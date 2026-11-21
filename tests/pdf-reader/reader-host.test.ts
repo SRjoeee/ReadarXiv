@@ -8,7 +8,7 @@ import { type Config, DEFAULT_CONFIG } from '@/config/schema'
 import { ENTRY_CHECK_MS } from '@/core/pdf/entry'
 import type { SessionEvent } from '@/pdf-reader/session/events'
 
-vi.mock('@/pdf-reader/pdfjs', () => ({ ASSETS: {}, EventBus: class {}, LinkTarget: {}, PDFLinkService: class {}, PDFPageView: class {}, PDFViewer: class {}, pdfjsLib: { getDocument: () => ({ promise: new Promise(() => {}), destroy: async () => {} }) } }))
+vi.mock('@/pdf-reader/pdfjs', () => ({ ASSETS: {}, EventBus: class {}, LinkTarget: {}, PDFLinkService: class {}, PDFPageView: class {}, PDFViewer: class {}, TextLayerBuilder: class {}, pdfjsLib: { getDocument: () => ({ promise: new Promise(() => {}), destroy: async () => {} }) } }))
 const { displayFrom, openReader, outward, prefsOf } = await import('@/pdf-reader/session/host')
 const { abstractOf, ownVersion } = await import('@/pdf-reader/session/paper')
 
@@ -43,7 +43,7 @@ const flush = async (n = 8) => { for (let i = 0; i < n; i++) await Promise.resol
 async function opened(query = 'paper=2600.00001v1', o: { config?: Config; refuse?: boolean; fetch?: typeof fetch } = {}) {
   const view = fakeView(), surface = fakeSurface(o.config ?? DEFAULT_CONFIG, o)
   const events: SessionEvent[] = []
-  const run = vi.fn(() => ({ retry: vi.fn(), dispose: vi.fn(), side: null, probe: () => ({ state: 'looking', lost: 0 }) }))
+  const run = vi.fn(() => ({ retry: vi.fn(), retarget: vi.fn(), setClasses: vi.fn(), dispose: vi.fn(), side: null, probe: () => ({ state: 'looking', lost: 0 }) }))
   const session = await openReader(
     { left: document.createElement('div'), right: document.createElement('div'), params: new URLSearchParams(query), emit: e => events.push(e), reading: { config: o.config ?? DEFAULT_CONFIG, fallbackReason: null } },
     { view: view.make as never, surface: surface.make as never, store: null, run: run as never, fetch: o.fetch ?? (vi.fn(async () => new Response('', { status: 404 })) as never) },
@@ -99,6 +99,18 @@ describe('the run, once a translated display is shown (what is not seen takes no
     expect(abstractOf(html)).toEqual({ title: 'A Title', version: 3 })
     expect(ownVersion('hep-th/9711200v2')).toEqual({ id: 'hep-th/9711200', version: 2 })
     expect(ownVersion('2600.00001')).toBeNull()
+  })
+
+  it('an address whose paper is no arXiv id opens with no paper: nothing fetched, no run, no setting written, nothing thrown, whatever else it asks', async () => {
+    const fetch = vi.fn(async () => new Response('', { status: 404 }))
+    for (const query of ['paper=../list/cs.AI/new&ask=translate', 'paper=xv3&ask=translate', 'live=1&paper=1706.03762/../../x&mode=bilingual']) {
+      const a = await opened(query, { config: { ...DEFAULT_CONFIG, pdfReader: { ...DEFAULT_CONFIG.pdfReader, original: true } }, fetch: fetch as never })
+      await flush(20)
+      a.session.setDisplay('bilingual')
+      await flush(20)
+      expect([query, a.run.mock.calls.length, a.surface.writes.length, a.view.showOriginal.mock.calls.length]).toEqual([query, 0, 0, 0])
+    }
+    expect(fetch).not.toHaveBeenCalled()
   })
 
   it('no version to be had (arXiv\'s page not read): the bilingual version cannot be had now, the original stays', async () => {
@@ -218,7 +230,7 @@ describe('the settings, written and followed', () => {
 
   it('a first read given up on: the display and sync the reader chose meanwhile stand over the late answer', async () => {
     const view = fakeView(), surface = fakeSurface(null)
-    const run = vi.fn(() => ({ retry: vi.fn(), dispose: vi.fn(), side: null, probe: () => ({ state: 'looking', lost: 0 }) }))
+    const run = vi.fn(() => ({ retry: vi.fn(), retarget: vi.fn(), dispose: vi.fn(), side: null, probe: () => ({ state: 'looking', lost: 0 }) }))
     const session = await openReader({ left: document.createElement('div'), right: document.createElement('div'), params: new URLSearchParams('paper=2600.00001v1'), emit: () => {}, reading: { config: DEFAULT_CONFIG, fallbackReason: { kind: 'unknown' } } }, { view: view.make as never, surface: surface.make as never, store: null, run: run as never, fetch: vi.fn(async () => new Response('', { status: 404 })) as never })
     session.setDisplay('original')
     session.setSyncMode('off')
@@ -242,13 +254,61 @@ describe('the settings, written and followed', () => {
     expect(a.view.setDisplay).not.toHaveBeenCalled()
   })
 
-  it('a new target language once a translation has started loads the page again, once this page\'s writes are in', async () => {
+  it('a new target language once a translation has started is the run\'s, in place (its code the layer\'s), once this page\'s writes are in: the page is not loaded again', async () => {
     const reload = vi.fn()
     vi.stubGlobal('location', { ...location, reload, search: '' })
     const a = await opened()
     await flush()
+    const r = a.run.mock.results[0]?.value as { retarget: ReturnType<typeof vi.fn> }
     a.surface.land({ ...DEFAULT_CONFIG, targetLanguage: 'jpn' })
     await flush(20)
-    expect(reload).toHaveBeenCalledTimes(1)
+    expect(r.retarget).toHaveBeenCalledWith('ja')
+    expect(reload).not.toHaveBeenCalled()
+  })
+
+  it('a hold for the language before is lifted by another target (the translated display shown again); a hold for the paper\'s own reason stays', async () => {
+    const a = await opened()
+    await flush()
+    const r = a.run.mock.results[0]?.value as { retarget: ReturnType<typeof vi.fn> }
+    const emit = ((a.run.mock.calls[0] as unknown[])[2] as { emit(e: unknown): void }).emit
+    emit({ type: 'unavailable', why: 'target', retryAt: null })
+    expect(a.view.setDisplay).toHaveBeenLastCalledWith('original')
+    a.surface.land({ ...DEFAULT_CONFIG, targetLanguage: 'jpn' })
+    await flush(20)
+    expect(r.retarget).toHaveBeenCalledWith('ja')
+    expect(a.view.setDisplay).toHaveBeenLastCalledWith(displayFrom(new URLSearchParams(''), DEFAULT_CONFIG))
+    const b = await opened()
+    await flush()
+    const rb = b.run.mock.results[0]?.value as { retarget: ReturnType<typeof vi.fn> }
+    ;((b.run.mock.calls[0] as unknown[])[2] as { emit(e: unknown): void }).emit({ type: 'unavailable', why: 'no-source', retryAt: null })
+    b.surface.land({ ...DEFAULT_CONFIG, targetLanguage: 'jpn' })
+    await flush(20)
+    expect(rb.retarget).not.toHaveBeenCalled()
+    expect(b.view.setDisplay).toHaveBeenLastCalledWith('original')
+  })
+
+  it('what to translate is the run\'s from its start, and a change of it, here or elsewhere, is told the run in place, once a change: nothing written to the image switch (S-R-27)', async () => {
+    const a = await opened()
+    await flush()
+    const host = (a.run.mock.calls[0] as unknown[])[2] as { classes(): Config['pdfReader']['classes'] }
+    expect(host.classes()).toEqual(DEFAULT_CONFIG.pdfReader.classes)
+    const r = a.run.mock.results[0]?.value as { setClasses: ReturnType<typeof vi.fn> }
+    // from the reading options: written through the surface, and followed as it lands
+    a.session.patchSettings(c => ({ ...c, pdfReader: { ...c.pdfReader, classes: { ...c.pdfReader.classes, names: true } } }))
+    await flush(20)
+    const names = { ...DEFAULT_CONFIG.pdfReader.classes, names: true }
+    expect(r.setClasses.mock.calls).toEqual([[names]])
+    expect(a.surface.writes.at(-1)?.image).toEqual(DEFAULT_CONFIG.image)
+    expect(host.classes()).toEqual(names)
+    // from the settings page: the same; a landing that changes something else tells the run nothing more
+    const back = { ...DEFAULT_CONFIG, pdfReader: { ...DEFAULT_CONFIG.pdfReader, classes: { ...names, tables: false } } }
+    a.surface.land(back)
+    a.surface.land({ ...back, reading: { ...back.reading, sentenceHighlight: false } })
+    await flush(20)
+    expect(r.setClasses.mock.calls).toEqual([[names], [back.pdfReader.classes]])
+    // and the HTML page's figure switch is no toggle of the reader's
+    a.surface.land({ ...back, image: { enabled: false } })
+    await flush(20)
+    expect(r.setClasses).toHaveBeenCalledTimes(2)
   })
 })

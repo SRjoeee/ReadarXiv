@@ -11,7 +11,9 @@ import { IMG_CLASS } from '@/core/marks'
 import { IMG_MODES_ATTR } from '@/core/renderer/image'
 import { createPageSession, type PageSession, type SessionDeps } from '@/core/session'
 import type { ProviderStatus, TranslationTransport } from '@/providers/transport'
-import type { TranslateCall } from '@/providers/translate-service'
+import { asOut, type OutPiece } from '@readarxiv/translate'
+import type { TranslateCall } from '@/providers/transport'
+import { textsOf } from '../helpers/units'
 import type { ProviderKind } from '@/providers/types'
 import type { ImageBytes } from '@/core/image'
 import type { OcrCall, OcrLine } from '@/shared/ocr'
@@ -72,7 +74,10 @@ function harness(options: HarnessOptions = {}) {
     async translate(call) {
       calls.push(call)
       const translated = options.translated ?? (text => text)
-      return { ok: true, result: { segments: call.request.segments.map(s => ({ id: s.id, text: translated(s.text) })), provider: options.provider ?? 'microsoft', kind: options.kind ?? 'mt' }, cached: 0 }
+      // each unit's text pieces translated, its elements and spans where they stand: the chain's result of an engine
+      const over = (ps: OutPiece[]): OutPiece[] => ps.map(p => (p.t === 'text' ? { t: 'text', s: translated(p.s) } : p.t === 'span' ? { ...p, content: over(p.content) } : p))
+      const engine = options.provider ?? 'microsoft'
+      return { ok: true, results: call.units.map(u => ({ id: u.id, ok: true as const, content: over(asOut(u.content)), by: `${engine}:0`, engine, kind: options.kind ?? 'mt' })), cached: 0 }
     },
     async cancel(scope) { cancelled.push(scope); return 0 },
     async status(scope, statusOptions) {
@@ -182,7 +187,7 @@ describe('page session', () => {
     expect(behindSettings(status, 'r-jpn')).toBe(false)
     await h.session.translate(h.blocks.slice(0, 1))
     expect(h.calls.length).toBeGreaterThan(0)
-    expect(h.calls.every(c => c.request.target === 'jpn')).toBe(true)
+    expect(h.calls.every(c => c.target === 'jpn')).toBe(true)
   })
 
   it('the action epoch moves with every start and restore; a command from an earlier epoch is refused, a translate decided on an idle page included (local review)', async () => {
@@ -250,6 +255,9 @@ describe('page session', () => {
 
   it('a start refused after its status was asked releases the session the status bound provisionally (Codex on #184)', async () => {
     // No usable service: the chain answered, so the scope is bound over there; the refusal cancels it
+    // a queue timeout names a task and milliseconds for the console; the start carries a code, not that message
+    const slow = harness({ status: () => Promise.reject(Object.assign(new Error('Task t-1 timed out after 5000ms'), { name: 'RequestTimeoutError' })) })
+    expect(await slow.session.start()).toEqual({ started: false, reason: 'backend-timeout' })
     const none = harness({ status: () => providerStatus({ available: false }) })
     live = none.session
     expect(await none.session.start()).toEqual({ started: false, reason: 'no-service' })
@@ -346,7 +354,7 @@ describe('page session', () => {
     h.session.restore()
     expect(states).toEqual(['on', 'idle'])
 
-    h.deps.backend.translate = async () => ({ ok: false, error: { kind: 'auth', message: 'refused', isolatable: false } })
+    h.deps.backend.translate = async () => ({ ok: false, error: { kind: 'auth', message: 'refused' } })
     live = h.session
     await h.session.start()
     await settle()
@@ -397,7 +405,7 @@ describe('page session', () => {
   it('a fatal error reaches the idle line as its kind only: the message is the endpoint\'s, and the trace feeds the diagnostics log (Codex on #214)', async () => {
     const h = harness()
     live = h.session
-    h.deps.backend.translate = async () => ({ ok: false, error: { kind: 'auth', message: 'Unauthorized: key=ZZZ-my-secret; request was: the Fourier transform of f', isolatable: false } })
+    h.deps.backend.translate = async () => ({ ok: false, error: { kind: 'auth', message: 'Unauthorized: key=ZZZ-my-secret; request was: the Fourier transform of f' } })
     await h.session.start()
     await settle()
     await h.session.translate(h.blocks.slice(1))
@@ -448,8 +456,8 @@ describe('page session', () => {
     await h.session.translate(h.blocks.slice(1))
     await h.session.translateImages()
     await settle(6)
-    expect(h.calls.some(c => c.request.segments[0]?.id === 'document.title')).toBe(true)
-    expect(h.calls.some(c => c.request.segments[0]?.id.endsWith('#L0'))).toBe(true)
+    expect(h.calls.some(c => c.units[0]?.id === 'document.title')).toBe(true)
+    expect(h.calls.some(c => c.units[0]?.id.endsWith('#L0'))).toBe(true)
     expect(h.calls.length).toBeGreaterThanOrEqual(3)
     expect(h.calls.map(c => c.scope)).toEqual(h.calls.map(() => id))
     expect(h.ocrCalls.map(c => c.scope)).toEqual([id])
@@ -464,7 +472,7 @@ describe('page session', () => {
   })
 
   it('the title goes out in the same envelope as the blocks: on a page with no title or abstract to send, it carries no context, and a block only its heading', async () => {
-    // To the cache key an absent context and an empty one are two contexts (run/call.ts); the title used to send `{}`
+    // To a translator's store key an absent context and an empty one are two contexts (run/call.ts); the title used to send `{}`
     const h = harness()
     h.deps.context = {}
     live = h.session
@@ -472,14 +480,14 @@ describe('page session', () => {
     await settle()
     await h.session.translate(h.blocks.slice(1))
     await settle()
-    const title = h.calls.find(c => c.request.segments[0]?.id === 'document.title')
-    const block = h.calls.find(c => c.request.segments[0]?.id !== 'document.title')
+    const title = h.calls.find(c => c.units[0]?.id === 'document.title')
+    const block = h.calls.find(c => c.units[0]?.id !== 'document.title')
     expect(title).toBeDefined()
     expect(block).toBeDefined()
-    expect(title?.request.context).toBeUndefined()
+    expect(title?.context).toBeUndefined()
     // The block sits under a heading, which is a context of its own; nothing of the paper's goes with it
-    expect(block?.request.context).toEqual({ sectionTitle: 'Introduction' })
-    expect(title?.cache).toEqual(block?.cache)
+    expect(block?.context).toEqual({ sectionTitle: 'Introduction' })
+    expect(title?.target).toBe(block?.target)
   })
 
   it('a permanent hand-over restarts the page once on the serving engine; a temporary one does not', async () => {
@@ -540,6 +548,8 @@ describe('page session', () => {
     await h.session.ready
     h.deps.config.get = async () => { throw new TypeError('the endpoint said: sk-not-for-the-log') }
     await expect(h.session.start()).rejects.toThrow(TypeError)
+    // Read after the status: the scope the status bound is released, as a refusal releases it (Codex on #184)
+    expect(h.cancelled).toEqual([h.statusCalls[0]])
     expect(h.trace()).toContain('start failed (TypeError; message withheld)')
     expect(h.trace().join('\n')).not.toContain('sk-not-for-the-log')
     // The failed start is over: the next one is judged on its own
@@ -698,7 +708,7 @@ describe('page session', () => {
       await settle()
       await h.session.translateImages()
       await settle(6)
-      const sent = h.calls.flatMap(call => call.request.segments).filter(seg => seg.id.includes('#L')).map(seg => seg.text)
+      const sent = h.calls.flatMap(call => textsOf(call)).filter(seg => seg.id.includes('#L')).map(seg => seg.text)
       const drawn = Array.from(document.querySelectorAll(`.${IMG_CLASS} > span`)).map(span => (span as HTMLElement).title)
       h.session.restore()
       return { sent, drawn }
@@ -710,7 +720,7 @@ describe('page session', () => {
 
   describe('a figure\'s text — the labels of a TikZ picture, blocks of the text run (§15.6) — is asked for where the reader has figures translated', () => {
     const PICTURE = '<figure class="ltx_figure" id="F2"><svg class="ltx_picture"><foreignObject><span class="ltx_foreignobject_container"><span class="ltx_foreignobject_content" id="label">Shared Expert</span></span></foreignObject></svg></figure>'
-    const asked = (h: ReturnType<typeof harness>) => h.calls.flatMap(call => call.request.segments.map(seg => seg.id))
+    const asked = (h: ReturnType<typeof harness>) => h.calls.flatMap(call => call.units.map(u => u.id))
 
     it('figures on: a label is asked for with the text around it, and the display gate is set though the paper holds not one image', async () => {
       const h = harness({ page: PAGE + PICTURE, config: { image: { enabled: true } } })
@@ -738,6 +748,24 @@ describe('page session', () => {
       await vi.waitFor(() => expect(asked(h)).toContain('label'))
       expect(asked(h).slice(before).filter(id => id !== 'label')).toEqual([])
       expect(document.getElementById('label')!.nextElementSibling?.classList.contains('axt-t')).toBe(true)
+    })
+
+    it('figures switched on while the start waits for the chain\'s state: the session starts with them on (the switch is not lost to the start\'s earlier read)', async () => {
+      const h = harness({ page: PAGE + PICTURE, config: { image: { enabled: false } }, holdStatusAt: 1 })
+      live = h.session
+      const started = h.session.start()
+      await settle()
+      expect(h.statusCalls).toHaveLength(1)
+      // The popup's switch, while the status is out: the store written, then the watcher's event
+      const on = { ...h.config(), image: { enabled: true } }
+      await h.deps.config.set(on)
+      h.session.onConfig(on)
+      h.releaseStatus()
+      expect(await started).toEqual({ started: true })
+      await settle()
+      expect(document.documentElement.getAttribute(IMG_MODES_ATTR)).toBe('stack side only')
+      await h.session.translate(h.blocks)
+      expect(asked(h)).toContain('label')
     })
 
     it('figures on show in every display (the redesign\'s design, §4): a label reached in stacked is asked for there', async () => {

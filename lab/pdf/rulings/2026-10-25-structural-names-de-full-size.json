@@ -1,0 +1,14 @@
+{
+ "date": "2026-10-25",
+ "by": "the coordinator, under the owner's standing rules of 2026-10-25",
+ "quote": "we own format correctness and translate structural names correctly; a longer correct name is the translation's cost, not a format defect. Accept the 2608.16117v1-de p11 \"full size\" step (Gleichung (12) against eq. (12))",
+ "on": "structural names in the target's TeX names (pull request 468, REMOVAL 11): the names cleveref and \\autoref generate are drawn in the target's names (layer2.mjs renameRefs, rules/tex-names.json from cleveref's own language definitions), a theorem-like head in translator's",
+ "measures": [
+  "fullSize"
+ ],
+ "targets": [
+  "de"
+ ],
+ "scope": "the rules gate's model tier at 532e76aa and d4d46932 against the merge base 499d1dfb: de full size 27.5 % to 26.9 %, on the one page 2608.16117v1-de p11, its unit 30, a paragraph whose \\cref to an equation is the only generated name on the page; every other measure of the 32 outputs unchanged or better",
+ "why": "cleveref sets that reference in English with its abbreviation and in German with the full word, its german definitions having no abbreviation for an equation. The name drawn is the package's own German word, longer than the English abbreviation it replaces, and the unit that holds it is set a size step under full size to keep its lines: the cost of the name translated correctly, not a defect of the page's format. The alternative, the English abbreviation left in German prose, is the defect this pull request removes"
+}

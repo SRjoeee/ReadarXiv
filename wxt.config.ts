@@ -3,6 +3,7 @@ import { readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import tailwindcss from '@tailwindcss/vite'
+import { readerAssets } from '@readarxiv/reader/vite'
 import { defineConfig } from 'wxt'
 import { readBuildRef } from './scripts/build-ref.mjs'
 import { licenceFiles, noteBundledPackages } from './scripts/third-party-notices.mjs'
@@ -65,6 +66,21 @@ function apiOf(mode: string): string {
   return api
 }
 
+/**
+ * Which reader the PDF page runs (stage 5a): `v2`, the build's default (lane V5, 2026-11-13), the reader package whole
+ * (`openReader` with the extension's Host, our server's v2 documents, the reader's own typesetter), which also takes the
+ * package's PDF.js data files; `today`, today's session (the engine's reading view, its run on our server's v1 layer, today's
+ * typesetter) under the reader package's chrome, the reader the released extension still reads with. `AXT_READER=today pnpm
+ * build` makes that one, so that a fix to it before the cut-over is built and tested (the e2e scripts choose by the build they
+ * are given); it goes with the cut-over (the stage's deletion list)
+ */
+const READERS = ['today', 'v2'] as const
+function readerPath(): (typeof READERS)[number] {
+  const named = process.env.AXT_READER ?? 'v2'
+  if (!(READERS as readonly string[]).includes(named)) throw new Error(`AXT_READER names ${named}: ${READERS.join(' or ')}`)
+  return named as (typeof READERS)[number]
+}
+
 // The WXT project configuration.
 export default defineConfig({
   srcDir: 'src',
@@ -73,7 +89,7 @@ export default defineConfig({
   modules: ['@wxt-dev/module-react'],
   // In extension pages <link rel="modulepreload" crossorigin> triggers Chrome's "cross-world extension resource mismatch" warning (harmless but noisy); preloading is off
   // The recogniser's worker (entrypoints/ocr) is a build of its own, and what it bundles goes into the same notices
-  vite: env => ({ build: { modulePreload: false }, plugins: [tailwindcss(), noteBundledPackages()], worker: { format: 'es', plugins: () => [noteBundledPackages()] }, define: { __AXT_BUILD_REF__: JSON.stringify(buildRef()), __AXT_READER_API__: JSON.stringify(apiOf(env.mode)), __AXT_LOOPBACK__: JSON.stringify(env.mode !== 'production') } }),
+  vite: env => ({ build: { modulePreload: false }, plugins: [tailwindcss(), noteBundledPackages(), ...(readerPath() === 'v2' ? [readerAssets()] : [])], worker: { format: 'es', plugins: () => [noteBundledPackages()] }, define: { __AXT_BUILD_REF__: JSON.stringify(buildRef()), __AXT_READER_API__: JSON.stringify(apiOf(env.mode)), __AXT_LOOPBACK__: JSON.stringify(env.mode !== 'production'), __AXT_READER__: JSON.stringify(readerPath()) } }),
   hooks: {
     'entrypoints:found': (wxt, infos) => {
       if (wxt.config.mode !== 'production') return
@@ -117,7 +133,7 @@ export default defineConfig({
     // The two strings Chrome itself shows — the extensions page, the store listing and the shortcuts
     // page — come from public/_locales, because only the browser reads them and only it can pick a
     // language for them. Everything inside our own pages follows the reader's own choice instead
-    // (src/locales, UI.md §6)
+    // (packages/ui/src/locales, UI.md §6)
     default_locale: 'en',
     description: '__MSG_description__',
     // contextMenus: the translate toggle in the context menu (issue #146) — it registers a menu item, not access to
@@ -144,12 +160,13 @@ export default defineConfig({
     host_permissions: ['https://openrouter.ai/*', 'https://translate-pa.googleapis.com/*', 'https://edge.microsoft.com/*', 'https://arxiv.org/*', 'https://readarxiv.com/*'],
     // The floating button (DESIGN §4.0c) frames the popup as its control panel, and a page may only load an extension
     // file that is declared here. One file, and only to arXiv. What the popup loads for itself (its script, its
-    // style sheet) is asked for by the extension's own origin and needs no entry; the button's mark is inline vector. A page that
-    // may frame the popup could try to trick a click on it: the popup shows no key and no paper text, and what a
-    // click can do there is what the reader does there anyway — start or undo a translation, pick a mode or a service
-    // On this experiment branch the PDF reader's page too: arXiv's PDF page frames it (entrypoints/pdf.content.ts), and
-    // what that page loads for itself is asked for by the extension's own origin, as the popup's is, and needs no entry
-    web_accessible_resources: [{ resources: ['popup.html'], matches: ['https://arxiv.org/*'] }, { resources: ['pdf-reader.html'], matches: ['https://arxiv.org/*'] }],
+    // style sheet) is asked for by the extension's own origin and needs no entry; the button's mark is inline vector.
+    // The PDF reader's page too: arXiv's PDF page frames it (entrypoints/pdf.content.ts), and what that page loads for
+    // itself is asked for by the extension's own origin, as the popup's is, and needs no entry.
+    // Both at a dynamic address (`use_dynamic_url`): the browser session's id, which `runtime.getURL` gives and no page
+    // can guess, so the static address an arXiv page could frame lands on an error page. Framed, either page acts only
+    // once the content script that made its frame vouches for it (shared/frame-owner.ts)
+    web_accessible_resources: [{ resources: ['popup.html'], matches: ['https://arxiv.org/*'], use_dynamic_url: true }, { resources: ['pdf-reader.html'], matches: ['https://arxiv.org/*'], use_dynamic_url: true }],
     // A custom endpoint may be http on 127.0.0.1 / the LAN (Ollama, LM Studio); with only the localhost literal the request fails outright (Codex on #6).
     // This is only the range that may be requested; the real grant is still asked for per origin on the settings page
     optional_host_permissions: ['https://*/*', 'http://*/*'],

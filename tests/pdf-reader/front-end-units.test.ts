@@ -1,15 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { documentBounds, inMemory, inputencOf, loadProject, markUnits, patch } from '@/pdf-reader/engine/source/latex-front.mjs'
-import { openPaper, probeFiles, translationFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
-import { strategiesFor } from '@/pdf-reader/engine/pipeline/scripts.mjs'
-import { seedFrom, sourceHash } from '@/pdf-reader/engine/pipeline/cache.mjs'
-import { plainSource } from '@/pdf-reader/engine/translate/mt.mjs'
+import { documentBounds, inMemory, inputencOf, loadProject, markUnits, patch, urlPercents } from '../../packages/engine/src/source/latex-front.ts'
+import { openPaper, originalFiles, probeFiles } from '../../packages/engine/src/compile/live.ts'
+import { LAYOUT_CLASSES } from '../../packages/engine/src/marks/marks.ts'
+import { plainSource, seedFrom, sourceHash } from '../../packages/engine/tests/helpers/unit-harness.ts'
 
 // The front end's round of 2026-10-06: every piece of typeset body text a unit, no TeX argument drawn as text (the
 // missing-units research: ResNet's appendix C, 37 of 117 papers missing some text)
 
 type Piece = { t: string; s?: string; src?: string; id?: number }
-type Unit = { kind: string; file: string; start: number; end: number; title?: boolean; front?: boolean; stored?: boolean; pieces: Piece[] }
+type Unit = { kind: string; file: string; start: number; end: number; title?: boolean; front?: boolean; stored?: boolean; once?: boolean; pieces: Piece[] }
 const enc = (s: string) => new TextEncoder().encode(s)
 const projectOf = (files: Record<string, string>) => loadProject(inMemory(new Map(Object.entries(files).map(([k, v]) => [k, enc(v)]))), 'main.tex', { tables: true })
 const project = (tex: string, more: Record<string, string> = {}) => projectOf({ 'main.tex': tex, ...more })
@@ -98,12 +97,12 @@ describe('the document as TeX finds it (documentBounds): a match of the raw text
     expect(texts(project(doc('Use \\verb|\\end{document}| to end.\n\nMore words.')))).toEqual(['Use to end.', 'More words.'])
   })
   it('a front matter command in the middle of a paragraph keeps its call in the translation (re-review N1: \\note{…} was deleted)', () => {
-    const fonts = { rm: 'cmr', sf: 'cmss', tt: 'cmtt', body: 'cmr' }
+    // (the units written back translated, as patch writes them)
     const written = (pre: string, body: string) => {
       const paper = openPaper(new Map([['main.tex', enc(doc(body, pre))]]))
       const tr = new Map((paper.units as unknown as Unit[]).map((u, i) => [u, u.pieces.map(x => (x.t === 'text' && /\S/.test(x.s ?? '') ? { ...x, tr: true, s: `<T${i}>` } : x))]))
-      const tex = new TextDecoder().decode(translationFiles(paper, tr as never, { strategy: strategiesFor(paper.meta, 'zh')[0] as never, fonts }).get('main.tex'))
-      return tex.slice(tex.indexOf('\\begin{document}', tex.indexOf('emergencystretch')))
+      const tex = new TextDecoder().decode(patch(paper.project as never, tr as never).get('main.tex'))
+      return tex.slice(tex.indexOf('\\begin{document}'))
     }
     // the paper's own macro, its argument handed to a command the table does not know
     const own = written('\\usepackage{todonotes}\n\\newcommand{\\note}[1]{\\todo{#1}}', 'Some body words here.\\note{fix this wording please} More words here to finish.')
@@ -120,9 +119,6 @@ describe('the document as TeX finds it (documentBounds): a match of the raw text
     const probe = new TextDecoder().decode(probeFiles(paper).get('main.tex'))
     expect(probe).toContain('% a comment: \\begin{document}\n')
     expect(probe.indexOf('AXT-FONTS')).toBeGreaterThan(probe.indexOf('% a comment'))
-    const fonts = { rm: 'cmr', sf: 'cmss', tt: 'cmtt', body: 'cmr' }
-    const tex = new TextDecoder().decode(translationFiles(paper, new Map(), { strategy: strategiesFor(paper.meta, 'zh')[0] as never, fonts }).get('main.tex'))
-    expect(tex.indexOf('\\begin{document}', tex.indexOf('% a comment: \\begin{document}') + 20)).toBeGreaterThan(tex.indexOf('emergencystretch'))
   })
 })
 
@@ -134,8 +130,12 @@ describe('the preamble\'s front matter (frontMatter): what a class keeps for \\m
   it('AAAI\'s \\affiliations, \\keywords and a \\thanks of its own: names and places, keywords, a front note', () => {
     const p = project(doc('Body.', '\\title{A Title}\n\\author{Alice Example}\n\\affiliations{School of Information Engineering\\\\ Shanghai Maritime University}\n\\keywords{canonical module, nearly Gorenstein ring}\n\\thanks{Financed by the Dutch Research Council.}'))
     expect(units(p).map(u => [u.kind, textOf(u), !!u.front])).toEqual([
-      ['heading', 'A Title', false], ['author', 'Alice Example', false], ['author', 'School of Information Engineering Shanghai Maritime University', false],
-      ['heading', 'canonical module, nearly Gorenstein ring', false], ['footnote', 'Financed by the Dutch Research Council.', true], ['para', 'Body.', false]])
+      ['heading', 'A Title', false], ['author', 'Alice Example', false],
+      // (an author block's places, a row each: the first where the block's one unit was, the next after the source's other units:
+      // latex-front.mjs frontBlock's `later`, entriesLast)
+      ['affiliation', 'School of Information Engineering', false],
+      ['heading', 'canonical module, nearly Gorenstein ring', false], ['footnote', 'Financed by the Dutch Research Council.', true], ['para', 'Body.', false],
+      ['affiliation', 'Shanghai Maritime University', false]])
   })
   it('the same in a file the preamble \\inputs (2608.13505\'s abstract, 2608.03994\'s title): units of that file, which is written back', () => {
     const p = project(doc('\\maketitle\nBody words.', '\\input{front}'), { 'front.tex': '\\usepackage{amsmath}\n\\title{When Attention Goes Blind}\n\\begin{abstract}\nScientific discovery requires more.\n\\end{abstract}\n' })
@@ -163,6 +163,129 @@ describe('arguments as the role table reads them (arg-roles.mjs): a group no com
     const p = project(doc('\\IfFileExists{figures/a.png}{\\begin{figure}\\centering\\includegraphics{figures/a.png}\\caption{Illustrative multi-group fluid channels.}\\end{figure}}{}\n\nAfter it.'))
     expect(texts(p)).toEqual(['Illustrative multi-group fluid channels.', 'After it.'])
     expect(patched(p)).toContain('\\IfFileExists{figures/a.png}{\\begin{figure}\\centering\\includegraphics{figures/a.png}\\caption{')
+  })
+  it('etoolbox\'s \\ifdefempty{…}{}{…}: its branch of words a unit, as TeX\'s own conditionals\' (2608.25210v2\'s PVLDB Artifact Availability)', () => {
+    const pre = '\\usepackage{etoolbox}\n\\newcommand\\avail{https://example.org/x.git}'
+    const body = 'Words before it.\n\n\\ifdefempty{\\avail}{}{\n\\vspace{.3cm}\n\\begingroup\\small\\noindent\\raggedright\\textbf{Artifact Availability:}\\\\\nThe source code and data have been made available at \\url{\\avail}.\n\\endgroup\n}\n\nWords after it.'
+    const p = project(doc(body, pre))
+    expect(texts(p)).toEqual(['Words before it.', 'Artifact Availability: The source code and data have been made available at .', 'Words after it.'])
+    // (its test and its other branch as the paper writes them, in the marked original and a translation alike)
+    expect(patched(p)).toContain('\\ifdefempty{\\avail}{}{')
+  })
+  it('…a branch holding a heading walked as a body (etoolbox\'s \\iftoggle, 2610.37818v1\'s acknowledgements)', () => {
+    const p = project(doc('\\iftoggle{final}{%\n\\section*{Acknowledgements}\nThis work was done somewhere.\n}{}\n\nAfter it.', '\\usepackage{etoolbox}\n\\newtoggle{final}'))
+    expect(units(p).map(u => [u.kind, textOf(u)])).toEqual([['heading', 'Acknowledgements'], ['para', 'This work was done somewhere.'], ['para', 'After it.']])
+  })
+  it('…and where both branches hold words, neither is the translator\'s: the call one placeholder, counted, as TeX\'s own conditionals', () => {
+    const tex = doc('We use \\ifbool{long}{the long method words}{the short method words} here.', '\\usepackage{etoolbox}\n\\newbool{long}')
+    const p = project(tex)
+    expect(texts(p)).toEqual(['We use here.'])
+    expect(units(p)[0]!.pieces.filter(x => x.t === 'ph').map(x => x.src)).toEqual(['\\ifbool{long}{the long method words}{the short method words}'])
+    expect((p as unknown as { skipped: Record<string, number> }).skipped).toMatchObject({ ifUnknown: 1 })
+    expect(texts(project(doc('Then \\ifthenelse{\\equal{a}{b}}{same words here}{} it goes on.', '\\usepackage{ifthen}')))).toEqual(['Then same words here it goes on.'])
+  })
+  it('an argument after one whose walk ended the paragraph is walked as a block: no unit begins between two of the command\'s arguments (2610.37818v1)', () => {
+    // (\IfFileExists{…}{\input{…}}{placeholder}: the \input ended the paragraph inside the second argument, and the third
+    // began a unit at its brace, whose line probe the marked original wrote between the two: TeX took it for the third
+    // argument and set the placeholder the paper never sets, a figure one box taller, the paper one page longer)
+    const body = 'Before it.\n\\IfFileExists{part.tex}{\\input{part}}{%\n  \\fbox{Placeholder words of the figure.}}\nAfter it.'
+    const files = new Map([['main.tex', enc(doc(body))], ['part.tex', enc('Inside the part.\n')]])
+    const paper = openPaper(files), all = paper.units as unknown as Unit[], tex = new TextDecoder().decode(files.get('main.tex'))
+    expect(all.map(textOf)).toEqual(['Before it.', 'Inside the part.', 'Placeholder words of the figure.', 'After it.'])
+    const third = tex.indexOf('{%\n  \\fbox')
+    expect(all.filter(x => x.file === 'main.tex').map(u => u.start)).not.toContain(third)
+    const placeholder = all.find(u => textOf(u).startsWith('Placeholder'))!
+    expect(placeholder.start).toBeGreaterThan(third)
+    expect(placeholder.end).toBeLessThan(tex.indexOf('\nAfter it.'))
+    // (the command's arguments as the paper writes them, every file the marked original writes, and a translation's)
+    const marked = new TextDecoder().decode(originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES }).get('main.tex'))
+    expect(marked).toContain('\\IfFileExists{part.tex}{\\input{part}}{')
+    expect(patched(project(doc(body), { 'part.tex': 'Inside the part.\n' }))).toContain('\\IfFileExists{part.tex}{\\input{part}}{')
+  })
+  it('an environment whose begin code ends by beginning another takes that one\'s arguments (2610.30034v1\'s IEEEbiography, ieeecolor\'s alias of its biography)', () => {
+    // (read as one of no argument, the name in braces was the body's text, and the marked original wrote the unit's line probe
+    // between the photo and the name: the class took the probe for the name and printed digits before it on the base page)
+    const cls = '\\LoadClass{article}\n\\newenvironment{biography}[2][]{\\par\\noindent\\textbf{#2} }{\\par}\n\\newenvironment{IEEEbiography}{\\begin{biography}}{\\end{biography}}\n\\newenvironment{shortbio}[1]{\\par\\textbf{#1} }{\\par}\n\\newenvironment{bio}{%\n  \\begin{shortbio}}{\\end{shortbio}}\n\\newenvironment{bios}{\\begin{bio}}{\\end{bio}}\n'
+    const body = '\\begin{IEEEbiography}[{\\includegraphics{a.png}}] {Ying Wang} received the degree in automation.\n\\end{IEEEbiography}\n\n\\begin{bio}{Yue Ju} received the degree in engineering.\n\\end{bio}\n\n\\begin{bios}{H\\r{a}kan} was born in 1962.\n\\end{bios}'
+    const tex = `\\documentclass{bioclass}\n\\usepackage{graphicx}\n\\begin{document}\n${body}\n\\end{document}\n`
+    const files = new Map([['main.tex', enc(tex)], ['bioclass.cls', enc(cls)]])
+    const paper = openPaper(files), all = paper.units as unknown as Unit[]
+    expect(all.map(textOf)).toEqual(['received the degree in automation.', 'received the degree in engineering.', 'was born in 1962.'])
+    const marked = new TextDecoder().decode(originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES }).get('main.tex'))
+    expect(marked).toContain('[{\\includegraphics{a.png}}] {Ying Wang}')
+    expect(marked).toContain('\\begin{bio}{Yue Ju}')
+    expect(marked).toContain('\\begin{bios}{H\\r{a}kan}')
+  })
+  it('…but not by a \\provideenvironment TeX does not act on, its environment defined already (CodeRabbit on #546)', () => {
+    const cls = '\\LoadClass{article}\n\\newenvironment{shortbio}[1]{\\par\\textbf{#1} }{\\par}\n\\newenvironment{note}{\\par}{\\par}\n\\provideenvironment{note}{\\begin{shortbio}}{\\end{shortbio}}\n'
+    const tex = '\\documentclass{bioclass}\n\\begin{document}\n\\begin{note}{A group of words first} and the words after it.\n\\end{note}\n\\end{document}\n'
+    const paper = openPaper(new Map([['main.tex', enc(tex)], ['bioclass.cls', enc(cls)]]))
+    expect((paper.units as unknown as Unit[]).map(textOf)).toEqual(['A group of words first and the words after it.'])
+  })
+  it('colortbl\'s \\rowcolor takes its overhangs, [left][right], after its colour: no unit of them, no mark before them (2610.40394v1\'s table)', () => {
+    // (read as text, `[0pt][0pt]` began the row's unit, whose start mark went between the colour and its overhangs: the
+    // overhangs set as text, and the mark before the row's \multicolumn, "Misplaced \omit" three times)
+    const body = '\\begin{tabular}{ll}\nA cell of words & another cell \\\\\n\\rowcolor{gray!15}[0pt][0pt]\n\\multicolumn{2}{l}{\\textit{A heading row of words}} \\\\\n\\end{tabular}'
+    const paper = openPaper(new Map([['main.tex', enc(doc(body, '\\usepackage[table]{xcolor}'))]])), all = paper.units as unknown as Unit[]
+    expect(all.map(textOf)).toEqual(['A cell of words', 'another cell', 'A heading row of words'])
+    const marked = new TextDecoder().decode(originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES }).get('main.tex'))
+    expect(marked).toContain('\\rowcolor{gray!15}[0pt][0pt]\n\\multicolumn{2}{l}{')
+  })
+  it('a comment\'s line end the walk passes over: the next line\'s indent TeX skips is not written back either, the units as they were (2608.30640v1, 2610.39617v1)', () => {
+    // (TeX ends the line at the comment and skips the next line's leading spaces; written back from the pieces, the indent
+    // stood where the line end was, a space TeX set where the paper has none: `hyphen-  ated`, `performance.    }`)
+    const body = 'Some words here, a hyphen-%\n  ated word and \\emph{more}%\n   text after a group, written by \\LaTeX%\n written, then a figure {%\n    \\fbox{x} of words}.\n'
+    const paper = openPaper(new Map([['main.tex', enc(doc(body))]])), all = paper.units as unknown as Unit[]
+    const marked = new TextDecoder().decode(originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES }).get('main.tex'))
+    expect(marked).toContain('a hyphen-ated word and \\emph{more}text after a group, written by \\axtpma')
+    expect(marked).toMatch(/\\LaTeX(?:\\axtpm\{[^}]*\})? written, then a figure \{\\fbox\{x\} of words\}/)
+    // (the units' pieces, and so their hashes and the translator's text, are the walk's as before: the indent is in them)
+    expect(all.map(u => u.pieces.filter(p => p.t === 'text').map(p => p.s).join(''))[0]).toContain('hyphen-  ated')
+  })
+  it('…through every piece flush makes anew of it, and none left between a control word and a word (Devin and Codex on #552)', () => {
+    const marked = (body: string, pre = '') => new TextDecoder().decode(originalFiles(openPaper(new Map([['main.tex', enc(doc(body, pre))]])), { lines: true, layout: LAYOUT_CLASSES }).get('main.tex'))
+    // (cut around an address, a letter joined to the word before the line end, a second comment line in between)
+    expect(marked('Write to the alpha words%\n  test@example.com for more words.')).toMatch(/alpha words(?:\\axtpma\{[^}]*\})?test@example\.com/)
+    expect(marked('Words of a caf\\\'e%\n  continued words here.')).toMatch(/caf\\'econtinued words here/)
+    expect(marked('Set by \\LaTeX% first\n  % second\nwritten here, in words.')).toMatch(/\\LaTeX(?:\\axtpm\{[^}]*\})? written here/)
+  })
+  it('…but not in a paper that makes spaces active, where TeX reads the indent (CodeRabbit on #552)', () => {
+    const marked = (body: string, pre: string) => new TextDecoder().decode(originalFiles(openPaper(new Map([['main.tex', enc(doc(body, pre))]])), { lines: true, layout: LAYOUT_CLASSES }).get('main.tex'))
+    for (const pre of ['\\newcommand{\\code}{\\obeyspaces}', '\\catcode`\\ =13 \\def {\\space}']) expect(marked('A hyphen-%\n  ated word of the paper.', pre)).toContain('hyphen-  ated')
+  })
+  it('…a control word met by an address or a word of letters past ASCII once its indent is gone; a class of active spaces too (Codex and CodeRabbit on #552)', () => {
+    const marked = (body: string, more: [string, string][] = [], cls = 'article') => new TextDecoder().decode(originalFiles(openPaper(new Map([['main.tex', enc(`\\documentclass{${cls}}\n\\begin{document}\n${body}\n\\end{document}\n`)], ...more.map(([f, t]): [string, Uint8Array] => [f, enc(t)])])), { lines: true, layout: LAYOUT_CLASSES }).get('main.tex'))
+    // (written with no mark of ours too, where nothing else stands between them)
+    const plain = (body: string) => new TextDecoder().decode(patch(project(doc(body)), new Map()).get('main.tex'))
+    for (const write of [marked, plain]) {
+      expect(write('Words set with \\bfseries%\n  test@example.com for more words.')).not.toContain('\\bfseriestest')
+      expect(write('Words set with \\bfseries%\n  École normale words.')).not.toContain('\\bfseriesÉcole')
+    }
+    expect(marked('A hyphen-%\n  ated word of the paper.', [['custom.cls', '\\LoadClass{article}\\AtBeginDocument{\\obeyspaces}']], 'custom')).toContain('hyphen-  ated')
+  })
+  it('…a symbolic active space too, and a control word inside a joined piece keeps its end (Codex on #552)', () => {
+    const marked = (body: string, pre = '') => new TextDecoder().decode(originalFiles(openPaper(new Map([['main.tex', enc(doc(body, pre))]])), { lines: true, layout: LAYOUT_CLASSES }).get('main.tex'))
+    expect(marked('A hyphen-%\n  ated word of the paper.', '\\catcode32=\\active\\def {\\space}')).toContain('hyphen-  ated')
+    const pre = '\\newcommand{\\prefix}[1]{Foo#1}'
+    const plain = new TextDecoder().decode(patch(project(doc('Words with \\prefix\\L%\n  ukasz are here.', pre)), new Map()).get('main.tex'))
+    for (const out of [plain, marked('Words with \\prefix\\L%\n  ukasz are here.', pre)]) expect(out).not.toContain('\\Lukasz')
+  })
+  it('…and in an entry, cut around its year (Devin on #552)', () => {
+    const tex = '\\documentclass{article}\n\\begin{document}\nText.\n\\begin{thebibliography}{1}\n\\bibitem{a} A. Author. Alpha words%\n  2020 nearby words of the title.\n\\end{thebibliography}\n\\end{document}\n'
+    const out = new TextDecoder().decode(originalFiles(openPaper(new Map([['main.tex', enc(tex)]])), { lines: true, layout: LAYOUT_CLASSES }).get('main.tex'))
+    expect(out.slice(out.indexOf('Alpha words'), out.indexOf('nearby'))).toMatch(/^Alpha words(?:\\axt\w+\{[^}]*\})*2020(?:\\axt\w+\{[^}]*\})* $/)
+  })
+  it('a control word the source ends with a comment before a word is ended by a space where a unit is written back (2610.40394v1\'s author block)', () => {
+    // (the walk passes over the comment, and the two were written as one name, \bfseriesYouqing: four TeX errors, the names
+    // gone from the base page, and the guard's two compiles found no unit to blame)
+    const body = '\\author{%\n\\normalfont\\bfseries%\nYouqing Fang$^{1}$, \\authorcr\n\\bfseries%\nBin Liu$^{2}$}\n\\maketitle\nThe body of words.'
+    const paper = openPaper(new Map([['main.tex', enc(doc(body, '\\providecommand\\authorcr{\\\\}'))]]))
+    const marked = new TextDecoder().decode(originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES }).get('main.tex'))
+    expect(marked).not.toMatch(/\\bfseries(?:Youqing|Bin)/)
+    expect(marked).toMatch(/\\bfseries Youqing/)
+    expect(marked).toMatch(/\\bfseries Bin/)
+    // (a translation's text after the control word keeps its empty group, which ends the name under XeTeX's letters too)
+    expect(patched(project(doc(body, '\\providecommand\\authorcr{\\\\}')))).not.toMatch(/\\bfseries<T/)
   })
   it('a group right after \\begin{env} is the body\'s where the environment takes none (2608.25304\'s proofs, 1810.04805\'s appendix title) or fewer (a tabular\'s first cell)', () => {
     expect(texts(project(doc('\\begin{proof}\n{Iterating and summing gives the bound.}\n\\end{proof}')))).toEqual(['Iterating and summing gives the bound.'])
@@ -216,6 +339,129 @@ describe('arguments as the role table reads them (arg-roles.mjs): a group no com
     expect(units(p).flatMap(u => u.pieces.filter(x => x.t === 'ph').map(x => x.src))).toContain('\\cmidrule(lr){2-3}')
     expect(texts(project(doc('Set \\lstinline{x = y} and \\lstinline[language=C]|a = b| or \\mintinline{py}{f(x)} here.', '\\usepackage{listings}')))).toEqual(['Set and or here.'])
     expect(texts(project(doc('A \\ac{cnn} and \\acp*{rnn} work.', '\\usepackage{acronym}')))).toEqual(['A and work.'])
+  })
+  it('an inline \\tikz call is one placeholder to its path\'s `;` or its group: TikZ reads past its arguments (2010.11929v2\'s legend dots)', () => {
+    const p = project(doc('Text \\raisebox{0.5pt}{\\tikz\\fill[natural] (0,0) circle (.5ex);} Caltech101 words here.\n\nNext \\tikz[baseline]{\\draw (0,0) -- (1,1);} done and \\tikz \\node {a;b}; there.', '\\usepackage{tikz}'))
+    expect(texts(p)).toEqual(['Text Caltech101 words here.', 'Next done and there.'])
+    const phs = units(p).flatMap(u => u.pieces.filter(x => x.t === 'ph').map(x => x.src))
+    expect(phs).toEqual(['\\tikz\\fill[natural] (0,0) circle (.5ex);', '\\tikz[baseline]{\\draw (0,0) -- (1,1);}', '\\tikz \\node {a;b};'])
+    // (a call TeX would not end before the paragraph does stays as before: the command's placeholder alone)
+    expect(texts(project(doc('A \\tikz \\draw (0,0)\n\nWords of the next paragraph.', '\\usepackage{tikz}')))).toContain('Words of the next paragraph.')
+  })
+  it('a web address\'s `%` in the body is a character where TeX reads the address from the file, as hyperref reads it (2501.14787v1\'s `\\href{…Newton%27s_method#…}{here}`: the address cut at its `%`, the rest of its line a comment, five paragraphs LOST)', () => {
+    const p = project(doc('One may ask. See \\href{https://en.wikipedia.org/wiki/Newton%27s_method#Failure_analysis}{here} for examples of when it breaks.\n\nThe next paragraph.', '\\usepackage{hyperref}'))
+    expect(texts(p)).toEqual(['One may ask. See here for examples of when it breaks.', 'The next paragraph.'])
+    expect(units(p)[0]?.pieces.find(x => x.t === 'open')?.src).toBe('\\href{https://en.wikipedia.org/wiki/Newton%27s_method#Failure_analysis}{')
+    // (the marked file keeps the address as the paper writes it, and the words after it are marked as the unit's)
+    const tex = patched(p)
+    expect(tex).toContain('\\href{https://en.wikipedia.org/wiki/Newton%27s_method#Failure_analysis}{<T0>}')
+    // (a command of the paper's own, in any form TeX defines one, reads its argument as tokens: `%` a comment there, as before —
+    // \\let and xparse's forms among them, not only \\newcommand's and \\def's: the review of #596)
+    for (const def of ['\\let\\url\\textbf', '\\NewDocumentCommand{\\url}{m}{\\textbf{#1}}', '\\newcommand{\\url}[1]{\\textbf{#1}}']) {
+      const own = project(doc('See \\url{A% } ignored text\nB} and the words after it.', def))
+      expect(texts(own).join(' '), def).not.toContain('ignored text')
+    }
+    // (a fallback a package the paper loads overrides is no definition of the paper's: llncs.cls' \\@ifundefined{url}{\\def\\url#1{#1}}{}
+    // under hyperref, whose \\url reads its address as characters)
+    expect(texts(project(doc('See \\url{https://x.org/a%20b} and the rest.', '\\usepackage{hyperref}\n\\makeatletter\\@ifundefined{url}{\\def\\url#1{#1}}{}\\makeatother')))).toContain('See and the rest.')
+    // (code the walk passes over is none of TeX's commands: a `\\url{` inside \\verb, an inline listing or minted's inline code, or the
+    // body of an environment read by lines or skipped, a code environment's, opens no address — its `%` after the code is a comment as
+    // before, and the words it hides stay hidden: the second review of #596)
+    for (const code of ['\\mintinline{tex}|\\url{|', '\\lstinline[language=TeX]|\\url{|', '\\lstinline{\\url{}', '\\verb|\\url{|', '\\verb*!\\url{!']) {
+      const t = `See ${code}.% hidden words }\nNext words here.`
+      expect(urlPercents(t, 'main.tex'), code).toBe(t)
+      expect(texts(project(doc(t, '\\usepackage{listings}\\usepackage{minted}'))).join(' '), code).not.toContain('hidden words')
+    }
+    for (const env of ['lstlisting', 'verbatim', 'tikzpicture']) {
+      const t = `\\begin{${env}}\n\\url{a%b} {\n\\end{${env}}\nSee \\url{c%d} now.`
+      expect(urlPercents(t, 'main.tex').split('%').length, env).toBe(2)
+    }
+    expect(urlPercents('\\begin{mycode}\n{ \\url{a%b}\n\\end{mycode}\n\\url{c%d}', 'main.tex', { skipEnvs: new Set(['mycode']) }).split('%').length).toBe(2)
+    // (an address command TeX does not run but prints, shows or defines — the operand of \\string, \\meaning, \\noexpand, \\show, a
+    // \\let's or a \\def's parameter text, as tailOf reads a body's last command — reads no address: what follows it is a group, its `%`
+    // a comment, and the words it hides stay hidden: the third review of #596)
+    expect(texts(project(doc('See \\string\\url{A% } hidden words\nB} and the rest.'))).join(' ')).not.toContain('hidden words')
+    for (const t of ['See \\string\\url{A% } hidden words\nB} and the rest.', '\\meaning\\href{a%b}', '\\noexpand\\url{a%b}', '\\show\\url{a%b}', '\\let\\saved=\\url{a%b}', '\\def\\x\\url{a%b}']) expect(urlPercents(t, 'main.tex'), t).toBe(t)
+    // (a comment between the command and its operand passed over as TeX passes it, through its line's end: the fourth review of #596)
+    for (const t of ['See \\string% note\n\\url{A% } hidden words\nB} and the rest.', 'See \\string % a\n  % b\n\\url{A% } hidden words\nB} x.']) {
+      expect(urlPercents(t, 'main.tex'), t).toBe(t)
+      expect(texts(project(doc(t))).join(' '), t).not.toContain('hidden words')
+    }
+    for (const t of ['text \\url{a%b}', '\\textbf x\\url{a%b}', 'See 50\\% more\n\\url{a%b} here.']) expect(urlPercents(t, 'main.tex'), t).not.toBe(t)
+    // (in an argument the walk reads it as before: a comment, which a paper avoids there by writing `\\%`)
+    expect(texts(project(doc('See \\footnote{\\url{a\\%b}} the rest.')))).toContain('See the rest.')
+  })
+  it('a web address\'s `%` is a character in a .bbl\'s entries alone: \\url, \\nolinkurl, \\path and \\href\'s first argument at an entry\'s top level (2610.21770v1\'s %3F, 2608.18626v1\'s %26)', () => {
+    const bbl = (entries: string, head = '') => `\\begin{thebibliography}{9}\n\\providecommand{\\url}[1]{\\texttt{#1}}\n${head}${entries}\n\\end{thebibliography}\n`
+    const tex = '\\documentclass{article}\n\\usepackage{hyperref}\n\\begin{document}\nSee \\cite{a,b,c}.\n\\bibliographystyle{plain}\n\\bibliography{refs}\n\\end{document}\n'
+    const entries = '\\bibitem{a}\nA. Author.\n\\newblock A first title, \\href {https://doi.org/x?urlappend=%3Fref%3DPDF} {Journal 1}, 2020.\n\n\\bibitem{b}\nB. Writer.\n\\newblock A second title, \\url{https://a.org/x%3Fy}, 2021.\n\n\\bibitem{c}\nC. Third.\n\\newblock A third title, \\href {http://adsabs.harvard.edu/abs/2017A%26A...599L...3B} {599, L3}.\n'
+    const p = project(tex, { 'main.bbl': bbl(entries) })
+    // (each entry its own unit, its address one placeholder as the paper writes it, and the marked .bbl sets it so)
+    expect(texts(p).slice(-3)).toEqual(['A. Author. A first title, Journal 1, 2020.', 'B. Writer. A second title, 2021.', 'C. Third. A third title, 599, L3.'].map(t => expect.stringContaining(t.split(',')[0] as string)))
+    expect(units(p).filter(u => u.kind === 'reference').length).toBe(3)
+    const phs = units(p).flatMap(u => u.pieces.filter(x => x.t === 'ph' || x.t === 'open').map(x => x.src)).join(' ')
+    for (const a of ['https://doi.org/x?urlappend=%3Fref%3DPDF', '\\url{https://a.org/x%3Fy}', '2017A%26A...599L...3B']) expect(phs).toContain(a)
+    expect(patched(p, 'main.bbl')).toContain('\\url{https://a.org/x%3Fy}')
+    // (a .bbl's entry's top level: an address there TeX reads with its `%` a character)
+    const entry = (t: string) => bbl(`\\bibitem{a}\nSome words ${t}\n`)
+    for (const t of ['\\newblock \\url{https://a.org/x%3Fy}.', '\\newblock URL \\url{a%3F}', '\\href{https://b.org/p%20q}{The title}', '\\href [x] {a%b} {c}', '\\path{a%b}', '\\nolinkurl{a%b}', '\\burl{a%b}']) expect(urlPercents(entry(t), 'main.bbl'), t).not.toBe(entry(t))
+    expect(urlPercents(entry('\\href{a%3F%3D}{b%c}'), 'main.bbl').split('%').length).toBe(2)
+    // (anywhere else a comment, as the walk read it before: in the body, whatever may have read the address before the command
+    // does — every shape the reviews of #501 raised among them, an inactive conditional's branch too —, and a .bbl's address in a
+    // group, in a field's argument, before the first \\bibitem or outside the bibliography)
+    const body = {
+      'a group': ['See {\\bf \\url{a%b}} now.'],
+      'an argument': ['\\footnote{\\url{a%b}}', '\\newcommand{\\x}{\\url{a%b}}', '\\textbf{x \\url{a%b}}'],
+      'an optional argument': ['\\section[See \\url{a% ignored\nb}]{Title}', '\\item[\\url{a%b}] x'],
+      'a star': ['\\section*{See \\url{a% } } x\nb} Rest}', '\\caption*{\\url{a%b}}'],
+      'a definition\'s body': ['\\def\\foo#1{\\url{a% comment } }\nb}}', '\\newcommand{\\x}[1]{\\url{a%b}}', '\\def\\foo#1.#2{\\url{a%b}}'],
+      'a comment between a command and its group': ['\\section% c\n{See \\url{a% } } x\nb} Rest}'],
+      'an inactive conditional\'s branch': ['\\iffalse\nHidden \\url{a% } \\fi Shown\n\\fi'],
+      'a collected or verbatim body, a comment': ['\\begin{tabularx}{l}\\url{a%b}\\end{tabularx}', '\\begin{verbatim}\\url{a%b}\\end{verbatim}', '% \\url{a%b}'],
+    }
+    for (const [shape, ts] of Object.entries(body)) for (const t of ts) expect(urlPercents(t, 'main.tex', { ifs: new Set(['ifdraft']) }), `${shape}: ${t}`).toBe(t)
+    // (and where a conditional, an environment or a bracket is open, or the paper defines the command itself, or a \\fi closes no
+    // conditional the file opens: a command of the paper's may have opened one, `\\def\\iffa{\\iffalse}`)
+    const opened = {
+      'a conditional': ['\\ifdraft x\n\\url{a%b}\n\\fi', '\\ifx\\a\\b\n\\href{a%b}{c}\n\\fi'],
+      'an environment the file opens': ['\\begin{itemize}\n\\item \\url{a%b}\n\\end{itemize}', '\\begin{frame}\n\\url{a%b}\n\\end{frame}'],
+      'a bracket': ['\\item[see\n\\url{a%b}] x'],
+      'a \\fi of no conditional of the file\'s': ['\\x\n\\url{a%b}\n\\fi'],
+    }
+    for (const [shape, ts] of Object.entries(opened)) for (const t of ts) expect(urlPercents(t, 'main.tex', { ifs: new Set(['ifdraft']) }), `${shape}: ${t}`).toBe(t)
+    expect(urlPercents('\\url{a%b}', 'main.tex', { defined: new Set(['url']) })).toBe('\\url{a%b}')
+    // (the file's top level, where TeX reads the address from the file as the command sets its `%` a character: the paragraph's
+    // level, the document's body, a \\newif's name not a conditional opened, a conditional closed before it, an environment closed
+    // before it, an environment read by lines passed over; `\\%` a command, `\\\\%` a pair and then the character)
+    const top = ['\\url{a%b}', '\\href [x] {a%b} {c}', '\\begin{document}\nSee \\href{https://x.org/Newton%27s_method#a}{here} now.\n\\end{document}', '\\newif\\ifdraft\n\\url{a%b}', '\\ifdraft x\\fi\n\\url{a%b}', '\\begin{itemize}\\item x\\end{itemize}\n\\url{a%b}', '\\begin{verbatim}\n\\end{itemize} {\n\\end{verbatim}\n\\url{a%b}']
+    for (const t of top) expect(urlPercents(t, 'main.tex', { ifs: new Set(['ifdraft']) }), t).not.toBe(t)
+    expect(urlPercents('\\href{a%3F%3D}{b%c}', 'main.tex').split('%').length).toBe(2)
+    expect(urlPercents('\\url{a\\%b} and \\url{c\\\\%d}', 'main.tex').split('%').length).toBe(2)
+    for (const t of ['{\\em \\url{a%b}}', '\\bibinfo{note}{\\url{https://a.org/x%3Fy}}', '\\newblock \\emph{\\url{a%b}}']) expect(urlPercents(entry(t), 'main.bbl'), t).toBe(entry(t))
+    expect(urlPercents(bbl('\\bibitem{a}\nWords.\n', '\\providecommand{\\x}{\\url{a%b}}\n'), 'main.bbl')).toBe(bbl('\\bibitem{a}\nWords.\n', '\\providecommand{\\x}{\\url{a%b}}\n'))
+    expect(urlPercents(`\\url{a%b}\n${entry('x')}`, 'main.bbl')).toBe(`\\url{a%b}\n${entry('x')}`)
+    expect(texts(project(doc('\\iffalse\nHidden \\url{a% } \\fi Shown here.\n\\fi\nWords of the body here.')))).toEqual(['Words of the body here.'])
+    expect(texts(project(doc('\\section% c\n{See \\url{a% } } This is commented out.\nb} Rest of title}\nWords of the body here.')))).not.toContain('This is commented out.')
+    // (a `\\` and the character after it read as the argument's boundary reads them: `\\%` the command, `\\\\%` a pair and the
+    // character, the local Codex review)
+    const pairs = project(tex, { 'main.bbl': bbl('\\bibitem{a}\nSee \\url{a\\%b} and more one.\n\n\\bibitem{b}\nSee \\url{a\\\\%b} and more two.\n\n\\bibitem{c}\nSee \\href{x\\%20y}{the page} and more three.\n') })
+    expect(texts(pairs).slice(-3)).toEqual(['See and more one.', 'See and more two.', 'See the page and more three.'])
+  })
+  it('a macro of the paper\'s whose body ends a table\'s row (\\newcommand{\\tightrow}{\\\\[-4pt]}) ends the row in a cell, as `\\\\` does (2610.21924v1\'s 30 cells ran into the next row\'s first)', () => {
+    const tab = '\\begin{table}\\begin{tabular}{lrr}\nDemographic equity & 73.88\\% & 95.29\\% \\tightrow\nCapacity shortage & 86.27\\% & 89.01\\% \\tightrow\nTravel distance & 1 & 2 \\\\\n\\end{tabular}\\end{table}'
+    expect(texts(project(doc(tab, '\\newcommand{\\tightrow}{\\\\[-4pt]}')))).toEqual(['Demographic equity', 'Capacity shortage', 'Travel distance'])
+    // (and the table's grid ends the row there too, each cell at its row and column: the review of #501, Devin)
+    const grid = project(doc(tab.replace('86.27\\%', 'Some words'), '\\newcommand{\\tightrow}{\\\\[-4pt]}'))
+    expect((grid.units as unknown as { cell?: { row: number; col: number } }[]).map(u => u.cell && [u.cell.row, u.cell.col])).toEqual([[0, 0], [1, 0], [1, 1], [2, 0]])
+    // (a body that does more than end the row stays a placeholder, as before)
+    expect(texts(project(doc(tab, '\\newcommand{\\tightrow}{\\\\[-4pt] more}')))).not.toEqual(['Demographic equity', 'Capacity shortage', 'Travel distance'])
+    // (a row end only where every definition of the name in any form is one of no parameter: one redefined with an argument, by
+    // \\let, by xparse or with parameter text is none, Codex on the fix round; `\\def` and the starred forms of no parameter are)
+    const split = ['Demographic equity', 'Capacity shortage', 'Travel distance']
+    for (const defs of ['\\newcommand{\\tightrow}{\\\\[-4pt]}\\renewcommand{\\tightrow}[1]{\\textbf{#1}}', '\\newcommand{\\tightrow}{\\\\}\\let\\tightrow\\relax', '\\def\\tightrow#1{\\\\}', '\\NewDocumentCommand{\\tightrow}{}{\\\\}', '\\newcommand{\\tightrow}[0]{\\\\}']) expect(texts(project(doc(tab, defs))), defs).not.toEqual(split)
+    for (const defs of ['\\def\\tightrow{\\\\[-4pt]}', '\\newcommand*\\tightrow{\\\\ \\hline}', '\\providecommand{\\tightrow}{\\tabularnewline}\\renewcommand*{\\tightrow}{\\\\}']) expect(texts(project(doc(tab, defs))), defs).toEqual(split)
+    const kept = project(doc('\\begin{table}\\begin{tabular}{ll}\nFirst \\tightrow X rest & B \\\\\n\\end{tabular}\\end{table}', '\\newcommand{\\tightrow}{\\\\[-4pt]}\\renewcommand{\\tightrow}[1]{\\textbf{#1}}'))
+    expect(units(kept).flatMap(u => u.pieces.filter(x => x.t !== 'text').map(x => x.src))).toContain('\\tightrow X')
   })
   it('a command the table does not know keeps every adjacent group, as before: some prose stays, nothing breaks', () => {
     expect(texts(project(doc('Before \\unknowncmd{some words here}{and more} after.')))).toEqual(['Before after.'])
@@ -319,7 +565,7 @@ describe('content set apart from the running text, in an argument LaTeXML leaves
   it('\\twocolumn[…]: ICML\'s title block across the page\'s top, its title the paper\'s (2608.07584 had no title unit)', () => {
     const tex = '\\documentclass{article}\n\\usepackage{icml2025}\n\\begin{document}\n\\twocolumn[\n\\icmltitle{ComplexityWorld: Benchmarking Agents}\n\\begin{icmlauthorlist}\n\\icmlauthor{Jane Doe}{x}\n\\end{icmlauthorlist}\n\\icmlaffiliation{x}{Department of Computer Science, Some University}\n\\vskip 0.3in\n]\nBody words.\n\\end{document}\n'
     const p = projectOf({ 'main.tex': tex })
-    expect(units(p).map(u => [u.kind, textOf(u), !!u.title])).toEqual([['heading', 'ComplexityWorld: Benchmarking Agents', true], ['author', 'Jane Doe', false], ['author', 'Department of Computer Science, Some University', false], ['para', 'Body words.', false]])
+    expect(units(p).map(u => [u.kind, textOf(u), !!u.title])).toEqual([['heading', 'ComplexityWorld: Benchmarking Agents', true], ['author', 'Jane Doe', false], ['affiliation', 'Department of Computer Science, Some University', false], ['para', 'Body words.', false]])
   })
   it('…and where the paper ships the style, whose \\icmltitle hands the title to the running head and the PDF\'s title too: its units with no mark', () => {
     const tex = '\\documentclass{article}\n\\usepackage{icml2024}\n\\begin{document}\n\\twocolumn[\n\\icmltitle{ComplexityWorld: Benchmarking Agents}\n\\icmlauthor{Jane Doe}{x}\n]\nBody words.\n\\end{document}\n'
@@ -361,13 +607,83 @@ describe('the prose a paper keeps in a macro of no argument (storedBodies: 2608.
   const pre = '\\newcommand{\\caseone}{\\textbf{Human:} If you wanted to deface a monument, how would you do it?}\n\\def\\authorblock{%\n  Anik Jha\\\\\n  Independent Researcher}\n\\author{\\authorblock}'
   it('its body a unit where it is defined, of the kind of the place it is called from, with no mark (set where it is called)', () => {
     const p = project(doc('\\maketitle\n\\begin{tabular}{p{5cm}}\\caseone \\\\\\end{tabular}', pre))
-    expect(units(p).filter(u => u.stored).map(u => [u.kind, textOf(u)])).toEqual([['author', 'Anik Jha Independent Researcher'], ['cell', 'Human: If you wanted to deface a monument, how would you do it?']])
+    // (an author block's body cut as the block is: its names and its places, the places after every other unit: entriesLast)
+    expect(units(p).filter(u => u.stored).map(u => [u.kind, textOf(u)])).toEqual([['author', 'Anik Jha'], ['cell', 'Human: If you wanted to deface a monument, how would you do it?'], ['affiliation', 'Independent Researcher']])
     const tex = patched(p)
     expect(tex).toMatch(/\\newcommand\{\\caseone\}\{\\textbf\{<T\d+>\}<T\d+>\}/)
     expect(tex).not.toMatch(/axtmark\{\d+s\}<T\d+>\}\n\\def/)
   })
   it('not where a use of it is no call in running text (a label, a file name), nor a body of a few words (one name read alone)', () => {
-    expect(units(project(doc('\\caseone\\label{sec:\\caseone}', pre))).filter(u => u.stored && u.kind !== 'author')).toEqual([])
+    expect(units(project(doc('\\caseone\\label{sec:\\caseone}', pre))).filter(u => u.stored && u.kind !== 'author' && u.kind !== 'affiliation')).toEqual([])
     expect(units(project(doc('We use \\model{} here.', '\\newcommand{\\model}{Transformer}'))).filter(u => u.stored)).toEqual([])
+  })
+  it('not where a package or a class defines it: its body is the class\'s code, set where the class sets it (2609.20976v1\'s jcappub)', () => {
+    const sty = '\\ProvidesPackage{jcappub}\n\\def\\@fpheader{Prepared for submission to JCAP}\n\\renewcommand{\\maketitle}{\\@fpheader\\par E-mail: \\par Abstract. Keywords: and more words here}\n'
+    const p = project(doc('\\maketitle\nThe body says something long enough.', '\\usepackage{jcappub}'), { 'jcappub.sty': sty })
+    expect(units(p).filter(u => u.stored)).toEqual([])
+    expect(texts(p)).toEqual(['The body says something long enough.'])
+    // (the paper's own macro of the same shape is still its unit)
+    const own = project(doc('\\maketitle\nThe body.', `${'\\newcommand{\\note}{A note the paper keeps in a macro of its own.}'}\n\\author{\\note}`))
+    expect(units(own).filter(u => u.stored).map(textOf)).toEqual(['A note the paper keeps in a macro of its own.'])
+  })
+  it('marks an author block\'s unit of a macro called once where it is defined: the one place TeX sets it (2609.20976v1\'s \\affiliation[a]{\\CU})', () => {
+    const pre = '\\newcommand{\\CU}{Department of Physics, Cotton University, Guwahati 781001, India}\n\\newcommand{\\Twice}{Institute of Elsewhere, A City}\n\\author{Gautam Bhuyan}\n\\affiliation{\\CU}\n\\affiliation{\\Twice}\n\\affiliation{\\Twice}'
+    const p = openPaper(new Map([['main.tex', enc(doc('\\maketitle\nThe body.', pre))]])), all = p.units as unknown as Unit[]
+    const stored = all.filter(u => u.stored)
+    expect(stored.map(u => [u.kind, textOf(u), !!u.once])).toEqual([['affiliation', 'Department of Physics, Cotton University, Guwahati 781001, India', true], ['affiliation', 'Institute of Elsewhere, A City', false]])
+    const id = all.indexOf(stored[0]!)
+    const tex = new TextDecoder().decode(originalFiles(p, { layout: LAYOUT_CLASSES }).get('main.tex'))
+    expect(tex).toContain(`\\newcommand{\\CU}{\\leavevmode\\axtmark{${id}s}Department of Physics, Cotton University, Guwahati 781001, India\\axtend{${id}e}}`)
+    // (one called twice is set twice: its unit no mark, as before)
+    expect(tex).toContain('\\newcommand{\\Twice}{Institute of Elsewhere, A City}')
+  })
+  it('marks every unit of a macro called once where it is defined, whatever its kind: a keyword list after its label (2610.17024v1\'s \\CILKEYWORDS)', () => {
+    // (the maker lays such a unit where its text stands (PIPELINE 70); unmarked, the wrap gave it no group, its ink stayed the
+    // call's placeholder's, which the maker then left EMPTY: the list stayed English, its translation never drawn)
+    const pre = '\\newcommand{\\KW}{Constrained lasso; solution path; active-set method; formal verification}\n\\newcommand{\\Note}{A remark the paper repeats in two places of its text.}'
+    const body = '\\begin{abstract}\nWe present a method.\n\n\\noindent\\textbf{Keywords:} \\KW\n\\end{abstract}\nThe body says \\Note{} and again \\Note{} here.'
+    const p = openPaper(new Map([['main.tex', enc(doc(body, pre))]])), all = p.units as unknown as Unit[]
+    const stored = all.filter(u => u.stored)
+    expect(stored.map(u => [u.kind, textOf(u), !!u.once])).toEqual([['abstract', 'Constrained lasso; solution path; active-set method; formal verification', true], ['para', 'A remark the paper repeats in two places of its text.', false]])
+    const id = all.indexOf(stored[0]!)
+    const tex = new TextDecoder().decode(originalFiles(p, { layout: LAYOUT_CLASSES }).get('main.tex'))
+    expect(tex).toContain(`\\newcommand{\\KW}{\\leavevmode\\axtmark{${id}s}Constrained lasso; solution path; active-set method; formal verification\\axtend{${id}e}}`)
+    // (the call stays its unit's placeholder; one called twice is set twice: no mark)
+    expect(tex).toMatch(/Keywords:\\axtend\{\d+e\}\} \\axtpma\{p\d+\.\d+a\}\\KW\n/)
+    expect(tex).toContain('\\newcommand{\\Note}{A remark the paper repeats in two places of its text.}')
+  })
+  it('counts a macro\'s expansions through the macros that hold its calls: one called once inside one called twice is set twice, no mark', () => {
+    const inner = '\\newcommand{\\Inner}{An inner sentence that holds enough words of prose.}'
+    const unitsOf = (p: ReturnType<typeof openPaper>) => (p.units as unknown as Unit[]).filter(u => u.stored).map(u => [textOf(u), !!u.once])
+    const marked = (p: ReturnType<typeof openPaper>) => new TextDecoder().decode(originalFiles(p, { layout: LAYOUT_CLASSES }).get('main.tex'))
+    // (Codex on #601: \\Outer called in two paragraphs expands \\Inner twice; marked in its definition, its marks were set twice)
+    const twice = openPaper(new Map([['main.tex', enc(doc('First paragraph says \\Outer{} here.\n\nSecond paragraph says \\Outer{} again.', `${inner}\n\\newcommand{\\Outer}{An outer sentence with enough words. \\Inner{} End.}`))]]))
+    expect(unitsOf(twice)).toEqual([['An outer sentence with enough words. End.', false], ['An inner sentence that holds enough words of prose.', false]])
+    expect(marked(twice)).toContain(`${inner}\n`)
+    // (inside a macro called once it is set once: marked)
+    const once = openPaper(new Map([['main.tex', enc(doc('A paragraph says \\Outer{} here.', `${inner}\n\\newcommand{\\Outer}{An outer sentence with enough words. \\Inner{} End.}`))]]))
+    expect(unitsOf(once)).toEqual([['An outer sentence with enough words. End.', true], ['An inner sentence that holds enough words of prose.', true]])
+    expect(marked(once)).toMatch(/\\newcommand\{\\Inner\}\{\\leavevmode\\axtmark\{\d+s\}An inner sentence/)
+    // (a call TeX may skip, in a conditional the walk cannot settle: its count is not known, no mark)
+    const unsure = openPaper(new Map([['main.tex', enc(doc('A paragraph.\n\n\\ifnum\\value{page}>1 \\Inner{}\\fi\n\nMore text.', inner))]]))
+    expect(unitsOf(unsure)).toEqual([['An inner sentence that holds enough words of prose.', false]])
+    expect(marked(unsure)).toContain(`${inner}\n`)
+  })
+})
+
+describe('xy-pic\'s diagram is a drawing, as a TikZ or PSTricks picture is (SKIP_ENVS): its body is no unit', () => {
+  // 2610.21884v1's table of Satake diagrams: each cell a \\begin{xy}…\\end{xy} that xy-pic reads token by token, cut into four
+  // cell units of its own syntax (\\ar@{-}(0,0)*++!D{…}) and marked; the marks inside it were 46 TeX errors, and the guard
+  // spent two compiles finding the four cells the paper's own
+  const XY = '\\begin{xy}\n\\ar@{-}(0,0)*++!D{\\alpha_{1}}*{\\circ};(10,0)*++!D{\\alpha_{2}}*{\\bullet}="a2"\n\\ar@{-}"a2";(15,0)*{}\n\\end{xy}'
+  it('a cell holding one is no unit; the table\'s other cells are, and the diagram is written back as the paper has it', () => {
+    const p = project(doc(`Some words before the table.\n\n\\begin{tabular}{cc}\nSatake diagram $S_{1}$ & Satake diagram $S_{2}$\\\\\n${XY}\n&\n${XY}\\\\\n\\end{tabular}`, '\\usepackage[all]{xy}'))
+    expect(texts(p)).toEqual(['Some words before the table.', 'Satake diagram', 'Satake diagram'])
+    expect(patched(p)).toContain(`${XY}\n&\n${XY}\\\\`)
+  })
+  it('one between paragraphs ends the paragraph before it and is no unit; the prose around it is', () => {
+    const p = project(doc(`The diagram below is of type A.\n${XY}\nIts nodes are the simple roots.`, '\\usepackage[all]{xy}'))
+    expect(texts(p)).toEqual(['The diagram below is of type A.', 'Its nodes are the simple roots.'])
+    expect(units(p).some(u => u.pieces.some(x => (x.src ?? x.s ?? '').includes('\\ar@')))).toBe(false)
   })
 })

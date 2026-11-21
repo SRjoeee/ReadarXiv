@@ -3,14 +3,16 @@ import { type Config, DEFAULT_CONFIG } from '@/config/schema'
 import { createChainHolder } from '@/entrypoints/background/chain'
 import { createConfigOffers, providerStatus, statusInForce } from '@/entrypoints/background/provider-status'
 import type { TranslationTransport } from '@/providers/transport'
+import { REQUEST_TIMEOUT_ERROR_NAME } from '@/providers/types'
 
 // The provider-status action: a session's chain, the chain in force, or — after a save — a chain
 // built from what is stored now, without the popup polling for it
 
 const chainOf = (provider: string): TranslationTransport => ({
-  translate: async () => ({ ok: true, result: { segments: [], provider, kind: 'mt' }, cached: 0 }),
+  translate: async () => ({ ok: true as const, results: [], cached: 0 }),
   cancel: async () => 0,
-  status: async () => ({ providerId: provider, chosen: provider, available: true, maxBatchChars: 1, maxBatchItems: 1, renderPath: 'tags' as const, targetLanguage: 'cmn', promptId: 'default', revision: provider, chain: [provider], demotions: [], identity: '', engine: { id: provider } }),
+  // (the PDF reader's chain answers as its own: `surface`, v22)
+  status: async (_scope?: string, options?: { surface?: 'pdf' }) => ({ providerId: options?.surface ? `${provider}:pdf` : provider, chosen: provider, available: true, maxBatchChars: 1, maxBatchItems: 1, renderPath: 'tags' as const, targetLanguage: 'cmn', promptId: 'default', revision: provider, chain: [provider], demotions: [], identity: '', engine: { id: provider } }),
 })
 
 function harness() {
@@ -102,6 +104,15 @@ describe('providerStatus', () => {
     h.save({ ...DEFAULT_CONFIG, provider: 'google-web' })
     expect((await providerStatus(h.deps, { scope: 's1', fresh: true })).providerId).toBe('google-web')
   })
+
+  it("the PDF reader asks about its own chain (`surface`), its session's and the chain in force's alike; the others as before (v22)", async () => {
+    const h = harness()
+    h.sessions.set('s1', chainOf('pinned'))
+    expect((await providerStatus(h.deps, { scope: 's1', surface: 'pdf' })).providerId).toBe('pinned:pdf')
+    expect((await providerStatus(h.deps, { scope: 's-new', fresh: true, surface: 'pdf' }, 7)).providerId).toBe(`${DEFAULT_CONFIG.provider}:pdf`)
+    expect((await providerStatus(h.deps, { surface: 'pdf' })).providerId).toBe(`${DEFAULT_CONFIG.provider}:pdf`)
+    expect((await providerStatus(h.deps, {})).providerId).toBe(DEFAULT_CONFIG.provider)
+  })
 })
 
 describe('statusInForce', () => {
@@ -158,8 +169,11 @@ describe('statusInForce', () => {
       const h = holderOf(never('stalled'))
       const status = statusInForce(h.chain, 1_000)
       const outcome = expect(status).rejects.toThrow(/did not settle/)
+      const named = expect(status).rejects.toMatchObject({ name: REQUEST_TIMEOUT_ERROR_NAME })
       await vi.advanceTimersByTimeAsync(1_000)
       await outcome
+      // a timeout by name: the popup words it from the pack (startRefusalText), not from this message
+      await named
     } finally {
       vi.useRealTimers()
     }

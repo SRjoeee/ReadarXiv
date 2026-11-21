@@ -1,0 +1,230 @@
+// lab/typeset/parity/measure-dom.mjs: what a laid page's SVG drew, read back in the browser, the same way for both readers
+// (today's door's SVG, `g[data-u]`; the reader package's, `g[data-axt-ord]`): every character where the browser placed it
+// (SVGTextContentElement's extent of each character: its advance box at its place), in the face weight, style and size it
+// was set in (the computed style of its run, so a weight a class names counts as one an attribute names), drawn or not (a
+// crop's transparent stand-in), and slanted or not (italic, or a run skewed by its own transform). The lines of a group are
+// its characters by baseline; each line is told in PDF units (y up): its baseline, the ink extent of its drawn characters,
+// its size, how many of its characters are bold and slanted (and each one's face), and the widest word space and letter gap between its drawn
+// characters (in ems of the line's size), the places a crop stands taken out (a crop is a formula's ink, no gap). A character
+// is placed through its <text>'s own transform into the SVG's user space (a figure text turned by `rotate`, an oblique run
+// skewed about its baseline); a turned <text> is one line of its own, told `rot`, with the box its characters cover and its
+// band as a level line's is read (`band`: each character's advance along its run, from 0.2 of its size under its baseline to
+// 0.8 over it across, turned with it: the browser's own box across a character is its first face's ascent and descent rounded
+// to the pixel, which no layout of either side is made from).
+
+const SPACE = /\s/u
+/** a character of the CJK scripts (a boundary between one and a Latin letter is a word boundary, not a letter gap) */
+const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\u3000-\u303f\uff00-\uffef\u30fc]/u
+const OBJ = '￼'
+/** a letter of any script, cased or not (Unicode L) */
+const LETTER = /^\p{L}$/u
+const r2 = (v) => Math.round(v * 100) / 100
+
+/** a line's characters (in its text's order) as runs of one size, [characters, size]: a white space or a stand-in at the size
+ *  its run was set at */
+function sizeRuns(cs) {
+  const out = []
+  for (const c of cs) {
+    const s = r2(c.size)
+    const last = out.at(-1)
+    if (last && last[1] === s) last[0]++
+    else out.push([1, s])
+  }
+  return out
+}
+
+/**
+ * The runs TeX's infinite glue places on a laid page's members, [ord, rank]: a member's text items in its lines' order, a crop
+ * none (the reader's painter, packages/reader/src/compose/paint.ts svgOf, draws one <tspan> each, in that order, under the
+ * member's `g`), each that the parity's lay marks `glue` (hook.mjs: the item after a token holding Token.fill, §18.104)
+ */
+export function glueRunsOf(members) {
+  const out = []
+  for (const m of members ?? []) {
+    if (m.state !== 'laid' || !m.lines?.length) continue
+    let rank = 0
+    for (const [, , , items] of m.lines)
+      for (const it of items) {
+        if ('src' in it) continue
+        if (it.glue) out.push([m.ord, rank])
+        rank++
+      }
+  }
+  return out
+}
+
+/** whether a <text> is slanted by its own transform (a skewX, the readers' oblique run) */
+const skewed = (t) => /skewX\(\s*-?[1-9]/.test(t.getAttribute('transform') ?? '')
+
+/**
+ * Each group's lines as drawn. `attr` the group's attribute (its unit's number), `view` the page's view box [x0, y0, x1, y1]
+ * in PDF units, `k` the SVG's user units a PDF unit (its viewBox's x origin the view's), `crops` [group, x0, y0, x1, y1] the
+ * places crops stand (PDF units), which no gap is read across. `glues` [group, run]: the runs TeX's infinite glue places, each
+ * by its group and its rank among the group's <tspan>s (the typesetter's text items in order, a crop none: v2page/main.ts
+ * glueRunsOf): the gap before such a run is the glue's, the line's free room (`\hfill`, `\hfil`: TeX gives it all of it), no
+ * word space and no letter gap.
+ */
+export function linesOfSvg(svg, attr, view, k, crops = [], glues = []) {
+  const glued = new Set(glues.map(([g, j]) => `${g}:${j}`))
+  const out = []
+  const X = (x) => view[0] + x / k
+  const Y = (y) => view[3] - y / k
+  const root = svg.getScreenCTM()?.inverse() ?? null
+  let tk = 0
+  for (const g of svg.querySelectorAll(`g[${attr}]`)) {
+    const raw = g.getAttribute(attr) ?? ''
+    const id = /^\d+$/.test(raw) ? Number(raw) : raw
+    const chars = []
+    // (each <tspan>'s rank in the group, in document order: the painter's one a text item)
+    let rank = 0
+    for (const t of g.querySelectorAll('text')) {
+      const slant = skewed(t)
+      // (the text's user space into the SVG's: its own transform and its parents')
+      const sc = t.getScreenCTM()
+      const m = root && sc ? root.multiply(sc) : null
+      const at = (x, y) => (m ? [m.a * x + m.c * y + m.e, m.b * x + m.d * y + m.f] : [x, y])
+      const rot = !!m && Math.abs(m.b) > 1e-3
+      const text = tk++
+      let i = 0
+      for (const span of t.querySelectorAll('tspan')) {
+        // (a run placed at its own x: what stands before it is the typesetter's glue, its first character a word's start)
+        const run = `${text}:${i}`,
+          placed = span.getAttribute('x') !== null
+        // (a run TeX's infinite glue places: the gap before it is the glue's)
+        const infinite = glued.has(`${id}:${rank++}`)
+        const n = span.getNumberOfChars()
+        const cs = getComputedStyle(span)
+        const weight = Number.parseInt(cs.fontWeight, 10) || 400
+        const italic = slant || cs.fontStyle === 'italic' || cs.fontStyle.startsWith('oblique')
+        const size = Number.parseFloat(cs.fontSize) / k
+        const hidden = span.getAttribute('fill-opacity') === '0' || cs.fillOpacity === '0' || cs.visibility === 'hidden'
+        const s = span.textContent ?? ''
+        for (let j = 0; j < n; j++) {
+          let ext, start
+          try {
+            ext = t.getExtentOfChar(i + j)
+            start = t.getStartPositionOfChar(i + j)
+          } catch {
+            continue
+          }
+          const ch = s[j] ?? ''
+          const pts = [at(ext.x, ext.y), at(ext.x + ext.width, ext.y), at(ext.x, ext.y + ext.height), at(ext.x + ext.width, ext.y + ext.height)]
+          // (a level character across: its advance on its baseline, where an oblique run's skew moves nothing; its box's corners
+          // lean with the skew, and a line's width is its advances', TeX's and the lay's, its glyphs' overhang aside, as the
+          // part reads the original's lines by its glyphs' advances. A turned one: its box's corners)
+          const xs = rot ? pts.map((q) => q[0]) : [at(ext.x, start.y)[0], at(ext.x + ext.width, start.y)[0]],
+            ys = pts.map((q) => q[1])
+          const [, sy] = at(start.x, start.y)
+          // (a turned character's band: its advance along, 0.2 of its size under its baseline to 0.8 over, in its own frame)
+          const fs = Number.parseFloat(cs.fontSize)
+          const bp = rot ? [at(ext.x, start.y - 0.8 * fs), at(ext.x + ext.width, start.y - 0.8 * fs), at(ext.x, start.y + 0.2 * fs), at(ext.x + ext.width, start.y + 0.2 * fs)] : null
+          chars.push({
+            ch: hidden ? OBJ : ch,
+            x0: X(Math.min(...xs)),
+            x1: X(Math.max(...xs)),
+            y: Y(sy),
+            top: Y(Math.min(...ys)),
+            bottom: Y(Math.max(...ys)),
+            rot,
+            ...(bp ? { band: [X(Math.min(...bp.map((q) => q[0]))), Y(Math.max(...bp.map((q) => q[1]))), X(Math.max(...bp.map((q) => q[0]))), Y(Math.min(...bp.map((q) => q[1])))] } : {}),
+            text,
+            size,
+            weight,
+            italic,
+            hidden,
+            fill: cs.fill,
+            run,
+            placed,
+            ...(infinite ? { infinite } : {}),
+          })
+        }
+        i += n
+      }
+    }
+    // (the group's characters by baseline: one line a baseline, 0.05 pt apart at most; a turned text one line of its own)
+    const byLine = []
+    for (const c of chars.sort((a, b) => b.y - a.y || a.x0 - b.x0)) {
+      const l = byLine.find((x) => (c.rot ? x.text === c.text : !x.rot && Math.abs(x.y - c.y) < 0.05))
+      if (l) l.chars.push(c)
+      else byLine.push({ y: c.y, rot: c.rot, text: c.text, chars: [c] })
+    }
+    const mine = crops.filter((c) => c[0] === id)
+    const lines = byLine.map(({ y, rot, chars: cs }) => {
+      cs.sort((a, b) => a.x0 - b.x0)
+      const ink = cs.filter((c) => !c.hidden && !SPACE.test(c.ch) && c.ch)
+      // (its size as the original's is read, fidelity.mjs originalOf: the size it was set at, its largest letter's (faked small
+      // capitals set the capitals at it and the rest smaller; a script is a line of its own; a CJK character is a letter at the
+      // line's size, an uncased one), else its median character's. Read at the median, a line of a translation holding a
+      // paper's macro in small capitals read their size: 2608.06701v1 p4 t59 at 7.97, set at 9.96)
+      const sizes = ink.map((c) => c.size).sort((a, b) => a - b)
+      const letters = ink.filter((c) => LETTER.test(c.ch)).map((c) => c.size)
+      const size = letters.length ? Math.max(...letters) : sizes.length ? sizes[sizes.length >> 1] : (cs[0]?.size ?? 0)
+      // (the widest gaps: between consecutive drawn characters, a space between them a word space, and so a run placed at its
+      // own x (the typesetter's glue before it: a lead's word, its label, the text after them, set apart with no space
+      // character), none a letter gap; a crop standing between them, or a hidden stand-in, no gap at all; and none before a run
+      // TeX's infinite glue places (`glues`): that is the line's free room, all of it, as TeX sets it (the typesetter's
+      // Token.fill, §18.104), never a stretched word space)
+      let word = 0,
+        letter = 0,
+        prev = null,
+        spaced = false
+      for (const c of rot ? [] : cs) {
+        if (c.hidden) {
+          prev = null
+          continue
+        }
+        if (SPACE.test(c.ch) || !c.ch) {
+          spaced = true
+          continue
+        }
+        if (prev) {
+          const gap = c.x0 - prev.x1
+          const cropBetween = mine.some((q) => q[1] < c.x0 && q[3] > prev.x1 && q[2] < y + size && q[4] > y - 0.3 * size)
+          const glueBefore = c.infinite && c.run !== prev.run
+          if (!cropBetween && !glueBefore && size > 0) {
+            const em = gap / size
+            const boundary = CJK.test(prev.ch) !== CJK.test(c.ch)
+            const glue = c.placed && c.run !== prev.run
+            if (spaced || boundary || glue) word = Math.max(word, em)
+            else letter = Math.max(letter, em)
+          }
+        }
+        prev = c
+        spaced = false
+      }
+      const fills = {}
+      for (const c of ink) fills[c.fill] = (fills[c.fill] ?? 0) + 1
+      const bands = rot ? ink.filter((c) => c.band).map((c) => c.band) : []
+      return {
+        ...(rot ? { rot: true } : {}),
+        ...(bands.length ? { band: [0, 1, 2, 3].map((q) => r2((q < 2 ? Math.min : Math.max)(...bands.map((b) => b[q])))) } : {}),
+        y: r2(y),
+        y0: cs.length ? r2(Math.min(...cs.map((c) => c.bottom))) : null,
+        y1: cs.length ? r2(Math.max(...cs.map((c) => c.top))) : null,
+        x0: ink.length ? r2(ink[0].x0) : null,
+        x1: ink.length ? r2(Math.max(...ink.map((c) => c.x1))) : null,
+        size: r2(size),
+        n: ink.length,
+        bold: ink.filter((c) => c.weight >= 600).length,
+        italic: ink.filter((c) => c.italic).length,
+        weights: [...new Set(ink.map((c) => c.weight))],
+        fill: Object.entries(fills).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null,
+        word: r2(word),
+        letter: r2(letter),
+        text: cs.map((c) => c.ch).join(''),
+        // (each character's face beside `text`, one digit a character: 1 bold, 2 slanted, 3 both, 0 neither, white space and a
+        // crop's stand-in 0; stated where a character is bold or slanted: the verdict leaves a label drawn anew out of the
+        // share, as the original's share leaves the label's ink out)
+        ...(ink.some((c) => c.weight >= 600 || c.italic)
+          ? { st: cs.map((c) => (c.hidden || SPACE.test(c.ch) || !c.ch ? 0 : (c.weight >= 600 ? 1 : 0) + (c.italic ? 2 : 0))).join('') }
+          : {}),
+        // (each character's size beside `text`, as runs of one size [characters, size], stated where its drawn characters take
+        // two sizes or more: what an element drawn as text carries of the original's two sizes, faked small capitals; the
+        // verdict's `elements`)
+        ...(new Set(ink.map((c) => r2(c.size))).size > 1 ? { sz: sizeRuns(cs) } : {}),
+      }
+    })
+    out.push({ id, lines })
+  }
+  return out
+}

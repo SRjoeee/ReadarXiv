@@ -9,28 +9,46 @@ name: Rules gate
 on:
   pull_request:
     # the drawing closure: the engine files the gate loads (a test holds this list to the gate's own reads), the gate and its pack
+    # (and the wrap's: the base page wrapped by optional content, whose ownership spells each unit against its source text through
+    # layout/own.mjs's translate/mt.mjs, and with it the protector's and the front end's files below)
     paths:
+      - 'packages/engine/src/**'
+      - 'packages/format/src/**'
+      - 'lab/pdf/packages-route.mjs'
       - 'src/pdf-reader/engine/rules/**'
       - 'src/pdf-reader/engine/layer-proto/**'
       - 'src/pdf-reader/engine/layer/check.mjs'
       - 'src/pdf-reader/engine/layer/pieces.mjs'
-      - 'src/pdf-reader/engine/layer/swap.mjs'
-      - 'src/pdf-reader/engine/layout/addon-manifest.mjs'
-      - 'src/pdf-reader/engine/layout/addon.mjs'
-      - 'src/pdf-reader/engine/layout/chain-wire.mjs'
-      - 'src/pdf-reader/engine/layout/chain.mjs'
+      - 'src/pdf-reader/engine/layout/accents.mjs'
+      - 'src/pdf-reader/engine/layout/cell-rules.mjs'
       - 'src/pdf-reader/engine/layout/colour.mjs'
+      - 'src/pdf-reader/engine/layout/figure-text.mjs'
       - 'src/pdf-reader/engine/layout/file.mjs'
       - 'src/pdf-reader/engine/layout/fills.mjs'
-      - 'src/pdf-reader/engine/layout/ink.mjs'
+      - 'src/pdf-reader/engine/layout/ink-units.mjs'
+      - 'src/pdf-reader/engine/layout/label-form.mjs'
       - 'src/pdf-reader/engine/layout/json.mjs'
+      - 'src/pdf-reader/engine/layout/ledger.mjs'
+      - 'src/pdf-reader/engine/layout/marks.mjs'
       - 'src/pdf-reader/engine/layout/names.mjs'
       - 'src/pdf-reader/engine/layout/oplist.mjs'
-      - 'src/pdf-reader/engine/layout/remove.mjs'
+      - 'src/pdf-reader/engine/layout/own.mjs'
+      - 'src/pdf-reader/engine/layout/stream.mjs'
+      - 'src/pdf-reader/engine/layout/wrap-final.mjs'
       - 'src/pdf-reader/engine/pipeline/anchors.mjs'
-      - 'src/pdf-reader/engine/layout/tail.mjs'
-      - 'src/pdf-reader/engine/pipeline/memory.mjs'
       - 'src/pdf-reader/engine/pipeline/versions.mjs'
+      - 'src/pdf-reader/engine/pipeline/typeset/tex.mjs'
+      - 'src/pdf-reader/engine/source/latex-front.mjs'
+      - 'src/pdf-reader/engine/translate/groups.mjs'
+      - 'src/pdf-reader/engine/translate/kept.mjs'
+      - 'src/pdf-reader/engine/translate/mixed.mjs'
+      - 'src/pdf-reader/engine/translate/mt.mjs'
+      - 'src/pdf-reader/engine/translate/version.mjs'
+      - 'src/pdf-reader/engine/view/floats.mjs'
+      - 'src/pdf-reader/engine/view/highlight.mjs'
+      - 'src/core/protector/math-runs.ts'
+      - 'src/core/protector/tokens.ts'
+      - 'src/core/sentences/index.ts'
       - 'lab/pdf/spikes/layer-gate.mjs'
       - 'lab/pdf/spikes/layer-gate/**'
       - 'lab/pdf/spikes/rules-gate.mjs'
@@ -61,14 +79,14 @@ jobs:
       PR: ${{ github.event.pull_request.number }}
     steps:
       # the pull request's own commit, not the merge: its sha is the one the lab links open
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
           persist-credentials: false
       # (pnpm comes with corepack, at the version package.json names: no third party's action runs in a job that holds a token)
       - run: corepack enable
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: pnpm
@@ -77,13 +95,16 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
 
       # The merge base first: its worktree is there before any pack is restored, because each side of the measurement runs on the
-      # pack its own commit names (below). The merge base is a commit of the base branch, reviewed history, not the pull request's code
+      # pack its own commit names (below). The merge base is a commit of the base branch, reviewed history, not the pull request's code.
+      # It gets an install of its own, from the store the install above filled: a workspace's links are relative
+      # (node_modules/@readarxiv/engine -> ../../packages/engine), so a node_modules borrowed from the pull request would load the pull
+      # request's packages into the base's run
       - name: Merge base
         run: |
           base=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
           echo "BASE_COMMIT=$base" >> "$GITHUB_ENV"
           git worktree add --detach "$RUNNER_TEMP/base" "$base"
-          ln -s "$PWD/node_modules" "$RUNNER_TEMP/base/node_modules"
+          pnpm -C "$RUNNER_TEMP/base" install --frozen-lockfile --prefer-offline
       # The packs, one for each side: a pack is made by an engine (its layout files are that engine's), and a pull request that moves
       # the layout file re-makes it, so the merge base's engine cannot read the pull request's pack. Each commit's own
       # lab/pdf/gate-pack.json names the pack its own engine reads: the pull request's, and the merge base's, which is restored by
@@ -118,7 +139,7 @@ jobs:
           fi
       - name: Pack from the cache
         id: pack-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           key: gate-pack-${{ steps.pack.outputs.digest }}
           path: lab/pdf/out/gate-pack
@@ -130,7 +151,7 @@ jobs:
         run: node lab/pdf/spikes/gate-pack.mjs restore
       - name: Keep the pack
         if: steps.pack-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           key: gate-pack-${{ steps.pack.outputs.digest }}
           path: lab/pdf/out/gate-pack
@@ -139,7 +160,7 @@ jobs:
       - name: Merge base pack from the cache
         id: base-cache
         if: steps.pack.outputs.same != 'true'
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           key: gate-pack-${{ steps.pack.outputs.base }}
           path: ${{ runner.temp }}/base-pack
@@ -151,7 +172,7 @@ jobs:
         run: node "$RUNNER_TEMP/base/lab/pdf/spikes/gate-pack.mjs" restore --pack="$RUNNER_TEMP/base/lab/pdf/gate-pack.json" --out="$BASE_PACK"
       - name: Keep the merge base pack
         if: steps.pack.outputs.same != 'true' && steps.base-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           key: gate-pack-${{ steps.pack.outputs.base }}
           path: ${{ runner.temp }}/base-pack
@@ -205,7 +226,7 @@ jobs:
           fi
       - name: Numbers
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: rules-gate
           path: ${{ runner.temp }}/verdict/rules-gate.json

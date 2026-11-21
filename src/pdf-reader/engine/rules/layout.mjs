@@ -28,7 +28,7 @@
 // Only this directory imports a package (zod, the mini build): the readers' bundles take the validator once, here. The
 // engine's drawing modules import resolveRules' answers, never the schema.
 import * as z from 'zod/mini'
-import { ENGLISH_FAMILIES, FACES } from './font-roles.mjs'
+import { isCjkFace } from './font-roles.mjs'
 import { scriptOf } from './script.mjs'
 import { countValues, LayoutRefusal, told } from '../layout/json.mjs'
 import { NAME_KEYS } from '../layout/names.mjs'
@@ -38,26 +38,51 @@ import BUILTIN_JSON from './layout-rules.json' with { type: 'json' }
  *  original's pitch while the size shrinks); `adaptiveFill` read for every original, its page's target held near the last
  *  page's and one size a page; `fillLead` and `leftover` added. 3 (D1a, 2026-10-08): `labels` holds every babel name
  *  (layout/names.mjs NAME_KEYS), the generated headings' as well as the floats'. 4 (1b-C, 2026-10-16): `adaptiveFill.band` is read
- *  against the page's own paragraphs (run.mjs pageTarget), no longer against the page before's and the fullest page's */
-export const RULES_SCHEMA = 4
+ *  against the page's own paragraphs (run.mjs pageTarget), no longer against the page before's and the fullest page's. 5 (2026-10-23):
+ *  `fillLeadRel` added, the fill's top relative to the original's own pitch (run.mjs fillLeadsOf). 6 (2026-10-29): `cjkFaces`
+ *  holds its group alone, a CJK script drawn at Regular and Bold beside every English family (the maintainer's ruling): its
+ *  `light` designs gone, and its `kai`, which no engine since 2026-10-19 read, gone with them as was planned at its ruling.
+ *  7 (2026-10-29, the maintainer's ruling on lane B's B1 and B2): `evenPitch` added, a block's lines at the original's leading
+ *  one pitch apart (layer2.mjs evenGridOf), and `keepAlign`, a unit TeX set flush left or flush right kept so (the layout
+ *  file's UNIT_FLAG.FLUSH_LEFT and FLUSH_RIGHT, LAYOUT 26). 8 (#121-4): `latinPatterns` takes French's, Spanish's and
+ *  Portuguese's own (hyph-utf8's), which were hyphenated with English's, and `hyphenation` their minimums as babel sets them.
+ *  9 (the owner's ruling of 2026-10-29 on the languages of a script the engine sets): `latinPatterns` takes Italian's, Dutch's,
+ *  Polish's, Turkish's, Indonesian's (Malay's too, as babel's malay.ldf takes them), Czech's and Swedish's, and
+ *  `cyrillicPatterns` is added, a Cyrillic word's patterns: Russian's rules (Khmelev's, hyph.mjs), or Ukrainian's or
+ *  Bulgarian's own, which those rules cannot read (і, ї, є and ґ are no letters of theirs, and Bulgarian's ъ is a vowel).
+ *  10 (the rules audit of 2026-11-04, T-D1): the switches no set ever turned the other way gone, their shipped value the
+ *  engine's own: `leadRel` (the leading is relative to the original's pitch: the page fill set it so for every unit), `trackStart`
+ *  (the face's size correction given back, run.mjs cjkAdvance), `even` and `fillSize` (no page-even pass, no growth by size),
+ *  `leftover` (what the fill leaves stays at each paragraph's foot), `evenPitch` and `keepAlign` (lane B's B1 and B2, on);
+ *  and `further`'s 'flow' (the text run past a display, the release sweep's and the gate pack's units: it set none the steps
+ *  around it had not) */
+export const RULES_SCHEMA = 10
 /** a set's bytes at most, as received (the migrated set is about 8 KB) */
 export const RULES_CAP = 65_536
 /** a set's JSON values at most, counted before JSON.parse (layout/json.mjs countValues) */
 export const RULES_VALUES = 20_000
-/** a set nests at most this deep (its deepest field: scripts.<script>.cjkFaces.light) */
+/** a set nests at most this deep (its deepest fields: a script's lists and objects, scripts.<script>.order and .adaptiveFill) */
 const DEPTH_MAX = 8
-/** the targets either reader offers, each of which must resolve or the set is refused: the web's eight and Portuguese, which the
- *  extension's reader offers too (its menu, ui/languages.ts READER_LANGUAGES; its tag for Traditional Chinese is zh-TW). A test
- *  holds that every language of that menu is here */
-export const TARGETS = Object.freeze(['zh', 'zh-TW', 'ja', 'ko', 'de', 'fr', 'es', 'ru', 'pt'])
+/** the targets either reader offers, each of which must resolve or the set is refused: the web's first eight, Portuguese, and the
+ *  languages of a script the engine already set that the owner's ruling of 2026-10-29 added (Latin: Italian, Dutch, Polish,
+ *  Turkish, Indonesian, Malay, Czech, Swedish; Cyrillic: Ukrainian, Bulgarian). The extension's reader offers every one (its
+ *  menu, ui/languages.ts READER_LANGUAGES; its tag for Traditional Chinese is zh-TW); a test holds that every language of that
+ *  menu is here */
+export const TARGETS = Object.freeze(['zh', 'zh-TW', 'ja', 'ko', 'de', 'fr', 'es', 'ru', 'pt', 'it', 'nl', 'pl', 'tr', 'id', 'ms', 'cs', 'sv', 'uk', 'bg'])
 export const SCRIPTS = Object.freeze(['Hans', 'Hant', 'Jpan', 'Kore', 'Latn', 'Cyrl'])
 /** the scripts whose text is set by CJK rules (cjk in the fit's parameters); each must name its CJK faces */
 const CJK_SCRIPTS = new Set(['Hans', 'Hant', 'Jpan', 'Kore'])
 const ORDER = Object.freeze(['track', 'borrow', 'lead', 'shrink'])
-const FURTHER = Object.freeze(['widen', 'flow', 'shrink'])
-const LEFTOVER = Object.freeze(['foot', 'pack'])
-/** the weights of a CJK group the role table builds its roles from (font-roles.mjs rolesFor) */
-const GROUP_WEIGHTS = Object.freeze(['light', 'regular', 'semibold', 'bold'])
+const FURTHER = Object.freeze(['widen', 'shrink'])
+/** the hyphenation patterns of TeX's (layer-proto/hyph.mjs TEX_PATTERN_FILES), each with its minimums in the set's `hyphenation`:
+ *  a Latin word's (`latinPatterns`: English's for every target's, the language's own where it names one), and a Cyrillic word's
+ *  (`cyrillicPatterns`), which may also be Russian's rules, Khmelev's, which take no patterns and hold their own minimums */
+export const PATTERNS = Object.freeze(['en', 'de', 'fr', 'es', 'pt', 'it', 'nl', 'pl', 'tr', 'id', 'cs', 'sv', 'uk', 'bg'])
+const LATIN_PATTERNS = Object.freeze(PATTERNS.filter(l => scriptOf(l) === 'Latn'))
+const CYRILLIC_PATTERNS = Object.freeze(['ru', ...PATTERNS.filter(l => scriptOf(l) === 'Cyrl')])
+const PATTERN_NAMES = Object.freeze({ en: 'English', de: 'German', fr: 'French', es: 'Spanish', pt: 'Portuguese', it: 'Italian', nl: 'Dutch', pl: 'Polish', tr: 'Turkish', id: 'Indonesian', cs: 'Czech', sv: 'Swedish', uk: 'Ukrainian', bg: 'Bulgarian' })
+/** the weights of a CJK group the role table builds its roles from (font-roles.mjs rolesFor): the body and the bold */
+const GROUP_WEIGHTS = Object.freeze(['regular', 'bold'])
 const NOTE_MAX = 1000
 const LABEL_MAX = 32
 const CHARS_MAX = 256
@@ -112,25 +137,19 @@ const SCRIPT_FIELDS = [
   { key: 'order', group: 'fit', kind: 'order', values: ORDER, words: 'The order in which the fit turns its knobs when a translation does not fit: tracking, borrowing free space below, the leading, the size.', schema: () => z.array(z.enum(ORDER)).check(z.refine(isPermutation, 'not an ordering of the four knobs')) },
   { key: 'leadBase', group: 'fit', kind: 'number', min: 0.8, max: 2, step: 0.05, words: "The translation's line pitch, × the original's line pitch.", schema: () => range(0.8, 2) },
   { key: 'leadFloor', group: 'fit', kind: 'number', min: 0.8, max: 2, step: 0.05, words: 'The tightest line pitch the fit falls back to, × the original\'s.', schema: () => range(0.8, 2) },
-  // (leadRel false: the maintainer's ruling of 2026-10-07 on S3-11, the script's leading on the original's own pitch, which
-  // reads more naturally on a loose original than the relative leading that stays a switch)
-  { key: 'leadRel', group: 'fit', kind: 'boolean', words: "Whether the leading is taken relative to the original's own pitch (never stacked on a loose original's) or applied as it is.", schema: () => z.boolean() },
   { key: 'trackMin', group: 'fit', kind: 'number', min: -0.3, max: 0, step: 0.005, words: 'The tightest letter spacing the fit uses, in em (zero or less).', schema: () => range(-0.3, 0) },
-  { key: 'trackStart', group: 'fit', kind: 'number', nullable: true, min: -0.3, max: 0.3, step: 0.005, words: "The letter spacing the fit starts from, in em; empty gives back the face's size correction.", schema: () => z.nullable(range(-0.3, 0.3)) },
   { key: 'compressMax', group: 'fit', kind: 'enum', values: [0, 1, 2], words: "How far full-width punctuation is compressed: 0 not at all, 1 at a line's start and between two marks, 2 every mark.", schema: () => z.literal([0, 1, 2]) },
   { key: 'centredPunct', group: 'fit', kind: 'boolean', words: 'Whether punctuation is centred in its em box (Traditional Chinese): no mark is then compressed or hung.', schema: () => z.boolean() },
   { key: 'borrow', group: 'fit', kind: 'enum', values: [0, 1], words: 'Whether a unit may borrow the free space below its last line (1) or not (0).', schema: () => z.literal([0, 1]) },
   { key: 'borrowGap', group: 'fit', kind: 'number', min: 0, max: 2, step: 0.05, words: "The gap kept clear under borrowed space, × the original's line pitch.", schema: () => range(0, 2) },
   { key: 'floor', group: 'fit', kind: 'number', min: 0.4, max: 1, step: 0.05, words: "The smallest size the fit sets a unit at, × the original's size.", schema: () => range(0.4, 1) },
   { key: 'step', group: 'fit', kind: 'number', min: 0.01, max: 0.1, step: 0.005, words: "The size step between the fit's tries, × the original's size.", schema: () => range(0.01, 0.1) },
-  { key: 'further', group: 'fit', kind: 'subset', values: FURTHER, words: 'The steps tried, in order, for a unit the fit leaves clipped: widen its lines, flow past a kept region, shrink below the floor.', schema: () => z.array(z.enum(FURTHER)).check(z.refine(isSubsetInOrder, 'not a subset of widen, flow, shrink in that order')) },
+  { key: 'further', group: 'fit', kind: 'subset', values: FURTHER, words: 'The steps tried, in order, for a unit the fit leaves clipped: widen its lines, shrink below the floor.', schema: () => z.array(z.enum(FURTHER)).check(z.refine(isSubsetInOrder, 'not a subset of widen, shrink in that order')) },
   { key: 'floorMin', group: 'fit', kind: 'number', min: 0.3, max: 1, step: 0.05, words: "The smallest size the last of those steps reaches, × the original's size.", schema: () => range(0.3, 1) },
   { key: 'cjkJust', group: 'fit', kind: 'number', min: 0, max: 1, step: 0.01, words: 'The most a line may open between CJK characters to justify, in em a gap.', schema: () => range(0, 1) },
   { key: 'spaceMin', group: 'fit', kind: 'number', min: 0.3, max: 1, step: 0.05, words: 'The least a word space shrinks to, × its natural width.', schema: () => range(0.3, 1) },
   { key: 'spaceMax', group: 'fit', kind: 'number', min: 0, max: 3, step: 0.05, words: 'The most a word space opens to justify a line, × its natural width.', schema: () => range(0, 3) },
   { key: 'autospace', group: 'fit', kind: 'number', min: 0, max: 1, step: 0.05, words: 'The space set between CJK text and Latin letters or digits, in em.', schema: () => range(0, 1) },
-  { key: 'even', group: 'fit', kind: 'enum', values: [0, 1, 2], words: "How a page's body units are set alike: 0 each at its own, 1 at one size, 2 at one size and one leading.", schema: () => z.literal([0, 1, 2]) },
-  { key: 'fillSize', group: 'fit', kind: 'number', min: 0, max: 1.5, step: 0.05, words: "How far a unit's size may grow to fill a loose original's paragraph, × the original's size; 0 is off.", schema: () => range(0, 1.5) },
   // (adaptiveFill on: the maintainer's choice of 2026-10-07 on S3-12, D, as measured there; null is B, the script's leading
   // on the original's pitch alone)
   {
@@ -146,30 +165,31 @@ const SCRIPT_FIELDS = [
   // (D6's F6b, 2026-10-08: the top of a unit's fill leading, which replaced the script's leading on the original's pitch;
   // in em of the size drawn, so that a shrunk unit is spread no looser for its size than one set at the full size)
   { key: 'fillLead', group: 'fit', kind: 'number', nullable: true, min: 1, max: 3, step: 0.05, words: "The loosest line pitch the fill spreads a unit's lines to, in em of the size it is drawn at; empty: the original's own pitch.", schema: () => z.nullable(range(1, 3)) },
-  // (D6's F6c, 2026-10-08: built switchable, for the maintainer to decide by looking; 'foot' is what the fill left before)
-  { key: 'leftover', group: 'fit', kind: 'enum', values: LEFTOVER, words: "Where what the fill leaves over goes: at each paragraph's foot, or packed to the end of its run of paragraphs, each keeping the original's gap to the one above it.", schema: () => z.literal([...LEFTOVER]) },
+  // (2026-10-23, chosen by eye on a double-spaced paper: the em top above can sit at the original's own pitch or under what the frame
+  // allows, and the translation then ends early. 1.3 is the engine's own Chinese leadBase, the leading that makes Chinese read as
+  // the original's pitch does; a ceiling of that many original pitches (scaled by the fit's size) never sets a gap wider than the
+  // original's own in proportion. Read only with fillLead; empty: the em top alone, as before. Per script, so that Japanese and
+  // Korean stay off until measured)
+  { key: 'fillLeadRel', group: 'fit', kind: 'number', nullable: true, min: 1, max: 3, step: 0.05, words: "The loosest line pitch the fill spreads a unit's lines to, as a multiple of the original's own pitch, where that is looser than the pitch above; empty: the pitch above alone.", schema: () => z.nullable(range(1, 3)) },
   // breaking (layer2.mjs tokensOf2, placeItems; layer1.mjs kinsokuOf)
   { key: 'keepAll', group: 'breaking', kind: 'boolean', words: 'Whether lines break only at spaces (Korean and the alphabets) rather than between any two CJK characters.', schema: () => z.boolean() },
   { key: 'cjkQuotes', group: 'breaking', kind: 'boolean', words: 'Whether curly quotes, dashes, the ellipsis and the middle dot are set as CJK characters.', schema: () => z.boolean() },
   { key: 'noStart', group: 'breaking', kind: 'chars', words: 'The characters no line starts with.', schema: characters },
   { key: 'noEnd', group: 'breaking', kind: 'chars', words: 'The characters no line ends with.', schema: characters },
   { key: 'hyphen', group: 'breaking', kind: 'enum', values: [0, 1], words: "Whether a Latin word is hyphenated at a line's end (1) or not (0).", schema: () => z.literal([0, 1]) },
-  { key: 'latinPatterns', group: 'breaking', kind: 'enum', values: ['en', 'de'], words: 'The hyphenation patterns a Latin word uses.', schema: () => z.literal(['en', 'de']) },
+  { key: 'latinPatterns', group: 'breaking', kind: 'enum', values: LATIN_PATTERNS, words: 'The hyphenation patterns a Latin word uses.', schema: () => z.literal([...LATIN_PATTERNS]) },
+  // (schema 9: Russian's rules, which were every Cyrillic word's, or a language's own patterns)
+  { key: 'cyrillicPatterns', group: 'breaking', kind: 'enum', values: CYRILLIC_PATTERNS, words: "The hyphenation a Cyrillic word uses: Russian's rules (ru), or a language's own patterns.", schema: () => z.literal([...CYRILLIC_PATTERNS]) },
   // table cells (layer2.mjs cellBands)
   { key: 'cellClear', group: 'cells', kind: 'number', min: 0, max: 5, step: 0.1, words: "The room kept between a table cell's text and a rule over or under it, in PDF units.", schema: () => range(0, 5) },
   { key: 'cellCapMin', group: 'cells', kind: 'number', min: 0.3, max: 1, step: 0.05, words: "The smallest share of the size a cell's text may be capped to between its rules.", schema: () => range(0.3, 1) },
   // faces (font-roles.mjs rolesFor)
   {
     key: 'cjkFaces', group: 'faces', kind: 'object', nullable: true,
-    members: [
-      { key: 'group', kind: 'text', words: 'the CJK font group' },
-      // (read by the engines before the ruling of 2026-10-19, which draw emphasis in it; kept for them until the schema next
-      // moves: an engine since draws a CJK italic run in the body's face sheared, layer-proto/fonts.mjs CJK_SLANT_DEG)
-      { key: 'kai', kind: 'text', nullable: true, words: 'its Kai for emphasis in engines before 2026-10-19 (empty: upright); since, emphasis is the body slanted and this is not read' },
-      { key: 'light', kind: 'list', words: 'the English designs beside which it takes the light weights' },
-    ],
-    words: 'The CJK family the script is drawn in; empty for an alphabet.',
-    schema: () => z.nullable(z.strictObject({ group: text(64), kai: z.nullable(text(64)), light: z.array(text(32)).check(z.maxLength(16)) })),
+    // (its group alone, drawn at Regular and Bold beside every English family: the light designs and the Kai gone at schema 6)
+    members: [{ key: 'group', kind: 'text', words: 'the CJK font group' }],
+    words: 'The CJK family the script is drawn in, at Regular and Bold; empty for an alphabet.',
+    schema: () => z.nullable(z.strictObject({ group: text(64) })),
   },
 ]
 const SCRIPT_KEYS = Object.freeze(SCRIPT_FIELDS.map(f => f.key))
@@ -183,7 +203,7 @@ const LABELS = z.nullable(z.strictObject(Object.fromEntries(LABEL_KEYS.map(k => 
 const SCRIPT_RULES = z.strictObject(Object.fromEntries(SCRIPT_FIELDS.map(f => [f.key, f.schema()])))
 const LANGUAGE_RULES = z.strictObject({ labels: LABELS, ...Object.fromEntries(SCRIPT_FIELDS.map(f => [f.key, z.optional(f.schema())])) })
 const SIDES = z.strictObject({ left: integer(1, 6), right: integer(1, 6) })
-const HYPHENATION = z.strictObject({ minWord: integer(2, 20), en: SIDES, de: SIDES })
+const HYPHENATION = z.strictObject({ minWord: integer(2, 20), ...Object.fromEntries(PATTERNS.map(l => [l, SIDES])) })
 
 /** the rule set's schema, strict at every level: an unknown key anywhere is another schema's */
 export const RULE_SET = z.strictObject({
@@ -204,10 +224,7 @@ export const RULES_FIELDS = Object.freeze([
   ...SCRIPT_FIELDS.map(({ key, schema: _, ...f }) => Object.freeze({ path: key, scope: 'script', ...f })),
   Object.freeze({ path: 'labels', scope: 'language', group: 'labels', kind: 'object', nullable: true, members: Object.freeze(LABEL_KEYS.map(key => ({ key, kind: 'text', words: LABEL_WORDS[key] }))), words: "A float's label and each generated heading babel names (Abstract, References, Contents, …) in this language's words; an empty word, or none, keeps the original's." }),
   Object.freeze({ path: 'hyphenation.minWord', scope: 'set', group: 'hyphenation', kind: 'integer', min: 2, max: 20, step: 1, words: 'The shortest word, in letters, that is hyphenated.' }),
-  Object.freeze({ path: 'hyphenation.en.left', scope: 'set', group: 'hyphenation', kind: 'integer', min: 1, max: 6, step: 1, words: 'The fewest letters English leaves before a hyphen.' }),
-  Object.freeze({ path: 'hyphenation.en.right', scope: 'set', group: 'hyphenation', kind: 'integer', min: 1, max: 6, step: 1, words: 'The fewest letters English leaves after a hyphen.' }),
-  Object.freeze({ path: 'hyphenation.de.left', scope: 'set', group: 'hyphenation', kind: 'integer', min: 1, max: 6, step: 1, words: 'The fewest letters German leaves before a hyphen.' }),
-  Object.freeze({ path: 'hyphenation.de.right', scope: 'set', group: 'hyphenation', kind: 'integer', min: 1, max: 6, step: 1, words: 'The fewest letters German leaves after a hyphen.' }),
+  ...PATTERNS.flatMap(l => ['left', 'right'].map(side => Object.freeze({ path: `hyphenation.${l}.${side}`, scope: 'set', group: 'hyphenation', kind: 'integer', min: 1, max: 6, step: 1, words: `The fewest letters ${PATTERN_NAMES[l]} leaves ${side === 'left' ? 'before' : 'after'} a hyphen.` }))),
 ])
 
 // ---- reading
@@ -257,9 +274,8 @@ function crossChecks(set) {
       return
     }
     if (!cjk) throw new RulesRefusal(`${at}.cjkFaces`, 'an alphabetic script takes no CJK faces')
-    if (!GROUP_WEIGHTS.every(w => Object.hasOwn(FACES, `${faces.group}-${w}`))) throw new RulesRefusal(`${at}.cjkFaces.group`, 'not a group of the face catalog')
-    if (faces.kai !== null && !Object.hasOwn(FACES, faces.kai)) throw new RulesRefusal(`${at}.cjkFaces.kai`, 'not a face of the catalog')
-    faces.light.forEach((design, i) => { if (!ENGLISH_FAMILIES.includes(design)) throw new RulesRefusal(`${at}.cjkFaces.light.${i}`, 'not an English design') })
+    // (a CJK group of the catalog, in both weights its roles take: a Latin family has a regular and a bold too)
+    if (!GROUP_WEIGHTS.every(w => isCjkFace(`${faces.group}-${w}`))) throw new RulesRefusal(`${at}.cjkFaces.group`, 'not a CJK group of the face catalog')
   }
   for (const script of SCRIPTS) checkFaces(set.scripts[script].cjkFaces, `scripts.${script}`, CJK_SCRIPTS.has(script))
   for (const target of TARGETS) if (!Object.hasOwn(set.languages, target)) throw new RulesRefusal(`languages.${target}`, 'missing: a target every reader offers')
@@ -323,7 +339,8 @@ const copy = v => (v !== null && typeof v === 'object' ? structuredClone(v) : v)
  * language's over them, field by field; an object field (adaptiveFill, cjkFaces, labels) is replaced whole, never merged.
  * `params` are v0's own Params: every fit, breaking and cell field, `cjk` from the script, and the set's hyphenation
  * minimums; fresh objects each call, a run may change its own. `patterns` are the hyphenation patterns to load: English's
- * for every target's Latin words, the language's own where `latinPatterns` names one, and Russian's for Cyrillic. Throws
+ * for every target's Latin words, the language's own where `latinPatterns` names one, and a Cyrillic target's
+ * `cyrillicPatterns` (Russian's rules, or the language's own; and these wherever a set names other than Russian's). Throws
  * for a target `languages` lacks, or a script the set has no rules for
  */
 export function resolveRules(set, target) {
@@ -338,7 +355,7 @@ export function resolveRules(set, target) {
   params.hyphenation = hyphenation
   const patterns = ['en']
   if (params.latinPatterns !== 'en') patterns.push(params.latinPatterns)
-  if (script === 'Cyrl') patterns.push('ru')
+  if (script === 'Cyrl' || params.cyrillicPatterns !== 'ru') patterns.push(params.cyrillicPatterns)
   return { target, script, params, labels: copy(lang.labels), patterns, hyphenation, cjkFaces: field('cjkFaces'), version: set.version }
 }
 
@@ -365,7 +382,7 @@ export function writeRules(set) {
     entry(1, 'schema', flat(set.schema)),
     entry(1, 'version', flat(set.version)),
     entry(1, 'note', flat(set.note)),
-    entry(1, 'hyphenation', block([entry(2, 'minWord', flat(h.minWord)), entry(2, 'en', sides(h.en)), entry(2, 'de', sides(h.de))], 1)),
+    entry(1, 'hyphenation', block([entry(2, 'minWord', flat(h.minWord)), ...PATTERNS.map(l => entry(2, l, sides(h[l])))], 1)),
     entry(1, 'scripts', block(SCRIPTS.map(script => entry(2, script, block(fields(set.scripts[script], SCRIPT_KEYS, 3), 2))), 1)),
     entry(1, 'languages', block(Object.keys(set.languages).sort().map(tag => entry(2, tag, block(fields(set.languages[tag], ['labels', ...SCRIPT_KEYS], 3), 2))), 1)),
   ]

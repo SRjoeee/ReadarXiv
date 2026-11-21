@@ -2,7 +2,7 @@
 // stand-in arXiv PDF and the layer bundle the reader's browser checks (tests/e2e/reader.mjs) are served from the stand-in
 // of the layer API (tests/e2e/lib/layer-api.mjs). Nothing here is an arXiv paper's, so both outputs are committed.
 //
-//   pnpm exec tsx scripts/make-sample-bundle.mjs [--out=<dir>] [--check] [--keep-pdf]
+//   pnpm exec tsx scripts/make-sample-bundle.mjs [--out=<dir>] [--check] [--keep-pdf] [--final=<file>]
 //
 // The steps, in the order the server's prepare takes them, each through the engine's modules as they stand:
 //   1. the stand-in arXiv PDF: the sample's source compiled unmarked (sample-1.pdf);
@@ -10,9 +10,11 @@
 //   3. the left geometry: the source compiled again with a mark at each unit's start and end (live.mjs originalFiles),
 //      those marks carried to the PDF of step 1 and the units anchored there (anchors.mjs), as the original's side is;
 //   4. the layout marks (layout/paper.mjs layoutMarksOfPaper: the mark probe and the layout-marked original);
-//   5. the layout file (layout/make.mjs makeLayout, over those marks and the PDF of step 1);
-//   6. the add-on, its tail and manifest (layout/addon.mjs paperAddon);
-//   7. the bundle (layer-proto/bundle.mjs writeBundle), read back at once by readBundle: bundle.json.
+//   5. the layout file and each page's cell rules (layout/make.mjs makeLayout, over those marks and the PDF of step 1);
+//   6. the bundle (layer-proto/bundle.mjs writeBundle), read back at once by readBundle: bundle.json.
+// The page the reader draws over is our final pass wrapped by optional content (tests/fixtures/pdf/ocg/, written with
+// `--final` and scripts/make-ocg-sample.mjs): the bundle names the stand-in, as arXiv's PDF, and the e2e's cut serves the
+// wrapped pass as our base (tests/e2e/lib/layer-cut.mjs).
 // Every compile is native TeX Live in Docker (the image the lab's gates run: texlive/texlive:latest, no network, 2 CPUs,
 // 3 GB, 600 s) with the date pinned (SOURCE_DATE_EPOCH with FORCE_SOURCE_DATE), so that the same source gives the same
 // bytes: run twice, the outputs are identical. `--out` writes elsewhere than the fixture's directory; `--check` makes the
@@ -24,19 +26,16 @@
 // a paper's layout over arXiv's; the next make in Docker makes both again.
 import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statfsSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statfsSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
-import { constants as zlibConstants, deflateSync, inflateRawSync, inflateSync } from 'node:zlib'
-import * as PL from '@cantoo/pdf-lib'
 import { getDocument, OPS, version as PDFJS_INSTALLED } from 'pdfjs-dist/legacy/build/pdf.mjs'
-import { anchorUnits, boundsFromMarks, markWords, tokenizeDocument } from '../src/pdf-reader/engine/pipeline/anchors.mjs'
+import { anchorUnits, boundsFromMarks, markWords, orderOf, tokenizeDocument } from '../src/pdf-reader/engine/pipeline/anchors.mjs'
 import { bundleUnitsOf, readBundle, writeBundle } from '../src/pdf-reader/engine/layer-proto/bundle.mjs'
 import { openPaper, originalFiles } from '../src/pdf-reader/engine/pipeline/live.mjs'
-import { paperAddon } from '../src/pdf-reader/engine/layout/addon.mjs'
-import { encodeLayout, indexLayout, parseLayout } from '../src/pdf-reader/engine/layout/file.mjs'
+import { encodeLayout, parseLayout } from '../src/pdf-reader/engine/layout/file.mjs'
 import { makeLayout } from '../src/pdf-reader/engine/layout/make.mjs'
 import { marksFile } from '../src/pdf-reader/engine/layout/marks.mjs'
 import { layoutMarksOfPaper } from '../src/pdf-reader/engine/layout/paper.mjs'
@@ -55,7 +54,7 @@ const KEEP_PDF = process.argv.includes('--keep-pdf')
 const OUT = CHECK ? mkdtempSync(join(tmpdir(), 'sample-bundle-out-')) : (argOf('out') ?? FIXTURE)
 
 /** the sample's identity: an identifier no arXiv paper has (there is no month 00), its first version, and the compiler
- *  image's name the web's prepare names (container/image.json) */
+ *  image's name the web's prepare names (its container's image) */
 const PAPER = { id: '2600.00001', version: 1 }
 const IMAGE = '1'
 /** every compile's date, as the lab pins it (2026-10-06) */
@@ -79,7 +78,7 @@ const stem = main.replace(/\.[^.]+$/, '')
 
 /** one compile: the files in a directory of their own, latexmk in Docker, the PDF's bytes and the log's text (the PDF null
  *  where none was made). `once`: one pass, as the mark probe is compiled */
-async function compile(sources, { once = false } = {}) {
+async function compile(sources, { once = false, files = false } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'sample-bundle-tex-'))
   try {
     for (const [path, bytes] of sources) {
@@ -97,7 +96,9 @@ async function compile(sources, { once = false } = {}) {
       if (e?.code === 125) throw new Error(`docker could not run the compile (exit 125): ${String(e.stderr ?? '').trim().split('\n')[0] || 'no message'}; the image texlive/texlive:latest must be on this machine, and the maker never pulls it`)
     })
     const pdf = join(dir, `${stem}.pdf`), log = join(dir, `${stem}.log`)
-    return existsSync(log) ? { pdf: existsSync(pdf) ? new Uint8Array(readFileSync(pdf)) : null, log: readFileSync(log, 'latin1') } : null
+    // (`files`: every file the compile left, by its path, for the final pass made over them: layout/paper.mjs finalPass)
+    const left = files ? new Map(readdirSync(dir, { recursive: true }).filter(p => statSync(join(dir, p)).isFile()).map(p => [String(p), new Uint8Array(readFileSync(join(dir, p)))])) : null
+    return existsSync(log) ? { pdf: existsSync(pdf) ? new Uint8Array(readFileSync(pdf)) : null, log: readFileSync(log, 'latin1'), ...(left ? { files: left } : {}) } : null
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -140,7 +141,9 @@ const arxivDoc = await arxivTask.promise
 step(2, 'the units')
 const kinds = paper.units.map(u => u.kind)
 const units = bundleUnitsOf(paper)
-console.log(`   ${units.length} units (${[...new Set(kinds)].map(k => `${kinds.filter(x => x === k).length} ${k}`).join(', ')})`)
+// (the bundle's kinds: the source units', then the structural names' (kind `name`))
+const bundleKinds = units.map(u => u[0])
+console.log(`   ${units.length} units (${[...new Set(bundleKinds)].map(k => `${bundleKinds.filter(x => x === k).length} ${k}`).join(', ')})`)
 
 // 3. the left geometry: our compile's unit marks carried to the PDF of step 1
 step(3, 'the left geometry')
@@ -153,13 +156,16 @@ const left = await (async () => {
   const doc = tokenizeDocument(here.pages)
   const carried = markWords(tokenizeDocument((await textPages(markedDoc)).pages), await unitMarks(markedDoc))
   const texts = paper.units.map((u, id) => ({ id, ...unitText(u.pieces), ...displayEdges(u) }))
-  const anchors = anchorUnits(doc, texts, { bounds: boundsFromMarks(doc, carried), floating: id => FLOATING.has(kinds[id]) })
+  // (in the order TeX sets the units, as the page pass anchors them: anchors.mjs orderOf)
+  const order = orderOf(paper.texOrder, texts.length)
+  const anchors = anchorUnits(doc, order ? order.map(i => texts[i]) : texts, { bounds: boundsFromMarks(doc, carried), floating: id => FLOATING.has(kinds[id]) })
   const located = []
   for (const [id, anchor] of [...anchors].sort((a, b) => a[0] - b[0])) {
     if (!anchor?.rects.length) continue
     located.push([id, anchor.tokens[0], anchor.rects.map(r => [r.page, hundredths(r.x0), hundredths(r.y0), hundredths(r.x1), hundredths(r.y1)])])
   }
-  return { kinds, pages: here.views.map(v => v.map(hundredths)), units: located }
+  // (a kind for each of the bundle's units: the source's, then the structural names' (bundleUnitsOf's `name` units))
+  return { kinds: units.map(u => u[0]), pages: here.views.map(v => v.map(hundredths)), units: located }
 })()
 await markedTask.destroy()
 console.log(`   ${left.units.length} of ${units.length} units located on ${left.pages.length} pages`)
@@ -170,8 +176,8 @@ let compileFault = null
 const made = await layoutMarksOfPaper(paper, {
   compile: async req => {
     try {
-      const c = await compile(withSource(req.overrides), { once: !req.rerun })
-      return c ? { ok: !!c.pdf?.length, pdf: c.pdf, log: c.log } : { ok: false, error: 'no log' }
+      const c = await compile(withSource(req.overrides), { once: !req.rerun, files: !!req.files })
+      return c ? { ok: !!c.pdf?.length, pdf: c.pdf, log: c.log, ...(c.files ? { files: c.files } : {}) } : { ok: false, error: 'no log' }
     } catch (e) { compileFault = e; throw e }
   },
   open: async bytes => {
@@ -183,32 +189,28 @@ const made = await layoutMarksOfPaper(paper, {
 if (compileFault) throw compileFault
 if (!('marks' in made)) throw new Error(`the layout marks were refused at the ${made.refused}`)
 console.log(`   ${marksFile(made.marks).length} characters of marks`)
+// (`--final=<file>`: our final pass of the marked compile written there too, the base page the per-unit erasure wraps: the
+// sample of tests/fixtures/pdf/ocg/, scripts/make-ocg-sample.mjs)
+if (argOf('final')) {
+  if (!made.base?.pdf) throw new Error(`no final pass of ours: ${made.base?.refused ?? 'none'} ${made.base?.why ?? ''}`)
+  writeFileSync(argOf('final'), made.base.pdf)
+  console.log(`   our final pass: ${made.base.pdf.length} bytes`)
+}
 
-// 5. the layout file
+// 5. the layout file and its cell rules
 step(5, 'the layout file')
-const layoutMade = await makeLayout({ units: paper.units, marks: made.marks, arxiv: arxivDoc, OPS, paper: PAPER, left: '', pdfjs: PDFJS })
+const layoutMade = await makeLayout({ units: paper.units, texOrder: paper.texOrder, marks: made.marks, base: arxivDoc, OPS, paper: PAPER, pdfjs: PDFJS, cellRules: true })
 if (!('file' in layoutMade)) throw new Error(`the layout maker refused the paper (${layoutMade.refused})`)
 const layoutText = encodeLayout(layoutMade.file)
 const layoutBytes = new TextEncoder().encode(layoutText)
 const layout = parseLayout(layoutBytes)
 const { located, total } = layoutMade.stats.units
-console.log(`   ${layoutBytes.length} bytes; ${located} of ${total} units located`)
+if (!layoutMade.cellRules) throw new Error(`the cell rules failed: ${layoutMade.rulesFailed}`)
+const rules = layoutMade.cellRules.size ? Object.fromEntries([...layoutMade.cellRules].sort((a, b) => a[0] - b[0])) : null
+console.log(`   ${layoutBytes.length} bytes; ${located} of ${total} units located; cell rules on ${layoutMade.cellRules.size} pages`)
 
-// 6. the add-on
-step(6, 'the add-on')
-const inflate = (bytes, limit) => {
-  const o = { finishFlush: zlibConstants.Z_SYNC_FLUSH, maxOutputLength: limit + 1 }
-  try { return new Uint8Array(inflateSync(bytes, o)) } catch (e) { if (e?.code === 'ERR_BUFFER_TOO_LARGE') throw e; return new Uint8Array(inflateRawSync(bytes.subarray(2), o)) }
-}
-const addonTask = open(arxiv)
-const addon = await paperAddon({ bytes: arxiv, index: indexLayout(layout), doc: await addonTask.promise, OPS, PL, deflate: bytes => new Uint8Array(deflateSync(bytes)), inflate })
-await addonTask.destroy()
-if (!addon.ok) throw new Error(`the remover refused the paper: ${addon.refused}`)
-const entries = Object.values(addon.manifest.page)
-console.log(`   tail ${addon.tail.length} bytes; ${entries.filter(p => p.ok).length} of ${addon.manifest.pages} pages made, ${entries.filter(p => p.ok && p.at).length} with a removed page`)
-
-// 7. the bundle, read back at once
-step(7, 'the bundle')
+// 6. the bundle, read back at once
+step(6, 'the bundle')
 const parts = {
   paper: { ...PAPER, pages: arxivDoc.numPages },
   base: { bytes: arxiv.length, sha256: sha256(arxiv), url: `/api/v1/original/${PAPER.id.replace('/', '_')}v${PAPER.version}` },
@@ -216,14 +218,14 @@ const parts = {
   units,
   left,
   layout,
-  addon: { manifest: addon.manifest, tail: addon.tail },
+  rules,
 }
 const bundle = writeBundle(parts)
 if (!same(writeBundle(parts), bundle)) throw new Error('the same parts gave other bytes')
 const read = readBundle(bundle)
 if (read.dropped.length) throw new Error(`the reader drops units ${read.dropped.join(', ')}`)
-if (read.layout === null || read.addon === null) throw new Error('the bundle holds no layout or no add-on')
-if (encodeLayout(read.layout) !== layoutText || !same(read.addon.tail, addon.tail)) throw new Error('readBundle does not give the layout and the tail back')
+if (read.layout === null) throw new Error('the bundle holds no layout')
+if (encodeLayout(read.layout) !== layoutText || JSON.stringify(read.rules) !== JSON.stringify(rules)) throw new Error('readBundle does not give the layout and the rules back')
 await arxivTask.destroy()
 
 // the outputs

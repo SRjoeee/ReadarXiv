@@ -29,7 +29,7 @@ const chainOf = (name: string, config: Config, log: string[]): TranslationTransp
   let gone = false
   const engines = [config.provider, ...['microsoft', 'google-web'].filter(e => e !== config.provider)]
   return {
-    translate: async () => ({ ok: true, result: { segments: [], provider: name, kind: 'mt' }, cached: 0 }),
+    translate: async () => ({ ok: true as const, results: [], cached: 0 }),
     cancel: async () => 0,
     status: async () => ({ providerId: engines[0]!, chosen: config.provider, revision: name, available: true, maxBatchChars: 1, maxBatchItems: 1, renderPath: 'tags' as const, targetLanguage: 'cmn', promptId: 'default', chain: engines, demotions: [], identity: '', engine: { id: engines[0]! } }),
     retire: () => { gone = true; log.push(`retire ${name}`); return 0 },

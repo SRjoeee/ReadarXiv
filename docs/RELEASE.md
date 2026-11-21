@@ -12,25 +12,114 @@ How a version of Read arXiv is cut, what is checked first, and the store listing
 
 The release commit is made **on the branch, before the merge**, so that the tree is clean at every step after it and the tagged commit carries the dated changelog and the recorded results.
 
-1. On the release branch: `CHANGELOG.md`'s "unreleased" heading gets the date, and so does `PRIVACY.md`'s "Effective" line when the policy changed in this release. `pnpm install --frozen-lockfile && pnpm typecheck && pnpm lint && pnpm test && pnpm build` — exit code green — then the browser suites on that build: `pnpm e2e`, `pnpm e2e:layout`, `pnpm e2e:a11y`, `pnpm e2e:local-endpoint`, `pnpm e2e:pdf`, `pnpm e2e:reader`, `pnpm e2e:floating`, `pnpm e2e:popup`, `pnpm e2e:viewer` and `pnpm e2e:image` (the recogniser ships in the package: any platform). Record the counts in the pull request that cuts the release; the dated changelog is the release commit.
+1. On the release branch: `CHANGELOG.md`'s "unreleased" heading gets the date, and so does `PRIVACY.md`'s "Effective" line when the policy changed in this release. `pnpm install --frozen-lockfile && pnpm typecheck && pnpm lint && pnpm test && pnpm build` — exit code green — then the browser suites on that build: `pnpm e2e`, `pnpm e2e:layout`, `pnpm e2e:a11y`, `pnpm e2e:local-endpoint`, `pnpm e2e:pdf`, `pnpm e2e:reader`, `pnpm e2e:framing`, `pnpm e2e:floating`, `pnpm e2e:popup`, `pnpm e2e:viewer` and `pnpm e2e:image` (the recogniser ships in the package: any platform). Record the counts in the pull request that cuts the release; the dated changelog is the release commit.
 2. The release branch is merged into `main` with a merge commit (never squash). The merge commit is the release.
 3. On the merge commit, with a clean tree, the gate once more (`pnpm typecheck && pnpm lint && pnpm test && pnpm build`); then the annotated tag on it, and push the tag.
-4. `pnpm build && pnpm zip` **after** the tag is pushed and with the tree still clean: the console line `[build] ref: v0.4.0` is the check (a build before the push, or on a dirty tree, stamps the commit or `main` instead). The archive is `.output/readarxiv-0.4.0-chrome.zip`. It carries the project's `LICENSE` and `licenses/third-party.txt`, the notices of the npm packages in the bundle, written by the build from what was bundled (`docs/THIRD_PARTY.md`); `pnpm build` fails without them, and on a bundled package that has no licence text.
+4. `pnpm build && pnpm zip` **after** the tag is pushed and with the tree still clean: the console line `[build] ref: v0.4.0` is the check (a build before the push, or on a dirty tree, stamps the commit or `main` instead). `wxt zip` builds again before it writes the archive, so `pnpm zip` ends with `scripts/check-output.mjs` on that build, as `pnpm build` does (`pnpm zip:staging` with the staging check): an archive whose command did not end green is not uploaded. The archive is `.output/readarxiv-0.4.0-chrome.zip`. It carries the project's `LICENSE` and `licenses/third-party.txt`, the notices of the npm packages in the bundle, written by the build from what was bundled (`docs/THIRD_PARTY.md`); `pnpm build` fails without them, and on a bundled package that has no licence text.
 5. A GitHub release for the tag, with the archive attached and the changelog section as its notes.
 6. The Chrome Web Store submission (below), with the privacy policy URL. Until it is listed, the README's "load unpacked" path is the install.
+
+**The reader's entries online, before the first release of the rebuilt reader** (lane V5, 2026-11-13): run on a staging
+build (`pnpm build:staging`, the rebuilt reader by default) against a staging that serves the release's round, by the
+coordinator, with the owner's word for the translator calls; once each, `AXT_E2E_ONLINE=1`, stopping at the first sign
+arXiv or staging slows or refuses (`tests/e2e/lib/online.mjs` refuses a build that talks to production). Not run on the
+rebuild line, where staging serves another round behind a tester gate a fresh profile does not pass:
+
+- `pnpm e2e:pdf`: arXiv (the abstract, the PDF page and the HTML version); staging's `/api/v2` (the reader opened from the
+  PDF page with `#readarxiv`: its open, its follow and its objects); the default translator (the HTML version translated,
+  its translations counted).
+- `pnpm e2e:popup`: arXiv (its search, the abstract, PDF and HTML pages the popup acts on and opens); the default
+  translator (an entry opens the HTML version translating).
+- `pnpm e2e:floating`: arXiv (the abstract, the PDF and the full-text pages); the default translator (the full-text page
+  translated by a click, its translations counted).
 
 **Release day of 0.5.0, on the maintainer's go** (the archive built for review on `release/0.5.0` is not the release: it is built from a branch, not from the tag, and its hash is refreshed on release day). In this order:
 
 1. Fill in the dates on the release branch: the `## 0.5.0` heading of `CHANGELOG.md` and the `Effective:` line of `PRIVACY.md`.
-2. The gate, then the browser suites on that build (step 1 above): `pnpm e2e`, `pnpm e2e:layout`, `pnpm e2e:a11y`, `pnpm e2e:local-endpoint`, `pnpm e2e:pdf`, `pnpm e2e:reader`, `pnpm e2e:floating`, `pnpm e2e:popup`, `pnpm e2e:viewer`, `pnpm e2e:image`. Record the counts in the pull request.
+2. The gate, then the browser suites on that build (step 1 above): `pnpm e2e`, `pnpm e2e:layout`, `pnpm e2e:a11y`, `pnpm e2e:local-endpoint`, `pnpm e2e:pdf`, `pnpm e2e:reader`, `pnpm e2e:framing`, `pnpm e2e:floating`, `pnpm e2e:popup`, `pnpm e2e:viewer`, `pnpm e2e:image`. Record the counts in the pull request.
 3. Merge the pull request into `main` with a merge commit.
 4. Push the annotated tag `v0.5.0` on the merge commit.
 5. `pnpm build && pnpm zip` from the tag with a clean tree; the console line must read `[build] ref: v0.5.0`. Build `pnpm zip:staging` too if a test build is wanted.
 6. Put the new sha256 of the archive in the pull request and in the owner's upload kit, then submit to the store.
 
+## Going back from the rebuilt reader's release
+
+The first release whose PDF reader is the rebuilt one (`AXT_READER` `v2`, the build's default: `wxt.config.ts:69-82`) changes
+what a reader's machine holds against 0.5.2, the version the Chrome Web Store holds. Contract by contract: what is migrated
+forward, what 0.5.2 refuses, what a reader on 0.5.2 sees, and what this release meets when it comes back. Read from the code at
+the release's head and at the tag `v0.5.2`; the two IndexedDB stores are measured (the next section).
+
+- **The settings** (`local:config`). This release reads and writes `CONFIG_VERSION` 21 at the time of writing
+  (`src/config/schema.ts:9`; a step added before the release raises it, and what follows holds for any number above 20); 0.5.2
+  knows 20. *Forward*: the step 20 → 21 (`src/config/storage.ts:142-157`) adds the PDF reader's "What to translate", each
+  toggle as it was in effect; nothing else changes. *Back*: 0.5.2 reads a stored 21 as `tooNew`
+  (`v0.5.2:src/config/storage.ts:200-204`), runs on its defaults, and refuses every write while the stored value cannot be
+  read (`:260-266`), so nothing the reader set is written over. *What the reader sees on 0.5.2*: the settings page's card
+  S-O-02 with its reset, and in the PDF reader the capsule S-R-21 (`docs/UI.md` at 0.5.2); the default service translates;
+  the reader's own services, keys, prompts and glossary stay in storage, out of effect. *Coming forward again*: the stored 21
+  is read as it was and nothing is lost, unless the reset was pressed on 0.5.2: it writes 0.5.2's defaults at version 20
+  (`:276-281`), which this release then migrates, and the reader's own settings are gone. A reader who goes back alone
+  should not press it.
+- **The service health and the floating button's place** (`local:serviceHealth`, `local:floatingEntry`): the same items, of
+  the same shapes, as 0.5.2's (`src/shared/service-health.ts` and `src/entrypoints/background/floating-entry.ts` are
+  unchanged since the tag). Nothing either way.
+- **The papers kept for reading offline** (`axt-layer`, version 5) and **the translations** (`axt-translation-cache`,
+  version 3, its `answers`, `rows` and `ocr` tables): the next section. In short, 0.5.2 works on both, its own tables made
+  again empty (what it had kept, the HTML page's translations and the figures' readings included, was let go once by this
+  release's steps); this release, back again, works on its own rows, each read for 30 days from its write
+  (`src/cache/translate-store.ts:28`, `:79`).
+- **The website's API.** The rebuilt reader opens, follows and reads papers through the website's second API
+  (`/api/v2/open`, `/api/v2/papers/…`, `/api/v2/o/…`: `packages/reader/src/session/client.ts`); 0.5.2's reader reads the
+  first (`/api/v1/…`). Each works only while the website answers the API it reads, which this repository does not decide:
+  this release is uploaded only after the website serves the second API in production. Where the website answers the
+  rebuilt reader's open with 404, the reader takes it as a lasting refusal: the original stays, the translated displays are
+  greyed, no retry is offered (`client.ts:446`, `packages/reader/src/session/machine.ts:779`,
+  `packages/reader/src/chrome/events.ts:11-17`); a paper this machine keeps is answered from the store only where the
+  website is out of reach or answers 5xx (`src/pdf-reader/host/stored-fetch.ts:9-12`). What 0.5.2's reader shows once the
+  website no longer answers the first API depends on the website's answer: not established here.
+
+**A build that takes every reader back.** The store takes only a version above the one it holds, so going back for every
+reader is a new upload of older code under a higher number, the maintainer's act like any upload. From the contracts above,
+such a build:
+
+1. carries a `package.json` version above the release's;
+2. reads the release's `CONFIG_VERSION`. A tree at a lower number puts every reader who updated on the defaults (above): an
+   upload of 0.5.2's tree is no way back, and `next` at `065c1d973` (21, today's reader) is one only while the release is
+   at 21;
+3. runs a PDF reader whose API the website still serves. Today's reader (`AXT_READER=today pnpm build`, `wxt.config.ts:69-82`;
+   `lab/release-check/today-build.sh` builds it for the release check's full tier) reads the first API, and it goes with the
+   cut-over's deletion of today's reader. After that deletion, and once the website stops answering the first API, the
+   reader has no way back, only forward;
+4. needs no store step to work (measured, the next section); the release that comes forward after it carries the null steps
+   of the recipe there.
+
+Which build is made ready before the upload, and kept for how long, is the maintainer's to choose: a commit of this release's
+line that still holds today's reader and the release's configuration steps, built with `AXT_READER=today` under a higher
+number, or `next`'s tree while the release is at 21. Neither has been uploaded or installed over this release's stores; the
+stores' half of it is measured, the rest is read from the code.
+
+## Going back a version: the reader's stores
+
+The first release whose PDF reader is the rebuilt one (`AXT_READER` `v2`, the build's default since 2026-11-13) steps two
+of the reader's stores in IndexedDB. What a reader who goes back to the version before it (0.5.2) finds, measured with Dexie
+4.4 (`tests/cache/paper-store.test.ts`, `tests/cache/translate-store.test.ts`; PDF-READER §9.3):
+
+- **`axt-layer`, the papers kept for reading offline**, at version 5: its step deletes the old reader's three tables
+  (`objects`, `papers`, `refs`), so the papers the old reader kept are let go once (the changelog says so). A build of
+  version 4 opens the database at 5.1 (Dexie adapts to a version above the one it declares), its tables made again,
+  empty, beside the new: it works and keeps papers again from then on; the new reader's papers stay beside, unread.
+- **`axt-translation-cache`**, at version 3 (the per-text table dropped): a build of version 2 opens it at 3.1, `entries`
+  made again, empty: it works, translating again what it had kept.
+- Coming forward again, this build works on its own rows. Nothing breaks either way.
+
+**The recipe after a rollback**: what a return leaves is the old tables beside the new (at most the old store's 200 MB),
+until a version step names them null again. The release that comes forward after a rollback carries that step:
+`axt-layer` version 6 with `objects`, `papers` and `refs` null; `axt-translation-cache` version 4 with `entries` null.
+Without a rollback, no step is needed.
+
 ## The store listing
 
-Category: Productivity. Language: English, with the Chinese description below. The short description is the manifest's `description` (`public/_locales/*/messages.json`) and must stay under 132 characters.
+Category: Productivity. Language: English, with the Chinese description below; the short descriptions in the other interface languages are their `messages.json`'s. The short description is the manifest's `description` (`public/_locales/*/messages.json`) and must stay under 132 characters.
 
 **Name**: Read arXiv
 
@@ -38,13 +127,19 @@ Category: Productivity. Language: English, with the Chinese description below. T
 
 **Short description (ZH)**: arXiv 论文双语阅读：HTML 原地翻译，PDF 原文与译文并排，随时可恢复原文
 
+**Short description (zh-TW)**: arXiv 論文雙語閱讀：HTML 就地翻譯，PDF 原文與譯文並排，隨時可還原原文
+
+**Short description (ja)**: arXiv の論文を対訳で読む：HTML はその場で翻訳、PDF は原文と訳文を並べて表示。いつでも原文に戻せます
+
+**Short description (ko)**: arXiv 논문을 두 언어로 읽기: HTML은 제자리에서 번역하고 PDF는 원문과 번역문을 나란히 보여 주며, 언제든 원문으로 되돌릴 수 있습니다.
+
 **Description (EN)**:
 
 > Read arXiv translates arXiv's papers and keeps them working. HTML papers are translated in place — beside, under, or instead of the original — and formulas stay formulas, citations stay clickable, tables and footnotes stay where the author put them, and the original comes back node for node when you ask. PDF papers open in a reader that shows arXiv's PDF beside its translation, page for page: the figures and formulas as the author drew them, the text in fonts close to the original's, links that still work, and the two sides scrolling together.
 >
 > Rest on a sentence and its counterpart lights up on the other side; in translation-only mode the original sentence floats beside the line. The words inside figures are translated and overlaid in place — vector figures read exactly, bitmaps recognised in your browser by a model that comes with the extension: nothing to install, and an image never leaves your machine.
 >
-> Microsoft's translator works out of the box with no account. Add Google's, Chrome's built-in offline translator, or any OpenAI-compatible endpoint with your own key (OpenRouter, DeepSeek, a local Ollama). When a service fails mid-paper, the rest of the page falls back to a free one and the popup says so. Prompts and a glossary keep terminology consistent on the LLM services. 179 target languages; interface in English and Chinese.
+> Google's and Microsoft's translators work out of the box with no account. Add Chrome's built-in offline translator, or any OpenAI-compatible endpoint with your own key (OpenRouter, DeepSeek, a local Ollama). When a service fails mid-paper, the rest of the page falls back to a free one and the popup says so. Prompts and a glossary keep terminology consistent on the LLM services. 180 target languages; interface in Simplified and Traditional Chinese, Japanese, Korean and English.
 >
 > Paragraphs are sent to the service you choose; Chrome's built-in translation and a local endpoint keep them on your machine. Your API keys stay in the browser's extension storage. Translations are cached locally so a paper reopens at once.
 >
@@ -56,7 +151,7 @@ Category: Productivity. Language: English, with the Chinese description below. T
 >
 > 鼠标停在一句话上，另一侧对应的句子同时高亮；只译文模式下，原文句子会浮在这一行旁边。图里的文字也会翻译并覆盖在原位——矢量图直接读取，位图由扩展自带的识别模型在浏览器里识别：无需安装任何东西，图片不会离开你的电脑。
 >
-> 默认使用微软翻译，无需账号。也可以用 Google 翻译、Chrome 内置的离线翻译，或者任何兼容 OpenAI 接口的服务（OpenRouter、DeepSeek、本机的 Ollama 等），填自己的密钥。翻译到一半服务失效时，剩下的页面会退到免费服务继续，弹窗会说明。提示词和术语表让 LLM 服务的术语前后一致。179 种目标语言；界面有中英文。
+> Google 翻译和微软翻译开箱即用，无需账号。也可以添加 Chrome 内置的离线翻译，或者任何兼容 OpenAI 接口的服务（OpenRouter、DeepSeek、本机的 Ollama 等），填自己的密钥。翻译到一半服务失效时，剩下的页面会退到免费服务继续，弹窗会说明。提示词和术语表让 LLM 服务的术语前后一致。180 种目标语言；界面有简体中文、繁體中文、日本語、한국어和英文。
 >
 > 段落会发给你选定的服务；Chrome 内置翻译和本机端点让文字不出本机。API 密钥只保存在浏览器的扩展存储里。译文在本地缓存，再次打开同一篇论文即时显示。
 >

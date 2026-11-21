@@ -1,6 +1,7 @@
 // reader-view.mjs's types: the one reading view both readers run (docs/PDF-READER.md §11.7). Browser; no extension module
 // and no pdfjs-dist: PDF.js is the host's kit, so every PDF.js type here is structural
-import type { LayerDocument, LinkRecord } from '../layer-proto/reader.mjs'
+import type { LayerDocument, LinkRecord, TextLayerData } from '../layer-proto/reader.mjs'
+import type { BuiltTextLayer } from './text-layer.mjs'
 import type { OutlineEntry } from './outline'
 
 export type Side = 'left' | 'right'
@@ -30,10 +31,11 @@ export type DocumentOpener = (options: Readonly<Record<string, unknown>>) => Doc
 /** the layer's composed document: arXiv's PDF ‖ every tail told (null for none), opened by the layer side */
 export type ComposedOpener = (tail: Uint8Array | null, options: Readonly<Record<string, unknown>>) => DocumentTask
 /** the host's PDF.js build (the web: modern or legacy); `assets` the getDocument options its data files are found by
- *  (cMapUrl, cMapPacked, standardFontDataUrl, wasmUrl). The view calls `lib.AnnotationMode` alone of the library */
+ *  (cMapUrl, cMapPacked, standardFontDataUrl, wasmUrl). The view calls `lib.AnnotationMode` alone of the library; the viewer's
+ *  `TextLayerBuilder` builds a laid page's text layer (text-layer.mjs; none given: the laid pages have none) */
 export interface PdfJsKit {
   lib: unknown
-  viewer: { EventBus: unknown; PDFViewer: unknown; PDFPageView: unknown; PDFLinkService: unknown; LinkTarget: unknown }
+  viewer: { EventBus: unknown; PDFViewer: unknown; PDFPageView: unknown; PDFLinkService: unknown; LinkTarget: unknown; TextLayerBuilder?: unknown }
   assets: Readonly<Record<string, unknown>>
 }
 /** the look the view reads: the highlight on or off. The rest is the host's sheet (the panes swapped, dimmed pages, the
@@ -100,6 +102,8 @@ export interface ReaderView {
   dispose(): void
 }
 export declare function createReaderView(host: ReaderHost): ReaderView
+/** how long after a pinch's last step it is committed: shown by transform until then (docs/PDF-READER.md §6.8) */
+export declare const PINCH_COMMIT_MS: number
 export type ViewEvent =
   | { type: 'loading'; loaded: number; total: number }
   | { type: 'opened'; pages: number }
@@ -114,23 +118,23 @@ export type ViewEvent =
   | { type: 'sync'; on: boolean; available: boolean }
   | { type: 'outline'; entries: OutlineEntry[] }
   | { type: 'heading'; id: number | null }
-  | { type: 'layer'; state: 'opening' | 'open' | 'refused'; why?: string; laid: number; total: number }
+  /** `laid`: the pages the door laid; `original` (none where 0): the pages asked near the view that the open door shows as arXiv's
+   *  by the rule (a page no part lays a line on: layer-side.mjs noLayoutPage), settled with nothing to lay */
+  | { type: 'layer'; state: 'opening' | 'open' | 'refused'; why?: string; laid: number; total: number; original?: number }
 
 // ---------------------------------------------------------------- what the view's layer side takes (not view.mjs's)
 /** a rectangle on one of a side's pages, in its PDF units */
 export interface PageBox { page: number; x0: number; y0: number; x1: number; y1: number }
 /** what a pane paints for the highlight, in its own pages' coordinates (the shapes seam): a unit's runs (one page and one
- *  column of it each, the objects the paint keeps what it drew by), a run's block, a sentence's shape by the unit's starts,
- *  the float a unit lights whole and what it paints, whether a unit's shapes hold its words by its starts (undefined where
- *  that is not to be told in a frame), what a point lights and what a click there levels by */
-export interface Shapes<R extends { page: number } = { page: number }, F extends { page: number } = { page: number }> {
+ *  column of it each, the objects the paint keeps what it drew by; a table's cell no unit holds by its id), a run's block, a
+ *  sentence's shape by the unit's starts, whether a unit's shapes hold its words by its starts (undefined where that is not
+ *  to be told in a frame), what a point lights and what a click there levels by. No float is painted (§17.1) */
+export interface Shapes<R extends { page: number } = { page: number }> {
   runs(id: number): readonly R[]
   block(run: R, padX: number): PageBox
   sentence(run: R, starts: Int32Array, s: number, padX: number): PageBox[]
-  float(id: number): F | null
-  floatShapes(f: F, padX: number): (PageBox & { frame: boolean })[]
   fits(id: number, starts: Int32Array, now: boolean): boolean | undefined
-  hit(page: number, x: number, y: number, padX: number, startsOf: (id: number) => Int32Array | null | undefined): { id: number; s: number; float?: F } | null
+  hit(page: number, x: number, y: number, padX: number, startsOf: (id: number) => Int32Array | null | undefined): { id: number; s: number } | null
   click(page: number, x: number, y: number, padX: number, startsOf: (id: number) => Int32Array | null | undefined): { id: number; line: number; f: number } | null
 }
 /** a place as a page view is read (its element, and the original's viewport and page box for that page) */
@@ -140,8 +144,6 @@ export type PlaceContent = 'layer' | 'original' | 'skeleton' | 'none'
 /** the units located, as the layer side gives them: the unit at a point of a page (PDF units), a unit's first rectangle,
  *  and the page the contents give a heading not located */
 export interface ViewUnits { unitAt(page: number, x: number, y: number): number | null; firstRect(id: number): PageBox | null; pageOf(id: number): number | null }
-/** a page's canvas as PDF.js drew it, with the scale it drew it at (drawn.mjs): device pixels a PDF unit */
-export interface DrawnCanvas { canvas: HTMLCanvasElement; k: number }
 /** the view's handle for its layer side (layer-side.mjs): the right pane, its places, the left's pages, the paint's seam */
 export interface Internals {
   readonly pane: HTMLElement
@@ -150,10 +152,9 @@ export interface Internals {
     page(n: number): HTMLElement | null
     view(n: number): PlaceView | null
     near(n: number): boolean
+    /** whether place n's page view is the one the places are drawing the original's page on now */
+    drawing(n: number): boolean
     contentOf(n: number): PlaceContent
-    /** the canvas of place n's own page view where PDF.js drew it whole, with the device pixels a PDF unit it drew it at
-     *  (read before a swap releases it), else null */
-    canvas(n: number): DrawnCanvas | null
     /** place n's box in CSS px as PDF.js sizes the left's page n (its viewport floored to the place's rounding), else null */
     box(n: number): { width: number; height: number } | null
     /** the layer's content in place n, in place: its page view destroyed with its canvas first; size and scroll unchanged.
@@ -161,15 +162,24 @@ export interface Internals {
     swap(n: number, content: HTMLElement, o?: { blank?: boolean }): boolean
     /** place n back to its pre-layer content */
     restore(n: number): void
+    /** the places near the view but not in it drawn from now on: the layer side's word that its first page is there, or that
+     *  there is none (places.mjs AHEAD_HOLD_MS bounds the wait where nothing says so) */
+    letAheadGo(): void
+    /** whether they still wait */
+    aheadHeld(): boolean
+    /** the layer side's word on the pages (`fn(n)`: whether page n stays the original's; null: none does; omitted: told again):
+     *  a place that waits for its layer shows the left's drawing of its page, one that stays the original's its own page view */
+    settle?(fn?: ((n: number) => boolean) | null): void
   }
   left: {
     doc(): ViewDocument | null
-    /** the left's page n drawn whole by PDF.js: its canvas, with the device pixels a PDF unit PDF.js drew it at (never its
-     *  width over the page's: PDF.js floors the canvas to whole CSS px), else null */
-    canvas(n: number): DrawnCanvas | null
     scale(): number
     /** the left's page n as PDF.js holds it (its operator list drawn: the floats' inputs), once laid out */
     pdfPage(n: number): unknown
+    /** whether page n of the left is being drawn (its page view running or paused) */
+    drawing?(n: number): boolean
+    /** whether page n of the left is drawn (its page view finished) */
+    drawn?(n: number): boolean
   }
   /** the host's PDF.js library (OPS, AnnotationMode) and its getDocument options (assets) */
   readonly lib: unknown
@@ -196,12 +206,20 @@ export interface Internals {
   onScale(listener: (scale: number, drawingDelay: number) => void): () => void
   /** a pane scrolled (each scroll event), for the layer side's re-asks and the heading read */
   onScrolled(listener: (side: Side) => void): () => void
+  /** whether the highlight is on (the look's switch): a pointer wants a page only while it is */
+  highlight(): boolean
+  /** each change of the highlight's switch */
+  onHighlight(listener: (on: boolean) => void): () => void
   /** the view's one layer side, disposed first by the view's own dispose; a second while one lives throws */
   attach(side: { dispose(): void }): () => void
   emit(event: ViewEvent): void
   /** the links of the layer's page `n` over its place (links.mjs linkLayer, over the place's viewport): followed inside the
    *  paper on the right pane, out of it through the host; null where none can be carried */
   links(n: number, records: readonly LinkRecord[] | null | undefined): HTMLDivElement | null
+  /** the text layer of the layer's page `n` over its place (text-layer.mjs textLayer: PDF.js's own builder, the host's pdf_viewer
+   *  TextLayerBuilder, over the place's viewport), its translated spans in `lang`; null where nothing can be placed or the host's
+   *  PDF.js has no builder */
+  text(n: number, data: TextLayerData, lang: string): Promise<BuiltTextLayer | null>
   /** a unit, or one of its sentences, lit as the pointer would light it (-1 for the whole); null for nothing */
   light(id: number | null, s?: number): void
 }

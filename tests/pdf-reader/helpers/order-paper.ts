@@ -5,6 +5,7 @@ import type { PageWords } from '@/pdf-reader/engine/layer-proto/words.mjs'
 import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { indexLayout, LAYOUT, LAYOUT_SCHEMA, type LayoutFile, parseLayout, UNIT_KINDS } from '@/pdf-reader/engine/layout/file.mjs'
 import { PDFJS } from '@/pdf-reader/engine/pipeline/versions.mjs'
+import { withGroups } from './groups'
 
 // Synthetic papers for the order of the asks (1b-D design §5: S-A to S-D, the fill paper, and S-E's shared lines): the same page of a PDF.js
 // document's shape as the take and local tests' (its text layer, its views; nothing drawn), a layout file and v0's geometry
@@ -14,13 +15,27 @@ import { PDFJS } from '@/pdf-reader/engine/pipeline/versions.mjs'
 // Each paper has what its name says and the pages are 300 × 300 pt; a line is 10 pt type, 12 pt apart.
 // The engine lays a page asked by its closure alone (1b-D1): these hold every page so laid to the page laid in order
 
-/** a canvas context that draws nothing and reads a white page */
+/** the lines a page's drawing put on a canvas, by the canvas (a paper's `ink`: its page's render records them) */
+const inked = new WeakMap<object, Line[]>()
+/** a context's readback where it was drawn a whole inked canvas scaled to w × h at its origin (layer2.mjs inkMapOf): each
+ *  line's box, from 2 pt below its baseline to 7 pt above, black; the rest white */
+const inkOf = (lines: Line[], w: number, h: number) => {
+  const data = new Uint8ClampedArray(w * h * 4).fill(255)
+  for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
+    const x = ((i + 0.5) * 300) / w, y = H - ((j + 0.5) * H) / h
+    if (lines.some(l => x >= l.x0 && x <= l.x1 && y >= l.b - 2 && y <= l.b + 7)) data.fill(0, 4 * (j * w + i), 4 * (j * w + i) + 3)
+  }
+  return data
+}
+/** a canvas context that draws nothing and reads a white page, or an inked page's lines where one was drawn into it whole */
 const ctxStub = (canvas?: { width: number; height: number }) => new Proxy({} as Record<string | symbol, unknown>, {
   get(t, k) {
     if (k in t) return t[k]
-    // (an em a CJK character, half one any other, at the context's font size)
-    if (k === 'measureText') return (s: string) => { const px = Number(/(\d+(?:\.\d+)?)px/.exec(String(t.font ?? ''))?.[1] ?? 10); return { width: [...s].reduce((w, ch) => w + (/[\u3000-\u9fff]/.test(ch) ? px : px / 2), 0), actualBoundingBoxAscent: 0.7 * px, actualBoundingBoxDescent: 0.2 * px } }
-    if (k === 'getImageData') return (_x: number, _y: number, w: number, h: number) => ({ width: w, height: h, data: new Uint8ClampedArray(Math.max(1, w * h) * 4).fill(255) })
+    if (k === 'drawImage') return (src: object, ...a: number[]) => { if (a.length === 4 && !a[0] && !a[1] && inked.has(src)) t.inkFrom = inked.get(src) }
+    // (an em a CJK character, half one any other, at the context's font size; the ink to the advance's end, but an ideographic full
+    // stop's, which ends 0.34 em into its em, as Source Han Serif draws it)
+    if (k === 'measureText') return (s: string) => { const px = Number(/(\d+(?:\.\d+)?)px/.exec(String(t.font ?? ''))?.[1] ?? 10), width = [...s].reduce((w, ch) => w + (/[\u3000-\u9fff]/.test(ch) ? px : px / 2), 0); return { width, actualBoundingBoxAscent: 0.7 * px, actualBoundingBoxDescent: 0.2 * px, actualBoundingBoxRight: s.endsWith('\u3002') ? width - 0.66 * px : width } }
+    if (k === 'getImageData') return (x: number, y: number, w: number, h: number) => ({ width: w, height: h, data: t.inkFrom && !x && !y ? inkOf(t.inkFrom as Line[], w, h) : new Uint8ClampedArray(Math.max(1, w * h) * 4).fill(255) })
     if (k === 'createImageData') return (w: number, h: number) => ({ width: w, height: h, data: new Uint8ClampedArray(Math.max(1, w * h) * 4) })
     if (k === 'canvas') return canvas
     return () => {}
@@ -44,8 +59,10 @@ const CJK = (n: number, from = 0x4e00) => Array.from({ length: n }, (_, i) => St
 export interface Line { page: number; b: number; text: string; x0: number; x1: number }
 export const line = (page: number, b: number, text: string, x0 = 20, x1 = 280): Line => ({ page, b, text, x0, x1 })
 export interface Cell { table: number; row: number; col: number; span: number; head: boolean }
-/** a unit: its lines, its translation (`chars` characters from `at`) and, for a table's cell, its table group (the run's `groups`) and its cell */
-export interface Spec { id: number; kind: string; lines: Line[]; chars: number; at: number; group?: string; cell?: Cell }
+/** a unit: its lines, its translation (`chars` characters from `at`, or `tr` as it is), for a table's cell its table group (the run's
+ *  `groups`) and its cell, and the label the file holds for it (`label`: the glyphs before its first line's start, make.mjs labelOf,
+ *  on the page and in the layout file's labels) */
+export interface Spec { id: number; kind: string; lines: Line[]; chars: number; at: number; tr?: string; group?: string; cell?: Cell; label?: Line }
 /** a paragraph over `pages` ([page, top baseline, lines]), each line 12 pt below the one before */
 export function para(id: number, pages: [number, number, number][], chars = 12, extra: Partial<Spec> = {}): Spec {
   const lines = pages.flatMap(([page, top, n]) => Array.from({ length: n }, (_, i) => { const text = `Alpha beta ${page}${i}`; return line(page, top - 12 * i, text, 20, 20 + 5 * text.length) }))
@@ -58,7 +75,7 @@ export function cell(id: number, page: number, b: number, c: Cell, group: string
 }
 const at = (table: number, row: number, col = 0, head = false): Cell => ({ table, row, col, span: 1, head })
 
-export interface Paper { name: string; specs: Spec[]; pages: number; /** a page whose reading throws */ fail?: number; /** what the pages' annotations do: `throw` (a read that rejects), `absent` (a page object with no such call); the default reads */ annots?: 'throw' | 'absent' }
+export interface Paper { name: string; specs: Spec[]; pages: number; /** a page whose reading throws */ fail?: number; /** what the pages' annotations do: `throw` (a read that rejects), `absent` (a page object with no such call); the default reads */ annots?: 'throw' | 'absent'; /** the page's text no unit holds (a label kept as the original's: an inline list's "(2)") */ extra?: Line[]; /** the pages' lines drawn as ink, read so by the page's ink map (the default: a white page, whose paper a slot may widen over to the text area's edge) */ ink?: boolean }
 /** S-A, the chain: a unit across every break, and one over 2 to 3 to 4 */
 const chain: Paper = {
   name: 'S-A chain', pages: 5,
@@ -165,23 +182,23 @@ export interface Built {
   layout: LayoutFile
 }
 const srcOf = (s: Spec) => s.lines.map(l => l.text).join(' ')
-const trOf = (s: Spec) => CJK(s.chars, s.at)
+const trOf = (s: Spec) => s.tr ?? CJK(s.chars, s.at)
 /** a paper built: its PDF.js document, its layout file and v0's geometry, the run's rows */
 export function build(paper: Paper): Built {
   const { specs, pages } = paper
   const all = Array.from({ length: pages }, (_, i) => i + 1)
-  const items = all.map(p => specs.flatMap(s => s.lines.filter(l => l.page === p).map(l => ({ str: l.text, transform: [10, 0, 0, 10, l.x0, l.b], width: l.x1 - l.x0, height: 10, fontName: 'f1', dir: 'ltr', hasEOL: false }))))
+  const items = all.map(p => [...specs.flatMap(s => s.lines), ...specs.flatMap(s => (s.label ? [s.label] : [])), ...(paper.extra ?? [])].filter(l => l.page === p).map(l => ({ str: l.text, transform: [10, 0, 0, 10, l.x0, l.b], width: l.x1 - l.x0, height: 10, fontName: 'f1', dir: 'ltr', hasEOL: false })))
   const viewportOf = (scale: number) => ({ width: 300 * scale, height: H * scale, scale, transform: [scale, 0, 0, -scale, 0, H * scale], convertToViewportPoint: (x: number, y: number) => [x * scale, (H - y) * scale], convertToPdfPoint: (x: number, y: number) => [x / scale, H - y / scale] })
-  const pageOf = (n: number) => ({ view: VIEW, getViewport: ({ scale }: { scale: number }) => viewportOf(scale), getTextContent: async () => ({ items: items[n - 1], styles: { f1: { fontFamily: 'serif', ascent: 0.7, descent: -0.2 } } }), render: () => ({ promise: Promise.resolve() }), commonObjs: { get: () => ({ name: 'Times-Roman' }) }, cleanup() {}, ...(paper.annots === 'absent' ? {} : { getAnnotations: async () => { if (paper.annots === 'throw') throw new Error('the annotations cannot be read'); return annotationsOf(specs, n) } }) })
+  const pageOf = (n: number) => ({ view: VIEW, getViewport: ({ scale }: { scale: number }) => viewportOf(scale), getTextContent: async () => ({ items: items[n - 1], styles: { f1: { fontFamily: 'serif', ascent: 0.7, descent: -0.2 } } }), render: ({ canvas }: { canvas?: object }) => { if (paper.ink && canvas) inked.set(canvas, [...specs.flatMap(s => s.lines), ...(paper.extra ?? [])].filter(l => l.page === n)); return { promise: Promise.resolve() } }, commonObjs: { get: () => ({ name: 'Times-Roman' }) }, cleanup() {}, ...(paper.annots === 'absent' ? {} : { getAnnotations: async () => { if (paper.annots === 'throw') throw new Error('the annotations cannot be read'); return annotationsOf(specs, n) } }) })
   const asked: number[] = []
-  const doc = { numPages: pages, asked, getPage: async (n: number) => { asked.push(n); if (n === paper.fail) throw new Error(`page ${n} cannot be read`); return pageOf(n) } }
+  const doc = withGroups({ numPages: pages, asked, getPage: async (n: number) => { asked.push(n); if (n === paper.fail) throw new Error(`page ${n} cannot be read`); return pageOf(n) } })
   const layout = {
     schema: LAYOUT_SCHEMA, lineskip: null, layout: LAYOUT, pdfjs: PDFJS, paper: { id: '2610.00001', version: 1, pages }, left: '', views: all.flatMap(() => VIEW), fonts: ['F1'],
     units: specs.map(s => [s.id, UNIT_KINDS.indexOf(s.kind as never), 9, 0, 1]),
     lines: specs.map(s => [s.id, s.lines.flatMap(l => [l.page, l.x0, l.x1, l.b, l.b + 7, l.b - 2, 10, 0])]),
     frames: specs.map(s => [s.id, s.lines.flatMap((l, j) => [l.page, 0, j, 1, j ? 0 : -1, 0])]),
     erase: specs.map(s => [s.id, s.lines.flatMap((l, j) => [j, l.x0, l.b - 2, l.x1, l.b + 7])]),
-    ph: [], labels: [], headings: [], pageText: [], held: [], names: [],
+    ph: [], labels: specs.filter(s => s.label).map(s => { const l = s.label!; return [s.id, 1, l.page, l.x0, l.b, l.x1, l.b + 7, l.b - 2] }), headings: [], pageText: [], held: [], names: [],
   } as unknown as LayoutFile
   const index = indexLayout(parseLayout(new TextEncoder().encode(JSON.stringify(layout))))
   const geometry = {
@@ -206,7 +223,7 @@ export async function openRun(P: Built, { free = true, groups = true, expect = f
   for (const [id, r] of P.rows) { if (!expect) units[id] = r; pieces.set(id, trPiecesOf(r.pieces, (p: unknown) => (p as { k: number }).k) ?? []) }
   return openProto({
     doc: P.doc, target: 'zh', pages: P.paper.pages, scale: 1, dpr: 1, copy: false, geometry: P.geometry, units, free, records, groups: groups ? P.groups : null, ...(expect ? { expect: [...P.rows.keys()] } : {}), ...(rules ? { rules } : {}),
-    tex: { index: P.index, pieces, use: 'lines', texOnly: true, symbols: 'text', extents: 'v0' },
+    tex: { index: P.index, pieces, symbols: 'text', extents: 'v0' },
   } as never) as Promise<Run>
 }
 /** a page asked for, as the door asks: its closure laid (Need(p), run.mjs layFor), and nothing else; the page is then final */
@@ -240,7 +257,7 @@ export function bundleOf(P: Built): ReadBundle {
     base: { bytes: 12_345, sha256: '0123456789abcdef'.repeat(4), url: '/api/v1/original/2610.00001v1' },
     image: '1', units: bundleUnitsOf(units),
     left: { kinds: specs.map(s => s.kind), pages: Array.from({ length: pages }, () => VIEW), units: [] },
-    layout: P.layout, addon: null,
+    layout: P.layout, rules: null,
   }
   return readBundle(writeBundle(parts))
 }

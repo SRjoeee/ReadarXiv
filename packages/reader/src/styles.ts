@@ -1,0 +1,185 @@
+// The reader's own sheet: the page stack's slots, the composed page's overlay, its text layer and links, the highlight's bands
+// and the translating marks. Scoped to a reader's root (`.axt-reader`, the element openReader is given), not <html>, so that
+// two readers on one page each style their own. A mark is read where its writer puts it (docs/PDF-READER.md §4.3): the reader's
+// own marks of its root (`data-axt-pdf-mode`, `data-axt-narrow`, `data-axt-swapped`: panes.ts; `data-axt-layer-text`: the
+// composer) on the root, the marks it writes inside (`data-axt-scaling` on a stack, `data-axt-turn`, …) under it, and the
+// appearance's, which the reader does not write, on the root or on any element above it (DIMMED): the chrome writes it on
+// <html> (chrome/appearance.ts) whichever element a host made the root (both hosts: <body>), a host with no chrome may write
+// it on the root itself. PDF.js's viewer sheet is linked beside it (kit.ts `sheet`).
+
+/** a reader whose pages are dimmed: `data-axt-dim` on its root or on any element above it, as the tokens read `data-theme` */
+const DIMMED = ':is(.axt-reader[data-axt-dim], [data-axt-dim] .axt-reader)'
+
+export const READER_CSS = `
+.axt-reader { --axt-green: oklch(0.693 0.17 162.48); --axt-sk: oklch(0.945 0.004 255); --axt-sk-paper: #fff; }
+${DIMMED} { --axt-sk: oklch(0.275 0.004 255); --axt-sk-paper: rgb(29 29 29); }
+.axt-reader { position: relative; }
+.axt-reader .axt-pane { position: absolute; top: 0; bottom: 0; overflow: auto; overflow-anchor: none; }
+.axt-reader .axt-pane.left { left: 0; width: 50%; }
+.axt-reader .axt-pane.right { left: 50%; width: 50%; }
+.axt-reader[data-axt-pdf-mode="original"] .axt-pane.left { width: 100%; }
+.axt-reader[data-axt-pdf-mode="original"] .axt-pane.right { display: none; }
+.axt-reader[data-axt-pdf-mode="translation"] .axt-pane.left { width: 0; visibility: hidden; }
+.axt-reader[data-axt-pdf-mode="translation"] .axt-pane.right { left: 0; width: 100%; }
+/* side by side swapped: the translation left, the original right (reader.css order: 2) */
+.axt-reader[data-axt-pdf-mode="bilingual"][data-axt-swapped] .axt-pane.left { left: 50%; }
+.axt-reader[data-axt-pdf-mode="bilingual"][data-axt-swapped] .axt-pane.right { left: 0; }
+/* a narrow window shows the translation alone for now (reader.css: the left pane out of the display) */
+.axt-reader[data-axt-pdf-mode="bilingual"][data-axt-narrow] .axt-pane.left { width: 0; visibility: hidden; }
+.axt-reader[data-axt-pdf-mode="bilingual"][data-axt-narrow] .axt-pane.right { left: 0; width: 100%; }
+/* a slot is a page box of the stack (.page: PDF.js's sheet gives it the page's colour, margins and border, as the left's pages
+   have them); its size is PDF.js's rule over the stack's --scale-factor; what it shows sits in its holder, which fills it */
+.axt-reader .pdfViewer .page.axt-slot { container-type: inline-size; }
+.axt-reader .axt-slot-view { position: absolute; inset: 0; }
+/* a drawing kept off the view while its slot is far (stack.ts keep): out of the layout tree, as today's reader held it out of the
+   document. A face added to the document re-lays every text node that is laid out ("Fonts changed"), and a reader keeping a
+   whole paper's drawings laid out paid it over 41-49k objects a time, 134 ms at the end of a 30-page paper
+   (verification/reader-perf.md §1). display: none and not content-visibility: hidden: the same relayouts measured, but none
+   keeps the drawing's layout objects (Blink's heap 147 MiB less after a scroll of that paper), and every browser the reader
+   serves has it (content-visibility only from Safari 18; the website serves Safari 17.4). The holder is absolute in a slot of
+   its own size, so the pane's height and the sync's places never see it go; what changed while it was out (a zoom, a face) is
+   laid out as it comes back, one pane's height before it shows. Not found by the browser's find while far, as today's. */
+.axt-reader .pdfViewer .page.axt-slot[data-axt-kept] > .axt-slot-view { display: none; }
+.axt-reader .pdfViewer .page.axt-slot .axt-slot-view > .page { position: absolute !important; inset: 0; margin: 0 !important; border: 0 !important; box-shadow: none !important; }
+/* the left's drawing of the page, while the slot waits for its layer (stack.ts copyLeft): placed as PDF.js places its own canvas in
+   its page box, the slot's box being the left page box's; dimmed by the host sheet's rule for a page's canvas, as the left's is */
+.axt-reader .axt-slot-view > .axt-slot-copy { position: absolute; top: 0; left: 0; margin: 0; display: block; width: 100%; height: 100%; }
+/* a page of text in grey, while there is no original to draw (round 4's skeleton, places.mjs): sized in the page's own width
+   (cqw), so that a page drawn at any zoom keeps its proportions; light, and dimmed in the dark */
+.axt-reader .axt-sk { position: absolute; inset: 9.5% 15.5% 9%; display: flex; flex-direction: column; overflow: hidden; }
+.axt-reader .axt-sk i { display: block; flex: none; background: var(--axt-sk); border-radius: 0.3cqw; }
+.axt-reader .axt-sk .axt-sk-lines { position: relative; block-size: calc(var(--axt-sk-n) * 2.05cqw - 0.9cqw); border-radius: 0; background: repeating-linear-gradient(to bottom, var(--axt-sk) 0 1.15cqw, transparent 1.15cqw 2.05cqw); }
+.axt-reader .axt-sk .axt-sk-lines::after { content: ""; position: absolute; inset-inline-end: 0; inset-block-end: 0; inline-size: var(--axt-sk-rest, 36%); block-size: 1.15cqw; background: var(--axt-sk-paper); }
+.axt-reader .axt-sk .axt-sk-gap { block-size: 2.2cqw; background: none; }
+.axt-reader .axt-sk .axt-sk-head { block-size: 1.7cqw; margin-block: 1.4cqw 2.2cqw; }
+.axt-reader .axt-sk .axt-sk-figure { block-size: 34cqw; margin-block: 1cqw 3cqw; border-radius: 0.6cqw; background: none; box-shadow: inset 0 0 0 0.25cqw var(--axt-sk); }
+.axt-reader .axt-sk .axt-sk-title { inline-size: 56%; block-size: 3.2cqw; margin: 4cqw auto 6cqw; }
+.axt-reader .axt-sk .axt-sk-label { inline-size: 13%; block-size: 1.7cqw; margin: 2cqw auto 2.6cqw; }
+.axt-reader .axt-sk-authors { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.6cqw 4cqw; margin-block: 0 3cqw; margin-inline: 4%; }
+.axt-reader .axt-sk-authors i { block-size: 1.2cqw; }
+.axt-reader .axt-sk-authors i:nth-child(3n) { inline-size: 70%; justify-self: center; }
+.axt-reader .axt-sk-abstract { margin-inline: 9%; }
+/* translating (marks.ts; engine.css at baf2083e0, the owner's "Glint" of 2026-11-01): over a near page whose slot shows the
+   original's page, one mark a paragraph not laid yet, above the page and under nothing the reader acts on. One diagonal light
+   crossing the whole page, a picture three pages wide (300cqw) in the page's frame, each mark clipping its own slice of it, moved
+   across the page by a transform (the compositor runs the pass); every mark's pass starts when its page's indicator did. The
+   light is the paper's own colour at 78 % (80 % dimmed), over no ground, laid with no blend. Every value of the look a custom
+   property; still (a veil of the paper, 10 %, 14 % dimmed) where the reader asks for less motion or the browser sizes no
+   container */
+.axt-reader {
+  --axt-tr-ground: transparent;
+  --axt-tr-light: color-mix(in oklab, var(--axt-sk-paper) 78%, transparent);
+  --axt-tr-light-a: color-mix(in oklab, var(--axt-tr-light) 35%, var(--axt-tr-ground));
+  --axt-tr-light-b: var(--axt-tr-light-a);
+  --axt-tr-edge: 40%;
+  --axt-tr-shoulder: 43.5%;
+  --axt-tr-angle: 100deg;
+  --axt-tr-blend: normal;
+  --axt-tr-filter: none;
+  --axt-tr-pad-x: 4;
+  --axt-tr-pad-y: 2;
+  --axt-tr-radius: 4;
+  --axt-tr-still: color-mix(in oklab, var(--axt-sk-paper) 10%, transparent);
+  --axt-tr-run: 3.4s;
+  --axt-tr-easing: cubic-bezier(0.65, 0, 0.35, 1);
+  --axt-tr-delay: 0.3s;
+  --axt-tr-fade: 0.4s;
+}
+${DIMMED} {
+  --axt-tr-light: color-mix(in oklab, var(--axt-sk-paper) 80%, transparent);
+  --axt-tr-still: color-mix(in oklab, var(--axt-sk-paper) 14%, transparent);
+}
+.axt-reader .axt-translating { position: absolute; inset: 0; pointer-events: none; z-index: 1; container-type: size; }
+.axt-reader .axt-translating .axt-translating-mark { position: absolute; display: block; overflow: hidden; left: calc(var(--axt-tr-x) - var(--axt-tr-px)); top: calc(var(--axt-tr-y) - var(--axt-tr-py)); width: calc(var(--axt-tr-w) + 2 * var(--axt-tr-px)); height: calc(var(--axt-tr-h) + 2 * var(--axt-tr-py)); border-radius: calc(var(--axt-tr-radius) * var(--axt-tr-u, 0.1cqw)); mix-blend-mode: var(--axt-tr-blend); filter: var(--axt-tr-filter); background: var(--axt-tr-ground); animation: axt-tr-in var(--axt-tr-fade) ease var(--axt-tr-delay) both; }
+.axt-reader .axt-translating .axt-translating-mark::before { content: ""; position: absolute; top: 0; height: 100%; left: calc(var(--axt-tr-px) - var(--axt-tr-x)); width: 100cqw; background-image: var(--axt-tr-image, linear-gradient(var(--axt-tr-angle), transparent 0 var(--axt-tr-edge), var(--axt-tr-light-a) var(--axt-tr-shoulder), var(--axt-tr-light) 50%, var(--axt-tr-light-b) calc(100% - var(--axt-tr-shoulder)), transparent calc(100% - var(--axt-tr-edge)) 100%)); background-size: var(--axt-tr-size, 300cqw 100cqh); background-repeat: no-repeat; background-position: -100cqw calc(var(--axt-tr-py) - var(--axt-tr-y)); animation: axt-tr-pass var(--axt-tr-run) var(--axt-tr-easing) infinite; }
+@keyframes axt-tr-pass { 0% { transform: translateX(-100%); } 80%, 100% { transform: translateX(100%); } }
+@keyframes axt-tr-in { from { opacity: 0; } to { opacity: 1; } }
+.axt-reader .axt-translating-still .axt-translating-mark { animation: none; background: var(--axt-tr-still, var(--axt-tr-ground)); }
+.axt-reader .axt-translating-still .axt-translating-mark::before { content: none; }
+@media (prefers-reduced-motion: reduce) {
+  .axt-reader .axt-translating .axt-translating-mark { animation: axt-tr-in 0s linear var(--axt-tr-delay) both; background: var(--axt-tr-still, var(--axt-tr-ground)); }
+  .axt-reader .axt-translating .axt-translating-mark::before { content: none; }
+}
+/* the highlight's layer: over the text layer, never catching the pointer, the bands multiplied into the page by the layer (an
+   isolated group: a band's own blend would grey the letters, engine.css "The wash") */
+.axt-reader .axt-hl-layer { position: absolute; inset: 0; pointer-events: none; z-index: 3; mix-blend-mode: multiply; }
+.axt-reader .axt-hl { position: absolute; border-radius: 3px; background: color-mix(in oklab, var(--axt-hl-color, var(--axt-green)) var(--axt-hl-mix, 22%), transparent); }
+/* a sentence over rows of different reach: one outline, its path filled with the band's wash (highlight.ts shapePath) */
+.axt-reader .axt-hl-shape { background: none; border-radius: 0; overflow: visible; }
+.axt-reader .axt-hl-shape > path { fill: color-mix(in oklab, var(--axt-hl-color, var(--axt-green)) var(--axt-hl-mix, 22%), transparent); }
+/* over a dimmed page the band is screened, as it is multiplied over a white one (by its layer: a band's own blend mode mixes
+   inside the layer alone) */
+${DIMMED} .axt-hl-layer { mix-blend-mode: screen; }
+/* the composed page's overlay over the page view: its frame the page's size at its scale (--axt-frame-w, -h), never the floored box.
+   Its text at the weight the page's canvas draws its own (docs/PDF-READER.md §11.8): the browser's own smoothing, and
+   geometricPrecision unless the reader's fixed probe said auto (text-rendering.ts, decided once a reader before its first
+   overlay and written on the root by the composer; Chromium on macOS draws geometricPrecision without the smoothing: 80 % of
+   the ink); in the layer's ink, the PDF's own black, where a run names no fill of its own (the owner's ruling of 2026-11-08:
+   today's layer, layer-proto/run.mjs SVG_RULES, drew #141414). A CJK run comes with its own fill, #141414, today's ink (the
+   owner's exception of 2026-11-08: typeset's display.ts CJK_INK, by the class of its characters), painted as its attribute */
+.axt-reader .axt-over { position: absolute; inset: 0; }
+.axt-reader .axt-over > svg { position: absolute; left: 0; top: 0; width: var(--axt-frame-w, 100%); height: var(--axt-frame-h, 100%); overflow: visible; font-synthesis: none; text-rendering: geometricPrecision; -webkit-font-smoothing: auto; -webkit-user-select: none; user-select: none; pointer-events: none; }
+.axt-reader[data-axt-layer-text="auto"] .axt-over > svg { text-rendering: auto; }
+.axt-reader .axt-over > svg text { white-space: pre; fill: #000; }
+/* the elements' and labels' crops, cut from the page's crop render: darkened into the page (lightened into a dimmed one, below),
+   so that paint order cannot change a pixel;
+   in the page view's own frame and box (the frame floored to its rounding, as PDF.js floors the page box; a turned page's
+   turned, never by CSS), so that its pixels are the page view's and the device's (paint.ts cropGrid) */
+/* a turned page (/Rotate, the maintainer's B-408): the overlay's drawing (its SVG, its crops, its links) and the highlight's
+   layer made in the page's own frame and turned with the page about the frame's corner, as PDF.js turns its own layers
+   (pdf_viewer.css [data-main-rotation]) */
+.axt-reader [data-axt-turn] { transform-origin: 0 0; }
+.axt-reader [data-axt-turn="90"] { transform: rotate(90deg) translateY(-100%); }
+.axt-reader [data-axt-turn="180"] { transform: rotate(180deg) translate(-100%, -100%); }
+.axt-reader [data-axt-turn="270"] { transform: rotate(270deg) translateX(-100%); }
+.axt-reader .axt-hl-layer[data-axt-turn] { inset: auto; left: 0; top: 0; width: var(--axt-frame-w); height: var(--axt-frame-h); }
+.axt-reader .axt-over > canvas.axt-crops { position: absolute; left: 0; top: 0; width: var(--axt-crops-w, 100%); height: var(--axt-crops-h, 100%); mix-blend-mode: darken; pointer-events: none; }
+.axt-reader .axt-over > .textLayer { contain: strict; }
+.axt-reader .axt-over > .textLayer[data-axt-frame] { width: var(--axt-frame-w, 100%) !important; height: var(--axt-frame-h, 100%) !important; }
+/* every text layer off screen skipped by style and layout (docs/PDF-READER.md §11.11, "Off screen, skipped"): PDF.js's on the
+   left's pages and on the right's original pages, and the laid pages'. Late in a paper's first scroll the text layers are 94 %
+   of what is laid out, most of it on left pages far from the view that PDF.js's viewer keeps drawn, and each change of the
+   document's fonts laid every one of them out again. A text layer paints nothing (its glyphs transparent) and its box is its
+   own (PDF.js's inset: 0 and overflow: clip; a laid page's contain: strict, sized by the frame), so one skipped draws nothing
+   less and moves no box: no intrinsic size is needed. The browser lays one out again as it comes near the view, and as its
+   find, a selection or the focus reaches it; a browser without content-visibility lays them all, as before */
+.axt-reader .textLayer { content-visibility: auto; }
+/* while a zoom's or a pinch's steps scale the pages by CSS (the stack marked scaling until TEXT_BACK_MS after they are drawn again),
+   the laid pages' text layers are out of style and layout: each span's size is a calc of --total-scale-factor, which every step
+   changes. They are sized once, as the steps end; a selection in them stays, and shows again with them */
+.axt-reader [data-axt-scaling] .axt-over > .textLayer { display: none; }
+/* the pages dimmed: the overlay's drawing, its text and its crops, takes the filter the host gives the page's canvas
+   (chrome/reader.css), so that every run comes out as the canvas's ink does, whatever fill it names (the layer's black, a CJK
+   run's CJK_INK, a colour of its own), as no rule on a text's fill would reach a run that names its own. The crops' blend is
+   mirrored with it, as the highlight's is: the filter turns a crop's paper into the dimmed page's ground (rgb(29 29 29), the
+   page canvas's white through the same filter) and its ink light, so darken, which keeps a crop's ink over a white page,
+   would keep the ground over it (the website's staging, 2026-11-12: every inline formula of a translated paragraph a blank
+   gap); lighten keeps the ink and lays the crop's paper on its equal */
+${DIMMED} .axt-over > svg, ${DIMMED} .axt-over > canvas.axt-crops { filter: invert(88.8%) hue-rotate(180deg); }
+${DIMMED} .axt-over > canvas.axt-crops { mix-blend-mode: lighten; }
+/* the links over a laid page: one anchor a link, each box a span of its own, sizes a share of the page's frame */
+.axt-reader .axt-links { position: absolute; left: 0; top: 0; width: var(--axt-frame-w, 100%); height: var(--axt-frame-h, 100%); z-index: 1; pointer-events: none; }
+.axt-reader .axt-link { position: absolute; display: block; pointer-events: none; outline: none; }
+.axt-reader .axt-link > .axt-link-box { position: absolute; box-sizing: border-box; pointer-events: auto; cursor: pointer; }
+.axt-reader .axt-link[data-axt-border="solid"] > .axt-link-box { border: var(--axt-link-border) solid var(--axt-link-colour); }
+.axt-reader .axt-link[data-axt-border="dashed"] > .axt-link-box { border: var(--axt-link-border) dashed var(--axt-link-colour); }
+.axt-reader .axt-link[data-axt-border="underline"] > .axt-link-box { border-bottom: var(--axt-link-border) solid var(--axt-link-colour); }
+@media (hover: hover) { .axt-reader .axt-link:hover > .axt-link-box { background-color: rgb(255 255 0 / 0.2); } }
+.axt-reader .axt-link { --axt-ring: oklch(0.235 0.012 255); --axt-ring-halo: oklch(1 0 0); }
+${DIMMED} .axt-link { --axt-ring: oklch(0.935 0.005 255); --axt-ring-halo: oklch(0.255 0.006 255); }
+.axt-reader .axt-link:focus-visible > .axt-link-box { outline: 2px solid var(--axt-ring); outline-offset: 1px; box-shadow: 0 0 0 1px var(--axt-ring-halo), 0 0 0 4px var(--axt-ring-halo); }
+@media (forced-colors: active) {
+  .axt-reader .axt-link > .axt-link-box { outline: 1.5px solid LinkText; }
+  .axt-reader .axt-link:focus-visible > .axt-link-box { outline: 2px solid Highlight; box-shadow: none; }
+}
+`
+
+/** the reader's sheets in its root: PDF.js's viewer sheet (`sheet`) and its own; removed with the root's content */
+export function addSheets(root: HTMLElement, sheet: string): void {
+  const link = document.createElement('link')
+  link.rel = 'stylesheet'
+  link.href = sheet
+  const style = document.createElement('style')
+  style.textContent = READER_CSS
+  root.prepend(link, style)
+}

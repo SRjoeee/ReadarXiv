@@ -53,6 +53,42 @@ describe('a heading set in fewer lines than its original goes on the original\'s
     expect(placed(lay(2, [block(500, 1), block(300, 1)], { lastLines: true }))).toEqual([[500, 0]])
   })
 
+  // 2610.18513v1 page 35, unit 316: amsthm's note "(Functional characterization … Proposition 6.1])", two lines, the theorem's
+  // body going on after its `).` on the second (run.mjs keptAfter, the block's `stop`). Its Chinese, one line, was moved onto
+  // that row whole, past where the note's text ends there, and drawn over the body's first words
+  it('where its last row\'s room ends sooner (a row it shares with the next unit), it keeps its first lines', () => {
+    const b = { ...block(500, 2), stop: { y: 488, band: 10, x1: 60 } }
+    const PL = { lastLines: true, halfLead: { head: false, foot: true, below: 12 } }
+    const l = lay(2, [b], PL)
+    expect(placed(l)).toEqual([[500, 0]])
+    // (and at the page fill's state, whose floor leaves the last row no slot of its own: the room read there all the same)
+    const at = L2.layoutAt(words(2) as never, [b] as never, 10, { ...P, ...PL } as never, { ...l.state, box: true, lead: 1.1 })
+    expect(placed(at)).toEqual([[500, 0]])
+  })
+
+  // (the room each line keeps is read on the row it lands on, its move the room under the last line allows, not the row the
+  // last line would reach without it: CodeRabbit on #468)
+  it('its room read where its lines land, the room under the original\'s last line taken into account', () => {
+    // (no room under the last row: moved by 2 pt, on its own row, whose room is the line's; read on the shared row it no longer
+    // reaches, it stayed where it was)
+    const b = { ...block(500, 2), stop: { y: 488, band: 10, x1: 60 } }
+    expect(placed(lay(2, [b], { lastLines: true, halfLead: { head: false, foot: true, below: 0 } }))).toEqual([[498, null]])
+  })
+
+  // the same unit: its first line starts after "Lemma A.2 (", kept as the original's ink there; moved down, its text stood
+  // apart from it, at that line's indent on a row that has none
+  it('where its first line starts past its block\'s edge with no start of its own (a label kept before it), it keeps its first lines', () => {
+    const l = lay(1, [{ ...block(500, 2), indent: 30 }], { lastLines: true })
+    expect(placed(l)).toEqual([[500, 0]])
+    expect(l.lines[0]?.x0).toBe(30)
+  })
+
+  it('a first line whose start is its own (the number run.mjs draws with it) still goes down, from that start', () => {
+    const l = lay(1, [{ ...block(500, 2), indent: 30, start: 20 } as ReturnType<typeof block>], { lastLines: true })
+    expect(placed(l)).toEqual([[488, 1]])
+    expect(l.lines[0]?.x0).toBe(20)
+  })
+
   it('the page fill\'s lay at a state places it so too', () => {
     const l = lay(2, [block(500, 2)], { lastLines: true })
     const at = L2.layoutAt(words(2) as never, [block(500, 2)] as never, 10, { ...P, lastLines: true } as never, l.state)

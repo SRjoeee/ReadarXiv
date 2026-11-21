@@ -38,7 +38,7 @@ vi.mock('@/cache/layer-store', () => ({
 
 import { DIAGNOSTICS_FILE_NAME, Data } from '@/entrypoints/options/sections/Data'
 import type { OptionsData } from '@/entrypoints/options/data'
-import { O, setLocale } from '@/ui/strings'
+import { O, setLocale } from '@readarxiv/ui'
 
 const data = (): OptionsData => ({
   config: DEFAULT_CONFIG, fallbackReason: null, reset: async () => DEFAULT_CONFIG, resetFailed: false, patch: async fn => fn(DEFAULT_CONFIG), pack: null, checkPack: async () => 'unsupported', fetchPack: async () => undefined,

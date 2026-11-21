@@ -2,9 +2,8 @@
 import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import { BUNDLE, readBundle, VTAG } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
-import { REMOVAL } from '@/pdf-reader/engine/layout/addon-manifest.mjs'
 import { LAYOUT } from '@/pdf-reader/engine/layout/file.mjs'
-import { PDFJS, PIPELINE_VERSION } from '@/pdf-reader/engine/pipeline/versions.mjs'
+import { PDFJS, PIPELINE_VERSION, REMOVAL } from '@/pdf-reader/engine/pipeline/versions.mjs'
 import { type Answer, layerApi, loadSample, mode, serves, WHY } from './layer-api.mjs'
 
 // The stand-in of the layer API (tests/e2e/lib/layer-api.mjs) holds to the contract the web's API gives the reader, and
@@ -25,7 +24,7 @@ describe('the sample the stand-in serves', () => {
     const read = readBundle(sample.bundle)
     expect(read.dropped).toEqual([])
     expect(read.layout).not.toBeNull()
-    expect(read.addon).not.toBeNull()
+    expect(read.rules).not.toBeNull()
     expect(read.versions).toEqual({ bundle: BUNDLE, pipeline: PIPELINE_VERSION, layout: LAYOUT, removal: REMOVAL, pdfjs: PDFJS, image: read.versions.image })
     expect(VTAG).toBe(`b${BUNDLE}-j${PDFJS}-p${PIPELINE_VERSION}-l${LAYOUT}-r${REMOVAL}`)
   })
@@ -380,22 +379,68 @@ describe('BUNDLE 4: the catalog, the 202s with the objects made so far, the obje
     expect('body' in get(api, BUNDLE_PATH) && (get(api, BUNDLE_PATH) as { body: Uint8Array }).body).toEqual(sample.bundle)
   })
 
-  it('names the original the layer is bound to beside the catalog and each object, the tag the original answers with (the MD5 of its bytes); unbound, none', async () => {
+  it('is a layer over our own compile (BUNDLE 8): its head, chunks and parts read by their readers, the catalog naming the base by its key', async () => {
+    const F = await import('@/pdf-reader/engine/layer-proto/format.mjs')
+    const sha = createHash('sha256').update(sample.pdf).digest('hex')
+    const files = sampleFiles(), ours = createHash('sha256').update(files.wrapped).digest('hex')
+    const headRef = layer4.refs.head as { sha256: string; bytes: number }
+    const head = await F.readHead(layer4.objects.get(headRef.sha256) as Uint8Array, { ref: { kind: 'head', ...headRef } as never })
+    expect(head.bundle).toBe(F.BUNDLE5)
+    expect(F.layerDraws(head.base)).toBe(true)
+    // (the base of ours is the wrapped pass, its wrap's fields in the head; arXiv's PDF beside it the stand-in)
+    expect(head.base).toMatchObject({ source: 'ours', bytes: files.wrapped.length, sha256: ours, pages: layer4.paper.pages, tree: '2025', check: { pages: [layer4.paper.pages, layer4.paper.pages], boxes: 'equal', carried: 1 }, unhidden: files.wrap.unhidden, labelKept: files.wrap.labelKept })
+    expect(head.orig).toEqual({ bytes: sample.pdf.length, sha256: sha })
+    expect(layer4.base).toEqual({ bytes: files.wrapped.length, sha256: ours, data: files.wrapped })
+    const chunks: import('@/pdf-reader/engine/layer-proto/format.mjs').ReadUnitsChunk[] = []
+    for (const r of layer4.refs.units) chunks.push(await F.readUnitsChunk(layer4.objects.get(r.sha256) as Uint8Array, { ref: r as never, before: chunks.at(-1) ?? null }))
+    const catalog = await F.readCatalog(layer4.catalog, { paper: layer4.paper })
+    expect(catalog.base).toEqual({ source: 'ours', key: F.baseKey(layer4.paper.id, layer4.paper.version, ours), sha256: ours, bytes: files.wrapped.length })
+    const index = F.indexOf(head, chunks, { catalog })
+    let chain = null, laid = 0, figures = 0
+    for (const r of layer4.refs.parts) {
+      const part = await F.readPart(layer4.objects.get(r.sha256) as Uint8Array, { ref: r as never, index, chain })
+      chain = part.chain
+      if (part.layout) laid++
+      // (the TikZ figure's text the wrap drew, each an ink unit of kind inkfigures: the content class `figures`)
+      for (const f of part.figures) { figures++; expect(index.units[f.id]?.[0]).toBe('inkfigures') }
+    }
+    expect(laid).toBe(layer4.refs.parts.length)
+    expect(figures).toBe(files.wrap.figures.units.length)
+    expect(figures).toBeGreaterThan(0)
+    // (each left part carries its page's draw, as the page pass ships it under a head of ours, and the head says so)
+    expect(JSON.parse(new TextDecoder().decode(layer4.objects.get(headRef.sha256))).draw).toBe(1)
+    for (const sha of Object.values(layer4.leftRefs)) expect(JSON.parse(new TextDecoder().decode(layer4.objects.get(sha))).draw).not.toBeNull()
+  })
+
+  it('serves our base page at /api/v1/base/<id>v<n>/<sha256> by ranges: 200, 206, 416, a strong tag, any origin; no other digest, no .pdf', () => {
+    const api = layerApi({ sample, layer4 })
+    const at = `/api/v1/base/${sample.segment}/${layer4.base!.sha256}`
+    const pdf = layer4.base!.data, whole = get(api, at)
+    expect(whole).toMatchObject({ status: 200, headers: { 'content-type': 'application/pdf', 'accept-ranges': 'bytes', 'access-control-allow-origin': '*', 'cache-control': 'public, max-age=31536000, immutable' } })
+    expect((whole as { body: Uint8Array }).body).toEqual(pdf)
+    const tag = (whole as { headers: Record<string, string> }).headers.etag
+    expect(tag).toMatch(/^"[\x21\x23-\x7e]+"$/)
+    expect(get(api, at, { range: 'bytes=0-9' })).toMatchObject({ status: 206, headers: { etag: tag, 'content-range': `bytes 0-9/${pdf.length}` } })
+    expect((get(api, at, { range: 'bytes=0-9' }) as { body: Uint8Array }).body).toEqual(pdf.subarray(0, 10))
+    expect(get(api, at, { range: `bytes=${pdf.length}-` })).toMatchObject({ status: 416, headers: { 'content-range': `bytes */${pdf.length}` } })
+    expect(serves(at)).toBe(true)
+    for (const path of [`${at}.pdf`, `/api/v1/base/${sample.segment}/${'0'.repeat(64)}`, `/api/v1/base/2600.99999v1/${layer4.base!.sha256}`, `/api/v1/base/${sample.segment}/ABC`]) expect(get(api, path).status, path).toBe(404)
+    expect(api.handle({ method: 'POST', path: at }).status).toBe(405)
+    // (without the cut, no base page of ours; its faults set apart from the layer's and the original's)
+    expect(get(layerApi({ sample }), at).status).toBe(404)
+    expect(api.set({ base: mode.error(503) }).handle({ method: 'GET', path: at, headers: {} }).status).toBe(503)
+    expect(get(api, `/api/v1/original/${sample.segment}`).status).toBe(200)
+  })
+
+  it('names no original beside a layer of ours (the Worker binds it by the base\'s digest); the original answers with its tag as before', () => {
     const api = layerApi({ sample, layer4 })
     const tag = `"${createHash('md5').update(sample.pdf).digest('hex')}"`
     expect(api.etag).toBe(tag)
-    expect(get(api, PATH)).toMatchObject({ status: 200, headers: { 'x-axt-base-etag': tag } })
-    for (const sha of layer4.objects.keys()) expect(get(api, `${PATH}/o/${sha}`)).toMatchObject({ headers: { 'x-axt-base-etag': tag } })
+    expect('x-axt-base-etag' in (get(api, PATH) as { headers: Record<string, string> }).headers).toBe(false)
+    for (const sha of layer4.objects.keys()) expect('x-axt-base-etag' in (get(api, `${PATH}/o/${sha}`) as { headers: Record<string, string> }).headers).toBe(false)
     const original = `/api/v1/original/${sample.segment}`
     expect(get(api, original)).toMatchObject({ status: 200, headers: { etag: tag } })
     expect(get(api, original, { range: 'bytes=0-9' })).toMatchObject({ status: 206, headers: { etag: tag } })
-    // the layer is made over the PDF the stand-in serves
-    const { readHead } = await import('@/pdf-reader/engine/layer-proto/format.mjs')
-    const headRef = layer4.refs.head as { sha256: string; bytes: number }
-    const head = await readHead(layer4.objects.get(headRef.sha256) as Uint8Array, { ref: { kind: 'head', ...headRef } as never })
-    expect([head.base.bytes, head.base.sha256]).toEqual([sample.pdf.length, createHash('sha256').update(sample.pdf).digest('hex')])
-    const unbound = layerApi({ sample, layer4, bound: false })
-    expect('x-axt-base-etag' in (get(unbound, PATH) as { headers: Record<string, string> }).headers).toBe(false)
   })
 
   it('serves each object by its whole digest, immutable; a digest it does not hold, another paper or another tag 404 not-prepared', () => {
@@ -432,5 +477,72 @@ describe('BUNDLE 4: the catalog, the 202s with the objects made so far, the obje
     expect(get(api, '/hyph/en.json').status).toBe(404)
     expect(serves('/static-fonts/index.json') && serves('/hyph/de.json') && serves(`/static-fonts/${FACE_FILE}.woff2`)).toBe(true)
     expect(get(layerApi({ sample }), '/static-fonts/index.json').status).toBe(404)
+  })
+})
+
+describe('BUNDLE 8 held as a delta: the stand-in PDF the original, our page a delta over it (cutSample `base: \'delta\'`)', async () => {
+  const { cutSample, sampleFiles } = await import('./layer-cut.mjs')
+  const F = await import('@/pdf-reader/engine/layer-proto/format.mjs')
+  const { getDocument, OPS } = await import('pdfjs-dist/legacy/build/pdf.mjs')
+  const { startxrefOf } = await import('@readarxiv/engine')
+  const cut = await cutSample(sampleFiles(), { base: 'delta' })
+  const PATH = `/api/v1/layer/${sample.segment}/${F.CTAG5}`
+  const sha = createHash('sha256').update(sample.pdf).digest('hex')
+  const delta = cut.delta!
+
+  it('names the delta in its head (kind delta, every page replaced by the wrapped pass\'s, orig the stand-in PDF with its startxref), held to checkDelta', async () => {
+    const headRef = cut.refs.head as { sha256: string; bytes: number }
+    const head = await F.readHead(cut.objects.get(headRef.sha256) as Uint8Array, { ref: { kind: 'head', ...headRef } as never })
+    const N = cut.paper.pages
+    expect(N).toBe(4)
+    expect(head.base).toMatchObject({ source: 'ours', kind: 'delta', bytes: delta.bytes, sha256: delta.sha256, xref: delta.xref, pages: N, check: { pages: [N, N], boxes: 'equal' }, replaced: [[1, N]], unhidden: sampleFiles().wrap.unhidden })
+    expect(head.orig).toEqual({ bytes: sample.pdf.length, sha256: sha, xref: startxrefOf(sample.pdf) })
+    expect(F.layerDraws(head.base)).toBe(true)
+    expect(await F.checkDelta(head, delta.data)).toBeNull()
+    expect(cut.base).toBeNull()
+    // (the catalog names it as a bundle object, and the index takes the catalog; every part reads in its chain)
+    const catalog = await F.readCatalog(cut.catalog, { paper: cut.paper })
+    expect(catalog.base).toEqual({ source: 'ours', kind: 'delta', object: { key: F.deltaKey(cut.paper.id, cut.paper.version, delta.sha256), sha256: delta.sha256, bytes: delta.bytes } })
+    expect(delta.key).toMatch(/\.delta$/)
+    const chunks: import('@/pdf-reader/engine/layer-proto/format.mjs').ReadUnitsChunk[] = []
+    for (const r of cut.refs.units) chunks.push(await F.readUnitsChunk(cut.objects.get(r.sha256) as Uint8Array, { ref: r as never, before: chunks.at(-1) ?? null }))
+    const index = F.indexOf(head, chunks, { catalog })
+    let chain: import('@/pdf-reader/engine/layer-proto/format.mjs').PartChain | null = null
+    for (const r of cut.refs.parts) chain = (await F.readPart(cut.objects.get(r.sha256) as Uint8Array, { ref: r as never, index, chain })).chain
+    expect(chain).toMatchObject({ through: N })
+  })
+
+  it('serves the delta at the layer\'s object route by its digest and `.delta` (the web\'s deltaPath), immutable, as bytes; the bare digest a 404, as the web answers it; no base PDF of ours; the original as before', () => {
+    const api = layerApi({ sample, layer4: cut })
+    const a = get(api, `${PATH}/o/${delta.sha256}.delta`)
+    expect(a).toMatchObject({ status: 200, headers: { 'content-type': 'application/octet-stream', 'cache-control': 'public, max-age=31536000, immutable', 'access-control-allow-origin': '*' } })
+    expect((a as { body: Uint8Array }).body).toEqual(delta.data)
+    const bare = get(api, `${PATH}/o/${delta.sha256}`)
+    expect([bare.status, jsonOf(bare)]).toEqual([404, { why: 'not-prepared' }])
+    expect(get(api, `${PATH}/o/${'0'.repeat(64)}.delta`).status).toBe(404)
+    expect(get(api, `/api/v1/base/${sample.segment}/${delta.sha256}`).status).toBe(404)
+    expect(get(api, `/api/v1/original/${sample.segment}`)).toMatchObject({ status: 200 })
+    expect((get(api, `/api/v1/original/${sample.segment}`) as { body: Uint8Array }).body).toEqual(sample.pdf)
+  })
+
+  it('composes: the original\'s bytes then the delta open in PDF.js, every page ours (the wrapped pass\'s)', async () => {
+    const opsOf = async (bytes: Uint8Array) => {
+      const task = getDocument({ data: bytes.slice(), verbosity: 0 }), doc = await task.promise
+      const out: number[][] = []
+      for (let p = 1; p <= doc.numPages; p++) out.push(Array.from((await (await doc.getPage(p)).getOperatorList()).fnArray))
+      await task.destroy()
+      return out
+    }
+    const composed = new Uint8Array(sample.pdf.length + delta.bytes)
+    composed.set(sample.pdf)
+    composed.set(delta.data, sample.pdf.length)
+    const [c, ours, orig] = [await opsOf(composed), await opsOf(cut.ours!), await opsOf(sample.pdf)]
+    expect(c).toHaveLength(4)
+    for (let p = 0; p < 4; p++) {
+      expect(c[p], `page ${p + 1}`).toEqual(ours[p])
+      expect(c[p], `page ${p + 1}`).not.toEqual(orig[p])
+      // (the wrap's optional content around the units' runs)
+      expect(c[p]!.filter(f => f === OPS.beginMarkedContentProps).length).toBeGreaterThan(orig[p]!.filter(f => f === OPS.beginMarkedContentProps).length)
+    }
   })
 })

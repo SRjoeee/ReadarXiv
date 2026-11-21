@@ -3,7 +3,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { POPUP_FIXTURES } from '@/entrypoints/popup/fixtures'
 import { MenuRow, StyleButton, anchors } from '@/entrypoints/popup/ui/menu'
 import { MANAGE_SERVICES, derivePopupView } from '@/entrypoints/popup/view-model'
-import { S, setLocale } from '@/ui/strings'
+import { S, setLocale } from '@readarxiv/ui'
 import { isOpen, stubPopovers } from '../pdf-reader/ui/popover-stub'
 import { mountElement } from '../ui/render-hook'
 

@@ -183,7 +183,7 @@ describe("the source's explicit glue: a kern at TeX's width, never a space", () 
     expect(items[c + 1]!.x - items[c]!.x).toBeCloseTo(20, 6)
     const id = (x: number, y: number) => [x, y]
     const audit: { what: string; dst?: number[] }[] = []
-    const ops = L2.unitOps(L, [], 1, { px: id, k: 1, hasSource: () => true, pxOf: () => id, audit: audit as never, id: 3 } as never) as { op: string; dst?: number[] }[]
+    const ops = L2.hideOps(L, 1, { px: id, k: 1, hasSource: () => true, pxOf: () => id, audit: audit as never, id: 3 } as never) as { op: string; dst?: number[] }[]
     expect(ops.find(o => o.op === 'crop')!.dst![2]).toBeCloseTo(10, 6)
     const a = audit.find(x => x.what === 'crop')!.dst!
     expect(a[2]! - a[0]!).toBeCloseTo(10, 6)
@@ -227,17 +227,19 @@ describe('a space placeholder TeX set ink for is drawn as that ink', () => {
   } as never
   const page = [...item('Federated', 10, 500, 10, 0), ...item('\u00b7', 58, 500, 6, 1), ...item('Transfer', 66, 500, 10, 2)]
   const u = { kind: 'para', src: 'Federated Transfer', pieces: [text('\u8054\u90a6 '), ph('\\and'), text(' \u8f6c\u79fb')] } as never
-  const read = (file: boolean) => {
+  const read = () => {
     const t = T.texRects(lu)
-    return file ? L2.prepareUnit(u, t.rects as never, [page as never], new Map() as never, null, T.texParts(lu, [-1, 1, -1], { use: 'lines', lines: t }) as never) : L2.prepareUnit(u, t.rects as never, [page as never], new Map() as never)
+    return L2.prepareUnit(u, t.rects as never, [page as never], new Map() as never, null, T.texParts(lu, [-1, 1, -1], { lines: t }) as never)
   }
   it('as its page text where the file finds its row, and set as a CJK mark in Chinese (no space either side)', () => {
-    const prep = read(true)
+    const prep = read()
     expect(prep.unproven).toBeUndefined()
     expect(prep.get(1)).toMatchObject({ mode: 'orig-text', text: '\u00b7' })
     expect(shape(L2.tokensOf2(u, prep as never, 'zh', BASE as never, DESIGNS as never, paramsFor('zh') as never, null, measure as never) as never)).toBe('\u8054 \u90a6 \u00b7 \u8f6c \u79fb')
   })
-  it('as a space where nothing tells its ink (v0 alone)', () => {
-    expect(read(false).get(1)).toMatchObject({ mode: 'none', text: ' ' })
+  it('as a space where the file tells no ink for it (no row)', () => {
+    const bare = { ...(lu as object), ph: new Map() } as never
+    const t = T.texRects(bare)
+    expect(L2.prepareUnit(u, t.rects as never, [page as never], new Map() as never, null, T.texParts(bare, [-1, 1, -1], { lines: t }) as never).get(1)).toMatchObject({ mode: 'none', text: ' ' })
   })
 })

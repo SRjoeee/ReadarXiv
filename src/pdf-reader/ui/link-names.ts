@@ -1,3 +1,4 @@
+// Kept at this path for the website's reader (readarxiv-web, @vendor/pdf-reader/ui/link-names) until its cut-over; nothing in the extension imports it. See tests/contract/website-imports.test.ts.
 // The names of the layer's links that have no text under them (an image, a symbol: the engine's '' name), by where they go
 // (UI.md S-R-25, the owner's words of 2026-10-17): elsewhere in the paper, a web page by its site, an email by its address,
 // else a link. Read from the interface's pack at each call, so that a language switched meanwhile names the next drawing;

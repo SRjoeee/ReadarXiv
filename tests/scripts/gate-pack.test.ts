@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { LAYOUT, LAYOUT_SCHEMA } from '../../src/pdf-reader/engine/layout/file.mjs'
 import { signV4 } from '../../scripts/r2-read.mjs'
-import { checkCompileImage, COMPILE_IMAGES_FILE, compileImageOf, compileImagesOf, localImageDigests, packPathsOf, entriesOf, fontFiles, inputsOfRecord, layoutOfEngine, layoutVersionOf, listingDigest, makePack, objectsOf, objectUrl, outputsOf, PACK_SCHEMA, packJsonOf, pipelineOf, RECORD_INPUTS, restorePack, sha256, summaryOf, verifyPack } from '../../lab/pdf/spikes/gate-pack.mjs'
+import { BASE_RECORD_SCHEMA, baseRecordOf, baseRecordOfMade, checkCompileImage, keptLayoutOf, COMPILE_IMAGES_FILE, compileImageOf, compileImagesOf, localImageDigests, packPathsOf, entriesOf, cjkRoleFaces, fontFiles, inputsOfRecord, layoutOfEngine, layoutVersionOf, listingDigest, makePack, objectsOf, objectUrl, outputsOf, PACK_SCHEMA, packJsonOf, pipelineOf, RECORD_INPUTS, restorePack, sha256, summaryOf, verifyPack } from '../../lab/pdf/spikes/gate-pack.mjs'
 
 // The rules gate's fixture pack (lab/pdf/spikes/gate-pack.mjs, Task R6): made the same on every make, restored by digest
 // from a private bucket, and checked before the gate reads it. The inputs here are small synthetic files.
@@ -28,7 +28,7 @@ const walk = (dir: string, rel = ''): string[] => readdirSync(dir).sort().flatMa
 /** a tree the way the gate's folders are laid out: two outputs of one paper (one PDF between them) and one of another */
 function inputs() {
   const root = tmp()
-  const o = { fixtures: join(root, 'fixtures'), records: join(root, 'records'), refs: join(root, 'refs'), geometry: join(root, 'geometry'), fontsDir: join(root, 'fonts'), texmf: join(root, 'texmf') }
+  const o = { fixtures: join(root, 'fixtures'), records: join(root, 'records'), refs: join(root, 'refs'), geometry: join(root, 'geometry'), fontsDir: join(root, 'fonts'), texmf: join(root, 'texmf'), sources: join(root, 'sources') }
   for (const [name, pdf] of [['0001.00001v1-zh', 'pdf-one'], ['0001.00001v1-de', 'pdf-one'], ['0002.00002v1-zh', 'pdf-two']] as const) {
     put(join(o.fixtures, name, 'arxiv.pdf'), pdf)
     put(join(o.fixtures, name, 'layout.json'), layoutText(name))
@@ -152,20 +152,211 @@ describe('the pack\'s outputs are the frozen references', () => {
   })
 })
 
-describe('the faces the pack holds', () => {
-  const faces = Object.fromEntries(
-    ['shs-sc-light', 'shs-sc-regular', 'shs-sc-medium', 'shs-sc-semibold', 'shs-sc-bold', 'shs-k-light', 'shs-k-regular', 'shs-k-semibold', 'shs-k-bold', 'fandolkai', 'bkai00mp', 'nimbus-roman-regular', 'cmun-serif-bold'].map(id => [id, { file: `${id}.otf` }]),
-  )
-  const known = [{ group: 'shs-sc', kai: 'fandolkai' }, { group: 'shs-k', kai: null }, { group: 'shs-tc', kai: 'bkai00mp' }]
-  it('takes every face that is no CJK face whole, and of a CJK group the four weights its roles are built from and its Kai', () => {
-    const files = fontFiles(faces, known, [{ group: 'shs-sc', kai: 'fandolkai' }])
-    expect(files).toEqual(['cmun-serif-bold.otf', 'fandolkai.otf', 'nimbus-roman-regular.otf', 'shs-sc-bold.otf', 'shs-sc-light.otf', 'shs-sc-regular.otf', 'shs-sc-semibold.otf'])
+// BUNDLE 8 (design note §3.1): a fixture's layout made over our base page, the final pass of the marked original, holds that page
+// beside arXiv's PDF and its record, base.json, which names the page's digest and the layout file's: a make checks the three
+// against each other, so that a layout file is never packed beside another page than the one it was made over
+describe('our base pages the layout files were made over', () => {
+  const n = '0001.00001v1-zh'
+  /** a fixture's base page of ours and its record, over its layout file as it is */
+  function withBase(i: ReturnType<typeof inputs>, page = 'our base page', more: Record<string, unknown> = {}) {
+    const layout = readFileSync(join(i.fixtures, n, 'layout.json'))
+    put(join(i.fixtures, n, 'base.pdf'), page)
+    const record = { schema: BASE_RECORD_SCHEMA, source: 'ours', base: { bytes: page.length, sha256: sha256(page), xref: 3, pages: 1, tree: '2025', check: { pages: [1, 1], boxes: 'equal', carried: 1 } }, layout: { sha256: sha256(layout), bytes: layout.length }, ...more }
+    put(join(i.fixtures, n, 'base.json'), JSON.stringify(record))
+    return record
+  }
+  const message = (i: ReturnType<typeof inputs>) => { try { entriesOf(i); return '' } catch (e) { return (e as Error).message } }
+
+  it('keeps the marking\'s texts in base.json, which the gate\'s wrap is given (a pack that drops them leaves a cell\'s lead macro the original\'s)', async () => {
+    const made = { source: 'ours' as const, head: { source: 'ours', bytes: 3, sha256: sha256('our'), xref: 1, pages: 1, tree: '2025', check: {} } }
+    expect(baseRecordOfMade({ made, layout: Buffer.from('l'), texts: ['\\bert', 'BERT'] })).toMatchObject({ texts: ['\\bert', 'BERT'] })
+    expect('texts' in baseRecordOfMade({ made, layout: Buffer.from('l') })).toBe(false)
+    const i = inputs()
+    put(join(i.sources, '0001.00001v1', 'source.gz'), 'the source')
+    withBase(i, 'our base page', { texts: ['\\bert', 'BERT'] })
+    expect(baseRecordOf(join(i.fixtures, n))).toMatchObject({ texts: ['\\bert', 'BERT'] })
+    const { textsOf } = await import('../../lab/pdf/spikes/layer-gate/wrap.mjs')
+    expect(textsOf(join(i.fixtures, n, 'base.pdf'))).toEqual(['\\bert', 'BERT'])
+    // (texts not pairs of strings: refused)
+    withBase(i, 'our base page', { texts: ['\\bert'] })
+    expect(() => baseRecordOf(join(i.fixtures, n))).toThrow(/texts/)
+    // (a source past 4,096 code units, as the ink section now asks, kept; sources past INK_BUDGET in all, a source twice or a text
+    // of 65, refused — Devin on #568)
+    withBase(i, 'our base page', { texts: [`\\mylabel{${'x'.repeat(5000)}}`, 'OK'] })
+    expect(baseRecordOf(join(i.fixtures, n))).toMatchObject({ texts: [`\\mylabel{${'x'.repeat(5000)}}`, 'OK'] })
+    for (const bad of [[`\\a{${'x'.repeat(32768)}}`, 'A', `\\b{${'x'.repeat(32768)}}`, 'B'], ['\\bert', 'BERT', '\\bert', 'B'], ['\\bert', 'B'.repeat(65)]]) {
+      withBase(i, 'our base page', { texts: bad })
+      expect(() => baseRecordOf(join(i.fixtures, n))).toThrow(/texts/)
+    }
   })
-  it('leaves out the group no target of the pack uses, and names a face the table lacks', () => {
-    const files = fontFiles(faces, known, [{ group: 'shs-sc', kai: 'fandolkai' }, { group: 'shs-k', kai: null }])
+  it('keeps the marking\'s inkless macros in base.json beside its texts, as the wrap is given them, and refuses a list the marks would not hold', async () => {
+    const made = { source: 'ours' as const, head: { source: 'ours', bytes: 3, sha256: sha256('our'), xref: 1, pages: 1, tree: '2025', check: {} } }
+    expect(baseRecordOfMade({ made, layout: Buffer.from('l'), inkless: ['\\boldmath'] })).toMatchObject({ inkless: ['\\boldmath'] })
+    expect('inkless' in baseRecordOfMade({ made, layout: Buffer.from('l') })).toBe(false)
+    const i = inputs()
+    put(join(i.sources, '0001.00001v1', 'source.gz'), 'the source')
+    withBase(i, 'our base page', { inkless: ['\\boldmath'] })
+    expect(baseRecordOf(join(i.fixtures, n))).toMatchObject({ inkless: ['\\boldmath'] })
+    const { inklessOf } = await import('../../lab/pdf/spikes/layer-gate/wrap.mjs')
+    expect(inklessOf(join(i.fixtures, n, 'base.pdf'))).toEqual(['\\boldmath'])
+    // (not distinct sources of 1 code unit or more, 65,536 in all at most — INK_BUDGET, MARKS_SCHEMA 15: refused — Devin on #482)
+    for (const bad of [['\\boldmath', '\\boldmath'], [''], [3], [`\\a{${'x'.repeat(32768)}}`, `\\b{${'x'.repeat(32768)}}`]]) {
+      withBase(i, 'our base page', { inkless: bad })
+      expect(() => baseRecordOf(join(i.fixtures, n))).toThrow(/inkless/)
+    }
+    // (more than 64 sources, and one past 200 code units, as the ink section now asks: kept)
+    withBase(i, 'our base page', { inkless: [...Array.from({ length: 65 }, (_, k) => `\\m${k}`), `\\delete{${'x'.repeat(633)}}`] })
+    expect((baseRecordOf(join(i.fixtures, n)) as { inkless?: string[] } | null)?.inkless).toHaveLength(66)
+  })
+  it('packs base.pdf and base.json beside arxiv.pdf where the fixture has them, and none where it has not', () => {
+    const i = inputs()
+    const record = withBase(i)
+    // (no source for a base of ours: the make names it missing)
+    expect(() => entriesOf(i)).toThrow(/sources\/0001\.00001v1\/source\.gz/)
+    put(join(i.sources, '0001.00001v1', 'source.gz'), 'the source')
+    expect(baseRecordOf(join(i.fixtures, n))).toEqual(record)
+    // (the image named: its tree's pin, each base page made on the year production compiles its paper on)
+    for (const tree of ['2025', '2023']) {
+      const j = inputs()
+      const pinned = withBase(j, 'our base page', { image: compileImagesOf().images[tree]?.texlive })
+      ;(pinned.base as { tree: string }).tree = tree
+      put(join(j.fixtures, n, 'base.json'), JSON.stringify(pinned))
+      expect(baseRecordOf(join(j.fixtures, n)), tree).toMatchObject({ image: compileImagesOf().images[tree]?.texlive })
+    }
+    expect(baseRecordOf(join(i.fixtures, '0001.00001v1-de'))).toBeNull()
+    const paths = entriesOf(i).map(e => e.path)
+    expect(paths).toContain(`fixtures/${n}/base.pdf`)
+    expect(paths).toContain(`fixtures/${n}/base.json`)
+    expect(paths.filter(p => /\/base\.(?:pdf|json)$/.test(p))).toHaveLength(2)
+    // (a base of ours carries its paper's source, which the gate wraps it from; one a paper; none for a fixture of no base)
+    expect(paths.filter(p => p.startsWith('sources/'))).toEqual(['sources/0001.00001v1/source.gz'])
+    const manifest = makePack({ entries: entriesOf(i), out: join(i.root, 'out'), pipeline: '10', layout: LAYOUT_V })
+    expect(manifest.files.find(f => f.path === `fixtures/${n}/base.pdf`)).toMatchObject({ sha256: sha256('our base page') })
+  })
+
+  it('refuses a base page that is not its record\'s, a layout file not made over it, a page with no record, a record of no page', () => {
+    const cases: [string, (i: ReturnType<typeof inputs>) => void, RegExp][] = [
+      ['other bytes', i => { withBase(i); put(join(i.fixtures, n, 'base.pdf'), 'another page') }, /base\.pdf is not the page base\.json names/],
+      ['another layout', i => { withBase(i); put(join(i.fixtures, n, 'layout.json'), layoutText('other')) }, /layout\.json is not the layout base\.json names, made over base\.pdf/],
+      ['no record', i => { put(join(i.fixtures, n, 'base.pdf'), 'our base page') }, /base\.pdf with no base\.json/],
+      ['no page', i => { withBase(i); rmSync(join(i.fixtures, n, 'base.pdf')) }, /there is no base\.pdf/],
+      ['no head', i => { withBase(i, 'our base page', { base: { bytes: 13, sha256: sha256('our base page') } }) }, /not a head's base of ours/],
+      ['no source', i => { withBase(i, 'our base page', { source: 'theirs' }) }, /names no source/],
+      ['another schema', i => { withBase(i, 'our base page', { schema: 2 }) }, /not of schema 1/],
+      ['another year\'s image', i => { withBase(i, 'our base page', { image: compileImagesOf().images['2023']?.texlive }) }, /not the pinned image of TeX Live 2025/],
+      ['no image', i => { withBase(i, 'our base page', { image: 'texlive/texlive:latest' }) }, /not the pinned image of TeX Live 2025/],
+    ]
+    for (const [what, make, why] of cases) {
+      const i = inputs()
+      make(i)
+      expect(message(i), what).toMatch(why)
+      expect(message(i), what).toContain(`${n}: `)
+    }
+  })
+
+  it('keeps the layout file of a paper whose base page of ours was refused, made over arXiv\'s PDF before, outside the version check', () => {
+    const i = inputs()
+    put(join(i.fixtures, n, 'layout.json'), layoutText(n, LAYOUT_V.schema, '3'))
+    const kept = readFileSync(join(i.fixtures, n, 'layout.json'))
+    put(join(i.fixtures, n, 'base.json'), JSON.stringify({ schema: BASE_RECORD_SCHEMA, source: 'arxiv', why: 'carry', detail: '80 of our 100 lines found on arXiv\'s PDF, under 90 %', layout: { sha256: sha256(kept), bytes: kept.length } }))
+    expect(baseRecordOf(join(i.fixtures, n))).toMatchObject({ source: 'arxiv', why: 'carry' })
+    expect(entriesOf(i).map(e => e.path)).toContain(`fixtures/${n}/base.json`)
+    expect(entriesOf(i).map(e => e.path)).not.toContain(`fixtures/${n}/base.pdf`)
+    expect(layoutVersionOf(i.fixtures, ['0001.00001v1-zh', '0001.00001v1-de', '0002.00002v1-zh'], LAYOUT_V)).toEqual(LAYOUT_V)
+    // (a refusal that keeps no layout, or keeps another, or comes with a page of ours, is no fixture)
+    for (const [record, page, why] of [[{ layout: null }, null, /no layout file is kept/], [{ layout: { sha256: sha256('x'), bytes: 1 } }, null, /not the kept layout/], [{}, 'a page', /there is a base\.pdf/], [{ why: '' }, null, /no why/]] as const) {
+      const j = inputs()
+      put(join(j.fixtures, n, 'base.json'), JSON.stringify({ schema: BASE_RECORD_SCHEMA, source: 'arxiv', why: 'carry', layout: { sha256: sha256(readFileSync(join(j.fixtures, n, 'layout.json'))), bytes: readFileSync(join(j.fixtures, n, 'layout.json')).length }, ...record }))
+      if (page) put(join(j.fixtures, n, 'base.pdf'), page)
+      expect(message(j)).toMatch(why)
+    }
+  })
+})
+
+// layer-fixtures.mjs writes base.json from what it made (baseRecordOfMade); where our base page is refused, the fixture keeps the
+// layout file it held, an older maker's over arXiv's PDF (keptLayoutOf), and the record names it, so that a make packs it
+describe('the base record a make of the fixtures writes', () => {
+  const n = '0001.00001v1-zh'
+  const HEAD = { source: 'ours', bytes: 13, sha256: sha256('our base page'), xref: 3, pages: 1, tree: '2025', check: { pages: [1, 1], boxes: 'equal', carried: 1 } }
+  it('names our base page and the layout made over it, or why there is none and the layout kept in its place', () => {
+    const i = inputs(), layout = readFileSync(join(i.fixtures, n, 'layout.json'))
+    put(join(i.fixtures, n, 'base.pdf'), 'our base page')
+    const ours = baseRecordOfMade({ made: { source: 'ours', head: HEAD }, layout, image: compileImagesOf().images['2025']?.texlive ?? null })
+    put(join(i.fixtures, n, 'base.json'), JSON.stringify(ours))
+    expect(baseRecordOf(join(i.fixtures, n))).toMatchObject({ source: 'ours', base: { sha256: sha256('our base page') }, layout: { sha256: sha256(layout), bytes: layout.length } })
+    // (refused: the layout file kept, named; none kept, null, which a make refuses)
+    const j = inputs(), keptBytes = readFileSync(join(j.fixtures, n, 'layout.json'))
+    const kept = baseRecordOfMade({ made: { source: 'arxiv', why: 'carry', detail: 'x' }, layout: keptBytes, image: null })
+    put(join(j.fixtures, n, 'base.json'), JSON.stringify(kept))
+    expect(kept).toEqual({ schema: BASE_RECORD_SCHEMA, source: 'arxiv', why: 'carry', detail: 'x', layout: { sha256: sha256(keptBytes), bytes: keptBytes.length } })
+    expect(baseRecordOf(join(j.fixtures, n))).toMatchObject({ source: 'arxiv', why: 'carry' })
+    const k = inputs()
+    put(join(k.fixtures, n, 'base.json'), JSON.stringify(baseRecordOfMade({ made: { source: 'arxiv', why: 'carry', detail: 'x' }, layout: null, image: null })))
+    expect(() => baseRecordOf(join(k.fixtures, n))).toThrow(/no layout file is kept/)
+  })
+
+  it('keeps a layout file of an older maker (made over arXiv\'s PDF, below LAYOUT 12), never one made over a base page of ours (LAYOUT 12 on)', () => {
+    const file = (layout: string) => new TextEncoder().encode(JSON.stringify({ schema: 5, layout }))
+    expect(keptLayoutOf(file('9'), '12')).toEqual(file('9'))
+    expect(keptLayoutOf(file('12'), '12')).toBeNull()
+    // from LAYOUT 12 on a file is written over a base page of ours: after the engine moves on (13) a 12 is still no older maker's
+    // over arXiv's PDF, and drawn over arxiv.pdf its coordinates would be the wrong page's; 11 is the last made over arXiv's
+    expect(keptLayoutOf(file('12'), '13')).toBeNull()
+    expect(keptLayoutOf(file('13'), '13')).toBeNull()
+    expect(keptLayoutOf(file('11'), '13')).toEqual(file('11'))
+    expect(keptLayoutOf(file('9'), '13')).toEqual(file('9'))
+    // a token with no number says nothing of its maker
+    expect(keptLayoutOf(file('x'), '13')).toBeNull()
+    expect(keptLayoutOf(null, '12')).toBeNull()
+    expect(keptLayoutOf(new TextEncoder().encode('not json'), '12')).toBeNull()
+  })
+})
+
+describe('the faces the pack holds', () => {
+  // (a catalog of both schemas' CJK weights, the Kais and two Latin faces, each with its family as the role table writes it)
+  const faces = Object.fromEntries(([
+    ['shs-sc-light', 'axt-shs-sc'], ['shs-sc-regular', 'axt-shs-sc'], ['shs-sc-medium', 'axt-shs-sc'], ['shs-sc-semibold', 'axt-shs-sc'], ['shs-sc-bold', 'axt-shs-sc'],
+    ['shs-tc-regular', 'axt-shs-tc'], ['shs-tc-bold', 'axt-shs-tc'], ['shs-k-regular', 'axt-shs-k'], ['shs-k-bold', 'axt-shs-k'],
+    ['fandolkai', 'axt-fandolkai'], ['bkai00mp', 'axt-bkai00mp'], ['nimbus-roman-regular', 'axt-nimbus-roman'], ['cmun-serif-bold', 'axt-cmun-serif'],
+  ] as const).map(([id, family]) => [id, { file: `${id}.otf`, family }]))
+  const LATIN = ['cmun-serif-bold.otf', 'nimbus-roman-regular.otf']
+  /** an engine as the make reads it: its role table (`rolesFor`, `ENGLISH_FAMILIES`) and its rule set's CJK families */
+  type Roles = (target: string, family: string, cjk: { group: string; kai?: string | null }) => { cjk: Record<string, string> | null; fallbacks: Record<string, string[]> }
+  const engine = (rolesFor: Roles) => ({
+    rolesFor, ENGLISH_FAMILIES: ['cm', 'times', 'garamond', 'other'], BUILTIN_RULES: {},
+    resolveRules: (_set: unknown, t: string) => ({ cjkFaces: ({ zh: { group: 'shs-sc', kai: 'fandolkai' }, 'zh-TW': { group: 'shs-tc', kai: 'bkai00mp' }, ko: { group: 'shs-k', kai: null } } as Record<string, { group: string; kai: string | null }>)[t] ?? null }),
+  })
+  const light = (family: string) => ['cm', 'garamond'].includes(family)
+  // (schema 5: Light, and SemiBold for bold, beside Computer Modern and Garamond; Regular and Bold beside the rest)
+  const schema5 = engine((_t, family, cjk) => ({ cjk: { body: `${cjk.group}-${light(family) ? 'light' : 'regular'}`, bold: `${cjk.group}-${light(family) ? 'semibold' : 'bold'}` }, fallbacks: {} }))
+  // (schema 6: Regular and Bold beside every family)
+  const schema6 = engine((_t, _f, cjk) => ({ cjk: { body: `${cjk.group}-regular`, bold: `${cjk.group}-bold` }, fallbacks: {} }))
+
+  it('takes every face that is no CJK face whole, and the CJK faces the selected engine\'s own roles draw: Regular and Bold for schema 6', () => {
+    expect(fontFiles(faces, cjkRoleFaces(schema6, ['de', 'zh']))).toEqual([...LATIN, 'shs-sc-bold.otf', 'shs-sc-regular.otf'])
+  })
+
+  it('takes a schema-5 engine\'s Light and SemiBold, which it draws beside Computer Modern and Garamond (an older tree given by --engine)', () => {
+    expect(fontFiles(faces, cjkRoleFaces(schema5, ['zh']))).toEqual([...LATIN, 'shs-sc-bold.otf', 'shs-sc-light.otf', 'shs-sc-regular.otf', 'shs-sc-semibold.otf'])
+  })
+
+  it('takes a Kai only where the engine\'s roles draw it, and the faces a role falls back to', () => {
+    expect(fontFiles(faces, cjkRoleFaces(schema5, ['zh']))).not.toContain('fandolkai.otf')
+    // (an engine before 2026-10-19 drew emphasis in its Kai)
+    const kai = engine((_t, _f, cjk) => ({ cjk: { body: `${cjk.group}-regular`, bold: `${cjk.group}-bold`, ...(cjk.kai ? { italic: cjk.kai } : {}) }, fallbacks: {} }))
+    expect(fontFiles(faces, cjkRoleFaces(kai, ['zh']))).toContain('fandolkai.otf')
+    // (Traditional Chinese's characters TC lacks, from SC at the same weight)
+    const tcToSc: Record<string, string[]> = { 'shs-tc-regular': ['shs-sc-regular'], 'shs-tc-bold': ['shs-sc-bold'] }
+    const hant = engine((_t, _f, cjk) => ({ cjk: { body: `${cjk.group}-regular`, bold: `${cjk.group}-bold` }, fallbacks: cjk.group === 'shs-tc' ? tcToSc : {} }))
+    expect(fontFiles(faces, cjkRoleFaces(hant, ['zh-TW']))).toEqual([...LATIN, 'shs-sc-bold.otf', 'shs-sc-regular.otf', 'shs-tc-bold.otf', 'shs-tc-regular.otf'])
+  })
+
+  it('leaves out the groups no target of the pack draws in, and names a face the table lacks', () => {
+    const files = fontFiles(faces, cjkRoleFaces(schema6, ['zh', 'ko']))
     expect(files.some(f => f.startsWith('shs-k'))).toBe(true)
+    expect(files.some(f => f.startsWith('shs-tc'))).toBe(false)
     expect(files).not.toContain('bkai00mp.otf')
-    expect(() => fontFiles(faces, known, [{ group: 'shs-tc', kai: 'bkai00mp' }])).toThrow(/shs-tc-light/)
+    expect(() => fontFiles(faces, new Set(['shs-sc-extrabold']))).toThrow(/shs-sc-extrabold/)
   })
 })
 

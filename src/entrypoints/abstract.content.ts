@@ -2,7 +2,7 @@
 //
 // The locale pack is read directly, not through `@/ui/strings`: that module pulls in 179 language names and the
 // appearance module, and this script runs on every arXiv abstract page. All it needs is one sentence (Codex on #161: the sentence used to be hard-coded Chinese).
-import { LOCALES, pickLocale } from '@/locales'
+import { LOCALES, pickLocale } from '@readarxiv/ui'
 import { htmlHrefOn, injectBilingualLink, relabelBilingualLink, retargetBilingualLink, sourceOn } from '@/core/abstract/link'
 import { pdfUrlOf } from '@/core/pdf/entry'
 import { paperIdFrom } from '@/core/paper-id'
@@ -25,12 +25,13 @@ export default defineContentScript({
       const { S } = LOCALES[pickLocale(uiLanguage, languages)]
       return S.page.abstractLink(S.brand)
     }
+    const lang = (uiLanguage: string) => pickLocale(uiLanguage, languages)
     // The first answer inserts the line; every later one — the settings page stays open beside this one — relabels
     // and retargets it (Codex on #161)
     void watchEntrySettings(settings => {
       const newTab = settings.openIn === 'new-tab'
-      if (!injectBilingualLink(document, label(settings.uiLanguage), { newTab })) {
-        relabelBilingualLink(document, label(settings.uiLanguage))
+      if (!injectBilingualLink(document, label(settings.uiLanguage), { newTab, lang: lang(settings.uiLanguage) })) {
+        relabelBilingualLink(document, label(settings.uiLanguage), lang(settings.uiLanguage))
         retargetBilingualLink(document, newTab)
       }
     })

@@ -19,7 +19,7 @@ import { createFollower } from './sync.mjs'
 import { createPlaces } from './places.mjs'
 import { createLighting } from './lighting.mjs'
 import { linkLayer } from './links.mjs'
-import { drawing, drawn, drawnCanvas } from './drawn.mjs'
+import { SOURCE_LANG, textLayer } from './text-layer.mjs'
 
 const DISPLAYS = ['original', 'bilingual', 'translation']
 /** arXiv's margin stamp, which its dvips and Ghostscript PDFs carry as their Info Title: `arXiv:1007.0072v1  [quant-ph]  1 Jul 2010` */
@@ -30,6 +30,9 @@ const PDF_TO_CSS = 96 / 72
 const READING_WIDTH = 1060
 /** a zoom's or a pinch's step: scaled by CSS at once, drawn this long after the last step (one redraw a burst) */
 const STEP_DELAY = 400
+/** a pinch is shown by transform while the fingers move, and committed (its scale written once, the panes put, drawn
+ *  once) this long after its last step */
+export const PINCH_COMMIT_MS = 200
 /** how long a pointer that lights nothing keeps what is lit (the HTML page's MISS_GRACE_MS) */
 const MISS_HOLD = 120
 /** the reading line, where on the view the reader is taken to be reading, as a share of its height, until a click moves it */
@@ -89,7 +92,7 @@ export function createReaderView(host) {
   const counts = { events: 0, tasks: 0, opens: 0, failures: 0, layouts: 0 }
   let lastEvent = null, lastAlign = null
   const released = new WeakSet()
-  const listeners = { drawn: new Set(), want: new Set(), near: new Set(), original: new Set(), scale: new Set(), scrolled: new Set() }
+  const listeners = { drawn: new Set(), want: new Set(), near: new Set(), original: new Set(), scale: new Set(), scrolled: new Set(), highlight: new Set() }
   const tell = (set, ...args) => { for (const l of [...set]) l(...args) }
   function emit(event) {
     if (disposed) return
@@ -152,6 +155,9 @@ export function createReaderView(host) {
     l10n: () => L.viewer.l10n,
     name: n => host.words.pageName('right', n),
     near: (n, on) => tell(listeners.near, n, on),
+    // (the left shows every page the right does, at the same viewport, while the two scroll together: a place waiting for its
+    // layer shows the left's drawing of its page, places.mjs)
+    borrow: () => active(),
     warn,
   })
 
@@ -240,7 +246,7 @@ export function createReaderView(host) {
       if (!layer) { layer = document.createElement('div'); layer.className = 'axt-hl-layer'; div.append(layer) }
       return layer
     },
-    pointAt: (s, x, y) => pointOn(s.at, pagesOf(s), s.scrollX, s.scrollY + follower.shift(s), x, y),
+    pointAt: (s, x, y) => { const [px, py] = unpreview(s, x, y); return pointOn(s.at, pagesOf(s), s.scrollX, s.scrollY + follower.shift(s), px, py) },
     want: (s, page) => tell(listeners.want, s.name, page),
     again: () => pointer.again(),
   })
@@ -255,6 +261,8 @@ export function createReaderView(host) {
     highlightOn = on
     // off lights nothing; on again, what a resting pointer is over is looked at again
     if (!on) lighting.light(null); else pointer.again()
+    // (the layer side makes the highlight's data while it is on alone)
+    tell(listeners.highlight, on)
   })
   /** where a pane and its pages are on the screen, for the pointer: read where the layout is known clean */
   function measure(s) {
@@ -292,13 +300,19 @@ export function createReaderView(host) {
     const c = s.container, o = { passive: true, signal }
     // the scroll as the pointer's frame reads it, first; what is under a pointer at rest looked at again
     c.addEventListener('scroll', () => {
+      // (a pane scrolled under a pinch's preview, by the find bar or a script: the pinch committed at the scroll it meets,
+      // about the point that scroll shows at the gesture's place)
+      if (preview) { rescrolled(); settle() }
       s.scrollX = c.scrollLeft; s.scrollY = c.scrollTop
       follower.scrolled(s)
       pointer.again()
       if (s === R) tellRightPage()
       tell(listeners.scrolled, s.name)
     }, o)
-    for (const type of ['wheel', 'touchstart', 'keydown', 'pointerdown']) c.addEventListener(type, () => follower.input(s, type), o)
+    // (a wheel with Ctrl is a zoom, never a scroll: the pinch's step makes its pane the driver, and binds nothing; a wheel with
+    // ⌘ held is a scroll, as the chrome's pinch has it, §6.8)
+    // (any other input ends a pinch under way: it is committed first)
+    for (const type of ['wheel', 'touchstart', 'keydown', 'pointerdown']) c.addEventListener(type, e => { if (type !== 'wheel' || !e.ctrlKey) { settle(); follower.input(s, type) } }, o)
     c.addEventListener('pointermove', () => follower.hover(s), o)
     c.addEventListener('scrollend', () => follower.ended(s), o)
     c.addEventListener('mousemove', e => pointer.moved(s, e.clientX, e.clientY), { signal })
@@ -322,7 +336,7 @@ export function createReaderView(host) {
    *  alone through the left's viewer, at the right's size */
   const refit = observe(new ResizeObserver(entries => {
     // (a display's own layout fits the panes itself, and puts them at its place: relayout)
-    if (!laid || relaying || typeof zoomChosen !== 'string') return
+    if (!laid || relaying || preview || typeof zoomChosen !== 'string') return
     for (const { target } of entries) {
       const s = target === L.container ? L : target === R.container ? R : null
       if (!s || !shown(s) || (s === R && shown(L))) continue
@@ -371,20 +385,22 @@ export function createReaderView(host) {
     tellScale(scale)
     if (laid) tell(listeners.scale, scale, stepDelay)
   })
-  // the scale PDF.js draws a page's canvas at, read as its drawing begins and kept with the canvas once it is done (a copy's
-  // source: drawn.mjs); a place's own page view's too
-  for (const bus of [L.bus, R.bus]) on(bus, 'pagerender', ({ source }) => drawing(source))
-  on(L.bus, 'pagerendered', ({ source, pageNumber, error, cssTransform, isDetailView }) => {
-    if (!cssTransform && !isDetailView && !error) drawn(source ?? L.viewer.getPageView(pageNumber - 1))
+  on(L.bus, 'pagerendered', ({ pageNumber, error, isDetailView }) => {
     if (!laid) return
     // the page's rounding is set as it is drawn: the place takes it
     places.size(pageNumber)
+    // (and its drawing, where the place shows the left's: a detail view's drawing is a part of the page's, over its canvas)
+    if (!isDetailView) places.leftDrawn(pageNumber, !error)
     lighting.paint(L)
     tell(listeners.drawn, 'left', pageNumber, error ?? null)
   })
   on(L.bus, 'pagechanging', () => tellLeftPage())
-  on(R.bus, 'pagerendered', ({ source, pageNumber, error, cssTransform, isDetailView }) => {
-    if (!cssTransform && !isDetailView && !error) drawn(source)
+  // a page view's text layer holds the original's words, on the left and in a place that shows the original's page: marked as
+  // the paper's language, the layer alone, so that the page's name, its links' names and the chrome keep the interface's
+  const sourceText = ({ source }) => source?.textLayer?.div?.setAttribute('lang', SOURCE_LANG)
+  on(L.bus, 'textlayerrendered', sourceText)
+  on(R.bus, 'textlayerrendered', sourceText)
+  on(R.bus, 'pagerendered', ({ pageNumber, error }) => {
     lighting.paint(R)
     tell(listeners.drawn, 'right', pageNumber, error ?? null)
   })
@@ -489,6 +505,7 @@ export function createReaderView(host) {
   /** the original shown let go: the places' page views over it first, then the viewer emptied, then its task; the places
    *  keep their sizes and show the skeleton */
   function letGo() {
+    settle()
     const was = current
     // what is lit on its pages goes with them: the painted elements would hold the pages let go
     lighting.light(null)
@@ -585,6 +602,7 @@ export function createReaderView(host) {
   }
   function zoomTo(z) {
     if (disposed) return
+    settle()
     if (!laid) { held.push(() => zoomTo(z)); return }
     zoomChosen = z
     scaled(() => (typeof z === 'string' ? fitShown(z) : setScale(z)))
@@ -593,6 +611,7 @@ export function createReaderView(host) {
   }
   function zoomBy(factor) {
     if (disposed) return
+    settle()
     if (!laid) { held.push(() => zoomBy(factor)); return }
     zoomChosen = null
     const cur = L.viewer.currentScale, next = Math.min(4, Math.max(0.25, cur * factor))
@@ -604,45 +623,254 @@ export function createReaderView(host) {
     tellScale(L.viewer.currentScale)
     follower.zoomed()
   }
+  /** the part of a pinch's factor PDF.js has not applied yet, and the scale its last step left: PDF.js rounds each scale to
+   *  a hundredth, and a step under half of one was lost (at 26 %, any step under 1.9 %: a slow pinch there zoomed not at
+   *  all, a quick one by lumps). Carried to the next step while the scale is the one the last step left and the gesture
+   *  keeps its direction, as PDF.js's own viewer carries it (its app's _accumulateFactor) */
+  let pinchRest = 1, pinchScale = 0, pinchWay = 0
+  /** the pinch under way: the scale the commit will set (`next`, PDF.js's rounding and range applied) and its factor over
+   *  the scale at the gesture's start (`k`), each shown pane's geometry read at its first step and the point it keeps, and
+   *  the commit's timer */
+  let preview = null
   /**
-   * A pinch over a pane: the left's viewer scaled — about the pointer where the pinch is over the left, else about the
-   * left's top quarter — and the places with it; the right scrolled so that the point under the pointer (a pinch over it),
-   * or its top quarter, stays where it is, as PDF.js keeps a pane of its own; the pair levelled once it settles. Every
-   * rectangle and offset is read first, then the scale and the scroll written: the point, its page's place and size, the
-   * pane's, and the scale PDF.js will set (its rounding and range); each place's box its page's floor at the new scale
+   * A pinch over a pane, shown by transform while its steps last and committed once: no step writes the scale or reads the
+   * layout (each had changed the left's scale and the places' sizes, and PDF.js's update read every page box of both panes
+   * again: docs/PDF-READER.md §6.8). Each step works out, from the pages' boxes read at the gesture's first step, the layout
+   * the commit will make at the step's scale — the pages' boxes scaled, the gaps between them not, a page narrower than the
+   * view centred, the scroll put so that the point under the gesture stays under it (on the other pane, the point at the
+   * same place in its view: the same point of the same page while the pair is level), wherever it lies, then held within
+   * the scroll's ends — and shows that layout by transform: the view scaled about the page holding the point (growing, the
+   * scroller, which the pane clips; shrinking, the pages' stack, so that the pages around the view show), each other page
+   * moved by what is left over (its gaps, its centring), and a box of the scroll's size at the gesture's start holding its
+   * range, so that nothing scrolls, nothing is clamped, and the handles hold still. The scaled view is a layer of its own,
+   * drawn at the gesture's first scale and scaled on the compositor, and the places' near window is held: nothing is made,
+   * laid or drawn at a scale the commit replaces. PINCH_COMMIT_MS after the last step, or
+   * as soon as anything else reads or moves the panes, the commit takes the transforms off and in the same task writes the
+   * scale once and puts each pane at the point it keeps: the layout the preview showed. The follower is told first, and
+   * binds nothing until the commit
    */
   function pinch(which, factor, origin) {
-    if (disposed || !laid) return
+    if (disposed || !laid || !(factor > 0)) return
     const s = which === 'left' ? L : R
-    if (!shown(s)) return
-    follower.bake()
-    const lb = shown(L) ? L.container.getBoundingClientRect() : null
-    const keep = shown(R) ? pointOf(R, s === R ? origin : null) : null
-    const cur = L.viewer.currentScale, k = Math.min(25, Math.max(0.1, Math.round(cur * factor * 100) / 100)) / cur
-    zoomChosen = null
-    stepDelay = STEP_DELAY
-    try { L.viewer.updateScale({ scaleFactor: factor, ...(lb ? { origin: s === L ? origin : [lb.left + lb.width / 2, lb.top + lb.height / 4] } : {}), drawingDelay: STEP_DELAY }) } finally { stepDelay = -1 }
-    if (keep) {
-      const c = R.container
-      const grown = keep.above.reduce((d, h) => d + Math.floor(h * k) - Math.floor(h), 0)
-      const outer = Math.floor(keep.width * k) + keep.outer - Math.floor(keep.width), centre = w => Math.max(0, (keep.room - w) / 2)
-      c.scrollTop = keep.top + grown + keep.point[1] * k - keep.dy
-      c.scrollLeft = keep.left - centre(keep.outer) + centre(outer) + keep.point[0] * k - keep.dx
+    // (the layout is read at the gesture's first step alone: the panes it showed are the ones it scales)
+    if (preview ? !preview.panes.some(p => p.t === s) : !shown(s)) return
+    const cur = L.viewer.currentScale
+    if (!preview) {
+      follower.zooming(s)
+      places.holdNear(true)
+      preview = { want: 1, next: cur, k: 1, timer: 0, panes: [] }
+      for (const t of sides) if (shown(t)) preview.panes.push(readPane(t))
     }
+    // the scale the commit will set: PDF.js's rounding to a hundredth and its range (pdf_viewer.mjs updateScale), what the
+    // last pinch's rounding left carried while the gesture keeps its way (commitPinch), shown as it will be set
+    preview.want = Math.min(25 / cur, Math.max(0.1 / cur, preview.want * factor))
+    const way = Math.sign(preview.want - 1), rest = cur === pinchScale && way === pinchWay ? pinchRest : 1
+    preview.next = Math.min(25, Math.max(0.1, Math.round(cur * preview.want * rest * 100) / 100))
+    preview.k = preview.next / cur
+    const b = preview.panes.find(p => p.t === s)?.box
+    for (const p of preview.panes) {
+      // the pointer's place in the view of the pane it is over, the same place in the other's; moved, the point kept is the
+      // one the preview shows there now
+      const q = { x: Math.min(p.box.w, Math.max(0, origin[0] - (b ?? p.box).left)), y: Math.min(p.box.h, Math.max(0, origin[1] - (b ?? p.box).top)) }
+      if (!p.kept || q.x !== p.q.x || q.y !== p.q.y) { p.kept = keptAt(p, q); p.q = q }
+      p.plan = planOf(p, preview.k)
+      showPreview(p, preview.k)
+    }
+    // (what is under a pointer at rest looked at again, through the preview, as each step's scroll had it looked at)
+    pointer.again()
+    zoomChosen = null
+    tellScale(preview.next)
+    clock.clear(preview.timer)
+    preview.timer = clock.later(commitPinch, PINCH_COMMIT_MS)
+  }
+  /** a pane's geometry at a pinch's first step (its one read of the layout): its view's box, its scroll and range, its
+   *  stack's place and width, and each page box in the scroll's coordinates; the gaps between them, which no zoom scales */
+  function readPane(t) {
+    const c = t.container, cb = c.getBoundingClientRect(), sb = t.stack.getBoundingClientRect()
+    const ox = cb.left + c.clientLeft - c.scrollLeft, oy = cb.top + c.clientTop - c.scrollTop
+    const pages = pagesOf(t).map(pv => { const r = pv.div.getBoundingClientRect(); return { div: pv.div, left: r.left - ox, top: r.top - oy, w: r.width, h: r.height } })
+    // each page's gaps above it, summed
+    const gaps = [0]
+    for (let i = 1; i < pages.length; i++) gaps.push(gaps[i - 1] + (pages[i].top - pages[i - 1].top - pages[i - 1].h))
+    const last = pages.at(-1), stack = { x: sb.left - ox, y: sb.top - oy, w: sb.width }
+    // (a page the host's sheet centres in the stack — or starts at its edge, being wider — is centred at every scale; one
+    // it places otherwise keeps its place)
+    for (const g of pages) g.centred = Math.abs(g.left - stack.x - Math.max(0, (stack.w - g.w) / 2)) < 1.5
+    return {
+      t, pages, gaps, stack, mode: null, hold: null, moved: new Set(), plan: null, kept: null, q: null,
+      box: { left: cb.left + c.clientLeft, top: cb.top + c.clientTop, w: c.clientWidth, h: c.clientHeight },
+      scroll: { x: c.scrollLeft, y: c.scrollTop, w: c.scrollWidth, h: c.scrollHeight },
+      foot: last ? footOf(c, t.stack, sb.bottom - oy) - last.top - last.h : 0,
+    }
+  }
+  /** where a pane's paper ends (scroll coordinates): its range's end while the paper overflows the view; while it fits, the
+   *  range is the view's and its empty foot no margin of the paper's, so the stack's end, its margin and the pane's padding */
+  function footOf(c, stack, stackEnd) {
+    if (c.scrollHeight > c.clientHeight + 0.5) return c.scrollHeight
+    const px = v => Number.parseFloat(v) || 0
+    return stackEnd + px(getComputedStyle(stack).marginBottom) + px(getComputedStyle(c).paddingBottom)
+  }
+  /** the layout a pane takes at factor k over the gesture's start: each page box (scroll coordinates), the scroll, and the
+   *  range */
+  function layoutAt(p, k) {
+    const first = p.pages[0]?.top ?? 0
+    const boxes = p.pages.map((g, i) => {
+      const w = g.w * k, h = g.h * k
+      // (a page centred in the stack while narrower than it; one wider starts at the stack's edge)
+      return { left: g.centred ? p.stack.x + Math.max(0, (p.stack.w - w) / 2) : g.left, top: first + k * (g.top - first - p.gaps[i]) + p.gaps[i], w, h }
+    })
+    const last = boxes.at(-1)
+    const height = last ? last.top + last.h + p.foot : p.scroll.h, width = Math.max(p.box.w, ...boxes.map(r => r.left + r.w))
+    return { boxes, height, width }
+  }
+  /** the point shown at q (px of the view) as the preview shows it now: the page box it is level with, as a share of its
+   *  height inside it or px from its edge outside it, and a share of its width across */
+  function keptAt(p, q) {
+    const lay = p.plan?.lay ?? layoutAt(p, 1), sx = p.plan?.sx ?? p.scroll.x, sy = p.plan?.sy ?? p.scroll.y
+    const Y = sy + q.y, X = sx + q.x, boxes = lay.boxes
+    if (!boxes.length) return null
+    let n = boxes.findIndex(r => r.top + r.h > Y)
+    if (n < 0) n = boxes.length - 1
+    const r = boxes[n]
+    // (a box of no size, as PDF.js's rounding down can make one at the least scale, holds no share: no point is kept)
+    if (!r.w || !r.h) return null
+    const v = Y < r.top ? { edge: 0, px: Y - r.top } : Y > r.top + r.h ? { edge: 1, px: Y - r.top - r.h } : { share: (Y - r.top) / r.h }
+    return { n, v, across: (X - r.left) / r.w }
+  }
+  /** the preview's plan at factor k: the layout, and the scroll that keeps the point at the pointer, within the scroll's ends */
+  function planOf(p, k) {
+    const lay = layoutAt(p, k), a = p.kept
+    if (!a) return { lay, sx: p.scroll.x, sy: p.scroll.y }
+    const r = lay.boxes[a.n], Y = a.v.share === undefined ? r.top + a.v.edge * r.h + a.v.px : r.top + a.v.share * r.h, X = r.left + a.across * r.w
+    const sy = Math.min(Math.max(0, lay.height - p.box.h), Math.max(0, Y - p.q.y)), sx = Math.min(Math.max(0, lay.width - p.box.w), Math.max(0, X - p.q.x))
+    return { lay, sx, sy }
+  }
+  /** a pane's preview drawn: its view scaled by k about the page that holds its point, placed where the plan puts it (growing,
+   *  the scroller, which the pane clips; shrinking, the pages' stack inside the scroller), each other page near the view
+   *  moved by what the plan leaves over, and a box of the scroll's size holding its range */
+  function showPreview(p, k) {
+    const c = p.t.container, st = p.t.stack, plan = p.plan, n = p.kept?.n ?? 0
+    const mode = k >= 1 ? 'scroller' : 'stack'
+    if (!p.hold) {
+      p.hold = document.createElement('div')
+      p.hold.className = 'axt-pinch-hold'
+      p.hold.setAttribute('aria-hidden', 'true')
+      Object.assign(p.hold.style, { position: 'absolute', left: '0', top: '0', width: `${p.scroll.w}px`, height: `${p.scroll.h}px`, visibility: 'hidden', pointerEvents: 'none' })
+      c.append(p.hold)
+    }
+    if (mode !== p.mode) {
+      for (const el of [c, st]) { el.style.removeProperty('transform'); el.style.removeProperty('transform-origin'); el.style.removeProperty('will-change') }
+      const el = mode === 'scroller' ? c : st
+      el.style.setProperty('transform-origin', '0 0')
+      // (a layer of its own, drawn at the gesture's first scale and scaled on the compositor: drawn again at every step's
+      // scale, the pages' pixels cost the GPU three times what a step had, and a pinch out dropped frames for it)
+      el.style.setProperty('will-change', 'transform')
+      p.mode = mode
+    }
+    // where a page box shows in the view before the gesture, and where the plan puts it
+    const was = g => ({ x: g.left - p.scroll.x, y: g.top - p.scroll.y }), now = r => ({ x: r.left - plan.sx, y: r.top - plan.sy })
+    const g0 = p.pages[n], r0 = plan.lay.boxes[n]
+    if (!g0 || !r0) return
+    // the uniform map v → k·v + b that puts page n where the plan does
+    const a = was(g0), z = now(r0), bx = z.x - k * a.x, by = z.y - k * a.y
+    if (mode === 'scroller') c.style.setProperty('transform', `translate(${bx}px, ${by}px) scale(${k})`)
+    else {
+      // the same map in the stack's coordinates: a point of the stack at s shows at k·s + (k − 1)·(stack − scroll) + b
+      const tx = (k - 1) * (p.stack.x - p.scroll.x) + bx, ty = (k - 1) * (p.stack.y - p.scroll.y) + by
+      st.style.setProperty('transform', `translate(${tx}px, ${ty}px) scale(${k})`)
+    }
+    // each page near the view moved by what the uniform map leaves (its gaps, its centring), in the scaled space
+    const near = new Set()
+    for (let i = 0; i < p.pages.length; i++) {
+      const r = plan.lay.boxes[i], v = now(r)
+      if (v.y + r.h < -p.box.h || v.y > 2 * p.box.h) continue
+      const w = was(p.pages[i]), dx = (v.x - (k * w.x + bx)) / k, dy = (v.y - (k * w.y + by)) / k
+      if (Math.abs(dx) < 0.01 && Math.abs(dy) < 0.01) continue
+      p.pages[i].div.style.setProperty('translate', `${dx}px ${dy}px`)
+      near.add(i)
+    }
+    for (const i of p.moved) if (!near.has(i)) p.pages[i].div.style.removeProperty('translate')
+    p.moved = near
+  }
+  function clearPreview(p) {
+    for (const el of [p.t.container, p.t.stack]) { el.style.removeProperty('transform'); el.style.removeProperty('transform-origin'); el.style.removeProperty('will-change') }
+    for (const i of p.moved) p.pages[i].div.style.removeProperty('translate')
+    p.moved.clear()
+    p.hold?.remove()
+    p.hold = null
+  }
+  /** where a point of the screen showed before the pinch under way, on pane `s`: through the page box the plan shows nearest
+   *  it, back to where that box was */
+  function unpreview(s, x, y) {
+    const p = preview?.panes.find(q => q.t === s)
+    if (!p?.plan) return [x, y]
+    const k = preview.k, vx = x - p.box.left, vy = y - p.box.top, boxes = p.plan.lay.boxes
+    let n = boxes.findIndex(r => r.top - p.plan.sy + r.h > vy)
+    if (n < 0) n = boxes.length - 1
+    const r = boxes[n], g = p.pages[n]
+    if (!r || !g) return [x, y]
+    return [p.box.left + g.left - p.scroll.x + (vx - (r.left - p.plan.sx)) / k, p.box.top + g.top - p.scroll.y + (vy - (r.top - p.plan.sy)) / k]
+  }
+  /** the pinch under way committed: the transforms off, then in the same task the scale written once and each pane put at the
+   *  point it keeps, read on its page box at the new scale (the layout the preview showed). What PDF.js's rounding leaves of
+   *  the fingers' factor is carried to the next pinch while it keeps the way, as each step's was */
+  function commitPinch() {
+    const p0 = preview
+    if (!p0) return
+    preview = null
+    // (the places' near window told once the panes stand at the new scale)
+    try { commitAt(p0) } finally { places.holdNear(false) }
+  }
+  function commitAt(p0) {
+    clock.clear(p0.timer)
+    for (const p of p0.panes) clearPreview(p)
+    if (disposed || !laid) { follower.zoomed(); return }
+    const cur = L.viewer.currentScale, way = Math.sign(p0.want - 1)
+    if (cur !== pinchScale || way !== pinchWay) pinchRest = 1
+    pinchWay = way
+    const want = p0.want * pinchRest, next = Math.min(25, Math.max(0.1, Math.round(cur * want * 100) / 100))
+    pinchRest = (want * cur) / next
+    pinchScale = cur
+    if (next === cur) { tellScale(cur); follower.zoomed(); return }
+    const kept = p0.panes.filter(p => p.kept && shown(p.t)).map(p => ({ t: p.t, n: p.kept.n + 1, v: p.kept.v, across: p.kept.across, x: p.q.x, y: p.q.y }))
+    stepDelay = 0
+    try { L.viewer.updateScale({ scaleFactor: next / cur, drawingDelay: 0 }) } finally { stepDelay = -1 }
+    pinchScale = L.viewer.currentScale
+    for (const a of kept) keepAnchor(a)
     tellScale(L.viewer.currentScale)
     follower.zoomed()
   }
-  /** what a pinch keeps of the right: the point of its page under `origin` (the pane's top quarter when null), its page's
-   *  top, box and viewport point, the heights of the pages above it; read only */
-  function pointOf(s, origin) {
-    const b = s.container.getBoundingClientRect(), at = origin ?? [b.left + b.width / 2, b.top + b.height / 4]
-    const under = pointOn(s.at, pagesOf(s), s.scrollX, s.scrollY + follower.shift(s), at[0], at[1])
-    const pv = under && pageView(s, under.page), div = under && pageDiv(s, under.page)
-    if (!pv?.viewport || !div) return null
-    const left = div.offsetLeft + div.clientLeft + (div.offsetParent === s.stack ? s.stack.offsetLeft + s.stack.clientLeft : 0)
-    const above = []
-    for (let n = 1; n < under.page; n++) above.push(pageView(s, n)?.viewport?.height ?? 0)
-    return { top: pageTop(s, under.page), left, outer: div.offsetWidth, room: s.container.clientWidth, width: pv.viewport.width, point: pv.viewport.convertToViewportPoint(under.x, under.y), above, dy: at[1] - b.top, dx: at[0] - b.left }
+  /** each pane the preview holds that another has scrolled since (the find bar, a script; the preview scrolls none): the
+   *  point it keeps read again where that scroll shows it, in the layout the preview started from, so that the commit keeps
+   *  the place the scroll took it to */
+  function rescrolled() {
+    for (const p of preview.panes) {
+      const c = p.t.container, x = c.scrollLeft, y = c.scrollTop
+      if (!p.q || (Math.abs(x - p.scroll.x) < 0.5 && Math.abs(y - p.scroll.y) < 0.5)) continue
+      p.scroll = { ...p.scroll, x, y }
+      p.plan = null
+      p.kept = keptAt(p, p.q)
+    }
+  }
+  /** a pinch under way committed before anything that reads or changes the panes' layout */
+  const settle = () => { if (preview) commitPinch() }
+  /** a page box of a pane in its scroll's coordinates, to the fraction of a pixel (offsetTop rounds to one); read where no
+   *  transform moves the stack */
+  function boxIn(t, n) {
+    const div = pageDiv(t, n)
+    if (!div) return null
+    const c = t.container, r = div.getBoundingClientRect(), p = c.getBoundingClientRect()
+    return { top: r.top - p.top - c.clientTop + c.scrollTop, left: r.left - p.left - c.clientLeft + c.scrollLeft, width: r.width, height: r.height }
+  }
+  /** a pane put so that the point a pinch keeps (keptAt: page n, as a share of its box's height inside it or px from its edge
+   *  outside it — the gap between two pages, the margin past the last: neither scales — and a share of its width across)
+   *  stands at (x, y) of its view: its page box read at the new scale */
+  function keepAnchor(a) {
+    const box = boxIn(a.t, a.n)
+    if (!box?.height) return
+    const Y = a.v.share === undefined ? box.top + a.v.edge * box.height + a.v.px : box.top + a.v.share * box.height
+    a.t.container.scrollLeft = box.left + a.across * box.width - a.x
+    follower.put(a.t.container, Y - a.y)
   }
 
   // ---------------------------------------------------------------- displays
@@ -651,6 +879,7 @@ export function createReaderView(host) {
    *  apart). A change made before that frame joins it, the first change's places kept: they were read where the layout
    *  was the reader's */
   function relayout(place) {
+    settle()
     if (due) return
     due = true
     duePlace = place
@@ -675,25 +904,32 @@ export function createReaderView(host) {
   const placeNow = () => (due ? null : placesNow())
   function setDisplay(d) {
     if (disposed || !DISPLAYS.includes(d) || d === mode) return
+    // (a pinch under way committed first: the place read is the one it left)
+    settle()
     const place = placeNow()
     mode = d
     showMode()
     relayout(place)
+    places.settle()
   }
   function setNarrow(onNow, o = {}) {
     if (disposed) return
     const next = o.display && DISPLAYS.includes(o.display) ? o.display : mode
     if (narrow === onNow && next === mode) return
+    settle()
     const place = placeNow()
     narrow = onNow
     html.toggleAttribute('data-axt-narrow', onNow)
     if (next !== mode) { mode = next; showMode() }
     relayout(place)
+    places.settle()
   }
   function setSync(onNow) {
     if (disposed) return
     syncOn = !!onNow
     reportSync()
+    // (a place waiting for the left's drawing of a page the left may no longer show draws its own)
+    places.settle()
   }
 
   // ---------------------------------------------------------------- going places
@@ -704,6 +940,7 @@ export function createReaderView(host) {
    *  driver, so that the other follows, and is levelled once a zoom settles */
   function jump(s, { pageNumber: n, destArray }) {
     if (disposed || !laid) return
+    settle()
     follower.take(s)
     if (s === L) { L.viewer.scrollPageIntoView({ pageNumber: n, destArray }); return }
     const vp0 = pageView(R, n)?.viewport, c = R.container
@@ -755,6 +992,7 @@ export function createReaderView(host) {
   }
   function goToPage(which, n) {
     if (disposed) return
+    settle()
     if (!laid) { held.push(() => goToPage(which, n)); return }
     const s = which === 'left' ? L : R
     // a page asked is the reader's input on the pane it scrolls: that pane leads, and the other follows the jump
@@ -767,6 +1005,7 @@ export function createReaderView(host) {
    *  give it; with neither, nothing */
   function goToUnit(id) {
     if (disposed) return
+    settle()
     if (!laid) { held.push(() => goToUnit(id)); return }
     const s = readSide(), r = units?.firstRect(id)
     if (!r) { const p = units?.pageOf(id); if (p) goToPage(s.name, p); return }
@@ -777,10 +1016,11 @@ export function createReaderView(host) {
     s.container.scrollTop = y
     if (!active() && shown(other(s))) follower.put(other(s).container, y)
   }
-  function lead(which) { if (!disposed) follower.take(which === 'left' ? L : R) }
+  function lead(which) { if (!disposed) { settle(); follower.take(which === 'left' ? L : R) } }
   /** a click levels what was clicked at the height it stands on the screen: the same point of the same page on the other
    *  pane, the reading line moved to the click's height. Not with one pane shown, nor with no original */
   function alignClick(from, e) {
+    settle()
     if (!bothShown() || !available()) return
     const div = e.target?.closest?.('.page'), n = Number(div?.dataset.pageNumber)
     if (!n) return
@@ -816,7 +1056,7 @@ export function createReaderView(host) {
         display: mode, narrow, sync: syncOn, available: available(),
         driver: d === L ? 'left' : d === R ? 'right' : null, compositing: follower.compositing(), motion: follower.motion(),
         levelError: available() && bothShown() ? follower.levelError(d ?? L) : null,
-        scale: L.viewer.currentScale, zoom: zoomChosen,
+        scale: L.viewer.currentScale, zoom: zoomChosen, pinching: preview ? preview.k : null,
         lit: lit?.id ?? null, litSentence: lit?.s ?? null, readingLine, lastAlign,
         layouts: counts.layouts, tasks: counts.tasks, opens: counts.opens, failures: counts.failures, events: counts.events, lastEvent,
       }
@@ -827,6 +1067,7 @@ export function createReaderView(host) {
       const s = side
       side = null
       try { s?.dispose() } catch (e) { warn('the layer side\'s dispose', e) }
+      if (preview) { clock.clear(preview.timer); for (const p of preview.panes) clearPreview(p); preview = null }
       disposed = true
       opening?.supersede()
       follower.stop()
@@ -860,17 +1101,22 @@ export function createReaderView(host) {
   handles.set(view, {
     pane: R.container,
     places: {
-      count: () => places.count(), page: n => places.page(n), view: n => places.views().get(n), near: n => places.near(n),
+      count: () => places.count(), page: n => places.page(n), view: n => places.views().get(n), near: n => places.near(n), drawing: n => places.drawing(n),
       contentOf: n => places.contentOf(n),
-      canvas: n => places.canvas(n),
       box: n => places.box(n),
       swap(n, content, o) { const ok = places.swap(n, content, o); if (ok) tellRightPage(); return ok },
       restore(n) { places.restore(n); tellRightPage() },
+      letAheadGo: () => places.letAheadGo(),
+      aheadHeld: () => places.aheadHeld(),
+      settle: fn => places.settle(fn),
     },
     left: {
       doc: () => current?.doc ?? null, scale: () => L.viewer.currentScale,
-      canvas: n => drawnCanvas(L.viewer.getPageView(n - 1)),
       pdfPage: n => (laid ? L.viewer.getPageView(n - 1)?.pdfPage ?? null : null),
+      // (whether page n of the left is being drawn: PDF.js's page view running or paused, RenderingStates 1 and 2)
+      drawing: n => (laid ? [1, 2].includes(L.viewer.getPageView(n - 1)?.renderingState) : false),
+      // (whether page n of the left is drawn: its page view finished, RenderingStates 3)
+      drawn: n => (laid ? L.viewer.getPageView(n - 1)?.renderingState === 3 : false),
     },
     lib: kit.lib,
     assets: kit.assets,
@@ -900,6 +1146,9 @@ export function createReaderView(host) {
     onOriginal: l => { listeners.original.add(l); return () => listeners.original.delete(l) },
     onScale: l => { listeners.scale.add(l); return () => listeners.scale.delete(l) },
     onScrolled: l => { listeners.scrolled.add(l); return () => listeners.scrolled.delete(l) },
+    /** whether the highlight is on (the look's switch, S-P-80), and each change of it: a pointer wants a page only while it is */
+    highlight: () => highlightOn,
+    onHighlight: l => { listeners.highlight.add(l); return () => listeners.highlight.delete(l) },
     attach(s) {
       if (disposed) throw new Error('the reading view is disposed')
       if (side) throw new Error('the reading view has a layer side already')
@@ -908,6 +1157,7 @@ export function createReaderView(host) {
     },
     emit,
     links: (n, records) => linkLayer(records, { viewport: places.views().get(n)?.viewport ?? null, follow, open: url => host.links.openExternal(url), words: host.words }),
+    text: (n, data, lang) => textLayer(data, { viewport: places.views().get(n)?.viewport ?? null, Builder: V?.TextLayerBuilder ?? null, lang }),
     light: (id, s = -1) => lighting.light(id == null ? null : { id, s }),
   })
   showMode()

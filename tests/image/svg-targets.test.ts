@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
+import type { TranslateCall } from '@/providers/transport'
+import { textResult, textsOf } from '../helpers/units'
 import { extract, markBlocks } from '@/core/extractor'
 import { collectImageTargets, startImageTranslation, type ImageRunOptions } from '@/core/image'
 import { IMG_CLASS } from '@/core/marks'
@@ -47,14 +49,14 @@ function setup(markup: string | null, extra: Partial<ImageRunOptions> = {}) {
   const targets = collectImageTargets(doc)
   for (const t of targets) if (t.kind === 'svg') plant(t.el, markup)
   const ocr = vi.fn(async (_call: OcrCall) => ({ ok: true as const, result: { width: 1, height: 1, lines: [] }, cached: false }))
-  const translate = vi.fn(async (call: { request: { segments: { id: string; text: string }[] } }) => ({
+  const translate = vi.fn(async (call: TranslateCall) => ({
     ok: true as const,
-    result: { segments: call.request.segments.map(s => ({ id: s.id, text: `译:${s.text}` })), provider: 'mock', kind: 'mt' as const },
+    results: textsOf(call).map(s => textResult(s.id, `译:${s.text}`, 'mock', 'mt')),
     cached: 0,
   }))
   const options: ImageRunOptions = {
     doc, targets: targets.filter(t => t.kind === 'svg'), paper: '2609.03768', target: 'cmn', scope: 's1',
-    renderPath: 'tags' as const, preload: DEFAULT_PRELOAD,
+    preload: DEFAULT_PRELOAD,
     fetchBytes: async () => { throw new Error('the SVG path must not fetch bytes') },
     ocr, translate, isCurrent: () => true,
     ...extra,
@@ -75,7 +77,7 @@ describe('SVG figures in the image pipeline (§15.5)', () => {
 
     // Neither the network nor the helper is touched — fetchBytes throws if it is
     expect(ocr).not.toHaveBeenCalled()
-    const sent = translate.mock.calls[0]![0].request.segments.map(s => s.text)
+    const sent = textsOf(translate.mock.calls[0]![0] as TranslateCall).map(s => s.text)
     expect(sent).toContain('wall time per epoch [ms]')
     expect(sent).toContain('closure')
     const overlay = doc.querySelector(`.${IMG_CLASS}`)
@@ -128,13 +130,13 @@ describe('SVG figures in the image pipeline (§15.5)', () => {
       configurable: true,
       get: () => (markup === null ? null : new DOMParser().parseFromString(markup, 'image/svg+xml')),
     })
-    const translate = vi.fn(async (call: { request: { segments: { id: string; text: string }[] } }) => ({
+    const translate = vi.fn(async (call: TranslateCall) => ({
       ok: true as const,
-      result: { segments: call.request.segments.map(s => ({ id: s.id, text: `译:${s.text}` })), provider: 'mock', kind: 'mt' as const },
+      results: textsOf(call).map(s => textResult(s.id, `译:${s.text}`, 'mock', 'mt')),
       cached: 0,
     }))
     const run = startImageTranslation({
-      doc, targets, paper: 'p', target: 'cmn', scope: 's', renderPath: 'tags' as const, preload: DEFAULT_PRELOAD,
+      doc, targets, paper: 'p', target: 'cmn', scope: 's', preload: DEFAULT_PRELOAD,
       fetchBytes: async () => { throw new Error('must not fetch bytes') },
       ocr: vi.fn(async () => ({ ok: true as const, result: { width: 1, height: 1, lines: [] }, cached: false })),
       translate, isCurrent: () => true,
@@ -146,7 +148,7 @@ describe('SVG figures in the image pipeline (§15.5)', () => {
     await pending
 
     expect(run.failed()).toEqual([])
-    expect(translate.mock.calls[0]![0].request.segments.map(s => s.text)).toContain('closure')
+    expect(textsOf(translate.mock.calls[0]![0] as TranslateCall).map(s => s.text)).toContain('closure')
   })
 
   it('waits for a figure whose document is still loading: read then, only part of its glyphs are there', async () => {
@@ -166,13 +168,13 @@ describe('SVG figures in the image pipeline (§15.5)', () => {
         return svg
       },
     })
-    const translate = vi.fn(async (call: { request: { segments: { id: string; text: string }[] } }) => ({
+    const translate = vi.fn(async (call: TranslateCall) => ({
       ok: true as const,
-      result: { segments: call.request.segments.map(s => ({ id: s.id, text: `tr:${s.text}` })), provider: 'mock', kind: 'mt' as const },
+      results: textsOf(call).map(s => textResult(s.id, `tr:${s.text}`, 'mock', 'mt')),
       cached: 0,
     }))
     const run = startImageTranslation({
-      doc, targets, paper: 'p', target: 'cmn', scope: 's', renderPath: 'tags' as const, preload: DEFAULT_PRELOAD,
+      doc, targets, paper: 'p', target: 'cmn', scope: 's', preload: DEFAULT_PRELOAD,
       fetchBytes: async () => { throw new Error('must not fetch bytes') },
       ocr: vi.fn(async () => ({ ok: true as const, result: { width: 1, height: 1, lines: [] }, cached: false })),
       translate, isCurrent: () => true,
@@ -182,7 +184,7 @@ describe('SVG figures in the image pipeline (§15.5)', () => {
     el.dispatchEvent(new Event('load'))
     await pending
 
-    const sent = translate.mock.calls[0]![0].request.segments.map(s => s.text)
+    const sent = textsOf(translate.mock.calls[0]![0] as TranslateCall).map(s => s.text)
     expect(sent).toContain('closure')
     expect(sent).not.toContain('Loss')
   })
@@ -191,7 +193,7 @@ describe('SVG figures in the image pipeline (§15.5)', () => {
     const listing = readFileSync(join(import.meta.dirname, '../fixtures/svg/2608.29808-bounter-case.svg'), 'utf8')
     const { targets, run, translate } = setup(listing)
     await run.translate(targets.filter(t => t.kind === 'svg'))
-    const sent = translate.mock.calls[0]?.[0].request.segments.map(s => s.text) ?? []
+    const sent = (translate.mock.calls[0]?.[0] ? textsOf(translate.mock.calls[0][0] as TranslateCall).map(s => s.text) : [])
     expect(sent.some(t => t.includes('PyErr_SetString'))).toBe(false)
     // The prose annotations on the same figure still go
     expect(sent).toContain('No sanitization forwidth')

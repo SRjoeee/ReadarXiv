@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { markedOfPaper } from '@/pdf-reader/engine/layout/paper.mjs'
-import { type Compiled, type CompileRequest, openPaper } from '@/pdf-reader/engine/pipeline/live.mjs'
+import { markedOfPaper } from '../../packages/engine/src/compile/paper.ts'
+import { type Compiled, type CompileRequest, openPaper } from '../../packages/engine/src/compile/live.ts'
 
 // markedOfPaper never throws (layout/paper.mjs; the web's prepare child calls it bare): a throw of the layout guard's own
 // (layout/guard.mjs) is no paper's refusal. Before the compile the brace check is skipped; after it the marked original is
@@ -8,8 +8,9 @@ import { type Compiled, type CompileRequest, openPaper } from '@/pdf-reader/engi
 
 // (`skip`: the calls of the check answered as they are before it throws)
 const fault = vi.hoisted(() => ({ at: null as null | 'braces' | 'aux', error: null as unknown, skip: 0 }))
-vi.mock('@/pdf-reader/engine/layout/guard.mjs', async importOriginal => {
-  const real = await importOriginal<typeof import('@/pdf-reader/engine/layout/guard.mjs')>()
+// (the guard where its code lives: the moved compile/paper.ts imports it there, not through its old path)
+vi.mock('../../packages/engine/src/compile/guard.ts', async importOriginal => {
+  const real = await importOriginal<typeof import('../../packages/engine/src/compile/guard.ts')>()
   const thrower = <F extends (...a: never[]) => unknown>(at: 'braces' | 'aux', f: F) => ((...a: Parameters<F>) => { if (fault.at === at && fault.skip-- <= 0) throw fault.error; return f(...a) }) as F
   return { ...real, unbalancedUnits: thrower('braces', real.unbalancedUnits), auxUnits: thrower('aux', real.auxUnits) }
 })
@@ -50,7 +51,7 @@ describe('markedOfPaper: a throw of the guard\'s own is no refusal', () => {
     fault.error = new Error('the check broke')
     try {
       const c = compiler([PROBE, ran])
-      expect(await markedOfPaper(paperOf(), { compile: c.compile })).toEqual({ pdf: PDF, log: expect.any(String), options: expect.any(Object), ms: { probe: expect.any(Number), compile: expect.any(Number) } })
+      expect(await markedOfPaper(paperOf(), { final: false, compile: c.compile })).toEqual({ pdf: PDF, log: expect.any(String), probeLog: expect.any(String), options: expect.any(Object), ms: { probe: expect.any(Number), compile: expect.any(Number) } })
       expect(c.asked).toHaveLength(2)
       expect(new TextDecoder().decode(c.asked[1]?.overrides.get('main.tex'))).toContain('\\axtmark{0s}')
     } finally { fault.at = null }
@@ -66,6 +67,20 @@ describe('markedOfPaper: a throw of the guard\'s own is no refusal', () => {
       // (one that did not run through: the auxiliary files are read of the remedy's compile, which did, and throw there)
       const d = compiler([PROBE, stopped, ran])
       expect(await markedOfPaper(paperOf(), { compile: d.compile })).toMatchObject({ refused: 'compile', why: 'the marked original did not run through; the layout guard failed: the check broke' })
+    } finally { fault.at = null }
+  })
+
+  it('takes no marked original of more pages than arXiv\'s where its checks threw, the base page asked: as the guard\'s own rule', async () => {
+    fault.at = 'aux'
+    fault.error = new Error('the check broke')
+    try {
+      const five: Compiled = { ...ran, log: `${TEX}AXT-END\nOutput written on main.pdf (5 pages, 9 bytes).\n` }
+      const c = compiler([PROBE, five])
+      expect(await markedOfPaper(paperOf(), { compile: c.compile, pages: 4 })).toMatchObject({ refused: 'compile', why: 'the marked original has 5 pages, arXiv\'s PDF 4; the layout guard failed: the check broke' })
+      expect(c.asked).toHaveLength(2)
+      // (without the base page, or with arXiv's pages, as before: the marked original taken)
+      expect(await markedOfPaper(paperOf(), { final: false, compile: compiler([PROBE, five]).compile, pages: 4 })).toMatchObject({ pdf: PDF })
+      expect(await markedOfPaper(paperOf(), { compile: compiler([PROBE, five]).compile, pages: 5 })).toMatchObject({ pdf: PDF })
     } finally { fault.at = null }
   })
 
@@ -107,15 +122,12 @@ describe('markedOfPaper: a throw of the guard\'s own is no refusal', () => {
     expect(c.asked).toHaveLength(2)
   })
 
-  it('lets a failed allocation of the probe\'s, the marked compile\'s, or the marked PDF\'s reading go on, never a stage\'s refusal', async () => {
+  it('lets a failed allocation of the probe\'s compile or the marked compile go on, never a stage\'s refusal; any other failure is the stage\'s refusal (markedOfPaper)', async () => {
     const memory = failedAllocation()
     await expect(markedOfPaper(paperOf(), { compile: asking(() => memory as Error).compile })).rejects.toBe(memory)
     await expect(markedOfPaper(paperOf(), { compile: asking((_, n) => (n === 0 ? PROBE : memory as Error)).compile })).rejects.toBe(memory)
-    const { layoutMarksOfPaper } = await import('@/pdf-reader/engine/layout/paper.mjs')
-    const OPS = {}
-    await expect(layoutMarksOfPaper(paperOf(), { compile: compiler([PROBE, ran]).compile, OPS, open: async () => { throw memory } })).rejects.toBe(memory)
-    await expect(layoutMarksOfPaper(paperOf(), { compile: compiler([PROBE, ran]).compile, OPS, open: async () => ({ doc: { numPages: 0 }, close: async () => { throw memory } }) })).rejects.toBe(memory)
     // (any other failure is the stage's refusal, as before)
     expect(await markedOfPaper(paperOf(), { compile: asking((_, n) => (n === 0 ? PROBE : new Error('the compiler threw'))).compile })).toMatchObject({ refused: 'compile' })
   })
+
 })

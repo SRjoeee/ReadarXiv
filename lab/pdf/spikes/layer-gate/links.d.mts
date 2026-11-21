@@ -16,7 +16,7 @@ export declare function annotationsOf(raw: unknown[] | null | undefined): Annots
 export declare function glyphPointsOf(items: { str?: string; width?: number; transform?: number[] }[] | null | undefined): Point[]
 export declare function pointsIn(points: Point[], boxes: number[][]): Point[]
 export declare function glyphsOfLink(a: Annot, points: Point[]): Point[]
-export type Op = { op: 'erase'; box: number[] } | { op: 'paper' | 'swap'; rects: number[][] } | { op: 'restore'; boxes: number[][]; clip: number[][] } | { op: 'crop' }
+export type Op = { op: 'hidden'; rects: number[][] } | { op: 'paste'; page?: number; plane?: 'B' | 'C'; rects: number[][] } | { op: 'crop' }
 export declare function erasedOf(ops: Op[] | null | undefined, devOf: (x: number, y: number) => number[]): (x: number, y: number) => boolean
 export declare function sameTarget(rec: { dest?: unknown; url?: string }, target: Target | null): boolean
 export declare function sameText(a: string, b: string): boolean

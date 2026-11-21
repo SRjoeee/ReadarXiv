@@ -10,10 +10,8 @@ import { X } from 'lucide'
 import { type ClipboardEvent, type FocusEvent, type KeyboardEvent, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { GLOSSARY_LIMITS, configSchema } from '@/config/schema'
 import { GLOSSARY_SEPARATOR, type GlossaryEntry } from '@/providers/glossary'
-import { Button } from '@/ui/controls/Button'
-import { Icon } from '@/ui/controls/Icon'
+import { Button, Icon, O } from '@readarxiv/ui'
 import { drafts } from '@/ui/drafts'
-import { O } from '@/ui/strings'
 import type { OptionsData } from '../data'
 import { Status } from '../ui/Row'
 
@@ -22,7 +20,7 @@ type Side = 'term' | 'translation'
 /** the empty row's cells, in the map of cells */
 const EMPTY = -1
 
-/** The whole rows, trimmed; a later row of a term wins, in the first one's place (providers/glossary.ts's rule) */
+/** The whole rows, trimmed; a later row of a term wins, in the first one's place, so that changing one translation does not move it */
 export function entriesOf(lines: readonly { term: string; translation: string }[]): GlossaryEntry[] {
   const out: GlossaryEntry[] = []
   const at = new Map<string, number>()
@@ -138,7 +136,8 @@ export function GlossaryTable({ data }: { data: OptionsData }) {
   /** the current whole rows, written again down the same path as any other change (fix round 1, item 1) */
   const retry = () => change(ls => ls)
   const enter = (e: KeyboardEvent) => {
-    if (e.key !== 'Enter') return
+    // Enter that commits an input method's word (a term typed in Japanese or Korean) is the composition's, not a move
+    if (e.key !== 'Enter' || e.nativeEvent.isComposing || e.keyCode === 229) return
     e.preventDefault()
     cells.current.get(`${EMPTY}:term`)?.focus()
   }

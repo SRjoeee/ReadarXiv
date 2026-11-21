@@ -1,0 +1,189 @@
+// The reader's state as the chrome's events (model.ts SessionEvent): what changed between two states of openReader, in the
+// words the chrome's model folds, as it folds the extension's v1 session's (src/pdf-reader/session). One fold for every host
+// that mounts the chrome over openReader, so that no host holds a copy of it: a host's `open` tells the chrome
+// `eventsOf(told, reader.state())` at each of the reader's changes.
+import { kindOfWhy } from '@readarxiv/format'
+import type { ProviderErrorKind } from '@readarxiv/ui'
+import type { ReaderState } from '../reader.ts'
+import type { LayerWhy, RowsStop, RowsWhy } from '../session/machine.ts'
+import type { SessionEvent, Unavailable } from './model.ts'
+
+/** the reader's reason a layer was refused, as the chrome says it: a lasting refusal keeps the original and greys the translated
+ *  displays, a passing one offers a retry. Which last is the session's one table (session/machine.ts LASTING), which the
+ *  chrome's own is made from (model.ts LASTING): a layer the side refused or an object not its bytes is passing there, a retry
+ *  asks again, so here it is our server's for now */
+export const LAYER_WHY: Readonly<Record<LayerWhy, Unavailable>> = {
+  'no-source': 'no-source',
+  'not-found': 'no-source',
+  'cannot-prepare': 'cannot-prepare',
+  'too-large': 'too-large',
+  outdated: 'unknown-versions',
+  mismatch: 'unreachable',
+  broken: 'unreachable',
+  busy: 'busy',
+  limit: 'refused',
+  rate: 'rate',
+  network: 'network',
+  unreachable: 'unreachable',
+}
+
+/**
+ * Each stage of a prepare (our server's record's `prepare.stage`, its PREPARE_STAGES in order) at a fixed place on the prepare's
+ * stretch, as a share of it: where the stage starts in the time a prepare takes, the mean of the two staging timelines
+ * measured 2026-11-11 (a new paper's, 2610.20266v1: 87.9 s; a paper prepared again after a deploy, 2610.21924v1: 95.6 s).
+ * Fetching is short (10 % of the time), compiling the long one (59 % and 22 %), the units and their layout the rest, the
+ * bundle the last few seconds. No time-based creeping: the line moves as the record's stage does, never back (ProgressLine;
+ * status.ts lineOf)
+ */
+const PREPARE_PLACES: Readonly<Record<string, number>> = {
+  fetching: 0.02,
+  compiling: 0.12,
+  units: 0.52,
+  'laying-out': 0.68,
+  bundle: 0.97,
+}
+/** a prepare's stage as the share of the prepare's stretch the line stands at: 0 before its first stage, or for a stage this reader
+ *  does not know */
+const prepareShare = (stage: string | null): number => (stage !== null && PREPARE_PLACES[stage]) || 0
+/** a rows' failure as the chrome's error kind, which the chrome words as the popup does: a unit's (the translator's `Why`) read
+ *  by format's one reading of it (kindOfWhy, the extension's own errorOf too); our server's run of the target failed, the
+ *  network (a wait, not a fault: status.ts WAITS); a target the reader does not set is told apart (eventsOf) */
+export function kindOf(why: RowsWhy | RowsStop): ProviderErrorKind {
+  if (why.kind === 'server') return 'network'
+  if (why.kind === 'target') return 'unknown'
+  return kindOfWhy(why)
+}
+
+/** what changed from `prev` (null: the first state) to `next`, as the chrome's events, in the order the chrome folds them */
+export function eventsOf(prev: ReaderState | null, next: ReaderState): SessionEvent[] {
+  const out: SessionEvent[] = []
+  const p = prev
+  // (the chrome's preferences with the target shown: the visit's (an address's), which the reader shows and never writes, as a
+  // shared link's language is shown in the menu; with no visit of its own, the stored one)
+  if (!p || p.prefs !== next.prefs || p.rows.target !== next.rows.target)
+    out.push({
+      type: 'prefs',
+      prefs:
+        next.rows.target && next.rows.target !== next.prefs.target
+          ? { ...next.prefs, target: next.rows.target }
+          : next.prefs,
+    })
+  if (!p || p.paper.title !== next.paper.title || p.paper.id !== next.paper.id)
+    out.push({
+      type: 'paper',
+      id: next.paper.id + (next.paper.version ? `v${next.paper.version}` : ''),
+      title: next.paper.title,
+    })
+  if (next.paper.html !== (p?.paper.html ?? null)) out.push({ type: 'html', url: next.paper.html })
+  // (none while the first read is out: the host's own first read is what the chrome shows meanwhile)
+  if ((!p || p.settings.s !== next.settings.s) && next.settings.s !== 'reading')
+    out.push({ type: 'notice', why: next.settings.s === 'unreadable' ? 'unreadable' : null })
+  for (let n = p?.settings.refused ?? 0; n < next.settings.refused; n++) out.push({ type: 'refused' })
+  const o = next.original
+  if (o.s === 'opening' && (p?.original.s !== 'opening' || p.original.loaded !== o.loaded))
+    out.push({ type: 'loading', loaded: o.loaded, total: o.total })
+  if (o.s === 'open' && p?.original.s !== 'open') out.push({ type: 'opened' })
+  if (o.s === 'failed' && p?.original.s !== 'failed')
+    out.push({
+      type: 'fail',
+      event: 'fetch failed',
+      text: `the original could not be read (${o.why})`,
+      kind: 'network',
+      ...(o.self ? { self: true as const } : {}),
+    })
+  const v = next.view
+  if (!p || p.view.display !== v.display) out.push({ type: 'display', mode: v.display })
+  if (!p || p.view.sync.on !== v.sync.on || p.view.sync.available !== v.sync.available)
+    out.push({ type: 'sync', on: v.sync.on, available: v.sync.available })
+  if (!p || p.view.scale !== v.scale || p.view.zoom !== v.zoom)
+    out.push({ type: 'scale', scale: v.scale, zoom: v.zoom })
+  for (const side of ['left', 'right'] as const) {
+    const a = p?.view.sides[side],
+      b = v.sides[side]
+    if (!a || a.page !== b.page || a.pages !== b.pages) out.push({ type: 'page', side, page: b.page, pages: b.pages })
+  }
+  if (!p || p.view.outline !== v.outline) out.push({ type: 'outline', entries: v.outline.map((e) => ({ ...e })) })
+  if (!p || p.view.heading !== v.heading) out.push({ type: 'heading', id: v.heading })
+  const l = next.layer,
+    pl = p?.layer
+  // (the prepare's stage, our server's record's own, as the share of the prepare the progress line stands at: status.ts)
+  if (l.s === 'preparing' && (pl?.s !== 'preparing' || pl.stage !== l.stage))
+    out.push({ type: 'preparing', progress: prepareShare(l.stage) })
+  if (l.s === 'ready') {
+    if (pl?.s !== 'ready') out.push({ type: 'prepared' }, { type: 'coming' })
+    if (pl?.s !== 'ready' || pl.laid !== l.laid || pl.total !== l.total || pl.asOriginal !== l.asOriginal)
+      out.push({
+        type: 'layer',
+        state: 'open',
+        laid: l.laid,
+        total: l.total,
+        ...(l.asOriginal ? { original: l.asOriginal } : {}),
+      })
+    // (our server's look stopped over the layer shown, while the view lacks what its work would bring: its cause told as where no
+    // layer is shown, again where its time or the session's own ask changes; gone, the bilingual version coming again)
+    const st = l.stopped,
+      was = pl?.s === 'ready' ? pl.stopped : undefined
+    if (st && (!was || was.why !== st.why || was.retryAt !== st.retryAt || !!was.self !== !!st.self))
+      out.push({
+        type: 'unavailable',
+        why: LAYER_WHY[st.why] ?? 'unreachable',
+        retryAt: st.retryAt,
+        ...(st.self ? { self: true as const } : {}),
+      })
+    if (!st && was) out.push({ type: 'coming' })
+  }
+  // (a refusal told again with another time is told again: the time said is the last our server named; and where the session
+  // stops asking it again by itself, or starts to)
+  if (
+    l.s === 'refused' &&
+    (pl?.s !== 'refused' || pl.why !== l.why || pl.retryAt !== l.retryAt || !!pl.self !== !!l.self)
+  )
+    out.push({
+      type: 'unavailable',
+      why: LAYER_WHY[l.why] ?? 'unreachable',
+      retryAt: l.retryAt,
+      ...(l.self ? { self: true as const } : {}),
+    })
+  if (!!p?.reconnecting !== !!next.reconnecting || !!p?.network !== !!next.network)
+    out.push({ type: 'link', reconnecting: !!next.reconnecting, network: !!next.network })
+  // a face lost, told once: the reader keeps it lost for the visit (reader.ts `faces`), and the chrome says so (S-R-28)
+  if (next.faces === 'lost' && p?.faces !== 'lost') out.push({ type: 'faces' })
+  // the translation under way is what the view shown waits for (reader.ts `waits`, session/rows.ts viewOf), counted over the layer
+  // it shows: rows read of a run done, a run that restates rows held, one on units of a layer not shown, are told by their end
+  // alone. The view's wait over while the rows still come (every unit shown holds its translation) is its end
+  const r = next.rows,
+    pr = p?.rows
+  const waited = pr?.s === 'arriving' && pr.waits
+  if (r.s === 'arriving' && r.waits && (!waited || pr.got !== r.got || pr.total !== r.total || pr.lost !== r.lost))
+    out.push({ type: 'translating', got: r.got, total: r.total, lost: r.lost })
+  if (r.s === 'arriving' && !r.waits && waited)
+    out.push({ type: 'translated', got: r.got, total: r.total, lost: r.lost, stopped: null })
+  // (the rows' end and its counts, told again whenever the view's counts change after it: the layer's units read after the end,
+  // a toggle, the passages a run our server started again brings. One statement, the view's, told whenever it changes)
+  const counts = (x: ReaderState['rows']) => (x.s === 'none' ? '' : `${x.got} ${x.total} ${x.lost}`)
+  const recount = !!pr && pr.s === r.s && counts(pr) !== counts(r)
+  if (r.s === 'complete' && (pr?.s !== 'complete' || recount))
+    out.push({
+      type: 'translated',
+      got: r.got,
+      total: r.total,
+      lost: r.lost,
+      stopped: r.stopped ? kindOf(r.stopped) : null,
+    })
+  if (r.s === 'failed' && (pr?.s !== 'failed' || pr.why.kind !== r.why.kind || recount || !!pr.self !== !!r.self)) {
+    if (r.why.kind === 'target') {
+      if (pr?.s !== 'failed' || pr.why.kind !== 'target')
+        out.push({ type: 'unavailable', why: 'target', retryAt: null })
+    } else
+      out.push({
+        type: 'translated',
+        got: r.got,
+        total: r.total,
+        lost: r.lost,
+        stopped: kindOf(r.why),
+        retryAt: r.retryAt ?? null,
+        ...(r.self ? { self: true as const } : {}),
+      })
+  }
+  return out
+}

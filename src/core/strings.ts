@@ -4,13 +4,15 @@
 import type { ProviderErrorKind } from '@/providers/types'
 
 export interface CoreStrings {
+  /** The interface language's tag: the widget carries it, inside a translation node that carries the target's */
+  lang: string
   /** The failure widget's button */
   retry: string
   /** The sentence shown on hovering a failed block, by the failure's kind; empty means “no sentence for it” */
   failureTitle: (kind: ProviderErrorKind) => string
 }
 
-let current: CoreStrings = { retry: 'Retry', failureTitle: () => '' }
+let current: CoreStrings = { lang: 'en', retry: 'Retry', failureTitle: () => '' }
 
 export const coreStrings = (): CoreStrings => current
 

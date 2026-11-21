@@ -6,8 +6,9 @@
 // and writes none. The button's own state is saved by the background too, and its answer is what the page shows —
 // so a change that could not be saved does not look saved.
 import { FLOATING_CLASS, type DockPlacement, type FloatingButton, type FloatingButtonStrings, type MainAction, mountFloatingButton } from '@/core/floating/button'
-import { LOCALES, pickLocale, type Locale } from '@/locales'
+import { LOCALES, pickLocale, type Locale } from '@readarxiv/ui'
 import { type EntrySettings, type FloatingEntryState, watchEntrySettings } from '@/shared/entry-settings'
+import { vouchFor } from '@/shared/frame-owner'
 import { sendMessage } from '@/shared/messages'
 
 const placementOf = ({ side, position, locked }: FloatingEntryState): DockPlacement => ({ side, position, locked })
@@ -54,8 +55,9 @@ export async function installFloatingButton(doc: Document, page: FloatingPage): 
   let settings: EntrySettings | null = null
 
   const strings = (from: EntrySettings): FloatingButtonStrings => {
-    const { S } = LOCALES[pickLocale(from.uiLanguage, languages)]
-    return { main: page.label(S, active), settings: S.settings, ...S.page.floating }
+    const lang = pickLocale(from.uiLanguage, languages)
+    const { S } = LOCALES[lang]
+    return { lang, main: page.label(S, active), settings: S.settings, ...S.page.floating }
   }
 
   /** What the settings say, put on the page: the button there or not, its words, its place, its size */
@@ -86,6 +88,8 @@ export async function installFloatingButton(doc: Document, page: FloatingPage): 
       .catch(() => undefined)
   }
 
+  /** the session's dynamic address of the popup (wxt.config.ts `use_dynamic_url`) */
+  const panelUrl = browser.runtime.getURL('/popup.html')
   const mount = (from: EntrySettings) => {
     const host = doc.createElement('div')
     host.className = FLOATING_CLASS
@@ -97,7 +101,9 @@ export async function installFloatingButton(doc: Document, page: FloatingPage): 
       placement: placementOf(from.floating),
       strings: strings(from),
       // The control panel is the extension's own popup page, framed beside the button (button.ts)
-      panelUrl: browser.runtime.getURL('/popup.html'),
+      panelUrl,
+      // the popup in it acts only for this script's frame, on this tab (shared/frame-owner.ts)
+      onPanelFrame: frame => vouchFor(frame, panelUrl, doc.defaultView ?? window),
       onPlacement: ({ side, position, locked }) => save({ side, position, locked }),
       // A page cannot open the settings page itself: the background does (`openOptionsPage`)
       onSettings: () => void sendMessage({ type: 'axt:open-settings' }).catch(() => undefined),

@@ -22,6 +22,7 @@
 //                                                                  the names' alone; ONLY=unmark: \axt@unmark's alone;
 //                                                                  ONLY=wrappers: the wrappers' alone; ONLY=lost: the LOST
 //                                                                  survey's, an inline formula first after a display, a
+//                                                                  superscript or a box glued to a word, a
 //                                                                  display group and a display at a page's foot; ONLY=runin:
 //                                                                  the run-in leads' stream case, F; ONLY=dvi: the DVI
 //                                                                  cases alone, every document under latex)
@@ -34,7 +35,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { lastTexLog, latin1, latin1Bytes } from '../../../src/pdf-reader/engine/source/latex-front.mjs'
-import { pageInk, unreadOf } from '../../../src/pdf-reader/engine/layout/ink.mjs'
+import { pageInk, unreadOf } from '@readarxiv/engine'
 import { NAME_KEYS } from '../../../src/pdf-reader/engine/layout/names.mjs'
 import { classOf, DVI_POINTS_TEX, encodeLayoutMarks, layoutMarking, layoutMarksOf, MARK_CLASSES, POINTS_TEX, probeSamples, readMarkProbe, readNameProbe } from '../../../src/pdf-reader/engine/layout/marks.mjs'
 import { OWNED, OWNED_HOW } from '../../../src/pdf-reader/engine/layout/stream.mjs'
@@ -91,6 +92,10 @@ const STAY = {
   // then a formula, the display without one
   // (XeLaTeX too: its \special is the same kind of node as pdfTeX's, so the mark on the empty list is as harmless there)
   'an inline formula first after a display': { engines: ['pdflatex', 'xelatex'], src: doc('\\usepackage{amsmath}', `${prose(6, () => '')} define\n\\[ a = b \\]\n$\\hat r^\\alpha$ is ${prose(6, () => '')}\n\\begin{equation} c = d \\end{equation}\n\\( z_0 \\) holds ${prose(6, () => '')}\n\\begin{align} e &= f \\end{align}\n\\begin{equation*} g = h \\end{equation*}\n\\ensuremath{\\theta} and ${prose(6, () => '')}\n\n${prose(4, () => '')} \\[ p = q \\] $x$, and \\[ u = v \\]\n$$ w = 1 $$\n$y$ ${prose(4, () => '')}`) },
+  // a superscript or a box glued to a word, whose opening mark LAYOUT_TEX sets in a box of its own (\\axt@boxy): TeX hyphenates
+  // no word a box or a formula follows, and kerns no letter with either (an author's affiliations, 2610.21924v1 u1); two
+  // columns, so that the glued words stand at many lines' ends
+  'a superscript or a box glued to a word': { engines: ['pdflatex', 'xelatex'], src: doc('', `${prose(40, i => ['\\textsuperscript{1}', '\\textsuperscript{2,*} and', '\\mbox{$^3$}', '\\textsuperscript{$\\dagger$},'][i % 4])}\n\n\\begin{center}Ann Author\\textsuperscript{1} \\quad Bo Writer\\textsuperscript{1,2,*}\\end{center}`, '\\documentclass[twocolumn]{article}') },
   // amsmath's \\] ends in \\ignorespaces, which skips a macro that sets nothing and the line end after it; a mark set
   // there would end the skip, and the next line begin with a space (2608.29782's \\delete{…} after a display)
   'a macro that sets nothing after a display': doc('\\usepackage{amsmath}\\newcommand\\delete[1]{}', `${prose(6, () => '')} by\n\\[ a = b \\]\n\\delete{A passage $x$ set aside.}\n${prose(6, () => '')} and\n\\begin{align*} c = d \\end{align*}\n\\delete{More.}\n${prose(6, () => '')}`),
@@ -156,6 +161,14 @@ const STAY = {
   // an italic word's correction before \\eqref's \\textup, under each engine: XeTeX's word is a whatsit (review I2)
   'an italic word before \\eqref': { engines: ['pdflatex', 'xelatex', 'lualatex'], src: doc('\\usepackage{iftex}\\ifPDFTeX\\else\\usepackage{fontspec}\\fi\\usepackage{amsmath}\\usepackage{amsthm}\\newtheorem{theorem}{Theorem}', `\\begin{equation} x = y \\label{e} \\end{equation}\n\\begin{theorem}${prose(24, i => [' by \\eqref{e}', ' with~\\eqref{e} and', ' of \\ref{e}', ' \\emph{set} by \\eqref{e}'][i % 4])}.\\end{theorem}\n${prose(6, () => '')}`) },
   'a word glued to a formula or a footnote\'s call, never hyphenated': doc('\\usepackage[margin=6.5cm]{geometry}', `${prose(30, i => [' representations$x_{' + i + '}$', ' characterization\\footnote{N.}', ' considerably$y$ is', ' experimentally\\footnotemark{} and'][i % 4])}`),
+  // ICML's \\icmltitle, the paper's own command, a front heading the layout compile marks (2610.22195v1): with no running title
+  // of its own, it hands the title to the running head (the output routine), to the PDF's title (a PDF string, with hyperref)
+  // and measures it in a box it never ships, then sets it in \\twocolumn's block
+  'ICML\'s \\icmltitle: the title in the running head, the PDF\'s title and a box never shipped': doc(String.raw`\makeatletter\newbox\titrun
+\long\def\icmltitle#1{\ifx\undefined\@icmltitlerunning\gdef\@icmltitlerunning{#1}\fi\ifdefined\hypersetup\hypersetup{pdftitle={#1}}\fi
+\global\setbox\titrun=\vbox{\small\bf\@icmltitlerunning}\thispagestyle{plain}{\center\baselineskip 18pt\hrule height1pt\vskip .25in{\Large\bf #1}\vskip .22in\hrule height1pt\vskip .3in}}
+\def\ps@icml{\def\@oddhead{\hfil\small\bf\@icmltitlerunning\hfil}\let\@evenhead\@oddhead\def\@oddfoot{\hfil\thepage\hfil}\let\@evenfoot\@oddfoot}\pagestyle{icml}
+\makeatother`, `\\twocolumn[\\icmltitle{The Title of a Paper in a Style of Its Own}]\n${Array.from({ length: 8 }, () => prose(30, () => '')).join('\n\n')}`),
 }
 
 // ---------------------------------------------------------------- compiling
@@ -184,7 +197,7 @@ function queue(name, src, { engine = 'pdflatex', passes = 2, variants = ['v0', '
   if (engine === 'latex') files = { ...files, '00README.json': JSON.stringify({ sources: [{ usage: 'toplevel', filename: 'main.tex' }], process: { compiler: 'latex' } }) }
   const all = new Map([['main.tex', new TextEncoder().encode(src)], ...Object.entries(files).map(([f, t]) => [f, new TextEncoder().encode(t)])])
   const paper = openPaper(all)
-  if ((STREAM_ONLY && !name.startsWith('stream-')) || (RUNIN_ONLY && !name.startsWith('stream-F-')) || (NAMES_ONLY && !name.startsWith('names-')) || (UNMARK_ONLY && !name.startsWith('unmark-')) || (WRAPPERS_ONLY && !name.startsWith('wrappers-')) || (LOST_ONLY && !name.startsWith('stay-an-inline-formula-first-after-a-display') && !name.startsWith('stream-E-')) || (DVI_ONLY && !/-latex(?:-hyperref)?$/.test(name))) return paper
+  if ((STREAM_ONLY && !name.startsWith('stream-')) || (RUNIN_ONLY && !name.startsWith('stream-F-')) || (NAMES_ONLY && !name.startsWith('names-')) || (UNMARK_ONLY && !name.startsWith('unmark-')) || (WRAPPERS_ONLY && !name.startsWith('wrappers-')) || (LOST_ONLY && !name.startsWith('stay-an-inline-formula-first-after-a-display') && !name.startsWith('stay-a-superscript-or-a-box-glued-to-a-word') && !name.startsWith('stream-E-')) || (DVI_ONLY && !/-latex(?:-hyperref)?$/.test(name))) return paper
   queued.push({ name, paper, engine, passes, variants, own, trace, files: all })
   return paper
 }
@@ -205,7 +218,7 @@ function prepare() {
       for (const [path, bytes] of q.files) writeFileSync(join(d, path), bytes)
       // v1np: v1 with no points, LAYOUT_TEX as it was before them
       // (under latex, v1np is v1 with no DVI point: POINTS_TEX's own sets nothing in DVI mode)
-      for (const [path, bytes] of originalFiles(q.paper, v === 'v0' ? { lines: true } : { lines: true, layout: MARK_CLASSES, switches })) writeFileSync(join(d, path), v === 'v1np' && path === 'main.tex' ? latin1Bytes(latin1(bytes).replace(q.engine === 'latex' ? DVI_POINTS_TEX : POINTS_TEX, '')) : bytes)
+      for (const [path, bytes] of originalFiles(q.paper, v === 'v0' ? { lines: true, transcode: false } : { lines: true, layout: MARK_CLASSES, switches })) writeFileSync(join(d, path), v === 'v1np' && path === 'main.tex' ? latin1Bytes(latin1(bytes).replace(q.engine === 'latex' ? DVI_POINTS_TEX : POINTS_TEX, '')) : bytes)
       jobs.push({ name: `${q.name}-${v}`, engine: q.engine, passes: q.passes, trace: q.trace })
     }
   }
@@ -280,8 +293,11 @@ function dviMoved(a, b) {
   return out
 }
 const READ_LINE = /^(?:AXT-|Missing character: |! LaTeX Error: Unicode character )/
-/** the log lines the run reads (live.mjs readingsOf), and LaTeX's warnings and errors */
-const readLog = name => lastTexLog(read(name, 'log', 'latin1') ?? '').split('\n').filter(l => READ_LINE.test(l) || /^(?:LaTeX|Package \S+|Class \S+) Warning|^! /.test(l))
+/** what the layout marks themselves write to the log (LAYOUT_TEX: a unit's alignment, a run's colour), which v0, with none of
+ *  them, cannot write: their readings, not something they change */
+const MARKS_OWN_LINE = /^AXT-(?:ALIGN|COLOUR) /
+/** the log lines the run reads (live.mjs readingsOf) but the layout marks' own, and LaTeX's warnings and errors */
+const readLog = name => lastTexLog(read(name, 'log', 'latin1') ?? '').split('\n').filter(l => (READ_LINE.test(l) && !MARKS_OWN_LINE.test(l)) || /^(?:LaTeX|Package \S+|Class \S+) Warning|^! /.test(l))
 const errorsOf = name => (read(name, 'log', 'latin1') ?? '').match(/^! .*/gm) ?? []
 const near = (m, page, x, y, d) => !!m && m.page === page && Math.hypot(m.x - x, m.y - y) <= d
 
@@ -664,7 +680,10 @@ ${Array.from({ length: 10 }, (_, i) => `\\newpage\\vspace*{${548 + 4 * i}pt}\\no
 // F (PR-C's run-in leads, 2026-10-19): a heading and a proof's name the class runs into the paragraph, each followed by a
 // placeholder first in it, whose opening mark waits in vertical mode for the unit's start mark (\\axtpmm, \\axtpma): TeX sets
 // the heading and the name first, as the paragraph starts, and their marks must leave it waiting (\\axt@hold), or the
-// placeholder owns the run-in text (2610.19159's "Task specification." owned by its $\\mathcal{T}$)
+// placeholder owns the run-in text (2610.19159's "Task specification." owned by its $\\mathcal{T}$); and a heading that holds a
+// formula or a reference before a paragraph that opens with one, whose opening point the heading's own placeholder mark set
+// while the unit's start mark came after the opening mark (2610.21085v1 u44's $\\cand(q)$ owned "𝒱 is, and what the model is
+// defined on."): the start mark now comes first, and the point is set at it
 STREAM.F = String.raw`\documentclass{article}
 \usepackage{amsmath,amsthm}
 \begin{document}
@@ -676,6 +695,10 @@ STREAM.F = String.raw`\documentclass{article}
 \begin{proof}
 $\psi$ opens the proof right after its name, and more words after it.
 \end{proof}
+
+\paragraph{What $\omega$ is, and what it is defined on.} $\chi_1$ opens the paragraph after a heading that holds a formula, and more words after it.
+
+\paragraph{As in \ref{sec:first}.} \ref{sec:first} opens the paragraph after a heading that holds a reference, and more words after it.
 \end{document}
 `
 const streamKey = (name, engine) => `stream-${name}-${engine}`
@@ -964,7 +987,7 @@ const OWN = {
   C: [['$\\phi$', '\u03d5'], ['$', glyphsOf], ['\\cite{one}', '[1]'], ['call:Note ', null], ['\\begin{align}', (src, nth) => rowsOf(src.trim(), [1, 9, 21, 37][nth])]],
   D: [['$b_', glyphsOf], ['$', null]],
   // each its own glyphs, none of the run-in heading's or name's before it
-  F: [['$\\phi$', '\u03d5'], ['\\ref{sec:first}', '1'], ['$\\psi$', '\u03c8']],
+  F: [['$\\phi$', '\u03d5'], ['\\ref{sec:first}', '1'], ['$\\psi$', '\u03c8'], ['$\\omega$', '\u03c9'], ['$\\chi_1$', '\u03c71']],
   // the group's first display owns the group (an align's row, an equation's, an equation*'s); each foot display its own
   E: [['\\begin{equation} a = b', 'a=b(1)'], ['$x_1$', 'x1'], ['\\begin{align} c', 'c=d(2)e=f(3)g=h'], ['\\begin{equation} e = f', 'LOST:in the display before it'], ['\\begin{equation*} g', 'LOST:in the display before it'], ['$u$', 'u'],
     ['\\begin{equation} p_', (src, n) => ({ s: `${glyphsOf(src.replace(/\\(?:begin|end)\{equation\}/g, '')).s}(${4 + n})`, rules: 0 })], ['$w_', glyphsOf]],

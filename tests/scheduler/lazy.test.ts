@@ -80,7 +80,7 @@ describe('createLazyScheduler', () => {
     expect(entered[0]!.map(b => b.el.id).sort()).toEqual(blocks.map(b => b.el.id).sort())
   })
 
-  it('parameters as in Read Frog: rootMargin takes the preload distance, threshold the visibility threshold', () => {
+  it('the observer\'s parameters: rootMargin takes the preload distance, threshold the visibility threshold', () => {
     const { io } = setup()
     expect(io.options).toEqual({ rootMargin: '1000px 0px', threshold: 0 })
   })
@@ -102,6 +102,45 @@ describe('createLazyScheduler', () => {
     expect(io.observed.size).toBe(0)
     io.emit([by.c!.el])
     expect(entered).toHaveLength(2)
+  })
+
+  it('a block removed from the page before it enters is never handed over, and no longer waits (#614)', () => {
+    document.body.innerHTML = PAGE
+    const blocks = extract(document)
+    markBlocks(blocks)
+    const by = Object.fromEntries(blocks.map(b => [b.id, b]))
+    layout(by.a!.el, 100)
+    layout(by.b!.el, 900 + 500)
+    layout(by.c!.el, 5000)
+    layout(by.d!.el, 5100)
+    const entered: Block[][] = []
+    const scheduler = createLazyScheduler(blocks, { ...DEFAULT_PRELOAD, onEnter: picked => entered.push(picked) })
+    const io = FakeIntersectionObserver.instances[0]!
+    expect(scheduler.waiting()).toBe(3)
+    // c (with its footnote) leaves the page while far away; an entry for it already queued arrives with d's
+    by.c!.el.remove()
+    io.emit([by.c!.el, by.d!.el])
+    expect(entered.at(-1)!.map(b => b.id)).toEqual(['d'])
+    expect(entered.flat().some(b => !b.el.isConnected)).toBe(false)
+    expect(scheduler.waiting()).toBe(0)
+    expect(io.observed.has(by.c!.el)).toBe(false)
+  })
+
+  it('a removed block is dropped from the waiting count on its own, before any entry arrives (#614)', () => {
+    const { by } = setup()
+    const scheduler = createLazyScheduler([by.c!, by.d!], { ...DEFAULT_PRELOAD, onEnter: () => undefined })
+    by.d!.el.remove()
+    expect(scheduler.waiting()).toBe(1)
+  })
+
+  it('an element with a width and no height has no box: it is not seeded as seen (#614)', () => {
+    document.body.innerHTML = '<p id="x">x</p><p id="y">y</p>'
+    const x = document.getElementById('x')!
+    const y = document.getElementById('y')!
+    layout(x, 100, 0)
+    layout(y, 120)
+    const reading = readViewport([{ el: x }, { el: y }], DEFAULT_PRELOAD)
+    expect(reading.seeded).toEqual([y])
   })
 
   it('a footnote block without a layout box hangs on its paragraph and enters with it', () => {

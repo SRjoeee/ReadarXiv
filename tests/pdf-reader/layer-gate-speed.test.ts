@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { median, percentile, slope, spread, summarizeRun, verdictOf, WORK_KEYS } from '../../lab/pdf/spikes/layer-gate/speed.mjs'
 
 // The speed check's arithmetic (lab/pdf/spikes/layer-gate/speed.mjs), on synthetic numbers: percentiles, the run-to-run spread,
-// the heap's slope, and the verdict (a time worse than the spread; a work counter that grew by more than 0.5 %)
+// the heap's slope, and the verdict (a time worse than both sides' spreads added; a work counter that grew by more than 0.5 %)
 
 const work = (n: number) => ({ fit: n, measures: 10 * n, breaks: 2 * n, linkTests: n, inkSteps: 100 * n, ops: 3 * n })
 /** a run of one output of `pages` pages: every page `step` ms, its lay `lay` ms, a heap growing `grow` bytes a page */
@@ -52,13 +52,27 @@ describe('the verdict', () => {
     const base = reps(k => run({ lay: 10 + k }))
     const head = reps(k => run({ lay: 11 + k }))
     const v = verdictOf(head, base)
-    expect(v.time['page lay p50 (ms)']).toMatchObject({ head: 12, base: 11, spread: 2, fail: false })
+    expect(v.time['page lay p50 (ms)']).toMatchObject({ head: 12, base: 11, spread: 4, fail: false })
     expect(v.verdict).toBe('PASS')
   })
-  it('fails a time worse than the largest spread, and a better one passes', () => {
+  it('fails a time worse than both sides\' spreads added, and a better one passes', () => {
     const base = reps(k => run({ lay: 10 + k }))
-    expect(verdictOf(reps(k => run({ lay: 14 + k })), base)).toMatchObject({ verdict: 'FAIL', time: { 'page lay p50 (ms)': { fail: true } } })
+    expect(verdictOf(reps(k => run({ lay: 15 + k })), base)).toMatchObject({ verdict: 'FAIL', time: { 'page lay p50 (ms)': { fail: true } } })
+    // (past the larger spread, 2, but not past the two added, 4: the noise of a difference of two medians)
+    expect(verdictOf(reps(k => run({ lay: 14 + k })), base).verdict).toBe('PASS')
     expect(verdictOf(reps(k => run({ lay: 5 + k })), base).verdict).toBe('PASS')
+  })
+  it('holds the heap to both sides\' spreads: a repetition\'s noise passes, a page\'s retained kilobytes fail', () => {
+    // (the heap's growth a laid page of the repetitions of 2026-11-01 that failed by 255 bytes against the larger spread, 228:
+    // head 135 apart, base 228; the same engine over 15 runs moves by 681)
+    const base = [2226410, 2226490, 2226638].map(grow => summarizeRun(run({ grow })))
+    const noise = verdictOf([2226672, 2226746, 2226807].map(grow => summarizeRun(run({ grow }))), base)
+    expect(noise.time['heap growth per laid page (bytes)']?.spread).toBeCloseTo(363, 3)
+    expect(noise.time['heap growth per laid page (bytes)']?.fail).toBe(false)
+    expect(noise.verdict).toBe('PASS')
+    // (8 KB more held a laid page: a FAIL)
+    const held = verdictOf([2226410, 2226490, 2226638].map(grow => summarizeRun(run({ grow: grow + 8192 }))), base)
+    expect(held).toMatchObject({ verdict: 'FAIL', time: { 'heap growth per laid page (bytes)': { fail: true } } })
   })
   it('fails any growth of a work counter beyond 0.5 %, whatever the clock says, and passes less or equal work', () => {
     const base = reps(() => run({ w: work(1000) }))
@@ -70,6 +84,13 @@ describe('the verdict', () => {
     expect(Object.entries(grown.work).filter(([, m]) => m.fail).map(([k]) => k)).toEqual(['measures'])
     // (one more unit of work on a counter that was zero)
     expect(verdictOf(reps(() => run({ w: { ...work(1000), linkTests: 1 } })), reps(() => run({ w: { ...work(1000), linkTests: 0 } }))).verdict).toBe('FAIL')
+  })
+  it('holds every counter the run keeps (layer-proto/work.mjs), the characters a unit\'s edges read and the live fills among them', () => {
+    expect([...WORK_KEYS]).toEqual(['fit', 'measures', 'breaks', 'linkTests', 'inkSteps', 'ops', 'edges', 'fills'])
+    const base = reps(() => run({ w: { ...work(1000), edges: 400 } as never }))
+    expect(verdictOf(reps(() => run({ w: { ...work(1000), edges: 400 } as never })), base).verdict).toBe('PASS')
+    const grown = verdictOf(reps(() => run({ w: { ...work(1000), edges: 410 } as never })), base)
+    expect(Object.entries(grown.work).filter(([, m]) => m.fail).map(([k]) => k)).toEqual(['edges'])
   })
   it('fails a counter that differs between repetitions of one side, and is incomparable when the base has none', () => {
     const base = reps(() => run({ w: work(1000) }))

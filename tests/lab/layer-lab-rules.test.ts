@@ -324,7 +324,7 @@ describe('saving (POST /api/rules)', () => {
     expect(JSON.parse(readFileSync(file, 'utf8')).scripts.Hans.leadBase).toBe(1.35)
     expect(siblings(file)).toEqual([RULES_PATH.split('/').pop()])
     // (a version ahead of the file's is as stale: the set was not built on this file)
-    const ahead = await save(l, builtin(s => { s.scripts.Hans.spaceMax = 0.5; s.note = 'ahead'; s.version = 9 }))
+    const ahead = await save(l, builtin(s => { s.scripts.Hans.spaceMax = 0.5; s.note = 'ahead'; s.version = V + 2 }))
     expect(ahead.status).toBe(409)
     expect(ahead.json.error).toBe('stale')
     expect(readFileSync(file).equals(after)).toBe(true)

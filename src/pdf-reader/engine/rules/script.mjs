@@ -1,5 +1,4 @@
-// The writing system a target is written in, which every rule of the engine is read by: the layout rules' scripts, the
-// font roles, the units a target keeps, the TeX path's strategies. A module of its own, importing nothing.
-
-/** the script a BCP 47 tag is written in: its likely script (zh-TW → Hant, sr → Cyrl) */
-export const scriptOf = lang => new Intl.Locale(lang).maximize().script
+// Moved whole into the engine package (packages/engine/src/fonts/script.ts); this path re-exports it from the package's
+// entry of the served faces and patterns (`@readarxiv/engine/fonts`) for what still imports it here. The cut-over deletes
+// the path.
+export { scriptOf, CJK, cjkClassWith, CJK_LETTER, SPACELESS } from '@readarxiv/engine/fonts'

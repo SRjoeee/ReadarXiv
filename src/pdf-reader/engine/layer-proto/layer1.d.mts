@@ -30,8 +30,6 @@ export declare const SUP: Readonly<Record<string, string>>
 export declare function texToText(src: string): string
 /** what a placeholder draws as: 'macro', 'zero', 'space', 'cite', 'num', 'display', 'other' or 'symbol' */
 export declare function phClass(src: string): string
-/** a gap's kind by its text: 'cite', 'num' or 'other' */
-export declare const gapClass: (text: string) => 'cite' | 'num' | 'other'
 /** letters and digits only, lower case, accents off */
 export declare const norm: (s: string) => string
 /** a run of characters' words: each { w, start, end } over the characters' indices */
@@ -40,6 +38,5 @@ export declare function wordsOf(chars: readonly { ch: string; sep?: boolean }[],
 export declare function lcsPairs(S: readonly string[], O: readonly string[]): Int32Array
 /** which of O's words a longest common subsequence with S's takes (1 each) */
 export declare function lcsMatched(S: readonly string[], O: readonly string[]): Uint8Array
-export declare const CJK: RegExp
 /** the line-break marks of a rule set's `noStart` and `noEnd` lists: whether a token begins with a character no line starts with, or ends with one no line ends with */
 export declare function kinsokuOf(noStart: string, noEnd: string): { starts(s: string): boolean; ends(s: string): boolean }

@@ -6,25 +6,20 @@
 // every session off the service: it has to stop serving everywhere (Codex on #157)
 import { Ellipsis, Plus } from 'lucide'
 import { type CSSProperties, Fragment, useEffect, useRef, useState } from 'react'
-import { LANG_CODES, LANG_CODE_TO_EN_NAME, LANG_CODE_TO_LOCALE_NAME, LANG_CODE_TO_ZH_NAME, type LangCode } from '@/config/languages'
+import { LANG_CODES, type LangCode } from '@/config/languages'
 import { type Config, SERVICES_MAX } from '@/config/schema'
 import { type Service, isLlmChosen, serviceRuns } from '@/config/services'
-import { supportsTarget } from '@/providers/microsoft'
+import { supportsTarget } from '@/providers/targets'
 import { sendMessage } from '@/shared/messages'
 import type { PackState } from '@/shared/pack'
-import { Button } from '@/ui/controls/Button'
-import { Icon } from '@/ui/controls/Icon'
-import { MenuList } from '@/ui/controls/MenuList'
-import { Popover, usePopover } from '@/ui/controls/Popover'
-import { radioKeys } from '@/ui/controls/radio'
-import { Reveal } from '@/ui/controls/Reveal'
-import { Switch } from '@/ui/controls/Switch'
-import { O, S, languageLabel, languageName } from '@/ui/strings'
+import { Button, Icon, MenuList, Popover, shut, usePopover, radioKeys, Reveal, Switch, O, S } from '@readarxiv/ui'
+import { languageKeywords } from '@/ui/language-keywords'
+import { languageLabel, languageName } from '@/ui/strings'
 import { useRejected } from '@/ui/use-rejected'
 import type { OptionsData } from '../data'
 import { type Hold, giveBackUnneeded, holdOrigin } from '../permissions'
 import { Card, GroupHeading } from '../ui/Card'
-import { type ListWrites, focusLost, insertAt, shut, undoHasFocus, useFocusWhenDrawn, useLinger, useListWrites, withUndo } from '../ui/lists'
+import { type ListWrites, focusLost, insertAt, undoHasFocus, useFocusWhenDrawn, useLinger, useListWrites, withUndo } from '../ui/lists'
 import { IconButton, Row, Status, Value } from '../ui/Row'
 import { UndoRow } from '../ui/UndoRow'
 import { Llm } from './Llm'
@@ -107,7 +102,8 @@ function Services({ data }: { data: OptionsData }) {
   const ids = [...builtIns.map(b => b.id), ...config.services.map(s => s.id)]
   const can = (id: string) => !builtIns.some(b => b.id === id && b.disabled)
   const choose = (id: string, how: 'pointer' | 'key') => {
-    void writes.attempt(latest => ({ ...latest, provider: id }))
+    // (a pick, recorded: the PDF reader follows it, v22)
+    void writes.attempt(latest => ({ ...latest, provider: id, providerChosen: true }))
     setPointed(how === 'pointer' ? id : null)
   }
   const keys = radioKeys(ids, config.provider, can, id => choose(id, 'key'), i => radios.current.get(ids[i]!)?.focus())
@@ -121,7 +117,7 @@ function Services({ data }: { data: OptionsData }) {
    * stays open saying so, the service not handed over (Task 107)
    */
   const added = async (s: Service, ms: number) => {
-    await writes.save(latest => ({ ...latest, services: latest.services.some(x => x.id === s.id) ? latest.services : [...latest.services, s], provider: s.id }))
+    await writes.save(latest => ({ ...latest, services: latest.services.some(x => x.id === s.id) ? latest.services : [...latest.services, s], provider: s.id, providerChosen: true }))
     setConnected(c => ({ ...c, [s.id]: ms }))
     setFresh(s.id)
     setForm(null)
@@ -271,7 +267,10 @@ function useDeletions(config: Config, writes: ListWrites<Config>, focusOn: { now
   const remove = (service: Service, focus: boolean) => {
     // written only once the hold is granted: the background, hearing of the deletion, finds the undo held (I1)
     const hold = holdOrigin(service.baseURL, service.id)
-    const stored = hold.ready.then(() => writes.attempt(latest => ({ ...latest, services: latest.services.filter(s => s.id !== service.id), provider: latest.provider === service.id ? 'microsoft' : latest.provider })))
+    // (the service chosen deleted: Microsoft in its place, chosen by nobody, so that the PDF reader follows the website, v22)
+    const stored = hold.ready.then(() => writes.attempt(latest => (latest.provider === service.id
+      ? { ...latest, services: latest.services.filter(s => s.id !== service.id), provider: 'microsoft', providerChosen: false }
+      : { ...latest, services: latest.services.filter(s => s.id !== service.id) })))
     const g: Gone = { service, index: config.services.findIndex(s => s.id === service.id), chosen: config.provider === service.id, focus, stored, hold }
     pending.current.add(g)
     setGone(x => [...x, g])
@@ -290,7 +289,9 @@ function useDeletions(config: Config, writes: ListWrites<Config>, focusOn: { now
     setGone(x => x.filter(y => y !== g))
     // after the same grant the deletion's write waits for, so an undo pressed before it is written after the deletion
     void g.hold.ready.then(() => writes.attempt(latest => (latest.services.some(s => s.id === g.service.id) ? latest
-      : { ...latest, services: insertAt(latest.services, g.index, g.service), provider: g.chosen && latest.provider === 'microsoft' ? g.service.id : latest.provider })))
+      : g.chosen && latest.provider === 'microsoft'
+        ? { ...latest, services: insertAt(latest.services, g.index, g.service), provider: g.service.id, providerChosen: true }
+        : { ...latest, services: insertAt(latest.services, g.index, g.service) })))
       .then(done => {
         // the focus goes to the service's radio once its row is drawn again, as the styles and the prompts lists do: a
         // frame after the press, or after the write, may find no row yet, and the focus falls to the page (Part 7's
@@ -325,7 +326,7 @@ function TargetLanguage({ data }: { data: OptionsData }) {
   const items = LANG_CODES.map(code => ({
     id: code,
     name: languageLabel(code),
-    keywords: `${LANG_CODE_TO_EN_NAME[code]} ${LANG_CODE_TO_LOCALE_NAME[code]} ${LANG_CODE_TO_ZH_NAME[code]} ${code}`,
+    keywords: languageKeywords(code),
     checked: code === config.targetLanguage,
   }))
   return (

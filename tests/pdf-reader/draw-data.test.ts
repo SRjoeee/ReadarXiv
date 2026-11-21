@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { beforeAll, describe, expect, it } from 'vitest'
-import { checkDraw, drawInputsOf } from '@/pdf-reader/engine/layer-proto/draw.mjs'
+import { checkDraw, drawInputsOf, inRuns, unmapped } from '@/pdf-reader/engine/layer-proto/draw.mjs'
 import { drawDataOf, drawTextOf, mappedChars } from '@/pdf-reader/engine/pipeline/draw-data.mjs'
 import { LINK_TEXT_PIXELS, NO_IMAGE_PIXELS } from '@/pdf-reader/engine/layout/pdf-lite.mjs'
 import { installLiteWorker } from './helpers/lite-pdfjs'
@@ -48,10 +48,12 @@ describe('drawDataOf', () => {
     const { draw, why } = await drawDataOf(page)
     expect(page.calls).toEqual(['text', 'ann'])
     expect(why).toBeNull()
-    expect(draw!.fonts).toEqual([['CMR10', 'serif', 0, ['a', 'b', 'ﬁ', 'f', 'i']], ['Type3Font', 'sans-serif', 1, null], [null, null, 2, null]])
-    expect(draw!.items.map(i => [i[0], i[8]])).toEqual([['hello', 0], ['', 0], ['x', 1], ['y', -1], ['z', 2]])
+    // (no font's map in its row: each item its own unmapped characters instead, BUNDLE5 15; CMR10 maps a, b and ﬁ, so "hello"'s
+    // h, e, l, l and o are unmapped; Type3Font has no map to read, so "x" is not)
+    expect(draw!.fonts).toEqual([['CMR10', 'serif', 0], ['Type3Font', 'sans-serif', 1], [null, null, 2]])
+    expect(draw!.items.map(i => [i[0], i[8], i[10] ?? null])).toEqual([['hello', 0, [0, 5]], ['', 0, null], ['x', 1, null], ['y', -1, null], ['z', 2, null]])
     // (no glyphs given: no fill told)
-    expect(draw!.items[0]).toEqual(['hello', 10, 0, 10, 72, 700, 20, 10, 0, -1])
+    expect(draw!.items[0]).toEqual(['hello', 10, 0, 10, 72, 700, 20, 10, 0, -1, [0, 5]])
     expect(draw!.links).toEqual([[[1, 2, 3, 4], null, null, 'sec.1', 'x', 0, 1, [0, 255, 0]]])
     expect(drawInputsOf(draw!).annots[0]).toMatchObject({ subtype: 'Link', dest: 'sec.1' })
   })
@@ -71,8 +73,10 @@ describe('drawDataOf', () => {
       fonts: { n: font({ toUnicode: {} }), e: { fontName: 'error', loadedName: 'e' }, m: font({ toUnicode: { _map: [] } }) },
     })
     const { draw } = await drawDataOf(page)
-    expect(draw!.fonts.map(f => [f[2], f[3]])).toEqual([[0, null], [2, null], [0, []], [2, null]])
+    expect(draw!.fonts.map(f => f[2])).toEqual([0, 2, 0, 2])
     expect(draw!.items.map(i => i[8])).toEqual([0, 1, 2, 3])
+    // (a font of no map, an error font and a font object-less row read none of a map; an empty map leaves every character unmapped)
+    expect(draw!.items.map(i => i[10] ?? null)).toEqual([null, null, [0, 1], null])
   })
 
   it('ships nothing for a page that uses a font it cannot tell the same on every host: not embedded, not Type3', async () => {
@@ -95,7 +99,9 @@ describe('drawDataOf', () => {
     })
     const { draw, why } = await drawDataOf(page)
     expect(why).toBeNull()
-    expect(draw!.fonts.map(f => [f[2], f[3]])).toEqual([[1, ['a', 'ﬁ', 'f', 'i']], [1, null], [2, null], [1, []]])
+    expect(draw!.fonts.map(f => f[2])).toEqual([1, 1, 2, 1])
+    // (T3 maps a: "a" read; T3b has none to read; an error font none; T3c's empty map leaves "d" unmapped)
+    expect(draw!.items.map(i => i[10] ?? null)).toEqual([null, null, null, [0, 1]])
   })
 
   it('ships nothing when a call fails, or a font was opened without its extra properties; a memory error is thrown', async () => {
@@ -104,6 +110,20 @@ describe('drawDataOf', () => {
     const bare = pageOf({ items: [item('a', 'f')], styles: { f: {} }, fonts: { f: { name: 'F', isType3Font: false, missingFile: false } } })
     expect(await drawDataOf(bare)).toEqual({ draw: null, why: 'props' })
     await expect(drawDataOf(pageOf({ textFails: Object.assign(new RangeError('Array buffer allocation failed'), {}) }))).rejects.toThrow(RangeError)
+  })
+
+  it('writes an item\'s origin, width and height and a link\'s numbers at a thousandth of a point, its fills read of them as they are; its scale as it is', async () => {
+    const page = pageOf({
+      items: [item('ab', 'f', { transform: [9.962599754333496, 0, 0, 9.962599754333496, 108.00000000000001, 701.3779999999999], width: 20.12345, height: 9.962599754333496 })],
+      styles: { f: { fontFamily: 'serif' } }, fonts: { f: font() },
+      annots: [{ subtype: 'Link', rect: new Float32Array([123.311, 115.328, 129.288, 127.821]), quadPoints: new Float32Array([1.00049, 2, 3, 4, 5, 6, 7, 8.0006]), dest: 'x', url: null, overlaidText: null, borderStyle: { width: 0.50049, style: 1 }, color: null }],
+    })
+    // (a glyph a hair inside the item's own place: the fills read of the item as PDF.js gives it)
+    const { draw } = await drawDataOf(page, null, null, [{ u: 'a', x0: 108.00000000000001, x1: 118, y: 701.3779999999999, size: 9.962599754333496, fill: 0xff }, { u: 'b', x0: 118, x1: 128.12, y: 701.3779999999999, size: 9.962599754333496, fill: 0xff }])
+    expect(draw!.items[0]!.slice(1, 10)).toEqual([9.962599754333496, 0, 9.962599754333496, 108, 701.378, 20.123, 9.963, 0, 0xff])
+    expect(draw!.links[0]![0]).toEqual([123.311, 115.328, 129.288, 127.821])
+    expect(draw!.links[0]![1]).toEqual([1, 2, 3, 4, 5, 6, 7, 8.001])
+    expect(draw!.links[0]![5]).toBe(0.5)
   })
 
   it('sheds a page past a cap, and ships an empty page as a draw with empty arrays', async () => {
@@ -133,8 +153,9 @@ describe('drawDataOf over a real PDF (the sample paper), opened as the prepare o
     return getDocument({ data: bytes.slice(), verbosity: 0, cMapUrl: join(dir, 'cmaps/'), cMapPacked: true, standardFontDataUrl: join(dir, 'standard_fonts/'), ...(extra ? { fontExtraProperties: true } : {}), ...(maxImageSize === null ? {} : { maxImageSize }) }).promise
   }
 
-  it('tells every page: its items as getTextContent has them, its embedded fonts with their maps, its Link annotations', async () => {
+  it('tells every page: its items as getTextContent has them, its embedded fonts, each item\'s unmapped characters of their maps, its Link annotations', async () => {
     const doc = await open(true)
+    const { fontMappedOf } = await import('@/pdf-reader/engine/layer-proto/layer2.mjs')
     for (let p = 1; p <= doc.numPages; p++) {
       const page = await doc.getPage(p)
       await page.getOperatorList()
@@ -142,7 +163,13 @@ describe('drawDataOf over a real PDF (the sample paper), opened as the prepare o
       expect(why, `page ${p}`).toBeNull()
       expect(draw!.items).toHaveLength((await page.getTextContent()).items.filter(i => 'str' in i).length)
       expect(draw!.fonts.length).toBeGreaterThan(0)
-      expect(draw!.fonts.every(f => f[2] === 0 && Array.isArray(f[3]) && (f[3] as string[]).length > 0)).toBe(true)
+      expect(draw!.fonts.every(f => f[2] === 0 && f.length === 3)).toBe(true)
+      // (each item's unmapped characters are what the live reading reads of its font's map: layer2.mjs fontMappedOf, unmapped)
+      const tc = await page.getTextContent(), its = tc.items.filter(i => 'str' in i) as { str: string; fontName: string }[]
+      its.forEach((it, k) => {
+        const mapped = fontMappedOf(page.commonObjs.get(it.fontName)), runs = (draw!.items[k]![10] as number[] | undefined) ?? null
+        expect([...it.str].map((ch, j) => /\S/.test(ch) && inRuns(runs, j)), `page ${p} item ${k}`).toEqual([...it.str].map(ch => unmapped(ch, mapped)))
+      })
       expect(() => checkDraw(JSON.parse(JSON.stringify(draw)))).not.toThrow()
     }
     await doc.loadingTask.destroy()

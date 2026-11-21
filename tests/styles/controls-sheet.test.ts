@@ -1,10 +1,10 @@
-// The shared controls' sheet (src/styles/controls.css): what Part 3 adds, its values as the prototypes and the design
+// The shared controls' sheet (packages/ui/src/controls.css): what Part 3 adds, its values as the prototypes and the design
 // agreed them (the redesign's design, §2.1, §5, §6, §8; Part 3's interfaces) — a change to one is a change to the design,
 // made there first
 import { describe, expect, it } from 'vitest'
 import { ruleOf, rules, sheet } from './css-rules'
 
-const all = rules(sheet('../../src/styles/controls.css'))
+const all = rules(sheet('../../packages/ui/src/controls.css'))
 const C = ['@layer components']
 const RM = ['@media (prefers-reduced-motion: reduce)']
 const HOVER = [...C, '@media (hover: hover)']
@@ -18,7 +18,7 @@ describe('controls.css: the motions both pages share', () => {
   })
 
   it('leaves the reader\'s sheet without a copy of its own; its capsule\'s words move with its box instead, by no keyframes (capsule-motion.ts)', () => {
-    const reader = sheet('../../src/entrypoints/pdf-reader/reader.css')
+    const reader = sheet('../../packages/reader/src/chrome/reader.css', '../../src/entrypoints/pdf-reader/reader.css')
     expect(reader).not.toContain('@keyframes words-in')
     expect(reader).toMatch(/\.capsule \.words \{[^}]*\}/)
     expect(reader).not.toMatch(/\.capsule \.words \{[^}]*animation:/)

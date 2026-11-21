@@ -11,13 +11,12 @@ const reason = (e: unknown): string => (e instanceof Error ? e.message : String(
 /** send is injectable for tests; runtime messaging by default */
 export function createMessageTransport(send: Send = sendMessage): TranslationTransport {
   return {
-    // Cut off from the background, a structured error still goes back: run.ts accepts TranslateMessageResponse only, and an exception would turn the whole batch into a crash
+    // Cut off from the background, a structured error still goes back: run.ts accepts a TranslateResponse only, and an exception would turn the whole batch into a crash
     async translate(call) {
       try {
         return await send({ type: 'axt:translate', ...call })
       } catch (e) {
-        // With the background unreachable, a smaller batch only repeats the same failure once per segment
-        return { ok: false, error: { kind: 'network', message: `cannot reach the extension background: ${reason(e)}`, isolatable: false } }
+        return { ok: false, error: { kind: 'network', message: `cannot reach the extension background: ${reason(e)}` } }
       }
     },
     // Cancellation is best effort: an in-flight request that cannot be withdrawn is stopped at the receiving end by the content side's session id (run.ts's halted)

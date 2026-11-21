@@ -1,10 +1,14 @@
 import { OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
-import { BOXES_PAGE, OPS_CAP, STACK_MAX } from '@/pdf-reader/engine/layout/ink.mjs'
+import { BOXES_PAGE, OPS_CAP, STACK_MAX } from '@readarxiv/engine'
 import { encodeLayoutMarks, layoutMarksOf, type MarkClass, parseLayoutMarks, type Switches } from '@/pdf-reader/engine/layout/marks.mjs'
+import { readArxivText } from '@/pdf-reader/engine/layout/arxiv.mjs'
+import { lineCheckOf as checkOf } from '@/pdf-reader/engine/layout/carry.mjs'
+import { withGroups } from './groups'
 
-// The layout maker's fake world (layout-make.test.ts, page-pass.test.ts): a fake PDF.js document of arXiv's PDF and a
-// marks file made, as the run makes it, from a fake marked original: each run of text is a text item and the glyphs of an operator list alike, every character half an em
+// The layout maker's fake world (layout-make.test.ts, page-pass.test.ts): fake PDF.js documents of arXiv's PDF (`pages`) and of
+// the base page (our compile's final pass: the marked original's pages, `marked`, or `base` where a test gives it pages of
+// its own), and a marks file made, as the run makes it, from a fake marked original: each run of text is a text item and the glyphs of an operator list alike, every character half an em
 // wide, so that a word's place in the text layer is its glyphs' place. The marked original's operator list shows its
 // runs in their order, and a point (`/axt-<name> ri`) beside each mark: before the first glyph on the mark's baseline at
 // or right of it, else after the last one on that baseline (a page's `points` places one by hand, before a run's
@@ -16,24 +20,29 @@ export const CH = 0.5
  *  string one glyph's Unicode (a character and its variation selector); `fill`: its glyphs' fill as PDF.js reports it
  *  ('#rrggbb', setFillRGBColor; 'pattern', setFillColorN), black again after it; `tr`: its text rendering mode (Tr), 0
  *  again after it */
-export type Run = { s: string; x: number; y: number; size?: number; font?: string; w?: number; blank?: boolean; one?: boolean; eol?: boolean; fill?: string; tr?: number }
+/** a run of text: `turn`, set a quarter turn (its baseline up the page from x, y: a \rotatebox{90}'s, a sideways cell's) */
+export type Run = { s: string; x: number; y: number; size?: number; font?: string; w?: number; blank?: boolean; one?: boolean; eol?: boolean; fill?: string; tr?: number; turn?: boolean }
 /** a Link annotation as PDF.js reports it (getAnnotations): its rectangle and the destination it names */
 export type Annot = { rect: number[]; dest: string | unknown[]; quadPoints?: number[]; url?: string }
-export type Page = { runs: Run[]; boxes?: number[][]; view?: number[]; ops?: 'never' | 'fails' | 'capped' | 'deep' | 'dense' | 'slow'; markedOps?: 'deep'; points?: Record<string, [run: number, char: number]>; order?: number[]; annots?: Annot[] }
+/** how long a page's `late` operator list takes to come: an hour of the (fake) clock, which no reader of the prepare gives up on */
+export const LATE_MS = 3_600_000
+export type Page = { runs: Run[]; boxes?: number[][]; images?: number[][]; view?: number[]; ops?: 'late' | 'fails' | 'capped' | 'deep' | 'dense' | 'slow'; markedOps?: 'deep'; points?: Record<string, [run: number, char: number]>; order?: number[]; annots?: Annot[] }
 export type Mark = [name: string, page: number, x: number, y: number]
-export type World = { pages: Page[]; marked?: Page[]; marks: Mark[]; units: SourceUnit[]; switches?: Switches; inkless?: string[]; texts?: [string, string][]; names?: Record<string, 0 | 1> }
+export type World = { pages: Page[]; marked?: Page[]; base?: Page[]; marks: Mark[]; units: SourceUnit[]; switches?: Switches; inkless?: string[]; texts?: [string, string][]; names?: Record<string, 0 | 1>; complete?: Record<string, number>; apart?: string[] }
 
 export const FONTS: Record<string, unknown> = {
   F1: { name: 'ABCDEF+CMR10', fontMatrix: [0.001, 0, 0, 0.001, 0, 0], ascent: 0.75, descent: -0.25, isType3Font: false, vertical: false },
   F2: { name: `ABCDEF+Ä${'x'.repeat(300)}`, fontMatrix: [0.001, 0, 0, 0.001, 0, 0], ascent: 0.75, descent: -0.25, isType3Font: false, vertical: false },
+  // (a delimiters' face as cmex10 is: its glyphs hang from their origin, which stands over the line)
+  F3: { name: 'ABCDEF+CMEX10', fontMatrix: [0.001, 0, 0, 0.001, 0, 0], ascent: 0.04, descent: -1.16, isType3Font: false, vertical: false },
 }
-export const STYLES = { F1: { ascent: 0.75, descent: -0.25, fontFamily: 'serif' }, F2: { ascent: 0.75, descent: -0.25, fontFamily: 'serif' } }
+export const STYLES = { F1: { ascent: 0.75, descent: -0.25, fontFamily: 'serif' }, F2: { ascent: 0.75, descent: -0.25, fontFamily: 'serif' }, F3: { ascent: 0.04, descent: -1.16, fontFamily: 'serif' } }
 export const size = (r: Run) => r.size ?? 10
 export const adv = (r: Run) => (r.w ?? CH) * size(r)
 /** where a run's character j begins, and where the run ends */
 export const xAt = (r: Run, j: number) => r.x + j * adv(r)
 export const endOf = (r: Run) => xAt(r, r.one ? 1 : r.s.length)
-export const item = (r: Run) => ({ str: r.blank ? ' '.repeat(r.s.length) : r.s, dir: 'ltr', transform: [size(r), 0, 0, size(r), r.x, r.y], width: (r.one ? 1 : r.s.length) * adv(r), height: size(r), fontName: r.font ?? 'F1', hasEOL: !!r.eol })
+export const item = (r: Run) => ({ str: r.blank ? ' '.repeat(r.s.length) : r.s, dir: 'ltr', transform: r.turn ? [0, size(r), -size(r), 0, r.x, r.y] : [size(r), 0, 0, size(r), r.x, r.y], width: (r.one ? 1 : r.s.length) * adv(r), height: size(r), fontName: r.font ?? 'F1', hasEOL: !!r.eol })
 /** where each mark's point stands in a page's stream: [run, character] before which it is shown, in the marks' order */
 export function pointsOf(p: Page, page: number, marks: Mark[]) {
   const out: [name: string, run: number, char: number][] = []
@@ -58,11 +67,15 @@ export function opsOf(p: Page, points: [string, number, number][] = []) {
   const ops: [number, unknown[]][] = []
   const at = (ri: number, c: number) => { for (const [name, r, ch] of points) if (r === ri && ch === c) ops.push([OPS.setRenderingIntent, [{ name: `axt-${name}` }]]) }
   const box = (b: number[]) => ops.push([OPS.constructPath, [OPS.fill, [Float32Array.from([0])], Float32Array.from(b.slice(0, 4))]])
+  // (an image, `images`: x0, y0, x1, y1 and the run it is painted before, an image XObject painted on its box, as pdfTeX includes
+  // a PNG: its matrix the box's)
+  const image = (b: number[]) => ops.push([OPS.save, []], [OPS.transform, [(b[2] ?? 0) - (b[0] ?? 0), 0, 0, (b[3] ?? 0) - (b[1] ?? 0), b[0], b[1]]], [OPS.paintImageXObject, ['img1', 1, 1]], [OPS.restore, []])
   for (const ri of p.order ?? p.runs.map((_, i) => i)) {
     const r = p.runs[ri] as Run
     for (const b of p.boxes ?? []) if (b[4] === ri) box(b)
+    for (const b of p.images ?? []) if (b[4] === ri) image(b)
     if (r.fill) ops.push(r.fill === 'pattern' ? [OPS.setFillColorN, ['P0']] : [OPS.setFillRGBColor, [r.fill]])
-    ops.push([OPS.beginText, []], [OPS.setFont, [r.font ?? 'F1', size(r)]], [OPS.setTextMatrix, [[1, 0, 0, 1, r.x, r.y]]])
+    ops.push([OPS.beginText, []], [OPS.setFont, [r.font ?? 'F1', size(r)]], [OPS.setTextMatrix, [r.turn ? [0, 1, -1, 0, r.x, r.y] : [1, 0, 0, 1, r.x, r.y]]])
     if (r.tr !== undefined) ops.push([OPS.setTextRenderingMode, [r.tr]])
     // a space is a move, as TeX's pages show it: no glyph (the ink reader keeps every painted glyph); a point between two
     // characters parts the run's showText
@@ -81,6 +94,7 @@ export function opsOf(p: Page, points: [string, number, number][] = []) {
   }
   at(p.runs.length, 0)
   for (const b of p.boxes ?? []) if (b[4] === undefined) box(b)
+  for (const b of p.images ?? []) if (b[4] === undefined) image(b)
   // (past OPS_CAP: operations the walk reads and does nothing with, after the page's own, as one typed array)
   if (p.ops === 'capped') { const fn = new Uint16Array(OPS_CAP + 1).fill(OPS.setFillRGBColor); fn.set(ops.map(o => o[0])); return { fnArray: fn, argsArray: ops.map(o => o[1]) } }
   // (after the page's own: saves past STACK_MAX, one of them restored and a path painted then, in a state the walk lost (so
@@ -106,21 +120,30 @@ export const commonObjs = { get: (id: string) => (id in PATHS ? { path: new Floa
 /** a page's getAnnotations, where it has annotations (`annots`): its Link annotations as PDF.js lists them; none, no such call */
 const annotsOf = (p: Page) => (p.annots ? { getAnnotations: async () => (p.annots ?? []).map(a => ({ subtype: 'Link', ...a })) } : {})
 export function arxivOf(pages: Page[], asked: number[] = []) {
-  return {
+  return withGroups({
     numPages: pages.length,
     getPage: async (n: number) => {
       const p = pages[n - 1] as Page
       return {
-        view: p.view ?? [0, 0, 612, 792], rotate: 0, commonObjs,
+        view: p.view ?? [0, 0, 612, 792], rotate: 0, commonObjs, ref: { num: 10 + n, gen: 0 },
         getTextContent: async () => ({ items: p.runs.map(item), styles: STYLES }),
         ...annotsOf(p),
         getOperatorList: () => {
           asked.push(n)
-          return p.ops === 'never' ? new Promise(() => {}) : p.ops === 'fails' ? Promise.reject(new Error('broken page')) : Promise.resolve(opsOf(p))
+          return p.ops === 'late' ? new Promise(r => setTimeout(() => r(opsOf(p)), LATE_MS)) : p.ops === 'fails' ? Promise.reject(new Error('broken page')) : Promise.resolve(opsOf(p))
         },
       }
     },
-  }
+  })
+}
+/** the base page's pages (the layer route's step 2): the final pass of the marked original, whose glyphs stand where the marked
+ *  original's do — `base` where a test gives the base page properties of its own (a page whose list never comes, …) */
+export const basePagesOf = (w: World) => w.base ?? w.marked ?? w.pages
+/** a fake PDF.js document of the base page */
+export const baseOf = (w: World, asked: number[] = []) => arxivOf(basePagesOf(w), asked)
+/** the line check of a world: the base page's lines found on arXiv's (`pages`), as the page pass makes it */
+export async function lineCheckOf(w: World) {
+  return checkOf((await readArxivText(baseOf(w))).tokens, (await readArxivText(arxivOf(w.pages))).tokens)
 }
 export function markedOf(pages: Page[], marks: Mark[]) {
   return {
@@ -134,7 +157,7 @@ export function markedOf(pages: Page[], marks: Mark[]) {
   }
 }
 export async function marksOf(w: World, log = '', classes?: MarkClass[]) {
-  return parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(await layoutMarksOf(markedOf(w.marked ?? w.pages, w.marks), log, { engine: 'pdflatex', switches: w.switches ?? null, inkless: w.inkless ?? null, texts: w.texts ?? null, names: w.names ?? null, units: w.units, OPS, ...(classes ? { classes } : {}) }))))
+  return parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(await layoutMarksOf(markedOf(w.marked ?? w.pages, w.marks), log, { engine: 'pdflatex', switches: w.switches ?? null, inkless: w.inkless ?? null, texts: w.texts ?? null, names: w.names ?? null, complete: w.complete ?? null, apart: w.apart ?? null, units: w.units, OPS, ...(classes ? { classes } : {}) }))))
 }
 export const text = (s: string) => ({ t: 'text', s })
 export const ph = (src: string) => ({ t: 'ph', src })

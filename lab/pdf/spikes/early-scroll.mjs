@@ -1,4 +1,4 @@
-// A side read before the pair is located (the website's early-scroll defect, readarxiv-web PR #23, in the shared
+// A side read before the pair is located (the website's early-scroll defect, in the shared
 // reader): the sync follows nothing until both sides are anchored (syncFrom, alignTop and arm go by the anchors), so a
 // scroll whose every step and whose rest came before that had nothing to level the pair by, and the pair stood apart
 // until the next scroll's rest. Once located, the pair is levelled by the side read, as at a rest (session.mjs
@@ -57,8 +57,8 @@ const extension = process.env.BUILD ?? BUILD
 const SOURCE_LATE = Number(process.env.LATE ?? 3000)
 // where a side is read, a share of its range: on 2608.02163, a page with prose to level by (0.4 is a page of figures)
 const SHARE = 0.3
-// (the pipeline's in versions.mjs, which live.mjs re-exports; the typesetting's in live.mjs)
-const [PIPELINE, TYPESETTING] = [['pipeline/versions.mjs', 'PIPELINE_VERSION'], ['pipeline/live.mjs', 'TYPESETTING_VERSION']].map(([file, name]) => readFileSync(join(root, '../../src/pdf-reader/engine', file), 'utf8').match(new RegExp(`export const ${name} = '([^']+)'`))[1])
+// (the pipeline's in versions.mjs; the typesetting's 6, its last, since the compiled translation went: 2026-11-04)
+const PIPELINE = readFileSync(join(root, '../../src/pdf-reader/engine/pipeline/versions.mjs'), 'utf8').match(/export const PIPELINE_VERSION = '([^']+)'/)[1], TYPESETTING = '6'
 // ONLY=<rows' numbers, by commas> runs those alone
 const only = process.env.ONLY ? process.env.ONLY.split(',').map(Number) : null
 const wanted = n => !only || only.includes(n)

@@ -1,6 +1,6 @@
 // The extension pages' own sheet (the redesign's design, §2.2): the tokens and the shared controls imported, the
 // roles named for Tailwind, and the pages' base
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { ruleOf, rules, sheet } from './css-rules'
@@ -9,7 +9,17 @@ const SHEET = readFileSync(join(import.meta.dirname, '../../src/styles/ui.css'),
 
 describe('ui.css', () => {
   it('imports the generated tokens, so that the controls the pages share find them', () => {
-    expect(SHEET).toContain('@import "./tokens.css";')
+    expect(SHEET).toContain('@import "@readarxiv/ui/tokens.css";')
+  })
+
+  it('takes Tailwind\'s utilities from the product\'s own files alone: no automatic scan, the sources named, each an existing place', () => {
+    // (read as it is: a glob's `/*` is no comment's start in a string, which the comment-stripped SHEET above cannot tell)
+    const raw = readFileSync(join(import.meta.dirname, '../../src/styles/ui.css'), 'utf8')
+    expect(raw).toMatch(/^@import "tailwindcss" source\(none\);$/m)
+    const paths = [...raw.matchAll(/^@source "([^"]+)";$/gm)].map(m => m[1] as string)
+    expect(paths.sort()).toEqual(['../', '../../packages/*/src/**/*'])
+    // (the sheet is src/styles/ui.css: its paths lead to src/ and to every package's src/, tests and documents outside)
+    expect(existsSync(join(import.meta.dirname, '../../src/styles', paths[0] as string))).toBe(true)
   })
 
   it('holds no token of the old pages: every colour a role of the generated sheet', () => {
@@ -27,7 +37,7 @@ describe('ui.css: a list under a search field', () => {
   })
 
   it('is the only cap on a menu\'s list among the pages\' sheets: the popup\'s is gone, the settings page adds none', () => {
-    const pages = rules(sheet('../../src/entrypoints/popup/popup.css', '../../src/entrypoints/options/ui/settings.css', '../../src/styles/controls.css'))
+    const pages = rules(sheet('../../src/entrypoints/popup/popup.css', '../../src/entrypoints/options/ui/settings.css', '../../packages/ui/src/controls.css'))
     expect(pages.filter(r => /\[role="(listbox|menu)"\]/.test(r.selector) && /max-height/.test(r.body)).map(r => r.selector)).toEqual([])
   })
 })

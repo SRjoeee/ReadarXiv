@@ -6,37 +6,43 @@
 //  - found: per paper, side and float environment (figure, table, algorithm; a caption in none is `other`), the
 //    captions anchored there and those with a float; on both sides; the floats whose kind is not their environment's (a
 //    figure found as a table: washed, not outlined)
-//  - holes: points on a grid inside each float's painted shapes (pad 3 px at 100 %) where the pointer's hit test
-//    (hitOf, then floatHitOf, as the session's pointer frame) lights nothing; points where a smaller unit's block wins
-//    are counted apart
+//  - what the pointer lights inside a float: points on a grid inside each float's shape (pad 3 px at 100 %), by what the
+//    pointer's hit test (hitOf, then floatHitOf, as the reader's pointer frame) lights there — the caption, a cell unit, a
+//    table's cell no unit holds (floats.mjs cellsOf), another unit, or nothing (a figure's picture, a table's gaps and
+//    rules: no float lights whole since the owner's ruling of 2026-10-30, docs/PDF-READER.md §17.1); counted, not held
 //  - running text inside a float: a token of a running-text unit (not a caption, a cell or a drawing's text) or of
 //    another caption whose ink's centre lies inside a float's extent
 //  - floats overlapping: two floats on a page whose extents overlap, or a rule inside both (round 1's table I took the
 //    next column's algorithm's rule and reached into its title: the bounded case); their painted shapes meeting by their
 //    pads (two floats set closer than their half leadings) are counted apart
-//  - cells: each cell a float holds lights the float at its words' centre
-//  - running text keeps its own: points of a running-text unit's block where hitOf finds that unit but a float takes
-//    the point (a float's shape winning over the unit's block)
+//  - cells: each cell a float holds lights itself at its words' centre, and each of a table's cells no unit holds (a cell of
+//    numbers, of a formula) lights itself at its box's centre
+//  - every unit keeps its own: points of a unit's block (not a cell's) where hitOf finds that unit but floatHitOf does not
+//    give it (a float's shape winning over the unit's block: to nothing, or to a cell)
 //  - each float's kind and extent, by its caption, held to the baseline exactly (a change meant is recorded again)
 //  - kinds agreed: the floats whose kind changed when the two sides' were made to agree (floats.mjs floatsAgree: a
 //    caption's float a figure on either side is one on both, as the reader makes it once both pages are drawn); the
 //    measures above are of the floats agreed
 //  - cost: a page's floats made from its operator list (pathsOf and pageFloats), the main thread's part of the page's
 //    first drawing, median of the gate's rounds
-// It fails on a hole, running text inside a float, floats overlapping, a held cell lighting anything but its float, a
-// point of running text taken by a float, and against the baseline on fewer floats found (per paper, side and
-// environment, and on both sides), more kinds mismatched, or any float's kind or extent moved.
+// It fails on running text inside a float, floats overlapping, a cell (held or no unit's) lighting anything but itself, a
+// point of a unit taken by a float, and against the baseline on fewer floats found (per paper, side and environment, and
+// on both sides), more kinds mismatched, or any float's kind or extent moved.
 // Each check made to fail once (B4, floats.mjs changed in place each time and put back): the hit test ignoring floats
 // (5 082 716 holes, 410 cells lighting themselves); the running-text limit dropped (47 words of 2608.06701's #65 inside
 // figure 5's box); a rule past a table's last line taken within 3 lines (16 floats sharing a rule with the next, tables
 // found 11 → 9 on 02163); held cells not taken by their table (410); every float a table (figures' kinds mismatched).
 // After the review of B4: floats winning over every block (350 points of running text taken); the text block's filter
-// dropped, PANELS 0, GAP 3 (floats' extents moved against the baseline).
+// dropped, PANELS 0, GAP 3 (floats' extents moved against the baseline). The checks of 2026-10-30 (no float lit whole),
+// each made to fail once on floats.mjs changed in place and put back: a cell unit not taken as itself (199 cells lighting
+// nothing on 2608.02163 and 2608.12502), a table's cells no unit holds not found under the pointer (1 729), a smaller
+// unit's block not winning over a float (250 points of units taken, on the other eight papers).
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { floatHitOf, floatsAgree, floatShapes, pageFloats, pathsOf, wantsFloats } from '../../../src/pdf-reader/engine/view/floats.mjs'
 import { figureRegions } from '../../../src/pdf-reader/engine/view/figures.mjs'
-import { blockOf, hitOf, layoutOf, pageGeometry, runsOf } from '../../../src/pdf-reader/engine/view/highlight.mjs'
+import { blockOf, DRAWING, hitOf, layoutOf, pageGeometry, runsOf } from '../../../src/pdf-reader/engine/view/highlight.mjs'
+import { isTableCell } from '../../../src/pdf-reader/engine/layer-proto/units.mjs'
 
 const BASELINE = new URL('highlight-gate-floats.baseline.json', import.meta.url).pathname
 
@@ -125,16 +131,17 @@ export function floatsVerdict({ ids, write, ten }) {
   for (const id of ids) for (const [env, n] of Object.entries(counts[id].both)) envSum[env].both += n
   for (const [env, t] of Object.entries(envSum)) console.log(env.padEnd(10), `captions ${t.capL} / ${t.capR}`, `floats ${t.L} / ${t.R}`, `both ${t.both}`, `mismatched ${t.misL} / ${t.misR}`)
   console.log('kinds agreed across the sides (a figure on one side made one on the other):', ids.reduce((n, id) => n + papers.get(id).agreed, 0), ids.filter(id => papers.get(id).agreed).map(id => `${id} ${papers.get(id).agreed}`).join(', '))
-  const sum = { holes: 0, smaller: 0, points: 0, cells: 0, padsMeet: 0, lost: 0 }, fail = { intruders: [], overlaps: [], cellsOff: [] }
+  const sum = { points: 0, caption: 0, cell: 0, own: 0, other: 0, none: 0, cells: 0, owns: 0, padsMeet: 0, lost: 0 }, fail = { intruders: [], overlaps: [], cellsOff: [] }
   for (const id of ids) for (const S of ['L', 'R']) { const m = papers.get(id).sides[S]; for (const k of Object.keys(sum)) sum[k] += m[k]; for (const k of Object.keys(fail)) fail[k].push(...m[k].map(x => `${id} ${S} ${x}`)) }
-  console.log(`points in floats' shapes ${sum.points}: holes ${sum.holes}, a smaller unit ${sum.smaller}; cells held ${sum.cells}, lighting another ${fail.cellsOff.length}; points of running text taken by a float ${sum.lost}`)
+  console.log(`points in floats' shapes ${sum.points}, lighting: the caption ${sum.caption}, a cell unit ${sum.cell}, a cell no unit holds ${sum.own}, another unit ${sum.other}, nothing ${sum.none}`)
+  console.log(`cells held ${sum.cells}, cells no unit holds ${sum.owns}; lighting another ${fail.cellsOff.length}; points of a unit taken by a float ${sum.lost}`)
+  console.log('cells lighting another:', fail.cellsOff.length, fail.cellsOff.slice(0, 8).join('; '))
   console.log('running text inside a float:', fail.intruders.length, fail.intruders.slice(0, 8).join('; '))
   console.log('floats overlapping:', fail.overlaps.length, fail.overlaps.slice(0, 8).join('; '), `(their pads meeting: ${sum.padsMeet})`)
   console.log('a page\'s floats, ms: paths read (median, max) and floats made (median, slowest page), per paper and side')
   for (const id of ids) for (const S of ['L', 'R']) { const c = papers.get(id).cost[S]; if (c.pages) console.log(`${id} ${S}`.padEnd(14), `${c.pages} pages with captions`, `paths ${c.pathsMs} / ${c.pathsMaxMs}`, `floats ${c.floatMs} / ${c.floatMaxMs}`) }
   const failures = []
-  if (sum.holes) failures.push(`holes in floats ${sum.holes}`)
-  if (sum.lost) failures.push(`points of running text taken by a float ${sum.lost}`)
+  if (sum.lost) failures.push(`points of a unit taken by a float ${sum.lost}`)
   for (const k of Object.keys(fail)) if (fail[k].length) failures.push(`floats' ${k} ${fail[k].length}: ${fail[k][0]}`)
   if (write) {
     if (!ten) failures.push('a baseline is recorded on the ten papers\' runs only')
@@ -160,19 +167,18 @@ export function floatsVerdict({ ids, write, ten }) {
       }
     }
   }
-  console.log(failures.length ? `\nFAIL (floats): ${failures.slice(0, 20).join('; ')}${failures.length > 20 ? ` (and ${failures.length - 20} more)` : ''}` : '\nok (floats): no hole, no running text inside or taken, none overlapping, their cells lighting them; the baseline met')
+  console.log(failures.length ? `\nFAIL (floats): ${failures.slice(0, 20).join('; ')}${failures.length > 20 ? ` (and ${failures.length - 20} more)` : ''}` : '\nok (floats): no running text inside, no unit\'s point taken, none overlapping, every cell lighting itself; the baseline met')
   return failures.length > 0
 }
 
 const inside = (b, x, y) => x >= b.x0 && x <= b.x1 && y >= b.y0 && y <= b.y1
-const RUNNING_NOT = new Set(['caption', 'cell', 'figure'])
 
-/** what the gate measures of one side's floats: { found, holes, smaller, points, intruders, overlaps, padsMeet, cells,
- *  cellsOff, lost, regions, floats } — `found` per environment { captions, found, mismatched }; `lost` the points of
- *  running text's blocks a float takes from their unit; `regions` each float's kind and extent (to a tenth), by its
- *  caption */
+/** what the gate measures of one side's floats: { found, points, caption, cell, own, other, none, intruders, overlaps,
+ *  padsMeet, cells, owns, cellsOff, lost, regions, floats } — `found` per environment { captions, found, mismatched }; the
+ *  points of the floats' shapes by what they light; `lost` the points of units' blocks a float takes from their unit;
+ *  `regions` each float's kind and extent (to a tenth), by its caption */
 export function measureSide({ L, doc, anchors, units, paper, kind, pad, step, drawn }) {
-  const r = { found: {}, holes: 0, smaller: 0, points: 0, intruders: [], overlaps: [], cells: 0, cellsOff: [], lost: 0, regions: {}, ids: new Map() }
+  const r = { found: {}, points: 0, caption: 0, cell: 0, own: 0, other: 0, none: 0, intruders: [], overlaps: [], cells: 0, owns: 0, cellsOff: [], lost: 0, regions: {}, ids: new Map() }
   const floats = []
   for (const fs of L.floats?.values() ?? []) floats.push(...fs)
   for (const f of floats) { r.ids.set(f.id, f.kind); r.regions[f.id] = [f.kind, ...[f.region.x0, f.region.y0, f.region.x1, f.region.y1].map(v => Math.round(v * 10) / 10)].join(' ') }
@@ -185,28 +191,32 @@ export function measureSide({ L, doc, anchors, units, paper, kind, pad, step, dr
   })
   const hit = (p, x, y) => floatHitOf(L, p, x, y, pad, hitOf(L, p, x, y, pad))
   for (const f of floats) {
-    // the pointer inside what the float paints lights it, or a smaller unit painted there
+    // what the pointer lights inside the float: its caption, a cell, another unit painted there, or nothing
     for (const s of floatShapes(L, f, pad)) for (let x = s.x0 + step / 2; x < s.x1; x += step) for (let y = s.y0 + step / 2; y < s.y1; y += step) {
       const h = hit(f.page, x, y)
       r.points++
-      if (!h) r.holes++
-      else if (h.id !== f.id) r.smaller++
+      r[!h ? 'none' : h.id === f.id ? 'caption' : isTableCell(h.id) ? 'own' : kind.get(h.id) === 'cell' ? 'cell' : 'other']++
     }
     // no running text inside it, and no other caption's words
     const { tok } = L
     for (const [id, a] of anchors) {
-      if (!a || id === f.id || f.parts?.has(id) || (RUNNING_NOT.has(kind.get(id)) && kind.get(id) !== 'caption')) continue
+      if (!a || id === f.id || f.parts?.has(id) || kind.get(id) === 'cell' || DRAWING.has(kind.get(id))) continue
       const n = a.tokens.filter(t => doc[t].page === f.page && inside(f.region, (tok.l[t] + tok.r[t]) / 2, (tok.top[t] + tok.bottom[t]) / 2)).length
       if (n) r.intruders.push(`#${f.id} p${f.page}: ${n} of #${id} (${kind.get(id) ?? 'para'})`)
     }
-    // the cells it holds light it
+    // the cells it holds light themselves, and so do its cells no unit holds
     for (const id of f.members) {
       if (kind.get(id) !== 'cell') continue
       r.cells++
       const t = anchors.get(id).tokens.find(t => doc[t].page === f.page)
       if (t === undefined) continue
-      const h = hit(f.page, (tok.l[t] + tok.r[t]) / 2, (tok.top[t] + tok.bottom[t]) / 2)
-      if (h?.id !== f.id) r.cellsOff.push(`#${id} in #${f.id}: ${h?.id ?? 'nothing'}`)
+      const x = (tok.l[t] + tok.r[t]) / 2, y = (tok.top[t] + tok.bottom[t]) / 2, h = hit(f.page, x, y)
+      if (h?.id !== id) r.cellsOff.push(`#${id} in #${f.id} p${f.page} at ${Math.round(x)},${Math.round(y)}: ${h?.id ?? 'nothing'} (the unit there ${hitOf(L, f.page, x, y, pad)?.id ?? 'none'})`)
+    }
+    for (const c of f.cells) {
+      r.owns++
+      const b = blockOf(c.run, pad), h = hit(f.page, (b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2)
+      if (h?.id !== c.id) r.cellsOff.push(`a cell no unit holds in #${f.id} p${f.page} at ${Math.round((b.x0 + b.x1) / 2)},${Math.round((b.y0 + b.y1) / 2)}: ${h ? `#${h.id} (${kind.get(h.id) ?? (isTableCell(h.id) ? 'a cell' : '?')})` : 'nothing'}`)
     }
   }
   // two floats on a page: their extents overlapping, or a rule in both (the bounded case: round 1's table I took the
@@ -220,16 +230,16 @@ export function measureSide({ L, doc, anchors, units, paper, kind, pad, step, dr
     if (meets(a.region, b.region) || shared) r.overlaps.push(`#${a.id} and #${b.id} p${a.page}${shared ? `, ${shared} rules in both` : ''}`)
     else if (floatShapes(L, a, pad).some(s => floatShapes(L, b, pad).some(t => meets(s, t)))) r.padsMeet++
   }
-  // running text keeps its own: no point of a running-text unit's block where hitOf finds that unit goes to a float
+  // every unit keeps its own (a cell its table's, checked above): no point of its block where hitOf finds it goes elsewhere
   const onFloats = new Set(floats.map(f => f.page))
   for (const [id, a] of anchors) {
-    if (!a || RUNNING_NOT.has(kind.get(id))) continue
+    if (!a || kind.get(id) === 'cell' || DRAWING.has(kind.get(id))) continue
     for (const run of runsOf(L, id)) {
       if (!onFloats.has(run.page)) continue
       const b = blockOf(run, pad)
       for (let x = b.x0 + step / 2; x < b.x1; x += step) for (let y = b.y0 + step / 2; y < b.y1; y += step) {
         const u = hitOf(L, run.page, x, y, pad)
-        if (u?.id === id && floatHitOf(L, run.page, x, y, pad, u)?.float) r.lost++
+        if (u?.id === id && floatHitOf(L, run.page, x, y, pad, u)?.id !== id) r.lost++
       }
     }
   }

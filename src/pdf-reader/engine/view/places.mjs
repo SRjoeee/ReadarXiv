@@ -1,9 +1,22 @@
 // The right pane's places (docs/PDF-READER.md §11.7): a page box for each of the original's pages, at its size and its zoom,
 // so that both panes hold the same pages at the same places (the identity map) whatever each place shows. A place shows the
 // best version of its page there is: the layer's content once the layer side has laid it (swap), else the original's page,
-// drawn from the left's document by PDF.js's own page view (canvas, text layer, links), else, with no original, the skeleton
-// of a page of text. Only the places near the view (one pane's height above and below) hold any of it: a place leaving
-// NEAR lets its page view go, canvas and all, and its skeleton; a far place is an empty box of its page's size.
+// else, with no original, the skeleton of a page of text. Only the places near the view (one pane's height above and below)
+// hold any of it: a place leaving NEAR lets its page go, canvas and all, and its skeleton; a far place is an empty box of its
+// page's size.
+//
+// The original's page, while it waits for its layer, is the left's own drawing of it: where the two panes show the same pages
+// (the sync on, both shown: `o.borrow()`), the left draws every page the right shows, at the same viewport, so the place takes
+// a copy of the left's canvas once the left's page view has finished it (one drawImage, in the next frame: the left's page is
+// painted in the frame it was drawn for, nothing of the right's in its task; leftDrawn), and shows PDF.js's loading mark
+// meanwhile, as the left's page shows it. The same pixels, with no second render of the page, no second text layer, no second
+// annotation layer: the reader view's audit of 2026-11-04 measured page 1 59 ms sooner at 1x and 138 ms at 4x on a returning
+// reader without the second page views (V1). A page that stays the original's (its layer failed or stalled there, the rule
+// shows it as arXiv's, the layer was refused, its rows will not come: the layer side's `settled`), or a pane whose pages the
+// left does not show (the right alone, the sync off), is drawn by PDF.js's own page view in the place (canvas, text layer,
+// links), as the left's is: its selection, find and links are the original's there. A place borrowing the left's drawing keeps
+// it through a zoom's steps by CSS, as PDF.js keeps its own, and takes the left's again once the left has drawn the page at the
+// new scale.
 //
 // A place is sized as PDF.js sizes the left's page of that number, by the same rule: its width and height are the left
 // page box's own style (PDF.js's `round(down, var(--total-scale-factor) * …px, var(--scale-round-x))`), and the stack
@@ -18,11 +31,23 @@
 // draws nothing and lets nothing go) would otherwise be kept for the document's life. PDF.js cleans nothing up while a
 // drawing of the page is under way. A page view lives in a holder of its own inside the place, so that the --scale-factor
 // PDF.js writes on a standalone page view's container stays off the place.
+//
+// The pages ahead wait. A place near the view but not in it draws the original's page only once the layer lets the pages ahead
+// go (letAheadGo: its first page put in place, a near page shown as arXiv's by the rule, the layer refused or let go), or
+// AHEAD_HOLD_MS after the places are made. Its page view is made all the same, and a place that comes into view is drawn at once.
+// Without the hold, a page ahead read the original's bytes on the line that page 1's layer was waiting on: on 2610.31506v1 in
+// two panes (staging, 2026-10-30), the right's page 3 is near, holds eleven images and reads 5.5 MB to draw. The original was
+// read 56 times, 3.6 MB, from the layer's open to page 1 drawn, beside page 1's 3.7 MB of font slices. Only when, never what:
+// the page is drawn as before once let go.
 
-import { drawnCanvas, pageBox } from './drawn.mjs'
+import { pageBox } from './drawn.mjs'
 
 /** how far past the view a place is near: one pane's height above and below */
 export const NEAR = '100% 0px 100% 0px'
+/** the most a place near the view but not in it waits to draw the original's page (ms), from the places' making: the web's
+ *  hold of PDF.js's own pages ahead is the same (its run.mjs AHEAD_HOLD_MS). A first open's layer comes long after it, while the
+ *  box runs: its pages ahead are drawn then */
+export const AHEAD_HOLD_MS = 15_000
 /** PDF.js's page view states (pdf_viewer.mjs RenderingStates) */
 const INITIAL = 0, FINISHED = 3
 /** the style a place copies of the left's page box: what PDF.js sizes a page box by */
@@ -69,15 +94,39 @@ function skeleton(n) {
 /** how long after a keyboard's jump the place jumped to may still take the focus when it comes to show its page: the jump's
  *  scroll brings it near within a frame or two; a place that comes near later is the reader's own scroll */
 export const FOCUS_WAIT_MS = 2000
+/** how long after a zoom's or a pinch's steps are drawn again the laid pages' text layers stay out of style and layout (ms):
+ *  steps a little further apart than their drawing delay (Ctrl+= pressed every 350 to 500 ms, WebKit's presses the slower) find
+ *  them still out, so that a run of steps sizes them once, after its last, not once a step */
+export const TEXT_BACK_MS = 500
 export function createPlaces(o) {
   const { stack, root, kit, clock } = o
   /** each place: its element, its holder, what it shows, whether it is near; and each as a page view is read */
   let list = [], slots = []
-  let doc = null, disposed = false, redrawTimer = 0
+  let doc = null, disposed = false, redrawTimer = 0, textTimer = 0
   /** the page views to draw, one at a time (PDF.js's own viewer draws one page at a time) */
   const queue = []
   let drawing = null
-  const counts = { made: 0, released: 0 }
+  /** whether the places near the view but not in it wait (letAheadGo, or AHEAD_HOLD_MS): held again for each document set
+   *  (another paper's layer has its own first page) */
+  let held = true
+  /** the layer side's word on a page: whether it stays the original's (none said: every page may still be laid, and waits) */
+  let settled = () => false
+  /** the scale each page of the left was last drawn at, as PDF.js told it drawn (pagerendered): its canvas is that scale's while
+   *  its page view's scale is the same */
+  const leftAt = new Map()
+  let aheadTimer = clock.later(() => letAheadGo(), AHEAD_HOLD_MS)
+  function holdAhead() {
+    clock.clear(aheadTimer)
+    held = true
+    aheadTimer = clock.later(() => letAheadGo(), AHEAD_HOLD_MS)
+  }
+  function letAheadGo() {
+    if (!held) return
+    held = false
+    clock.clear(aheadTimer)
+    pump()
+  }
+  const counts = { made: 0, released: 0, copies: 0 }
   /** the place a keyboard's jump gives the focus to once it shows a page (`n`), within FOCUS_WAIT_MS of the jump: a far
    *  place shows nothing until it comes near, and the focus left on the link would fall to the document once that link's
    *  page goes. Given up where the focus moves meanwhile */
@@ -85,7 +134,13 @@ export function createPlaces(o) {
   const giveUp = e => { if (pending && e.target !== list[pending.n - 1]?.div) pending = null }
   document.addEventListener('focusin', giveUp, true)
 
+  /** while a pinch is shown by transform (holdNear): what the near window says of each place, kept to be told at its end */
+  let nearHeld = null
   const near = new IntersectionObserver(entries => {
+    if (nearHeld) { for (const e of entries) nearHeld.set(e.target, e.isIntersecting); return }
+    nearEntries(entries)
+  }, { root, rootMargin: NEAR })
+  function nearEntries(entries) {
     for (const e of [...entries].sort((a, b) => Number(a.target.dataset.pageNumber) - Number(b.target.dataset.pageNumber))) {
       const p = list[Number(e.target.dataset.pageNumber) - 1]
       if (!p || p.div !== e.target || p.near === e.isIntersecting) continue
@@ -93,7 +148,18 @@ export function createPlaces(o) {
       if (p.near) show(p); else letGo(p)
       o.near(p.n, p.near)
     }
-  }, { root, rootMargin: NEAR })
+  }
+  /** which places are in the view itself (no margin): while the pages ahead wait, those alone are drawn */
+  const inView = new IntersectionObserver(entries => {
+    let came = false
+    for (const e of entries) {
+      const p = list[Number(e.target.dataset.pageNumber) - 1]
+      if (!p || p.div !== e.target) continue
+      if (e.isIntersecting && !p.inView) came = true
+      p.inView = e.isIntersecting
+    }
+    if (came && held) pump()
+  }, { root, rootMargin: '0px' })
 
   /** a place's page box as the left's page n is sized now */
   function sizeOf(p) {
@@ -106,17 +172,108 @@ export function createPlaces(o) {
       if (to.getPropertyValue(v) !== x) { if (x) to.setProperty(v, x); else to.removeProperty(v) }
     }
   }
-  /** what a place shows before its page is laid: the original's page view (an original open), else the skeleton */
+  /** what a place shows before its page is laid: the original's page (an original open; the left's drawing of it while it waits
+   *  for its layer and the left shows it, else its own page view), else the skeleton */
   function show(p) {
     if (p.side || disposed) return
     if (doc) {
       dropSkeleton(p)
-      if (!p.view) makeView(p)
+      if (!p.view && borrows(p)) borrowLeft(p)
+      else if (!p.view) makeView(p)
     } else {
       releaseView(p)
       if (!p.skeleton) { p.skeleton = skeleton(p.n); p.holder.replaceChildren(p.skeleton) }
     }
     name(p)
+  }
+  /** whether place p shows the left's drawing of its page: it waits for its layer (not settled as the original's), and the left
+   *  shows the pages the right does (o.borrow: the sync on, both panes shown) */
+  const borrows = p => !settled(p.n) && !!o.borrow?.()
+  /** whether the left's page n is drawn at its page view's scale now (its canvas that drawing's): drawn, and told drawn at it */
+  function leftFresh(n) {
+    const lv = o.original(n)
+    return !!lv?.canvas && lv.renderingState === FINISHED && leftAt.get(n) === lv.scale && lv.canvas.width > 0
+  }
+  /** place p showing the left's drawing of its page: the copy at once where the left has drawn it at this scale, else once it has
+   *  (leftDrawn), the left's loading mark shown meanwhile, as the left's page shows it */
+  function borrowLeft(p) {
+    if (leftFresh(p.n)) { copyLeft(p); return }
+    p.wantsCopy = true
+    mirrorLoading(p)
+  }
+  /** the left's canvas of page p drawn into a canvas of the place's (one drawImage at its size: the same pixels, the place's box the
+   *  left page box's, so it is shown as the left shows its own), the one before let go */
+  function copyLeft(p) {
+    const src = o.original(p.n)?.canvas
+    if (!src) return
+    const c = document.createElement('canvas')
+    c.className = 'axt-place-copy'
+    c.setAttribute('role', 'presentation')
+    c.width = src.width
+    c.height = src.height
+    try { c.getContext('2d', { alpha: false })?.drawImage(src, 0, 0) } catch (e) { o.warn('the original\'s page copied', e); c.width = 0; c.height = 0; p.wantsCopy = false; stopMirror(p); makeView(p); return }
+    stopMirror(p)
+    p.wantsCopy = false
+    const was = p.copy
+    p.copy = c
+    if (was?.parentNode === p.holder) was.replaceWith(c)
+    else p.holder.replaceChildren(c)
+    if (was) { was.width = 0; was.height = 0 }
+    counts.copies++
+  }
+  /** place p's copy of the left's drawing let go, its pixels with it */
+  function dropCopy(p) {
+    stopMirror(p)
+    p.wantsCopy = false
+    const c = p.copy
+    if (!c) return
+    p.copy = null
+    c.remove()
+    c.width = 0
+    c.height = 0
+  }
+  /** PDF.js's loading mark on place p while it waits for the left's drawing: the left page view's own classes (pdf_viewer.css
+   *  `.pdfViewer .page.loadingIcon`, `.loading`), mirrored as PDF.js sets them, so the place shows what the left's page shows */
+  const LOADING = ['loadingIcon', 'loading']
+  function mirrorLoading(p) {
+    const lv = o.original(p.n)
+    if (!lv?.div || p.mirror) return
+    const sync = () => { for (const c of LOADING) p.div.classList.toggle(c, lv.div.classList.contains(c)) }
+    p.mirror = new MutationObserver(sync)
+    p.mirror.observe(lv.div, { attributes: true, attributeFilter: ['class'] })
+    sync()
+  }
+  function stopMirror(p) {
+    p.mirror?.disconnect()
+    p.mirror = null
+    for (const c of LOADING) p.div.classList.remove(c)
+  }
+  /** the places whose copy is taken in the next frame (leftDrawn): the left's page is painted in the frame it was drawn for, with
+   *  nothing of the right's in its task, and the place keeps the loading mark until its copy is made */
+  const copyDue = new Set()
+  let copyFrame = 0
+  function copySoon(p) {
+    copyDue.add(p)
+    if (copyFrame || disposed) return
+    copyFrame = clock.frame(() => {
+      copyFrame = 0
+      for (const q of copyDue) {
+        if (!q.near || q.side || q.view || !(q.copy || q.wantsCopy)) continue
+        if (borrows(q) && leftFresh(q.n)) copyLeft(q)
+        // (the left drawing the page again meanwhile, a zoom's: its mark followed again until it is drawn)
+        else if (q.wantsCopy) mirrorLoading(q)
+      }
+      copyDue.clear()
+    })
+  }
+  /** place p drawn by its own page view now (the page settled as the original's, the left no longer showing it): its copy kept
+   *  over the page view until that is drawn, so nothing blank shows meanwhile */
+  function ownView(p) {
+    if (p.view || p.side || !doc) return
+    stopMirror(p)
+    p.wantsCopy = false
+    makeView(p)
+    if (p.copy) p.holder.append(p.copy)
   }
   function dropSkeleton(p) { if (p.skeleton) { p.skeleton.remove(); p.skeleton = null } }
   /** a place's page view over the left's document, drawn when its page comes */
@@ -139,8 +296,10 @@ export function createPlaces(o) {
       enqueue(p)
     }, e => o.warn('the original\'s page', e))
   }
-  /** a place's page view let go: its drawing cancelled, its canvas released, its element out of the place */
+  /** a place's page view let go: its drawing cancelled, its canvas released, its element out of the place; and a copy of the
+   *  left's drawing it shows */
   function releaseView(p) {
+    dropCopy(p)
     const v = p.view
     if (!v) return
     p.view = null
@@ -180,7 +339,10 @@ export function createPlaces(o) {
   }
   function pump() {
     if (drawing || disposed) return
-    const p = queue.shift()
+    // (while the pages ahead wait, the first place queued that is in the view; the others keep their turn)
+    const at = held ? queue.findIndex(q => q.inView) : 0
+    if (at < 0 || !queue.length) return
+    const p = queue.splice(at, 1)[0]
     if (!p) return
     const v = p.view
     if (!v?.pdfPage || v.renderingState !== INITIAL) return pump()
@@ -188,6 +350,8 @@ export function createPlaces(o) {
     p.drawnAt = v.scale
     v.draw().catch(e => { if (!/cancel/i.test(`${e?.name} ${e?.message}`)) o.warn('the original\'s page drawn', e) }).finally(() => {
       if (drawing === v) drawing = null
+      // (a copy of the left's drawing kept over the page view that replaces it, until it is drawn: ownView)
+      if (p.view === v && v.renderingState === FINISHED && p.copy) { const c = p.copy; p.copy = null; c.remove(); c.width = 0; c.height = 0 }
       pump()
     })
   }
@@ -199,7 +363,7 @@ export function createPlaces(o) {
   }
   /** a place's name for assistive technology: a page of the right where it shows one, else hidden (a skeleton, nothing) */
   function name(p) {
-    if ((p.side && !p.blank) || p.view) {
+    if ((p.side && !p.blank) || p.view || p.copy || p.wantsCopy) {
       p.div.removeAttribute('aria-hidden')
       p.div.setAttribute('role', 'region')
       p.div.setAttribute('aria-label', o.name(p.n))
@@ -213,7 +377,7 @@ export function createPlaces(o) {
     }
   }
   function remove() {
-    for (const p of list) { near.unobserve(p.div); releaseView(p); p.div.remove() }
+    for (const p of list) { near.unobserve(p.div); inView.unobserve(p.div); releaseView(p); p.div.remove() }
     list = []
     slots = []
     queue.length = 0
@@ -234,13 +398,14 @@ export function createPlaces(o) {
         const holder = document.createElement('div')
         holder.className = 'axt-place-view'
         div.append(holder)
-        // drawnAt: the scale its page view was last drawn at
-        return { n: i + 1, div, holder, view: null, skeleton: null, side: null, blank: false, near: false, drawnAt: 0 }
+        // drawnAt: the scale its page view was last drawn at; copy: the left's drawing it shows, wantsCopy: waiting for it, mirror:
+        // the left's loading mark followed meanwhile
+        return { n: i + 1, div, holder, view: null, skeleton: null, side: null, blank: false, near: false, inView: false, drawnAt: 0, copy: null, wantsCopy: false, mirror: null }
       })
       // a place as a page view is read: its element, and the left's viewport and page box for its page, as they are now
       slots = list.map(p => ({ id: p.n, div: p.div, get viewport() { return o.original(p.n)?.viewport ?? null }, get pdfPage() { return o.original(p.n)?.pdfPage ?? null } }))
       stack.append(...list.map(p => p.div))
-      for (const p of list) { sizeOf(p); near.observe(p.div) }
+      for (const p of list) { sizeOf(p); near.observe(p.div); inView.observe(p.div) }
     },
     /** every place sized again as the left's page boxes are (the pages laid out, a page's own size, its rounding) */
     size(n) {
@@ -248,9 +413,13 @@ export function createPlaces(o) {
       else if (list[n - 1]) sizeOf(list[n - 1])
     },
     /** the left's scale changed: the stack's --scale-factor, and each page view's scale, by CSS until `drawingDelay` has
-     *  passed (a zoom's or a pinch's steps), then drawn again once */
+     *  passed (a zoom's or a pinch's steps), then drawn again once. While the steps last, and TEXT_BACK_MS after they are
+     *  drawn again, the stack is marked scaling (`data-axt-scaling`): the laid pages' text layers are out of style and layout
+     *  (engine.css), so that no step makes their spans' sizes again (each a calc of --total-scale-factor), and they are sized
+     *  once, after the last step */
     scale(scaleFactor, scale, drawingDelay = -1) {
       if (disposed) return
+      if (drawingDelay >= 0) { clock.clear(textTimer); textTimer = 0; stack.setAttribute('data-axt-scaling', '') }
       if (scaleFactor) stack.style.setProperty('--scale-factor', scaleFactor)
       for (const p of list) sizeOf(p)
       const views = list.filter(p => p.view)
@@ -258,6 +427,11 @@ export function createPlaces(o) {
       clock.clear(redrawTimer)
       const redraw = () => {
         redrawTimer = 0
+        // (one reveal at a time: a menu zoom while one waits replaces it, so that the next step's clear reaches the one that waits)
+        if (stack.hasAttribute('data-axt-scaling')) {
+          clock.clear(textTimer)
+          textTimer = clock.later(() => { textTimer = 0; stack.removeAttribute('data-axt-scaling') }, TEXT_BACK_MS)
+        }
         for (const p of list) {
           if (!p.view) continue
           // drawn at another scale (a zoom's steps stretch its canvas by CSS): drawn again at its own
@@ -272,6 +446,9 @@ export function createPlaces(o) {
     setDocument(next) {
       if (disposed) return
       for (const p of list) releaseView(p)
+      leftAt.clear()
+      // (another document: its pages ahead wait for its layer's first page, or the bound, again)
+      if (next && next !== doc) holdAhead()
       doc = next
       for (const p of list) if (p.near && !p.side) show(p)
     },
@@ -305,9 +482,6 @@ export function createPlaces(o) {
       if (p.near) show(p); else name(p)
       keepFocus(p, focus)
     },
-    /** the canvas of place n's own page view where PDF.js has drawn it whole, with the device pixels a PDF unit it drew it at
-     *  (`{ canvas, k }`, drawn.mjs); null else (read before a swap releases it) */
-    canvas: n => drawnCanvas(list[n - 1]?.view),
     /** place n's box in CSS px, as PDF.js sizes the left's page n (its viewport floored to the rounding the place carries,
      *  --scale-round-x and -y); null with no viewport. Nothing of the layout is read */
     box(n) {
@@ -318,9 +492,32 @@ export function createPlaces(o) {
     },
     contentOf(n) {
       const p = list[n - 1]
-      return !p ? 'none' : p.side ? (p.blank ? 'none' : 'layer') : p.view ? 'original' : p.skeleton ? 'skeleton' : 'none'
+      return !p ? 'none' : p.side ? (p.blank ? 'none' : 'layer') : p.view || p.copy || p.wantsCopy ? 'original' : p.skeleton ? 'skeleton' : 'none'
+    },
+    /** the left's page n drawn at its page view's scale (PDF.js's pagerendered, `ok` false where its drawing failed): the places
+     *  showing or waiting for its drawing take it; one whose left drawing failed draws its own */
+    leftDrawn(n, ok = true) {
+      if (disposed) return
+      const lv = o.original(n), p = list[n - 1]
+      if (lv && ok) leftAt.set(n, lv.scale)
+      else leftAt.delete(n)
+      if (!p || p.side || p.view || !(p.copy || p.wantsCopy) || !p.near) return
+      if (!ok || !borrows(p)) { ownView(p); return }
+      // (its mark kept as it stands until the copy is made: the left's going as its page is drawn is not followed)
+      p.mirror?.disconnect()
+      p.mirror = null
+      copySoon(p)
+    },
+    /** the layer side's word on the pages (`fn(n)`: whether page n stays the original's; null: none does), and the places near
+     *  told it again: one that no longer waits for its layer, or whose left no longer shows its page, drawn by its own page view */
+    settle(fn) {
+      if (disposed) return
+      if (fn !== undefined) settled = fn ?? (() => false)
+      for (const p of list) if (p.near && !p.side && !p.view && (p.copy || p.wantsCopy) && !borrows(p)) ownView(p)
     },
     near: n => !!list[n - 1]?.near,
+    /** whether place n's page view is the one the places are drawing the original's page on now (one at a time: pump) */
+    drawing: n => !!drawing && list[n - 1]?.view === drawing,
     page: n => list[n - 1]?.div ?? null,
     /** the focus given to place n (a keyboard's jump to it): at once where it shows a page, else once it does, within
      *  FOCUS_WAIT_MS */
@@ -331,14 +528,27 @@ export function createPlaces(o) {
       pending = { n, until: clock.now() + FOCUS_WAIT_MS }
     },
     count: () => list.length,
+    /** the places near the view but not in it drawn from now on (the layer's first page there, or none to wait for) */
+    letAheadGo,
+    /** a pinch shown by transform (on) and its end (off): the near window's word on each place held meanwhile — the places it
+     *  shows by transform are near-tested where they show, and would be made, laid and drawn at a scale the commit replaces —
+     *  and told at the end, as it stands then */
+    holdNear(on) {
+      if (on) { nearHeld ??= new Map(); return }
+      const held = nearHeld
+      nearHeld = null
+      if (held?.size) nearEntries([...held].map(([target, isIntersecting]) => ({ target, isIntersecting })))
+    },
+    /** whether they still wait */
+    aheadHeld: () => held,
     /** the places as page views are read: place n's element with the left's viewport and page box for page n */
     views: () => views,
     /** the names of the places that show a page, again (the interface's language changed) */
-    rename() { for (const p of list) if ((p.side && !p.blank) || p.view) name(p) },
+    rename() { for (const p of list) if ((p.side && !p.blank) || p.view || p.copy || p.wantsCopy) name(p) },
     probe() {
-      let views = 0, skeletons = 0, laid = 0, near = 0
-      for (const p of list) { if (p.view) views++; if (p.skeleton) skeletons++; if (p.side && !p.blank) laid++; if (p.near) near++ }
-      return { places: list.length, pageViews: views, skeletons, laidPlaces: laid, nearPlaces: near, pageViewsMade: counts.made }
+      let views = 0, skeletons = 0, laid = 0, near = 0, copies = 0, copyPixels = 0, waiting = 0
+      for (const p of list) { if (p.view) views++; if (p.skeleton) skeletons++; if (p.side && !p.blank) laid++; if (p.near) near++; if (p.copy) { copies++; copyPixels += p.copy.width * p.copy.height } if (p.wantsCopy) waiting++ }
+      return { places: list.length, pageViews: views, skeletons, laidPlaces: laid, nearPlaces: near, pageViewsMade: counts.made, aheadHeld: held, copies, copyPixels, copiesMade: counts.copies, copyWaits: waiting }
     },
     dispose() {
       if (disposed) return
@@ -346,9 +556,15 @@ export function createPlaces(o) {
       pending = null
       document.removeEventListener('focusin', giveUp, true)
       clock.clear(redrawTimer)
+      clock.clear(textTimer)
+      clock.clear(aheadTimer)
+      clock.cancel(copyFrame)
+      copyDue.clear()
       near.disconnect()
+      inView.disconnect()
       remove()
       stack.style.removeProperty('--scale-factor')
+      stack.removeAttribute('data-axt-scaling')
       doc = null
     },
   }

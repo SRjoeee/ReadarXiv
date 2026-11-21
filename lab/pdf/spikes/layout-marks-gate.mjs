@@ -1,4 +1,6 @@
 // lab/pdf/spikes/layout-marks-gate.mjs
+// Retired as a gate on 2026-11-13, its record not made again (lab/pdf/README.md, "The layout marks and the unit marks", says
+// why); runnable as a measurement until the cut-over deletes it with today's engine.
 // The layout marks' quality on the corpus (Plan 8b, Task 2; spec §5). The layout marks have a compile of their own (the
 // layout compile, v1), which feeds only the layout file; the readings and the final come from a compile with none. A
 // line the marks move costs that paper's layout lines alone: their marks are where the layout compile set them, not
@@ -50,7 +52,7 @@ import { promisify } from 'node:util'
 import { gunzipSync, gzipSync } from 'node:zlib'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { latin1, latin1Bytes, MARK_DEF } from '../../../src/pdf-reader/engine/source/latex-front.mjs'
-import { askedCommands, encodeLayoutMarks, inkSamples, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarksOf, MARK_CLASSES, parseLayoutMarks, probeSamples, readInkProbe, readInkTexts, readMarkProbe, switchedOf } from '../../../src/pdf-reader/engine/layout/marks.mjs'
+import { askedCommands, encodeLayoutMarks, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarksOf, MARK_CLASSES, parseLayoutMarks, probeSamples, readInkAnswers, readMarkProbe, switchedOf } from '../../../src/pdf-reader/engine/layout/marks.mjs'
 import { openPaper, originalFiles, probeFiles, readingsOf } from '../../../src/pdf-reader/engine/pipeline/live.mjs'
 import { unpackSource } from '../../../src/pdf-reader/engine/source/tar.mjs'
 import { marksOf } from '../../../src/pdf-reader/engine/pipeline/typeset/places.mjs'
@@ -83,7 +85,7 @@ const FORMAT = 4
 /** the code that reads a compile (its text items, readings, marks and marks file), hashed into every compile's key: a
  *  change to it reads every compile again, not a stale result (the review, M4) */
 const READERS = createHash('sha256')
-for (const f of ['pipeline/live.mjs', 'pipeline/typeset/places.mjs', 'pipeline/typeset/tex.mjs', 'layout/marks.mjs', 'layout/json.mjs', 'layout/ink.mjs', 'layout/stream.mjs', 'pipeline/anchors.mjs', 'source/latex-front.mjs']) READERS.update(readFileSync(new URL(`../../../src/pdf-reader/engine/${f}`, import.meta.url)))
+for (const f of ['pipeline/live.mjs', '../../../packages/engine/src/compile/live.ts', 'pipeline/typeset/places.mjs', '../../../packages/engine/src/compile/tex.ts', 'layout/marks.mjs', '../../../packages/engine/src/marks/marks.ts', 'layout/json.mjs', '../../../packages/engine/src/ink.ts', '../../../packages/engine/src/own/stream.ts', 'pipeline/anchors.mjs', '../../../packages/engine/src/source/latex-front.ts']) READERS.update(readFileSync(new URL(`../../../src/pdf-reader/engine/${f}`, import.meta.url)))
 const READ_HASH = READERS.digest('hex').slice(0, 16)
 /** every compile's date, pinned (pdfTeX's SOURCE_DATE_EPOCH with FORCE_SOURCE_DATE): a paper's \today is the same in v0
  *  and v1 whenever each was compiled (2608.20159's title page moved a day across midnight UTC) */
@@ -190,8 +192,8 @@ async function paperRow(id) {
   // --no-switch: the probe not asked (switches null), every mark as LAYOUT_TEX sets it; and the paper's macros TeX said
   // set no ink, which get no mark (readInkProbe)
   const switches = NO_SWITCH ? null : answered
-  const inkless = NO_SWITCH ? null : readInkProbe(probe.log ?? '', inkSamples(units))
-  const texts = NO_SWITCH ? null : readInkTexts(probe.log ?? '', inkSamples(units))
+  const ink = NO_SWITCH ? null : readInkAnswers(probe.log ?? '', units)
+  const inkless = ink?.inkless ?? null, texts = ink?.texts ?? null
   const v1Of = classes => {
     const files = originalFiles(paper, { lines: true, layout: classes, switches, inkless })
     if (PLANT) for (const p of [project.main, ...[...files.keys()].filter(f => f !== project.main).sort()]) {
@@ -203,7 +205,8 @@ async function paperRow(id) {
     }
     return withSources(files)
   }
-  const v0Files = originalFiles(paper, { lines: true })
+  // (the paper's own bytes, as v1's: a Latin-1 source is not transcoded for either, live.mjs originalFiles `transcode`)
+  const v0Files = originalFiles(paper, { lines: true, transcode: false })
   v0Files.set(project.main, latin1Bytes(withFitr(latin1(v0Files.get(project.main)), MARK_DEF, LAYOUT_TEX)))
   const f0 = withSources(v0Files), f1 = v1Of(CLASSES)
   const [c0, c1] = await Promise.all([compile(id, f0, opts('v0')), compile(id, f1, { ...opts('v1'), marking: { classes: CLASSES, switches, inkless, texts, units, OPS } })])

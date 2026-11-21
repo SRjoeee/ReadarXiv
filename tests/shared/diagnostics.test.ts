@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { LINE_MAX, RECORD_SHAPES, batchLine, chainLine, failureLine, failureReason, normalizeEntries, redact, scopeTag, sessionLine, splitLine } from '@/shared/diagnostics'
+import { LINE_MAX, RECORD_SHAPES, batchLine, failureLine, failureReason, normalizeEntries, redact, scopeTag, sessionLine } from '@/shared/diagnostics'
 
 // The diagnostics log's one hard rule (CLAUDE.md hard rule 5): no key in a line, whatever the line quotes
 
@@ -64,10 +64,7 @@ describe('the records', () => {
     expect(batchLine({ segments: 1, cached: 0, calls: 1, done: 1 })).toBe('batch - segments=1 cached=0 calls=1 done=1 outcome=ok')
   })
 
-  it('write a split, a hand-over\'s outcome and the router\'s decisions', () => {
-    expect(splitLine('abcdef12-0000', 8, [4, 4])).toBe('split abcdef12 segments=8 into=4+4')
-    expect(chainLine({ scope: 'abcdef12-0000', tried: 2, servedBy: 'google-web' })).toBe('chain abcdef12 tried=2 served-by=google-web outcome=ok')
-    expect(chainLine({ scope: 'abcdef12-0000', tried: 3, failed: 'rate-limit' })).toBe('chain abcdef12 tried=3 served-by=- outcome=failed:rate-limit')
+  it('write the router\'s decisions', () => {
     expect(sessionLine('abcdef12-0000', 7, 'grace armed')).toBe('session abcdef12 tab=7 grace armed')
     expect(sessionLine('abcdef12-0000', undefined, 'rebound (pack)')).toBe('session abcdef12 tab=- rebound (pack)')
   })
@@ -76,9 +73,6 @@ describe('the records', () => {
     const lines = [
       batchLine({ scope: 'abcdef12-0000', segments: 8, cached: 0, calls: 3, done: 8 }),
       batchLine({ scope: 'abcdef12-0000', segments: 8, cached: 0, calls: 15, done: 0, failed: 'timeout' }),
-      splitLine('abcdef12-0000', 5, [3, 2]),
-      chainLine({ scope: 'abcdef12-0000', tried: 2, servedBy: 'microsoft' }),
-      chainLine({ scope: 'abcdef12-0000', tried: 2, failed: 'auth' }),
       ...['grace armed', 'grace re-armed round=2', 'probe same', 'probe other', 'probe unknown', 'kept', 'dropped (tab closed) cancelled=3', 'dropped (left) cancelled=0', 'rebound (pack)']
         .map(event => sessionLine('abcdef12-0000', 9, event)),
       'sessions rebound all (service deleted) cancelled=4 moved=2',

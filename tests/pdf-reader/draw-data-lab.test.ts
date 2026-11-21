@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { beforeAll, describe, expect, it } from 'vitest'
-import { drawInputsOf } from '@/pdf-reader/engine/layer-proto/draw.mjs'
+import { drawInputsOf, inRuns, unmapped } from '@/pdf-reader/engine/layer-proto/draw.mjs'
 import { drawDataOf } from '@/pdf-reader/engine/pipeline/draw-data.mjs'
 import { LINK_TEXT_PIXELS } from '@/pdf-reader/engine/layout/pdf-lite.mjs'
 import { LAB } from './helpers/lab-data'
@@ -22,9 +22,8 @@ const NM = dirname(createRequire(import.meta.url).resolve('pdfjs-dist/package.js
 const PAPERS: [string, number[] | null][] = [['2608.04322v1', [3, 8, 9]], ['2307.16209v1', null]]
 // (the lite worker, as the server runs it, before this file's first document: one opened without its options reads as stock)
 beforeAll(async () => { await installLiteWorker() })
-const sameSet = (a: Set<string> | null, b: Set<string> | null) => (a === null || b === null ? a === b : a.size === b.size && [...a].every(x => b.has(x)))
 
-describe.skipIf(!LAB)('the map a font ships is the one the live reading takes', () => {
+describe.skipIf(!LAB)('each item\'s unmapped characters the draw ships are the ones the live reading takes of its font\'s map', () => {
   for (const [paper, pages] of PAPERS) {
     it(`${paper}: every font of ${pages ? `pages ${pages.join(', ')}` : 'every page'}, Type3 included`, async () => {
       const file = join(LAB as string, 'data/layout', paper, 'arxiv.pdf')
@@ -43,21 +42,22 @@ describe.skipIf(!LAB)('the map a font ships is the one the live reading takes', 
         const x = drawInputsOf(draw)
         const tc = await page.getTextContent()
         const seen = new Set<string>()
-        tc.items.forEach((it, k) => {
-          if (!('str' in it) || seen.has(it.fontName)) return
-          seen.add(it.fontName)
-          const key = x.items[k]?.fontName
+        let k = -1
+        for (const it of tc.items) {
+          if (!('str' in it)) continue
+          k++
+          // (each item's unmapped characters as shipped, BUNDLE5 15, against the live reading's of its font's map)
           let live: Set<string> | null = null
           try { live = fontMappedOf(page.commonObjs.get(it.fontName)) } catch { live = null }
-          const shipped = (key ? x.fonts.get(key)?.mapped : null) ?? null
+          const runs = x.nus[k] ?? null
           const f = page.commonObjs.get(it.fontName)
-          fonts++
-          if (f?.isType3Font) type3++
-          if (!sameSet(shipped, live)) bad.push(`p${p} ${it.fontName} ${f?.name} type3=${!!f?.isType3Font}: shipped ${shipped === null ? 'none' : shipped.size}, live ${live === null ? 'none' : live.size}`)
-        })
+          if (!seen.has(it.fontName)) { seen.add(it.fontName); fonts++; if (f?.isType3Font) type3++ }
+          const shipped = [...it.str].map((ch, j) => /\S/.test(ch) && inRuns(runs, j)), want = [...it.str].map(ch => unmapped(ch, live))
+          if (shipped.join() !== want.join()) bad.push(`p${p} item ${k} ${it.fontName} ${f?.name} type3=${!!f?.isType3Font}`)
+        }
       }
       await task.destroy()
-      expect(bad, `${bad.length} of ${fonts} fonts differ (${type3} Type3)`).toEqual([])
+      expect(bad, `${bad.length} items differ, over ${fonts} fonts (${type3} Type3)`).toEqual([])
       if (paper === '2608.04322v1') expect(type3, 'the census\' Type3 fonts of p3, p8, p9').toBeGreaterThan(0)
     }, 600_000)
   }

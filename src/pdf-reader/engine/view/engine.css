@@ -9,10 +9,13 @@
    in it (a highlight or figure layer inserted) put two paragraphs levelled by a click a few to tens of pixels apart */
 .viewerContainer { position: absolute; inset: 0; overflow: auto; overflow-anchor: none; }
 /* the highlight layer sits over the text layer, never catches the pointer. Its blocks are the HTML page's band: one wash
-   per run of a unit, one page and one column of it (highlight.mjs), multiplied into the page, so the paper stays white
-   under nothing and the letters stay their own colour, as a band behind the text looks on an HTML page */
-.axt-hl-layer { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
-.axt-hl { position: absolute; border-radius: 3px; mix-blend-mode: multiply;
+   per run of a unit, one page and one column of it (highlight.mjs), multiplied into the page, so the paper takes the wash
+   and the letters stay their own colour, as a band behind the text looks on an HTML page. The layer blends, not its
+   blocks: its z-index makes it a stacking context, an isolated group, and a block's own blend mode mixes with nothing
+   but the layer's empty ground there — laid over the page as is, the wash greyed the letters (black ink (9, 9, 9) read
+   (8, 44, 32) under a band; blended by the layer, (8, 9, 8), the paper's wash the same: 2026-10-31) */
+.axt-hl-layer { position: absolute; inset: 0; pointer-events: none; z-index: 3; mix-blend-mode: multiply; }
+.axt-hl { position: absolute; border-radius: 3px;
   background: color-mix(in oklab, var(--axt-hl-color, var(--axt-green)) var(--axt-hl-mix, 22%), transparent); }
 /* a sentence over rows of different reach: one outline, its path filled with the band's wash (highlight.mjs shapePath) */
 .axt-hl-shape { background: none; border-radius: 0; overflow: visible; }
@@ -25,10 +28,6 @@
 .axt-fig > div, .axt-fig > canvas, .axt-fig img { position: absolute; inset: 0; width: 100%; height: 100%; }
 .axt-fig img { opacity: 0; }
 .axt-fig .axt-img > span { pointer-events: auto; }
-/* a figure lit: an outline in the band's colour, three times its wash's strength (a wash multiplied into a figure would
-   change its colours); drawn inside the figure's padded box */
-.axt-hl.axt-hl-frame { box-sizing: border-box; background: none;
-  border: 1.5px solid color-mix(in oklab, var(--axt-hl-color, var(--axt-green)) min(100%, calc(var(--axt-hl-mix, 22%) * 3)), transparent); }
 /* ----- the reading view's places (places.mjs): the right pane's page boxes, the original's pages at its sizes and zoom.
    A place is a page box of the stack's (`.page`: the host sheet's page colour, shadow and margins, as the left's pages
    have them); its size is the left page box's own style, read through the stack's --scale-factor. What it shows sits in
@@ -37,6 +36,10 @@
 .pdfViewer .page.axt-place { container-type: inline-size; }
 .axt-place-view { position: absolute; inset: 0; }
 .pdfViewer .page.axt-place .axt-place-view > .page { position: absolute !important; inset: 0; margin: 0 !important; border: 0 !important; box-shadow: none !important; }
+/* the left's drawing of the page, while the place waits for its layer (places.mjs copyLeft): placed as PDF.js places its own canvas
+   in its page box (pdf_viewer.css `.canvasWrapper canvas`), the place's box being the left page box's; dimmed by the host sheet's
+   rule for a page's canvas, as the left's is */
+.axt-place-view > .axt-place-copy { position: absolute; top: 0; left: 0; margin: 0; display: block; width: 100%; height: 100%; }
 /* a page of text in grey, while there is no original to draw (round 4's skeleton): sized in the page's own width (cqw), so
    that a page drawn at any zoom keeps its proportions; light, and dimmed in the dark */
 :root { --axt-sk: oklch(0.945 0.004 255); --axt-sk-paper: #fff; }
@@ -56,22 +59,113 @@ html[data-axt-dim] { --axt-sk: oklch(0.275 0.004 255); --axt-sk-paper: rgb(29 29
 .axt-sk-authors i { block-size: 1.2cqw; }
 .axt-sk-authors i:nth-child(3n) { inline-size: 70%; justify-self: center; }
 .axt-sk-abstract { margin-inline: 9%; }
+/* ----- translating (layer-side.mjs markPage): over a near page whose place shows the original's page, one mark a paragraph not
+   laid yet, above the page and under nothing the reader acts on (no pointer). The shape is the owner's "Field" (2026-10-25): one
+   diagonal light crossing the whole page, each mark showing its own share of it; the look is his "Glint" (2026-11-01): the
+   light passes through the glyphs, the paper untouched, no ground and almost no margin. The page's overlay is a size container.
+   The light is a picture three pages wide (300cqw) in the page's frame, and each mark clips (its own box and corners) its slice
+   of it, set in the page's frame by the mark's own place (--axt-tr-x, -y, written by the code in the page's shares, and its
+   padding --axt-tr-px, -py), which a transform moves across the page: the compositor runs the pass, with no style, layout or
+   paint on the page's thread while it runs, and every mark's pass starts when its page's indicator did (markPage), so that the
+   marks show one light. The light lies over the mark's ground. Every value of the look is a custom property below: the ground
+   and the light (its two shoulders and its peak), where they stand in the band, the band's angle, the blend, a filter, the
+   mark's padding and corner, the still mark, the pass's length and easing, the delay before a mark shows and its fade; a light
+   of another shape sets --axt-tr-image and -size. Still, the still mark alone (--axt-tr-still: a look with no ground has its
+   own), where the reader asks for less motion, and where the browser cannot size a container (markPage: axt-translating-still) */
+:root {
+  /* Glint: the light is the paper's own colour (the page's, --axt-sk-paper, in both looks) at 78 %, over no ground. Laid as it
+     is, with no blend: the overlay is a stacking context (its z-index), so a mark's own blend mode mixes with nothing but the
+     overlay's empty ground; and the paper's colour laid normally gives the pixels that `screen` (white, light) and `darken`
+     (the dimmed paper, dark) would give over the page, within one level (measured in the reader, 2026-11-01) */
+  --axt-tr-ground: transparent;
+  --axt-tr-light: color-mix(in oklab, var(--axt-sk-paper) 78%, transparent);
+  --axt-tr-light-a: color-mix(in oklab, var(--axt-tr-light) 35%, var(--axt-tr-ground));
+  --axt-tr-light-b: var(--axt-tr-light-a);
+  --axt-tr-edge: 40%;
+  --axt-tr-shoulder: 43.5%;
+  --axt-tr-angle: 100deg;
+  --axt-tr-blend: normal;
+  --axt-tr-filter: none;
+  /* the card: CSS pixels at the reader's 100 %, scaled with the page (layer-side.mjs markPage: --axt-tr-u, a pixel at 100 % in
+     the page's container units; the padding is clamped so that no two cards meet) */
+  --axt-tr-pad-x: 4;
+  --axt-tr-pad-y: 2;
+  --axt-tr-radius: 4;
+  /* the still mark: the paper over the letters, faint (the owner asked it lighter than 30 %, 2026-11-01): it moves the letters'
+     luminance by 26 levels at most, where Graphite's still ground moved them by 10; 14 % on the dimmed page, 28 against 11 */
+  --axt-tr-still: color-mix(in oklab, var(--axt-sk-paper) 10%, transparent);
+  --axt-tr-run: 3.4s;
+  --axt-tr-easing: cubic-bezier(0.65, 0, 0.35, 1);
+  --axt-tr-delay: 0.3s;
+  --axt-tr-fade: 0.4s;
+}
+html[data-axt-dim] {
+  --axt-tr-light: color-mix(in oklab, var(--axt-sk-paper) 80%, transparent);
+  --axt-tr-still: color-mix(in oklab, var(--axt-sk-paper) 14%, transparent);
+}
+.axt-translating { position: absolute; inset: 0; pointer-events: none; z-index: 1; container-type: size; }
+.axt-translating .axt-translating-mark { position: absolute; display: block; overflow: hidden;
+  left: calc(var(--axt-tr-x) - var(--axt-tr-px)); top: calc(var(--axt-tr-y) - var(--axt-tr-py));
+  width: calc(var(--axt-tr-w) + 2 * var(--axt-tr-px)); height: calc(var(--axt-tr-h) + 2 * var(--axt-tr-py));
+  border-radius: calc(var(--axt-tr-radius) * var(--axt-tr-u, 0.1cqw)); mix-blend-mode: var(--axt-tr-blend); filter: var(--axt-tr-filter);
+  background: var(--axt-tr-ground); animation: axt-tr-in var(--axt-tr-fade) ease var(--axt-tr-delay) both; }
+/* (the mark's slice of the light's picture: one page wide, the picture's middle third, where the band lies on any page up to
+   about twice as tall as it is wide; as high as the mark, its rows the page's; the light alone, over the mark's ground) */
+.axt-translating .axt-translating-mark::before { content: ""; position: absolute; top: 0; height: 100%;
+  left: calc(var(--axt-tr-px) - var(--axt-tr-x)); width: 100cqw;
+  background-image: var(--axt-tr-image, linear-gradient(var(--axt-tr-angle), transparent 0 var(--axt-tr-edge), var(--axt-tr-light-a) var(--axt-tr-shoulder), var(--axt-tr-light) 50%, var(--axt-tr-light-b) calc(100% - var(--axt-tr-shoulder)), transparent calc(100% - var(--axt-tr-edge)) 100%));
+  background-size: var(--axt-tr-size, 300cqw 100cqh); background-repeat: no-repeat;
+  background-position: -100cqw calc(var(--axt-tr-py) - var(--axt-tr-y));
+  animation: axt-tr-pass var(--axt-tr-run) var(--axt-tr-easing) infinite; }
+/* (the slice a page to the left of the page, then a page to its right: the band crosses the page; the last 20 % of each pass is
+   a pause) */
+@keyframes axt-tr-pass { 0% { transform: translateX(-100%); } 80%, 100% { transform: translateX(100%); } }
+@keyframes axt-tr-in { from { opacity: 0; } to { opacity: 1; } }
+.axt-translating-still .axt-translating-mark { animation: none; background: var(--axt-tr-still, var(--axt-tr-ground)); }
+.axt-translating-still .axt-translating-mark::before { content: none; }
+@media (prefers-reduced-motion: reduce) {
+  /* (still shown only after the delay, at once: a fast page shows no mark at all) */
+  .axt-translating .axt-translating-mark { animation: axt-tr-in 0s linear var(--axt-tr-delay) both; background: var(--axt-tr-still, var(--axt-tr-ground)); }
+  .axt-translating .axt-translating-mark::before { content: none; }
+}
 /* ----- the layer drawn in a place (layer-side.mjs; the web's placeholders.css as it drew it): the page's copy fills the
-   place, and the engine's SVG and the page's links are laid over it in the copy's frame. The copy is the page as PDF.js
-   draws a page view (drawn.mjs): at the pane's scale from the page's top-left corner, on a canvas of the place's box, which
+   place, and the engine's SVG and the page's links are laid over it in the copy's frame. The copy is the composed page drawn as
+   PDF.js draws a page view (drawn.mjs pageBox): at the pane's scale from the page's top-left corner, on a canvas of the place's box, which
    PDF.js floors to whole CSS px, the rest of the page cropped; so the frame is the page's size at that scale
    (--axt-frame-w and -h, --total-scale-factor times the page's size, set by the layer side), never the floored box, which
    would shrink the translation and the links by up to a pixel over the page against the copy. The frame passes the box by
    less than PDF.js's rounding at the right and the bottom, where a page holds nothing; nothing clips it there, as nothing
    ever clipped the SVG (its overflow is visible), and a clip on the place would cut a link's focus ring at the page's
    edge. The copy is a canvas of the page, dimmed in the dark by the reader sheet's own rule for a page's canvas; the SVG's
-   text by the same filter, so that the layer's page reads as the original's beside it. Its text is drawn with fractional advances (geometricPrecision): the engine measures a word by the
-   canvas, and a system that draws SVG text with a hinted face's advances (Chromium on Linux at a pixel ratio of 1) rounds
-   each to a whole pixel. A place retired (far from the view) holds an empty one */
+   text by the same filter, so that the layer's page reads as the original's beside it. A place retired (far from the view)
+   holds an empty one.
+   Its text is drawn at the weight the page's canvas draws its own (the maintainer's ruling of 2026-10-29; docs/PDF-READER.md
+   §11.8): the browser's own font smoothing, not the antialiased the reader's page sets for its chrome, which on macOS draws
+   without the system's smoothing; and fractional advances, since the engine measures a word by the canvas: geometricPrecision
+   where a system lays a web font out on whole-pixel advances (Chromium on Linux), `auto` where the browser lays the layer's
+   own words out alike under both (text-rendering.mjs, decided at the first laid page that tells, an attribute of <html>:
+   Chromium on macOS, whose geometricPrecision draws without the smoothing, 80 % of the ink PDF.js gives the same face) */
 .axt-layer { position: absolute; inset: 0; }
 .axt-layer > .axt-layer-copy { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
-.axt-layer > svg { position: absolute; left: 0; top: 0; width: var(--axt-frame-w, 100%); height: var(--axt-frame-h, 100%); overflow: visible; font-synthesis: none; text-rendering: geometricPrecision; }
+.axt-layer > svg { position: absolute; left: 0; top: 0; width: var(--axt-frame-w, 100%); height: var(--axt-frame-h, 100%); overflow: visible; font-synthesis: none; text-rendering: geometricPrecision; -webkit-font-smoothing: auto; }
+html[data-axt-layer-text="auto"] .axt-layer > svg { text-rendering: auto; }
 .axt-layer > svg text { white-space: pre; }
+/* ----- the layer's text layer (text-layer.mjs; docs/PDF-READER.md §11.11): PDF.js's own text layer over the drawing, under the
+   links, built after the commit; what a selection, a copy and a search on a laid page read, one copy of each text. The SVG's
+   text is drawn, not read: out of selection (and, in layer-side.mjs, out of the accessibility tree). An upright page's layer is
+   laid in the copy's frame, as the SVG is, not in the place's box that PDF.js floors to whole CSS px (its inline size, set by
+   PDF.js's builder, overridden); a page turned a quarter keeps PDF.js's own box, which its rotation rule turns. Contained: its
+   spans' style and layout are the layer's alone, never the page's */
+.axt-layer > svg { -webkit-user-select: none; user-select: none; }
+.axt-layer > .textLayer { contain: strict; }
+/* while a zoom's or a pinch's steps scale the pages by CSS (places.mjs scale: the stack marked scaling until they are drawn
+   again), the text layers are out of style and layout: each span's size is a calc of --total-scale-factor, which every step
+   changes, so a step would make every span of every near page again (the web's zoom check on the sample: twice the frames over
+   budget in a pinch).
+   They are sized once, as the steps end; a selection in them stays, and shows again with them. (content-visibility: hidden in
+   their place measured worse: WebKit's pinch 52 frames over budget to display: none's 33, main's 38; Chromium no better) */
+[data-axt-scaling] .axt-layer > .textLayer { display: none; }
+.axt-layer > .textLayer[data-axt-frame] { width: var(--axt-frame-w, 100%) !important; height: var(--axt-frame-h, 100%) !important; }
 html[data-axt-dim] .axt-layer > svg { filter: invert(88.8%) hue-rotate(180deg); }
 /* ----- the layer's links over a laid page (links.mjs): one anchor a link, at the union of its boxes, each box a span of its
    own; every size a share of the page's frame (the SVG's: the page's size at its scale) or of the link's, so a zoom moves

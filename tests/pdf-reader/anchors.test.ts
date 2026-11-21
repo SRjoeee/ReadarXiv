@@ -70,6 +70,45 @@ describe('tokens: a run of Latin letters or digits ends where a CJK character be
     expect(boundsFromMarks(near, new Map([['0s', { page: 1, x: 50, y: 700 }], ['0e', { page: 1, x: 70, y: 700 }]])).get('0')).toEqual([0, 0])
   })
 
+  it('a start mark takes the word it stands before, not the one it stands past: a caption\'s first word after its label, read in one item or in two (2610.22065)', () => {
+    // the marked original reads the line as one item, its width shared by its characters: "1" ends at 358 and "attention"
+    // begins at 368, and the start mark at 362 (where TeX set it, before "Attention") is 4 past the one and 6 short of the
+    // other; our wrapped base page reads it in two items cut at the mark, "attention" at 362 exactly
+    const one = tokenizeDocument([{ page: 1, items: [item('Figure 1: Attention maps', 318, 440, { width: 120 })], styles: {} }])
+    const cut = tokenizeDocument([{ page: 1, items: [item('Figure 1:', 318, 440, { width: 34.7 }), item('Attention maps', 362, 440, { width: 76 })], styles: {} }])
+    const at = new Map([['0s', { page: 1, x: 362, y: 440 }], ['0e', { page: 1, x: 438, y: 440 }]])
+    const words = markWords(one, at)
+    expect(words.get('0s')?.t).toBe('attention')
+    expect(boundsFromMarks(cut, words).get('0')).toEqual([2, 3])
+    // a mark just past a label's digit (1.4 pt, a third of its box) is the next word's: no slack past a word's end (2610.22214's
+    // "Figure 9: Manufacturability", as its marked original read it)
+    const nine = tokenizeDocument([{ page: 1, items: [item('Figure', 317.96, 582.49, { width: 25.77 }), item('9:', 348.02, 582.49, { width: 6.5 }), item('Manufacturability', 360.9, 582.49, { width: 73.01 })], styles: {} }])
+    expect(markWords(nine, new Map([['0s', { page: 1, x: 353.74, y: 582.49 }]])).get('0s')?.t).toBe('manufacturability')
+    // a mark inside a word's box is that word's
+    expect(markWords(one, new Map([['0s', { page: 1, x: 370, y: 440 }]])).get('0s')?.t).toBe('attention')
+    // and with no word after it on its line within reach, the word it stands past, as before
+    expect(markWords(one, new Map([['0s', { page: 1, x: 441, y: 440 }]])).get('0s')?.t).toBe('maps')
+  })
+
+  it('an end mark takes the last word that begins before it, a box that overruns the mark its word (the start rule\'s mirror)', () => {
+    // "maps" shared from 418 to 438: an end mark at 436, inside its approximate box, is still the end of "maps", never "attention"
+    const one = tokenizeDocument([{ page: 1, items: [item('Figure 1: Attention maps', 318, 440, { width: 120 })], styles: {} }])
+    expect(markWords(one, new Map([['0e', { page: 1, x: 436, y: 440 }]])).get('0e')?.t).toBe('maps')
+    expect(markWords(one, new Map([['0e', { page: 1, x: 414, y: 440 }]])).get('0e')?.t).toBe('attention')
+    // the next word's shared box begun before the mark, the mark inside it: the marked original's word at the end mark is the
+    // next one ("the"), our base page's the last ("model", exact); the unit is bounded all the same, by the base page's word, one
+    // word beside it the most (2610.20716's "… model| the right")
+    const next = tokenizeDocument([{ page: 13, items: [item('model', 161.46, 255.91, { width: 24.57 }), item('the', 195.86, 255.91, { width: 14.74 })], styles: {} }])
+    const exact = tokenizeDocument([{ page: 13, items: [item('So', 140, 255.91, { width: 10 }), item('model', 169.07, 255.91, { width: 24.21 }), item('the', 202.6, 255.91, { width: 13.78 }), item('right', 220.97, 255.91, { width: 22.97 })], styles: {} }])
+    const ends = markWords(next, new Map([['0s', { page: 13, x: 161.46, y: 255.91 }], ['0e', { page: 13, x: 198.13, y: 255.91 }]]))
+    expect(ends.get('0e')?.t).toBe('the')
+    expect(boundsFromMarks(exact, new Map([['0s', { page: 13, x: 169.07, y: 255.91, t: 'model' }], ['0e', { ...ends.get('0e')!, t: 'the' }]])).get('0')).toEqual([1, 1])
+    // two words over is no longer the same layout
+    expect(boundsFromMarks(exact, new Map([['0s', { page: 13, x: 169.07, y: 255.91, t: 'model' }], ['0e', { page: 13, x: 198.13, y: 255.91, t: 'right' }]])).get('0')).toBeUndefined()
+    // and the start side's mirror: a start mark's carried word the label's, the word before the base page's
+    expect(boundsFromMarks(exact, new Map([['0s', { page: 13, x: 169.07, y: 255.91, t: 'so' }], ['0e', { page: 13, x: 198.13, y: 255.91, t: 'model' }]])).get('0')).toEqual([1, 1])
+  })
+
   it('a word the tokenizer still joins with a CJK character — a Latin word hyphenated at a line\'s end, CJK on the next — is carried whole, and bounds its unit (the review of A1, M2)', () => {
     const doc = tokenizeDocument([{ page: 1, items: [item('GPT-', 50, 700, { eol: true }), item('风格的模型', 50, 688, { eol: true })], styles: {} }])
     expect(doc[0]?.t).toBe('gpt风')
@@ -203,6 +242,47 @@ describe('inkEdges: a token\'s ink reaches over the marks that touch it', () => 
       ['it', 95, 10, 90, 110],
       ['ends', 120, 20, 120, 150],
     ])
+  })
+
+  it("joins a word a hyphen cuts at a line's end where an empty item ends the line, as PDF.js gives it where marked content closes (2610.19274v1)", () => {
+    // our wrapped page: the hyphen's item has no end of line of its own, an empty one after it has (the group's EMC)
+    const joined = (items: Item[]) => tokenizeDocument([{ page: 1, items, styles: {} }]).map(t => t.t)
+    const own = joined([item('integrates depth-', 50, 700, { eol: true }), item('wise convolutions', 50, 688)])
+    const empty = joined([item('integrates depth-', 50, 700), item('', 50, 688, { eol: true }), item('wise convolutions', 50, 688)])
+    expect(own).toEqual(['integrates', 'depthwise', '', 'convolutions'])
+    expect(empty).toEqual(own)
+    // (no hyphen: two words, as before; and a word on the next line is never joined to the one before as on its line)
+    expect(joined([item('integrates depth', 50, 700), item('', 50, 688, { eol: true }), item('wise convolutions', 50, 688)])).toEqual(['integrates', 'depth', 'wise', 'convolutions'])
+  })
+
+  it("joins a hyphen's word only with the line below it, never with text the stream gives next elsewhere (2610.21765v1 p7's \"simq\")", () => {
+    const joined = (items: Item[]) => tokenizeDocument([{ page: 1, items, styles: {} }]).map(t => t.t)
+    // (a caption's "sim-" at its line's end, a figure's axis label "q" above it next in the stream, the caption's line after)
+    for (const end of [[item('a sim-', 50, 300), item('', 50, 288, { eol: true })], [item('a sim-', 50, 300, { eol: true })]]) {
+      // (the label its own word; the line below, which the stream gives after it, the word's rest)
+      expect(joined([...end, item('q', 200, 420), item('ulation here', 50, 288)])).toEqual(['a', 'simulation', 'q', '', 'here'])
+      // (the line below, at a double spacing too: joined)
+      expect(joined([...end, item('ulation here', 50, 276)])).toEqual(['a', 'simulation', '', 'here'])
+      // (text below it to the right, a figure's, between it and its line below: its own words, the line below the rest — Devin
+      // on #487)
+      expect(joined([...end, item('Figure axis', 200, 276), item('ulation here', 50, 288)])).toEqual(['a', 'simulation', 'figure', 'axis', '', 'here'])
+      // (an item printed over itself to look bold, right after it: read once, the rest joined still — Codex on #487)
+      expect(joined([...end, item('a sim-', 50, 300, { eol: true }), item('ulation here', 50, 288)])).toEqual(['a', 'simulation', '', 'here'])
+    }
+    // (a list's item, its bullet starting its line, its line below hung under its text, a bullet's width in: joined —
+    // 2307.16209v1 p22's "inves-"/"tigate")
+    expect(joined([item('• In Chapter 5, we inves-', 101.1, 348.7, { size: 12, eol: true }), item('tigate the frequencies', 114.2, 330.7, { size: 12 })])).toEqual(['in', 'chapter', '5', 'we', 'investigate', '', 'the', 'frequencies'])
+    // (the word cut at a column's foot and gone on at the next column's top, a gutter past its line's end: joined — Codex on
+    // #487; a figure's label in that column, 15 sizes past it, as 2610.21765v1 p7's "q" after "Sim-": its own word, the column's
+    // line after it the word's rest still)
+    expect(joined([item('a sim-', 50, 70, { eol: true }), item('ulation here', 98, 700)])).toEqual(['a', 'simulation', '', 'here'])
+    expect(joined([item('a sim-', 50, 70, { eol: true }), item('q', 230, 582), item('ulation here', 98, 700)])).toEqual(['a', 'simulation', 'q', '', 'here'])
+    // (and its axis's tick at the column's start, smaller than the text: its own word, not the word's rest — 2610.21765v1 p7's
+    // "0" after "Sim-", 4.6 sizes past its line's end)
+    expect(joined([item('a sim-', 50, 70, { eol: true }), item('0', 126, 593, { size: 7.9 }), item('ulation here', 98, 700)])).toEqual(['a', 'simulation', '0', '', 'here'])
+    expect(joined([item('a sim-', 50, 70, { eol: true }), item('0', 98, 593, { size: 7.9 })])).toEqual(['a', 'sim', '0'])
+    // (no line below within PENDING_ITEMS items: never joined with one further on)
+    expect(joined([item('a sim-', 50, 300, { eol: true }), ...['w', 'x', 'y', 'z'].map((t, k) => item(t, 300 + 20 * k, 500)), item('ulation here', 50, 288)])).toEqual(['a', 'sim', 'w', 'x', 'y', 'z', 'ulation', 'here'])
   })
 
   it('the words a hyphen joins: their boxes, which anchoring reads, an even share of the item; their ink a proportional face\'s widths, the hyphen with the word it follows', () => {
@@ -532,6 +612,46 @@ describe('anchorUnits: two marked units both going on over a page (2610.10069 p8
   })
 })
 
+describe('anchorUnits: a unit\'s line after a page break that an inline formula fills (2610.40645v1 p3, u9)', () => {
+  const line = (s: string, x: number, y: number, width = 400) => [item(s, x, y, { width, eol: true })]
+  const pageOf = (n: number, lines: Item[][]) => ({ page: n, items: [...lines.flat(), item(String(n), 150, 62, { eol: true })], styles: {} })
+  const words = (doc: DocToken[], f: { tokens: number[] } | null | undefined) => f?.tokens.map(k => doc[k]?.t)
+
+  it('a formula\'s tokens between two of its words that are next to each other in its text are the unit\'s, and its line with them, with the display under it', () => {
+    // (page 3's first line: 7 words of the unit's text and the 11 tokens of the formula between two of them, 7 of 18, under
+    // the 40 % a line of a unit over a break needs; the page's number before it on page 2, the display's rows after it: no
+    // neighbour of its own. Taken from the walk up from "distinguish" over the display neither: its tallest glyphs give no token)
+    const pages = [
+      pageOf(1, [line('the paragraph before it', 50, 700), line('ferrari proposed that suitable models', 50, 100)]),
+      pageOf(2, [
+        line('boundary segment equip d z re iθ 0 r 1 and 0 θ π with the riemannian metric', 50, 700),
+        line('exp 2 n 1 cos', 120, 668, 120), line('dz 2 gn i i d n 0 1 1 1', 200, 660, 200), line('1 z2', 140, 652, 40),
+        line('distinguish 1 1 as its base', 50, 640), line('another paragraph after', 50, 610),
+      ]),
+    ]
+    const doc = tokenizeDocument(pages)
+    const at = (t: string, from = 0) => doc.findIndex((d, k) => k >= from && d.t === t)
+    const units = [{ id: 0, text: 'the paragraph before it' }, { id: 1, text: 'ferrari proposed that suitable models boundary segment equip with the riemannian metric distinguish as its base', inner: 'exp cos dz gn iid' }, { id: 2, text: 'another paragraph after' }]
+    const found = anchorUnits(doc, units, { bounds: new Map([['0', [at('the'), at('it')]], ['1', [at('ferrari'), at('base')]], ['2', [at('another'), at('after')]]]) })
+    expect(words(doc, found.get(1))?.slice(5, 23)).toEqual(['boundary', 'segment', 'equip', 'd', 'z', 're', 'iθ', '0', 'r', '1', 'and', '0', 'θ', 'π', 'with', 'the', 'riemannian', 'metric'])
+    expect(found.get(1)?.rects.filter(r => r.page === 2).length).toBe(5)
+  })
+
+  it('words of the unit\'s text that are not next to each other in it give the tokens between them nothing: a row at the next page\'s head sharing two of its words is not its own', () => {
+    // ("results" and "the" are matched there; the text has "final" between them, so what stands between them is no
+    // placeholder's)
+    const pages = [
+      pageOf(1, [line('the paragraph before it', 50, 700), line('long paragraph that ends with the final results and', 50, 100)]),
+      pageOf(2, [line('results 12 34 56 78 90 the', 50, 740), line('the model is better', 50, 700), line('another paragraph after', 50, 676)]),
+    ]
+    const doc = tokenizeDocument(pages)
+    const at = (t: string, from = 0) => doc.findIndex((d, k) => k >= from && d.t === t)
+    const units = [{ id: 0, text: 'the paragraph before it' }, { id: 1, text: 'long paragraph that ends with the final results and the model is better' }, { id: 2, text: 'another paragraph after' }]
+    const found = anchorUnits(doc, units, { bounds: new Map([['0', [at('the'), at('it')]], ['1', [at('long'), at('better')]], ['2', [at('another'), at('after')]]]) })
+    expect(words(doc, found.get(1))).not.toContain('12')
+  })
+})
+
 describe('anchorUnits: a unit\'s display across a page break', () => {
   it('a unit with a display between its words fills the break with the display\'s lines and its own words, not a table\'s row whose words the paragraph uses (the re-review of A1, m2)', () => {
     const b12 = (str: string, x: number, y: number, eol = false, width = str.length * 6) => ({ str, transform: [12, 0, 0, 12, x, y], width, height: 12, hasEOL: eol, fontName: 'f' })
@@ -814,6 +934,65 @@ describe('startRuns and startsAnchor: sentenceStarts read from a left part\'s ru
     expect(gated).toBeGreaterThan(50)
     // E0 (a unit through the gate whose every pair was filtered, asked for no sentence) is the one difference: [] raw, null rebuilt
     expect(e0).toBeGreaterThanOrEqual(0)
+  })
+})
+
+describe('matchUnits: a heading with no marks between neighbours found by their text', () => {
+  // (2610.37668v1 on arXiv's PDF, pages 21 and 22: no mark of units 234 to 262 carried, the heading "Surface losses." between two
+  // paragraphs found by their text, and a figure's panel title of the same words at the top of the next page, still in the gap
+  // between the marked neighbours: the last place of the heading's words there)
+  const pages = [
+    page([['the', 'first', 'paragraph', 'of', 'words'], ['a', 'long', 'paragraph', 'that', 'runs', 'before', 'it'], ['surface', 'losses'], ['table', 'a', 'reports', 'the', 'depth', 'alone']], 1),
+    page([['surface', 'losses'], ['the', 'last', 'paragraph', 'of', 'all']], 2),
+  ]
+  const doc = tokenizeDocument(pages)
+  const units: UnitText[] = [
+    { id: 0, text: 'the first paragraph of words' }, { id: 1, text: 'a long paragraph that runs before it' }, { id: 2, text: 'Surface losses.' },
+    { id: 3, text: 'Table a reports the depth alone' }, { id: 4, text: 'the last paragraph of all' },
+  ]
+  const at = (t: string, from = 0) => doc.findIndex((d, k) => k >= from && d.t === t)
+  const bounds = new Map<string, [number, number]>([['0', [0, 4]], ['4', [at('last') - 1, at('all')]]])
+  const own = at('surface'), panel = at('surface', own + 1)
+
+  it('is searched again between them: its own place, right before its text, not the panel title past it', () => {
+    const found = matchUnits(doc, units, { bounds })
+    expect([found[1]?.m.length, found[3]?.m.length]).toEqual([7, 6])
+    expect(found[2]?.m).toEqual([own, own + 1])
+    expect(anchorUnits(doc, units, { bounds }).get(2)?.tokens).toEqual([own, own + 1])
+    expect(panel).toBeGreaterThan(own + 1)
+  })
+
+  it('a call of the heading alone finds the same, its neighbours matched as the call of every unit matches them', () => {
+    const found = matchUnits(doc, units, { bounds })
+    for (let u = 0; u < units.length; u++) {
+      const alone = matchUnits(doc, units, { bounds, only: new Set([u]) })
+      expect(JSON.stringify(alone[u]), String(u)).toBe(JSON.stringify(found[u]))
+      expect(alone.filter((f, v) => v !== u && f !== null)).toEqual([])
+    }
+  })
+
+  it('takes no neighbour of the same words, found so at one of several places, as its bound (2610.16663v1, two headings of one title)', () => {
+    // (a paragraph, the first heading, a float, the second heading of the same title, and a figure's panel of the title past
+    // them: each heading took the panel, the gap's last place; the first bounded by the second's place there was put on the
+    // second's own)
+    const two = [page([['the', 'first', 'paragraph', 'of', 'words'], ['a', 'long', 'paragraph', 'that', 'runs', 'before', 'it'], ['results']], 1), page([['results'], ['a', 'float', 'set', 'here']], 2), page([['results'], ['the', 'last', 'paragraph', 'of', 'all']], 3)]
+    const d = tokenizeDocument(two)
+    const us: UnitText[] = [
+      { id: 0, text: 'the first paragraph of words' }, { id: 1, text: 'a long paragraph that runs before it' }, { id: 2, text: 'Results' },
+      { id: 3, text: 'a float set here' }, { id: 4, text: 'Results' }, { id: 5, text: 'the last paragraph of all' },
+    ]
+    const b = new Map<string, [number, number]>([['0', [0, 4]], ['5', [d.findIndex(t => t.t === 'last') - 1, d.findIndex(t => t.t === 'all')]]])
+    const panel = d.findLastIndex(t => t.t === 'results')
+    const found = matchUnits(d, us, { bounds: b, floating: id => id === 3 })
+    expect([found[2]?.m, found[4]?.m]).toEqual([[panel], [panel]])
+  })
+
+  it('stays the gap\'s last place where its neighbours leave no run of its words between them', () => {
+    // (the heading's own line gone: its words come only past its text, where the gap's rule took them)
+    const moved = [page([['the', 'first', 'paragraph', 'of', 'words'], ['a', 'long', 'paragraph', 'that', 'runs', 'before', 'it'], ['table', 'a', 'reports', 'the', 'depth', 'alone']], 1), pages[1] as TextPage]
+    const d = tokenizeDocument(moved)
+    const b = new Map<string, [number, number]>([['0', [0, 4]], ['4', [d.findIndex(t => t.t === 'last') - 1, d.findIndex(t => t.t === 'all')]]])
+    expect(matchUnits(d, units, { bounds: b })[2]?.m).toEqual([d.findIndex(t => t.t === 'surface'), d.findIndex(t => t.t === 'surface') + 1])
   })
 })
 

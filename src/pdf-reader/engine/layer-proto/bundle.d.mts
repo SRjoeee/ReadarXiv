@@ -1,7 +1,6 @@
 // bundle.mjs's types: the layer bundle as the engine writes it and both readers read it (the web mirrors them in its
 // src/shared/bundle.ts)
 import type { CellPlace } from '../source/latex-front.mjs'
-import type { RemovalManifest } from '../layout/addon-manifest.mjs'
 import type { LayoutFile } from '../layout/file.mjs'
 import type { BundleUnit } from './units.mjs'
 
@@ -33,7 +32,8 @@ export interface LayerBundle {
   schema: 1
   paper: { id: string; version: number; pages: number }
   /** arXiv's PDF the bundle was made over: its fingerprint, and our copy of those bytes, `/api/v1/original/<id>v<n>` */
-  base: { bytes: number; sha256: string; url: string }
+  /** `source`: whose page the layout is over ('ours', or 'arxiv'); a bundle merged from a head tells it (mergeParts), a read BUNDLE 3 file does not */
+  base: { bytes: number; sha256: string; url: string; source?: 'ours' | 'arxiv' }
   versions: BundleVersions
   /** the paper's units (openPaper's), ids their indices, language-independent */
   units: BundleUnit[]
@@ -41,14 +41,12 @@ export interface LayerBundle {
   left: { kinds: string[]; pages: Box[]; units: UnitWire[] }
   /** LAYOUT 3; null where the maker refused (v0 then draws from `left` alone) */
   layout: LayoutFile | null
-  /** the add-on; null where the remover refused, crashed or ran out of time (readers then erase and restore) */
-  addon: { manifest: RemovalManifest; tail: string /* base64 of the bytes after arXiv's */ } | null
+  /** the rules near its table cells by page (x0, y0, x1, y1 stride 4); null where the layout is none or no page has any */
+  rules: Record<number, number[]> | null
 }
-/** the bundle as readBundle gives it: each unit it dropped null at its id (`dropped`, those ids rising), and the
- *  add-on's tail its bytes, decoded once */
-export interface ReadBundle extends Omit<LayerBundle, 'units' | 'addon'> {
+/** the bundle as readBundle gives it: each unit it dropped null at its id (`dropped`, those ids rising) */
+export interface ReadBundle extends Omit<LayerBundle, 'units'> {
   units: (BundleUnit | null)[]
-  addon: { manifest: RemovalManifest; tail: Uint8Array } | null
   dropped: number[]
 }
 /** what writeBundle writes a bundle from: the engine fills the versions */
@@ -60,7 +58,7 @@ export interface BundleParts {
   units: BundleUnit[]
   left: LayerBundle['left']
   layout: LayoutFile | null
-  addon: { manifest: RemovalManifest; tail: Uint8Array } | null
+  rules?: Record<number, readonly number[]> | null
 }
 /** which object a BUNDLE 4 refusal is of: a units chunk, the head, a part, a left part, the catalog, or the index the head and
  *  its chunks make */

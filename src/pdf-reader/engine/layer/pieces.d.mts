@@ -26,3 +26,5 @@ export declare function trText(pieces: readonly TrPiece[]): string
 
 /** mt.mjs shown: a text piece as the compiled PDF shows it, a translation's TeX escapes undone, a source's bytes as UTF-8 */
 export declare function shown(p: { s: string; tr?: boolean }): string
+/** a text piece as the layer draws it: a translation's TeX escapes undone, each its own character; a source's text as it is */
+export declare function drawnText(p: { s: string; tr?: boolean }): string

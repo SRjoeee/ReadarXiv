@@ -16,7 +16,7 @@ const item = (str: string, x: number, y: number, w: number, size = 10) => ({ str
 /** the page at 2 pixels a unit, y down from 792 */
 const dev = (x: number, y: number): [number, number] => [2 * x, 2 * (792 - y)]
 /** an erase operation over a PDF box, in the device pixels of `dev` */
-const erase = (x0: number, y0: number, x1: number, y1: number) => { const [a, b] = dev(x0, y1), [c, d] = dev(x1, y0); return { op: 'erase', box: [a, b, c - a, d - b] } }
+const erase = (x0: number, y0: number, x1: number, y1: number) => { const [a, b] = dev(x0, y1), [c, d] = dev(x1, y0); return { op: 'hidden', rects: [[a, b, c - a, d - b]] } }
 const kept = (list: readonly (Annot | Unsupported)[]) => list.filter((a): a is Annot => !a.unsupported)
 
 describe('the glyph points: PDF.js\'s rule, the gate\'s instrument\'s', () => {
@@ -114,23 +114,22 @@ describe('reading the annotations', () => {
 
 describe('what the operations leave erased', () => {
   const ops = (...o: unknown[]) => o as never
-  it('is what an erase, a paper or a swap covers, less what a restore puts back within its clip, in the operations\' order', () => {
+  it('is what a hidden operation covers, less what a paste shows again, in the operations\' order', () => {
     const e = erasedOf(ops(
-      { op: 'erase', box: [0, 0, 10, 10] },
-      { op: 'paper', rects: [[20, 0, 10, 10]] },
-      { op: 'swap', page: 1, rects: [[40, 0, 10, 10]] },
-      { op: 'crop', page: 1, src: [0, 0, 50, 50], dst: [60, 0, 10, 10] },
-      { op: 'restore', page: 1, clip: [[0, 0, 8, 10]], boxes: [[0, 0, 5, 10], [20, 0, 10, 10]] },
+      { op: 'hidden', rects: [[0, 0, 10, 10], [20, 0, 10, 10]] },
+      { op: 'hidden', rects: [[40, 0, 10, 10]] },
+      { op: 'crop', page: 1, plane: 'B', src: [0, 0, 50, 50], dst: [60, 0, 10, 10] },
+      { op: 'paste', page: 1, plane: 'C', rects: [[0, 0, 5, 10]] },
     ))
-    // (inside the erase, outside the restore's box: erased; inside both its box and its clip: put back; a box outside its clip stays erased; a crop erases nothing)
+    // (inside the hidden rectangle, outside the paste's: hidden; inside the paste's: shown again; a crop hides nothing)
     expect([e(7, 5), e(2, 5), e(25, 5), e(45, 5), e(65, 5), e(100, 5)]).toEqual([true, false, true, true, false, false])
     // (the edge is the operations': x from the box's left to before its right)
     expect([e(0, 0), e(9.99, 9.99), e(10, 5)]).toEqual([false, true, false])
   })
-  it('LK9: leaves a restored box visible, and answers as the gate\'s instrument does', () => {
+  it('LK9: leaves a pasted rectangle visible, and answers as the gate\'s instrument does', () => {
     const list = [
-      { op: 'erase', box: [0, 0, 100, 100] }, { op: 'restore', page: 1, clip: [[0, 0, 100, 100]], boxes: [[10, 10, 20, 20]] },
-      { op: 'paper', rects: [[50, 50, 40, 40]] }, { op: 'swap', page: 1, rects: [[0, 80, 30, 30]] },
+      { op: 'hidden', rects: [[0, 0, 100, 100]] }, { op: 'paste', page: 1, plane: 'C', rects: [[10, 10, 20, 20]] },
+      { op: 'hidden', rects: [[50, 50, 40, 40], [0, 80, 30, 30]] }, { op: 'paste', page: 1, plane: 'B', rects: [[60, 60, 5, 5]] },
     ]
     const mine = erasedOf(list as never), theirs = gateErased(list as never, (x, y) => [x, y])
     for (let x = -5; x < 130; x += 3.5) for (let y = -5; y < 130; y += 3.5) expect(mine(x, y), `${x},${y}`).toBe(theirs(x, y))
@@ -203,7 +202,7 @@ describe('a page that is final', () => {
   })
 
   it('LK9: keeps a link over what a restore put back', () => {
-    const f = free([erase(100, 690, 260, 715), { op: 'restore', page: 1, clip: [[...dev(100, 715), 320, 50]], boxes: [[...dev(100, 715), 320, 50]] }])
+    const f = free([erase(100, 690, 260, 715), { op: 'paste', page: 1, plane: 'C', rects: [[...dev(100, 715), 320, 50]] }])
     expect(f.dropped.unmatched).toBe(0)
     expect(f.records.map(r => r.name)).toEqual(['Table', 'Also here', '12,', ''])
   })
@@ -266,7 +265,7 @@ describe('the two readings of a glyph\'s place', () => {
     const f = (ops: unknown[]) => freezeLinks({ list, q: 1, ops: ops as never, devOf: dev, units: [] })
     expect(f([erase(99, 690, 110, 715)]).dropped.unmatched).toBe(1)
     // (the engine's point at 102 is erased and put back by a restore over 101.5 to 102.5: kept; over 101.5 to 102 it is not put back: dropped)
-    const restore = (w: number) => ({ op: 'restore', page: 1, clip: [[...dev(101.5, 715), w, 50]], boxes: [[...dev(101.5, 715), w, 50]] })
+    const restore = (w: number) => ({ op: 'paste', page: 1, plane: 'C', rects: [[...dev(101.5, 715), w, 50]] })
     expect(f([erase(99.9, 690, 102.5, 715), restore(2)]).dropped.unmatched).toBe(0)
     expect(f([erase(99.9, 690, 102.5, 715), restore(1)]).dropped.unmatched).toBe(1)
   })
@@ -275,7 +274,7 @@ describe('the two readings of a glyph\'s place', () => {
     const l2 = annotsOf([raw({ rect: [110, 695, 118, 710], overlaidText: 'j' })], est, own).list
     expect(kept(l2)[0]!.g.ch).toEqual(['j'])
     expect(kept(l2)[0]!.g2.ch).toEqual(['j'])
-    const ops = [erase(104, 690, 120, 715), { op: 'restore', page: 1, clip: [[...dev(114, 715), 2 * 2, 50]], boxes: [[...dev(114, 715), 2 * 2, 50]] }]
+    const ops = [erase(104, 690, 120, 715), { op: 'paste', page: 1, plane: 'C', rects: [[...dev(114, 715), 2 * 2, 50]] }]
     // (the estimate at 115 is put back, the engine's centre at 112 is not: dropped)
     expect(freezeLinks({ list: l2, q: 1, ops: ops as never, devOf: dev, units: [] }).dropped.unmatched).toBe(1)
     // (and with the estimate alone it would have stayed)

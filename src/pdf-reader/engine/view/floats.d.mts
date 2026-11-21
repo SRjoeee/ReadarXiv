@@ -1,15 +1,17 @@
 // floats.mjs's types (JavaScript until the engine's port), for the reader's tests
-import type { Layout } from './highlight.mjs'
+import type { Layout, Run } from './highlight.mjs'
 
 /** a box in PDF units */
 export interface Box { x0: number; y0: number; x1: number; y1: number }
 /** a page's paths drawn outside any form: its rules (`v` a vertical one) and its other marks */
 export interface Paths { rules: (Box & { v: boolean })[]; marks: Box[] }
-/** a float: the caption's id, its page, a figure (outlined) or a table (washed), its extent without the caption, the
- *  units it holds (cells, a drawing's text), the subcaptions it takes in (a main caption's) and the caption's half
- *  leading */
-export interface Float { id: number; page: number; kind: 'figure' | 'table'; region: Box; members: Set<number>; parts: Set<number>; lead: number }
-/** what a float paints, in PDF units: `frame` an outline, else a wash */
+/** a table's cell no unit holds (numbers, a formula, one letter): its hover id (units.mjs tableCellId), its run, its tokens */
+export interface Cell { id: number; run: Run; toks: number[] }
+/** a float: the caption's id, its page, a figure or a table, its extent without the caption, the units it holds (cells, a
+ *  drawing's text), the subcaptions it takes in (a main caption's), the caption's half leading and a table's cells no unit
+ *  holds */
+export interface Float { id: number; page: number; kind: 'figure' | 'table'; region: Box; members: Set<number>; parts: Set<number>; lead: number; cells: Cell[] }
+/** a float's shape, in PDF units: where the pointer finds its picture or its cells (`frame` a figure's) */
 export interface Shape extends Box { page: number; frame: boolean }
 
 /** a caption of a page, for captionFor: its extent across, its first line's top and last line's foot there (NaN where on
@@ -23,4 +25,6 @@ export declare function floatsOn(layout: Layout | null | undefined, page: number
 export declare function floatOf(layout: Layout | null | undefined, id: number): Float | null
 export declare function floatsAgree(layout: Layout | null | undefined, page: number, other: Layout | null | undefined): Float[]
 export declare function floatShapes(layout: Layout, float: Float, padX: number): Shape[]
-export declare function floatHitOf<H extends { id: number }>(layout: Layout | null | undefined, page: number, x: number, y: number, padX: number, hit: H | null): H | { id: number; s: -1; float: Float } | null
+/** a table's cell no unit holds, by its hover id: its run, [] where its page's floats are not made */
+export declare function cellRunsOf(layout: Layout | null | undefined, id: number): Run[]
+export declare function floatHitOf<H extends { id: number }>(layout: Layout | null | undefined, page: number, x: number, y: number, padX: number, hit: H | null): H | { id: number; s: -1; run: Run } | null

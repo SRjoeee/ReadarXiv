@@ -23,15 +23,16 @@ const pathsOf = (yml: string) => [...(/^\s+paths:\n((?:\s+- '.*'\n)+)/m.exec(yml
 const matches = (pattern: string, path: string) => new RegExp(`^${pattern.split('**').map(part => part.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[^/]*')).join('.*')}$`).test(path)
 const covered = (patterns: string[], path: string) => patterns.some(p => matches(p, path))
 
-/** the files a file loads by a relative import, followed to the end */
+/** the files a file loads by a relative import or a transition path of the front half moved into the engine package
+ *  (`@readarxiv/engine/today/…`, the engine's own code at its new place), followed to the end */
 function closure(entries: string[]): string[] {
   const seen = new Set<string>()
   const visit = (file: string) => {
     if (seen.has(file)) return
     seen.add(file)
     if (!/\.m?js$/.test(file)) return
-    for (const m of readFileSync(file, 'utf8').matchAll(/(?:from\s+|import\s*\(\s*|import\s+)['"](\.[^'"]+)['"]/g)) {
-      const target = resolve(dirname(file), m[1]!)
+    for (const m of readFileSync(file, 'utf8').matchAll(/(?:from\s+|import\s*\(\s*|import\s+)['"](\.[^'"]+|@readarxiv\/engine\/today\/[^'"]+)['"]/g)) {
+      const target = m[1]!.startsWith('.') ? resolve(dirname(file), m[1]!) : join(ROOT, 'packages/engine/src', m[1]!.slice('@readarxiv/engine/today/'.length))
       if (existsSync(target)) visit(target)
     }
   }
@@ -63,9 +64,23 @@ describe('the gate runs when what it loads changes', () => {
   it('covers every engine file the gate loads, found by following its imports from the files the page and the Node side load', () => {
     const E = (f: string) => join(ROOT, 'src/pdf-reader/engine', f)
     // the page (layer-gate/proto.mjs) imports these from /engine/; layer-gate.mjs imports the others in Node
-    const loaded = closure(['layer/check.mjs', 'layout/json.mjs', 'layer-proto/removal.mjs', 'layout/ink.mjs', 'layer-proto/run.mjs', 'layout/file.mjs', 'rules/layout.mjs', 'layout/addon.mjs', 'layout/remove.mjs', 'layer-proto/hyph.mjs'].map(E))
+    // (and the wrap's, layer-gate/wrap.mjs: the base page wrapped by optional content and its cell rules, beside the source
+    // units' reading, which is the pipeline's and not the drawing's)
+    const loaded = closure(['layer/check.mjs', 'layout/json.mjs', 'layer-proto/visibility.mjs', 'layer-proto/hide.mjs', '../../../packages/engine/src/ink.ts', 'layer-proto/run.mjs', 'layout/file.mjs', 'rules/layout.mjs', 'layout/wrap-final.mjs', '../../../packages/engine/src/wrap.ts', 'layout/cell-rules.mjs', '../../../packages/engine/src/remove.ts', 'layer-proto/hyph.mjs', 'layer-proto/rows.mjs'].map(E))
+    // (and the rows' reading, rows.mjs, whose units openProto takes: their table groups, translate/groups.mjs, and a cell's
+    // span, layer-proto/cells.mjs — Devin on #456)
     expect(loaded.length).toBeGreaterThan(20)
     expect(loaded.filter(f => !covered(patterns, f))).toEqual([])
+  })
+  it('loads in the page no module the page cannot import: none of the repository\'s TypeScript (src/core), which only --door transpiles', () => {
+    // (3310dfa7 on #456: run.mjs imported translate/groups.mjs, whose mt.mjs imports src/core's .ts: every output of the head run
+    // failed to load the engine, "did not run". The workspace packages' TypeScript is served stripped, lab/pdf/packages-route.mjs:
+    // the ink walk's readers, packages/engine/src/ink-args.ts, load in the page as its other modules do)
+    const E = (f: string) => join(ROOT, 'src/pdf-reader/engine', f)
+    const page = closure(['layer/check.mjs', 'layout/json.mjs', 'layer-proto/visibility.mjs', 'layer-proto/hide.mjs', '../../../packages/engine/src/ink.ts', 'layer-proto/run.mjs', 'layout/file.mjs', 'rules/layout.mjs', 'layer-proto/hyph.mjs'].map(E))
+    expect(page.filter(f => f.endsWith('.ts') && !f.startsWith('packages/'))).toEqual([])
+    // (and the check holds something: the page's closure reaches the packages' TypeScript)
+    expect(page.filter(f => f.startsWith('packages/') && f.endsWith('.ts')).length).toBeGreaterThan(0)
   })
   it('covers the gate, its scorer and measures, the rules gate, the pack and its manifest, and itself', () => {
     const gate = ['lab/pdf/spikes/layer-gate.mjs', ...readdirSync(join(ROOT, 'lab/pdf/spikes/layer-gate')).map(f => `lab/pdf/spikes/layer-gate/${f}`), 'lab/pdf/spikes/rules-gate.mjs', 'lab/pdf/spikes/gate-pack.mjs', 'scripts/r2-read.mjs', 'lab/pdf/gate-pack.json', '.github/workflows/rules-gate.yml']
@@ -103,8 +118,17 @@ describe('the secrets', () => {
     }
     for (const name of ['rules-publish.yml', 'rules-point.yml']) for (const m of text(name).matchAll(/secrets\.(\w+)/g)) expect(['RULES_PUBLISH_SECRET', 'READARXIV_CI_TOKEN']).toContain(m[1])
   })
-  it('go to actions of GitHub\'s alone, at a major version: pnpm comes with corepack, not a third party\'s action', () => {
-    for (const name of WITH_TOKEN) for (const m of text(name).matchAll(/uses: (\S+)/g)) expect(m[1], name).toMatch(/^actions\/[a-z-]+(\/[a-z-]+)?@v\d+$/)
+  it('go to actions of GitHub\'s alone, each pinned by its full commit with its version beside it: pnpm comes with corepack, not a third party\'s action', () => {
+    // a tag moves where its owner moves it; a commit does not (#82f: the website's deploy workflows pin so, and are held to it)
+    for (const name of WITH_TOKEN) {
+      const uses = [...text(name).matchAll(/uses: (.*)/g)].map(m => m[1]!)
+      expect(uses.length, name).toBeGreaterThan(0)
+      for (const use of uses) expect(use, name).toMatch(/^actions\/[a-z-]+(\/[a-z-]+)?@[0-9a-f]{40} # v\d+\.\d+\.\d+$/)
+    }
+    // one action, one commit, in every workflow
+    const commits = new Map<string, Set<string>>()
+    for (const name of WITH_TOKEN) for (const m of text(name).matchAll(/uses: (\S+)@([0-9a-f]{40})/g)) commits.set(m[1]!, (commits.get(m[1]!) ?? new Set()).add(m[2]!))
+    for (const [action, at] of commits) expect([...at], action).toHaveLength(1)
     for (const name of WITH_TOKEN.filter(n => text(n).includes('pnpm '))) expect(text(name), name).toContain('run: corepack enable')
     expect(text('ci.yml')).not.toContain('pnpm/action-setup')
   })
@@ -136,7 +160,7 @@ describe('the secrets', () => {
     expect(ci).not.toMatch(/pull_request_target/)
     // the job that holds the token reads the repository alone, and keeps no git credential in the checkout
     expect(ci).toMatch(/^permissions:\n {2}contents: read\n/m)
-    expect(ci).toMatch(/uses: actions\/checkout@v\d+\n {8}with:\n {10}persist-credentials: false\n/)
+    expect(ci).toMatch(/uses: actions\/checkout@[0-9a-f]{40} # v[\d.]+\n {8}with:\n {10}persist-credentials: false\n/)
     // the order of the fetch among the steps stays: after the cache is restored, before the tests that read the fixtures
     const order = steps.map(step => (step.startsWith('id: fixtures-cache') ? 'restore' : step.startsWith('run: node scripts/fetch-fixtures.mjs') ? 'fetch' : step.startsWith('run: pnpm test') ? 'test' : ''))
     expect(order.filter(Boolean)).toEqual(['restore', 'fetch', 'test'])
@@ -161,6 +185,12 @@ describe('each side of the gate runs on the pack its own commit names', () => {
     expect(at('Check the pack')).toBeLessThan(at('Gate on the merge base'))
   })
 
+  it('installs the merge base\'s own modules and borrows none of the pull request\'s: a workspace\'s links are relative, so borrowed they load the pull request\'s packages into the base\'s run (PR #642: every output of the base failed)', () => {
+    const base = step('Merge base')
+    expect(base).toContain('pnpm -C "$RUNNER_TEMP/base" install --frozen-lockfile --prefer-offline')
+    for (const body of runBodies(yml)) expect(body).not.toMatch(/ln -s[^\n]*node_modules/)
+  })
+
   it('reads the merge base\'s digest from its own manifest with its own script, and runs the base on the pull request\'s directory only where the layout file\'s version is the same (not where the digests are)', () => {
     const digests = step('Pack digests')
     expect(digests).toContain('head=$(node lab/pdf/spikes/gate-pack.mjs digest)')
@@ -175,8 +205,8 @@ describe('each side of the gate runs on the pack its own commit names', () => {
   it('restores the merge base\'s pack with the merge base\'s own script and manifest, from a cache keyed by its own digest, only where the layout versions differ', () => {
     const cache = step('Merge base pack from the cache'), bucket = step('Merge base pack from the bucket'), keep = step('Keep the merge base pack'), check = step('Check the merge base pack')
     for (const s of [cache, bucket, keep, check]) expect(s).toContain("steps.pack.outputs.same != 'true'")
-    expect(cache).toContain('uses: actions/cache/restore@v4')
-    expect(keep).toContain('uses: actions/cache/save@v4')
+    expect(cache).toContain('uses: actions/cache/restore@')
+    expect(keep).toContain('uses: actions/cache/save@')
     // biome-ignore lint/suspicious/noTemplateCurlyInString: GitHub expressions, not templates
     for (const s of [cache, keep]) { expect(s).toContain('key: gate-pack-${{ steps.pack.outputs.base }}'); expect(s).toContain('path: ${{ runner.temp }}/base-pack') }
     // only a cache miss reads the bucket and saves
@@ -220,6 +250,29 @@ describe('the pack\'s cache', () => {
   })
 })
 
+describe('the fixtures\' cache (ci.yml)', () => {
+  // arXiv's papers under its non-exclusive licence, never redistributed (tests/fixtures/README.md): ci.yml runs on a push to main
+  // too, and a cache saved there is restorable by any pull request, a fork's included, whose own copy of the workflow decides what
+  // happens to it (#88 E8). A pull request's cache is that pull request's alone
+  const ci = text('ci.yml')
+  const steps = ci.slice(ci.indexOf('\n    steps:\n')).split(/\n {6}- /).slice(1)
+  const SAME_REPO = "github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository"
+  it('is restored and saved only in a pull request of this repository', () => {
+    const caching = steps.filter(step => /uses: actions\/cache\//.test(step))
+    expect(caching).toHaveLength(2)
+    for (const step of caching) {
+      const condition = /^(?:id: .*\n\s+)?if: (.*)$/m.exec(step)?.[1]
+      expect(condition, step.split('\n')[0]).toBeDefined()
+      expect(condition!.startsWith(`${SAME_REPO}`), step.split('\n')[0]).toBe(true)
+    }
+    // the save after a miss alone
+    expect(caching.find(step => step.includes('actions/cache/save'))).toContain(`if: ${SAME_REPO} && steps.fixtures-cache.outputs.cache-hit != 'true'`)
+  })
+  it('is keyed apart from the entry main saved before the guard, which no run reads again and so expires', () => {
+    for (const m of ci.matchAll(/key: (\S+)\$\{\{/g)) expect(m[1]).toBe('remote-fixtures-pr-')
+  })
+})
+
 describe('the pull request gate', () => {
   const yml = text('rules-gate.yml')
   it('holds the permissions the plan names, runs in no environment, skips a fork and an unset bucket, and keeps to its budget', () => {
@@ -237,7 +290,7 @@ describe('the pull request gate', () => {
   it('edits one comment found by the marker the script writes, and uploads the numbers alone', () => {
     expect(yml).toContain(`startswith("${MARK}")`)
     expect(yml).toContain(String.raw`printf '<!-- rules-gate -->\n`)
-    expect(yml).toMatch(/upload-artifact@v4\n\s+with:\n\s+name: rules-gate\n\s+path: \$\{\{ runner\.temp \}\}\/verdict\/rules-gate\.json/)
+    expect(yml).toMatch(/upload-artifact@[0-9a-f]{40} # v[\d.]+\n\s+with:\n\s+name: rules-gate\n\s+path: \$\{\{ runner\.temp \}\}\/verdict\/rules-gate\.json/)
   })
 })
 

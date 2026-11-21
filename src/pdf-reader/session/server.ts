@@ -1,15 +1,18 @@
-// What the extension asks our server, and only that (Stage 5 Task 9; the layer API v1, the web's src/shared/layer-api.ts
+// What the extension asks our server, and only that (Stage 5 Task 9; the layer API v1, as the website defines it,
 // recorded by tests/pdf-reader/server.test.ts): a paper version's layer by the reader's CTAG — its catalog, or the prepare
 // under way with the objects made so far, or why there is none, or a wait —, its prepare, each object of it by its digest,
-// and our copy of arXiv's PDF of the version.
+// our copy of arXiv's PDF of the version, and, where a layer is laid over our own compile (the layer route, design §3.2), that
+// base page, named by the digest of its bytes.
 //
 //   GET  /api/v1/layer/<id>v<n>/<CTAG5>             200 the catalog | 202 Preparing | 404 { why } | 429 { retryAfterMs }
 //   POST /api/v1/layer/<id>v<n>/<CTAG5>/prepare     (application/json, body {}) 202 Preparing | 200 { ready: true } | 404 | 429
 //   GET  /api/v1/layer/<id>v<n>/<CTAG5>/o/<sha256>  200 the object, immutable
+//   GET  /api/v1/layer/<id>v<n>/<CTAG5>/o/<sha256>.delta  200 our base as a delta over arXiv's PDF, immutable (the web's deltaPath)
 //   GET  /api/v1/original/<id>v<n>                  200 application/pdf, or 206 for a range (ranges.ts)
+//   GET  /api/v1/base/<id>v<n>/<sha256>             200 application/pdf, or 206 for a range: our base page, where a head says it is ours
 //
 // The catalog's and each object's answer name the original the layer was made over (BASE_ETAG_HEADER: our copy's entity-tag,
-// which the server binds to the head's base as it commits the layer, the web's worker/src/layer/base.ts), so that our copy
+// which the server binds to the head's base as it commits the layer), so that our copy
 // can be read by ranges, every answer held to that tag and the base's length, with no whole read hashed first (ranges.ts).
 //
 // Only the paper's id and version leave the machine, in the address: no query, no body but `{}` on the prepare, no header of
@@ -41,6 +44,8 @@ export const RETRY_MS = 1000
 export const REQUEST_MS = 30_000
 /** our copy of the original read whole (no tag to read it by ranges): its own bound, a 46 MB copy at 80 KB/s */
 export const ORIGINAL_MS = 600_000
+/** a delta object (at most DELTA_MAX_BYTES, 24 MiB): 24 MiB at 400 KB/s */
+export const DELTA_MS = 60_000
 /** the header of the catalog's and the objects' answers that names the original the layer is bound to: our copy's entity-tag */
 export const BASE_ETAG_HEADER = 'x-axt-base-etag'
 /** a strong entity-tag (RFC 9110 §8.8.3), as R2 tags an object: the only kind a range is held to */
@@ -77,7 +82,17 @@ export function paperSegment(p: Paper): string {
 }
 export const layerPath = (api: string, p: Paper) => `${api}${API_ROOT}layer/${paperSegment(p)}/${CTAG5}`
 export const objectPath = (api: string, p: Paper, sha256: string) => `${layerPath(api, p)}/o/${sha256}`
+/** our base as a delta over arXiv's PDF, by its digest: the object route with the delta's own suffix, as the web serves it (its
+ *  path of a delta; the engine's deltaKey names it so). The bare digest of a delta is a 404 there */
+export const deltaPath = (api: string, p: Paper, sha256: string) => `${objectPath(api, p, sha256)}.delta`
 export const originalPath = (api: string, p: Paper) => `${api}${API_ROOT}original/${paperSegment(p)}`
+/** our base page of the version, where a head says its base is ours: the final pass of our compile, named by the SHA-256 of its
+ *  bytes (so the address is the object and never another), read by ranges from any origin. A digest that is not 64 lower-case
+ *  hex digits makes no address */
+export function basePath(api: string, p: Paper, sha256: string): string {
+  if (typeof sha256 !== 'string' || !DIGEST.test(sha256)) throw new TypeError(`not a SHA-256 digest: ${String(sha256).slice(0, 70)}`)
+  return `${api}${API_ROOT}base/${paperSegment(p)}/${sha256}`
+}
 
 /** every request's options: no credentials, no referrer, nothing of ours but what the request is */
 export const REQUEST: Readonly<RequestInit> = { credentials: 'omit', referrerPolicy: 'no-referrer' }
@@ -235,12 +250,13 @@ export async function askPrepare(api: string, p: Paper, o: { fetch?: typeof fetc
   void r.body?.cancel().catch(() => {})
   throw new LayerUnreachable(`the prepare's route answered ${r.status}`)
 }
-/** an object of the layer by its ref, no more of it read than its ref's bytes and OBJECT_MARGIN (the side's readers check
+/** an object of the layer by its ref (`ms`: how long its ask may take, REQUEST_MS by default: a delta's is longer; `delta`: the
+ *  ref is the head's delta, asked at deltaPath), no more of it read than its ref's bytes and OBJECT_MARGIN (the side's readers check
  *  its digest, values and shape), and the original its answer names it bound to (boundOf); a ref that is no ref refused
  *  before any request, any answer but a 200 refused */
-export async function fetchObject(api: string, p: Paper, ref: Pick<Ref, 'sha256' | 'bytes'>, o: { fetch?: typeof fetch; signal?: AbortSignal } = {}): Promise<{ bytes: Uint8Array; bound: string | null }> {
+export async function fetchObject(api: string, p: Paper, ref: Pick<Ref, 'sha256' | 'bytes'>, o: { fetch?: typeof fetch; signal?: AbortSignal; ms?: number; delta?: boolean } = {}): Promise<{ bytes: Uint8Array; bound: string | null }> {
   if (typeof ref?.sha256 !== 'string' || !DIGEST.test(ref.sha256) || !Number.isSafeInteger(ref.bytes) || ref.bytes < 1) throw new TypeError(`the layer's object: not a ref (${String(ref?.sha256).slice(0, 80)})`)
-  const r = await fetched(o.fetch ?? fetch, objectPath(api, p, ref.sha256), { signal: o.signal ?? null })
+  const r = await fetched(o.fetch ?? fetch, (o.delta ? deltaPath : objectPath)(api, p, ref.sha256), { signal: o.signal ?? null }, o.ms ?? REQUEST_MS)
   if (r.status !== 200) { void r.body?.cancel().catch(() => {}); throw new Error(`the layer's object ${ref.sha256}: ${r.status}`) }
   return { bytes: await bodyWithin(r, ref.bytes + OBJECT_MARGIN), bound: boundOf(r) }
 }

@@ -12,7 +12,7 @@ vi.mock('wxt/browser', () => ({ browser: { runtime: { id: 'test-extension', getU
 
 import { GlossaryTable, entriesOf } from '@/entrypoints/options/sections/Glossary'
 import { drafts } from '@/ui/drafts'
-import { O, setLocale } from '@/ui/strings'
+import { O, setLocale } from '@readarxiv/ui'
 
 /** `fail`, when given, decides per call whether the write is refused — never resolves, so a chained `.catch` sees it */
 function data(config: Config, patches: Config[] = [], fail: () => boolean = () => false): OptionsData {
@@ -74,6 +74,16 @@ describe('the glossary\'s table (§6.3)', () => {
     await m.flush()
     expect(patches.at(-1)!.glossary).toEqual([{ term: 'a', translation: 'b' }])
     expect(drafts.any()).toBe(false)
+    await m.unmount()
+  })
+
+  it('Enter that commits an input method\'s word stays in its cell (a term typed in Japanese or Korean)', async () => {
+    const m = await mountElement(h(GlossaryTable, { data: data(WITH([])) }))
+    const cell = cells(m.container)[0]!
+    cell.focus()
+    cell.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', isComposing: true, bubbles: true }))
+    await m.flush()
+    expect(document.activeElement).toBe(cell)
     await m.unmount()
   })
 

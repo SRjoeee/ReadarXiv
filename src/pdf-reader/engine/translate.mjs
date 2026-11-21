@@ -2,7 +2,7 @@
 // Re-exports only: the directory is the contract (docs/PDF-READER.md, the engine's contract), tests/pdf-reader/engine-contract.json its snapshot.
 
 // the wires (the free engine's own client stays with the extension)
-export { FIRST_BATCH, NEXT_BATCH, SPACING, TRANSLATE_VERSION, WIRE, batchOf, cutsOf, decode, displayEdges, escape, isName, nameCells, plainSource, plainTranslated, rehydrate, rehydrateTags, sentencesKept, sentencesOf, serialize, serializeTags, shown, texEscape, textsShown, translateUnits, unitText, utf8 } from './translate/mt.mjs'
+export { FIRST_BATCH, NEXT_BATCH, SPACING, TRANSLATE_VERSION, WIRE, batchOf, cutsOf, decode, displayEdges, escape, isName, nameCells, plainSource, plainTranslated, readsBack, rehydrate, rehydrateTags, sentencesKept, sentencesOf, serialize, serializeTags, shown, texEscape, textsShown, translateUnits, unitText, utf8 } from './translate/mt.mjs'
 export { NAMES_SHARE, decideGroups, groupOf, unchanged } from './translate/groups.mjs'
 export { authorsTranslated } from './translate/kept.mjs'
 export { MIXED } from './translate/mixed.mjs'

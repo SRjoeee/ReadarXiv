@@ -26,7 +26,7 @@ import type { PackState } from '@/shared/pack'
 import { rejectedServices, watchRejected } from '@/shared/service-health'
 import { messageFor } from '@/shared/page-action'
 import { type SurfaceConfig, type SurfaceConfigDeps, createSurfaceConfig } from '@/shared/surface-config'
-import { S } from '@/ui/strings'
+import { S } from '@readarxiv/ui'
 import { offeredQuery, readQuery } from './find'
 import { createProviderAsks } from './provider-asks'
 import { MANAGE_PROMPTS, MANAGE_SERVICES, MANAGE_STYLES, type MenuKind, type PopupInput, actionErrorText, runnable, startRefusalText } from './view-model'
@@ -407,7 +407,8 @@ export function createPopupState(host: PopupHost, seed: { rejected?: readonly st
       const next = await patchConfig(latest => (
         // The menu may have been built before another tab deleted this service; storing an id that
         // names nothing would leave the reader looking at a choice nothing honours (Codex on #157)
-        isBuiltInService(id) || latest.services.some(s => s.id === id) ? { ...latest, provider: id } : latest
+        // (a pick, recorded: the PDF reader follows it, v22)
+        isBuiltInService(id) || latest.services.some(s => s.id === id) ? { ...latest, provider: id, providerChosen: true } : latest
       ))
       if (next.provider !== id) return
       const packState = id === 'chrome-builtin' ? await surface.checkPack(next.targetLanguage) : surface.state().pack

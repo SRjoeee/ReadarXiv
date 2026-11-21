@@ -2,8 +2,10 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { COVERAGE } from '@/pdf-reader/engine/rules/font-coverage.mjs'
 import { FACES } from '@/pdf-reader/engine/rules/font-roles.mjs'
+import { fileOfGeometry, unitsOfGeometry } from './helpers/file-of-geometry'
+import { withGroups } from './helpers/groups'
 
-// v0's faces (layer-proto/fonts.mjs roleFaceSet, run.mjs openProto's `faceSources`): the role table's files, served in
+// The layer's faces (layer-proto/fonts.mjs roleFaceSet, run.mjs openProto's `faceSources`): the role table's files, served in
 // slices or whole, and nothing else. A PDF.js document of its own making (one page of paragraphs, nothing drawn), fonts
 // that load by their slices (a FontFace and document.fonts that know which characters each has loaded), and a canvas that
 // measures a character at its face's width only once the slice that holds it has loaded, and records every measure taken
@@ -112,13 +114,13 @@ beforeEach(() => {
 afterEach(() => { vi.restoreAllMocks() })
 
 type Slices = { url: string; ranges: number[] }[]
-/** a face's coverage cut at every 0x1000 code points, a slice each (the lowest first): the cut of any host */
-function cut(id: string, name = (n: number) => `/s/${id}-${n.toString(16)}.woff2`): Slices {
+/** a face's coverage cut at every 0x1000 code points (2^`bits`), a slice each (the lowest first): the cut of any host */
+function cut(id: string, name = (n: number) => `/s/${id}-${n.toString(16)}.woff2`, bits = 12): Slices {
   const by = new Map<number, number[]>()
   const r = COVERAGE[id] as unknown as number[]
   for (let i = 0; i < r.length; i += 2) {
     for (let a = r[i]!; a <= r[i + 1]!;) {
-      const chunk = a >> 12, z = Math.min(r[i + 1]!, ((chunk + 1) << 12) - 1)
+      const chunk = a >> bits, z = Math.min(r[i + 1]!, ((chunk + 1) << bits) - 1)
       const list = by.get(chunk) ?? by.set(chunk, []).get(chunk)!
       list.push(a, z)
       a = z + 1
@@ -134,15 +136,15 @@ function docOf(lines: [string, number][]) {
   const viewportOf = (scale: number) => ({ width: 300 * scale, height: H * scale, scale, transform: [scale, 0, 0, -scale, 0, H * scale], convertToViewportPoint: (x: number, y: number) => [x * scale, (H - y) * scale], convertToPdfPoint: (x: number, y: number) => [x / scale, H - y / scale] })
   const items = lines.map(([str, y]) => ({ str, transform: [10, 0, 0, 10, 20, y], width: 260, height: 10, fontName: 'f1', dir: 'ltr', hasEOL: false }))
   const page = { view: [0, 0, 300, H], getViewport: ({ scale }: { scale: number }) => viewportOf(scale), getTextContent: async () => ({ items, styles: { f1: { fontFamily: 'serif', ascent: 0.7, descent: -0.2 } } }), render: () => ({ promise: Promise.resolve() }), commonObjs: { get: () => ({ name: 'Times-Roman' }) }, cleanup() {} }
-  return { numPages: 1, getPage: async () => page }
+  return withGroups({ numPages: 1, getPage: async () => page })
 }
-/** v0 over one page of paragraphs, one line each from the top (the source and its translation), in the role table's faces */
+/** the layer over one page of paragraphs, one line each from the top (the source and its translation), in the role table's faces */
 async function open(paras: [string, string][], o: Record<string, unknown> = {}) {
   const { openProto } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
   const lines = paras.map(([src], i) => [src, 260 - 30 * i] as [string, number])
   const geometry = { schema: 1, kinds: paras.map(() => 'para'), left: { pages: [[0, 0, 300, 300]], units: paras.map((_, i) => [i, i, [[1, 20, lines[i]![1] - 2.15, 280, lines[i]![1] + 6.83]]]) } }
   const units = paras.map(([src, tr]) => ({ kind: 'para', src, state: 'whole', pieces: [{ t: 'text', tr: true, s: tr }] }))
-  const run = await openProto({ doc: docOf(lines), target: 'zh', pages: 1, scale: 1, dpr: 1, copy: false, geometry, units, faceUrl: (f: string) => `/fonts/${encodeURIComponent(f)}`, ...o } as never)
+  const run = await openProto({ doc: docOf(lines), target: 'zh', pages: 1, scale: 1, dpr: 1, copy: false, geometry, units, tex: fileOfGeometry(unitsOfGeometry(geometry)), faceUrl: (f: string) => `/fonts/${encodeURIComponent(f)}`, ...o } as never)
   return run as Awaited<ReturnType<typeof openProto>>
 }
 const PARAS: [string, string][] = [['Alpha beta gamma', '\u6c49\u5b57 LLM \u6c49\u5b57\u6c49'], ['Delta epsilon zeta', '\u6c49\u5b57\u5b57 abc'], ['Eta theta iota', '\u5b57\u6c49\u5b57\u6c49\u5b57\u6c49']]
@@ -189,7 +191,7 @@ describe('a character in no served slice', () => {
     const paras: [string, string][] = [['Alpha beta gamma', '\u6c49\u5b57\u6c49'], ['Delta epsilon zeta', '\u6c49\u5b57\u8bed LLM'], ['Eta theta iota', '\u5b57\u6c49']]
     const run = await open(paras, { faceSources: hole })
     await run.until(1)
-    expect(run.skipped).toEqual([{ id: 1, kind: 'para', why: 'served', missing: [0x8bed], chars: 6, pages: [1] }])
+    expect(run.skipped).toEqual([{ id: 1, kind: 'para', why: 'served', code: 'served', missing: [0x8bed], chars: 6, pages: [1] }])
     expect(run.stats.map(r => r.id).sort()).toEqual([0, 2])
     const svg = run.svgOf(1).innerHTML
     expect(svg).toContain('data-u="0"')
@@ -320,7 +322,7 @@ describe('a slice that does not load', () => {
   // (a face never selected by the load is no failure: a fallback family's face the browser did not need, or another weight's)
   const roleSet = async (bold: boolean, cls: 'latin' | 'cjk') => {
     const F = await import('@/pdf-reader/engine/layer-proto/fonts.mjs')
-    F.setRoleFaces('zh', 'times', { group: 'shs-sc', kai: null, light: [] } as never)
+    F.setRoleFaces('zh', 'times', { group: 'shs-sc' })
     return { set: F.roleFaceSet({ faceSources: slicesOfAll }), face: F.faceOf({ fam: 'serif', design: 'times', bold, italic: false, caps: false } as never, cls, 'zh') }
   }
   it('does not fail a unit whose primary face loaded because a fallback face the load did not select stays unloaded', async () => {
@@ -349,7 +351,7 @@ describe('a slice that does not load', () => {
     // (the bold CJK face is served in one slice, U+5B57 alone; U+6C49 is in the regular body's slice 0x6000, which fails)
     const sources = async (id: string) => (id === 'shs-sc-bold' ? [{ url: '/s/shs-sc-bold-5.woff2', ranges: [0x5b57, 0x5b57] }] : slicesOfAll(id))
     const F = await import('@/pdf-reader/engine/layer-proto/fonts.mjs')
-    F.setRoleFaces('zh', 'times', { group: 'shs-sc', kai: null, light: [] } as never)
+    F.setRoleFaces('zh', 'times', { group: 'shs-sc' })
     const set = F.roleFaceSet({ faceSources: sources })
     const style = { fam: 'serif', design: 'times', bold: true, italic: false, caps: false } as never
     expect(await set.check([{ face: F.faceOf(style, 'cjk', 'zh'), text: '\u5b57' }] as never)).toBeNull()
@@ -391,6 +393,43 @@ describe('a slice that does not load', () => {
       expect(run.skipped.map(s => `${s.id}:${s.why}`), what).toEqual(['0:face'])
       expect(faces.some(f => f.src.includes('local(') || f.url.includes('x.woff2')), what).toBe(false)
     }
+  })
+})
+
+describe('the faces a unit checks, none failed', () => {
+  it('reads their statuses alone, walking no declared face for each of its characters (a CJK body in hundreds of slices); one failed, the walk finds it', async () => {
+    // (each FontFace's family read counted: the walk for a failed face reads every declared face's, for each character)
+    let reads = 0
+    const Stubbed = g.FontFace as new (family: string, src: string, d?: object) => object
+    g.FontFace = class extends Stubbed {
+      constructor(family: string, src: string, d?: object) {
+        super(family, src, d)
+        Object.defineProperty(this, 'family', { get: () => { reads++; return family }, enumerable: true })
+      }
+    }
+    // (a load of the faces whose ranges hold the text's characters, chosen by their ranges alone; fulfilled with those that
+    // loaded, as WebKit's: the statuses are the verdict, never the promise)
+    ;(document.fonts as unknown as { load: (font: string, text: string) => Promise<unknown> }).load = async (_font, text) => {
+      const want = faces.filter(f => [...text].some(ch => inRanges(rangesOf(f.unicodeRange), ch.codePointAt(0)!)))
+      await Promise.allSettled(want.map(f => (f as unknown as { load(): Promise<unknown> }).load()))
+      return want.filter(f => f.status === 'loaded')
+    }
+    const F = await import('@/pdf-reader/engine/layer-proto/fonts.mjs')
+    F.setRoleFaces('zh', 'times', { group: 'shs-sc' })
+    // (every face cut at every 0x100 code points: the body's coverage in over a hundred slices, as a host serves it in ranks)
+    const set = F.roleFaceSet({ faceSources: async (id: string) => cut(id, n => `/s/${id}-${n.toString(16)}.woff2`, 8) })
+    const face = F.faceOf({ fam: 'serif', design: 'times', bold: false, italic: false, caps: false } as never, 'cjk', 'zh')
+    // (the run's tables asked and their slices declared by a first unit)
+    expect(await set.check([{ face, text: '\u4e00' }] as never)).toBeNull()
+    expect(faces.filter(f => f.url.includes('shs-sc-regular-')).length).toBeGreaterThan(100)
+    reads = 0
+    expect(await set.check([{ face, text: '\u6c49\u5b57\u4e2d\u6587' }] as never)).toBeNull()
+    expect(reads).toBe(0)
+    // (a slice that fails: the unit with a character of it is left the original, the walk run as before)
+    rejects = src => src.includes('shs-sc-regular-8b.woff2')
+    expect(await set.check([{ face, text: '\u8bed' }] as never)).toEqual({ why: 'face' })
+    expect(reads).toBeGreaterThan(0)
+    expect(await set.check([{ face, text: '\u5c71' }] as never)).toBeNull()
   })
 })
 

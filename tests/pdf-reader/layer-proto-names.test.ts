@@ -2,6 +2,9 @@ import { describe, expect, it, vi } from 'vitest'
 import { indexLayout, LABEL_KINDS, LAYOUT_SCHEMA, NAME_FLAG, NAME_KEYS, parseLayout, UNIT_KINDS } from '@/pdf-reader/engine/layout/file.mjs'
 import { openProto } from '@/pdf-reader/engine/layer-proto/run.mjs'
 import { nameInTarget } from '@/pdf-reader/engine/layer-proto/layer2.mjs'
+import { nameOccurrenceId } from '@/pdf-reader/engine/layer-proto/units.mjs'
+import { BUILTIN_RULES } from '@/pdf-reader/engine/rules/layout.mjs'
+import { withGroups } from './helpers/groups'
 
 // babel's names drawn by v0 (D1a, run.mjs paintNames): a generated heading the layout file locates (its `names`) set in
 // the target's word for it, the original's erased as a label's is, at its size and alignment, where the target has a word
@@ -33,26 +36,30 @@ const H = 300
  *  (`beside`), and a paragraph's line at y = 200; the layout file locating the heading as babel's `key`, `flags` its, its
  *  TeX column the paragraph's (20 to 120). `runIn`: IEEEtran's "Abstract—Deep …": the paragraph's line is the heading's,
  *  its dash (the unit's label, 60 to 64) and then its text from 64, the file locating it and the name leading it (RUN_IN,
- *  `glue` after the dash; `whole` false: not located whole, laid by v0's geometry); `bare`: no unit at all, the
+ *  `glue` after the dash); `bare`: no unit at all, the
  *  paragraph's line text no unit holds (a page of references alone); `column`: the name's TeX column in its row;
  *  `nameSize`: its size there (the unit's lines are 10) */
-function paper({ name = 'Abstract', x = 20, width = 40, beside = null as [string, number, number] | null, key = 'abstract', flags = 0, runIn = false, glue = 0, bare = false, whole = true, column = [20, 120], nameSize = 10, text = '\u6c49\u5b57\u6c49\u5b57' } = {}) {
+function paper({ name = 'Abstract', x = 20, width = 40, beside = null as [string, number, number] | null, key = 'abstract', flags = 0, runIn = false, glue = 0, bare = false, column = [20, 120], nameSize = 10, text = '\u6c49\u5b57\u6c49\u5b57', runs = null as [string, number, number, number][] | null, after = null as number | null } = {}) {
+  // (`after`: the unit's line on the name's line from that x, as runIn's, but led by nothing: an appendix's contents line, its
+  // title an ink unit after the name and its counter)
+  const on = runIn ? 64 + glue : after
   const viewportOf = (scale: number) => ({ width: 300 * scale, height: H * scale, scale, transform: [scale, 0, 0, -scale, 0, H * scale], convertToViewportPoint: (px: number, py: number) => [px * scale, (H - py) * scale], convertToPdfPoint: (px: number, py: number) => [px / scale, H - py / scale] })
-  const item = (str: string, ix: number, w: number, y: number) => ({ str, transform: [10, 0, 0, 10, ix, y], width: w, height: 10, fontName: 'f1', dir: 'ltr', hasEOL: false })
-  const items = [item(name, x, width, 230), ...(beside ? [item(beside[0], beside[1], beside[2], 230)] : []), ...(runIn ? [item('\u2014', 60, 4, 230), item('Alpha beta gamma', 64 + glue, 100, 230)] : [item('Alpha beta gamma', 20, 100, 200)])]
+  const item = (str: string, ix: number, w: number, y: number, size = 10) => ({ str, transform: [size, 0, 0, size, ix, y], width: w, height: size, fontName: 'f1', dir: 'ltr', hasEOL: false })
+  // (`runs`: the name's items, each [text, x, width, size], in place of one at 10: a faked small capitals' run)
+  const items = [...(runs ? runs.map(([s, rx, w, z]) => item(s, rx, w, 230, z)) : [item(name, x, width, 230)]), ...(beside ? [item(beside[0], beside[1], beside[2], 230)] : []), ...(runIn ? [item('\u2014', 60, 4, 230)] : []), ...(on !== null ? [item('Alpha beta gamma', on, 100, 230)] : [item('Alpha beta gamma', 20, 100, 200)])]
   const page = { view: [0, 0, 300, H], getViewport: ({ scale }: { scale: number }) => viewportOf(scale), getTextContent: async () => ({ items, styles: { f1: { fontFamily: 'serif', ascent: 0.7, descent: -0.2 } } }), render: () => ({ promise: Promise.resolve() }), cleanup() {}, commonObjs: { get: () => ({ name: 'NimbusRomNo9L-Regu' }) } }
   const file = {
     schema: LAYOUT_SCHEMA, lineskip: null, layout: '5', pdfjs: '6.3.289', paper: { id: '2610.00001', version: 1, pages: 1 }, left: '', views: [0, 0, 300, 300], fonts: ['NimbusRomNo9L-Regu'],
-    units: runIn ? [[0, UNIT_KINDS.indexOf('para'), 9, 0, 1]] : [], lines: runIn ? [[0, [1, 64 + glue, 164 + glue, 230, 237, 227.5, 10, 0]]] : [], frames: runIn ? [[0, [1, 0, 0, 1, -1, 0]]] : [],
+    units: on !== null ? [[0, UNIT_KINDS.indexOf('para'), 9, 0, 1]] : [], lines: on !== null ? [[0, [1, on, on + 100, 230, 237, 227.5, 10, 0]]] : [], frames: on !== null ? [[0, [1, 0, 0, 1, -1, 0]]] : [],
     erase: [], ph: [], labels: runIn ? [[0, LABEL_KINDS.indexOf('number'), 1, 60, 230, 64, 237, 228]] : [], headings: [], pageText: [], held: [],
     names: [[1, NAME_KEYS.indexOf(key as never), 1, x, 230, x + width, 237, 228, nameSize, 0, flags | (runIn ? NAME_FLAG.RUN_IN : 0), runIn ? 0 : -1, glue, column[0], column[1]]],
   }
   return {
-    doc: { numPages: 1, getPage: async () => page },
-    geometry: { schema: 1, kinds: bare ? [] : ['para'], left: { pages: [[0, 0, 300, 300]], units: bare ? [] : [[0, 0, [runIn ? [1, 64 + glue, 227.85, 164 + glue, 236.83] : [1, 20, 197.85, 120, 206.83]]]] } },
+    doc: withGroups({ numPages: 1, getPage: async () => page }),
+    geometry: { schema: 1, kinds: bare ? [] : ['para'], left: { pages: [[0, 0, 300, 300]], units: bare ? [] : [[0, 0, [on !== null ? [1, on, 227.85, on + 100, 236.83] : [1, 20, 197.85, 120, 206.83]]]] } },
     units: bare ? [] : [{ kind: 'para', src: 'Alpha beta gamma', state: 'whole', pieces: [{ t: 'text', tr: true, s: text }] }],
     // (the translation's one text piece the source's: the file locates the run-in unit whole)
-    tex: { use: 'lines', texOnly: true, index: indexLayout(parseLayout(new TextEncoder().encode(JSON.stringify(file)))), pieces: new Map(runIn && whole ? [[0, [[0]]]] : []) },
+    tex: { index: indexLayout(parseLayout(new TextEncoder().encode(JSON.stringify(file)))), pieces: new Map(on !== null ? [[0, [[0]]]] : []) },
   }
 }
 const open = (o: object = {}, p = paper()) => openProto({ ...p, target: 'zh', pages: 1, scale: 1, dpr: 1, copy: false, labels: { captions: null }, ...o } as never)
@@ -64,8 +71,14 @@ describe("v0 draws babel's names in the target's words (D1a)", () => {
     expect(run.names).toEqual([expect.objectContaining({ occurrence: 1, key: 'abstract', page: 1, drawn: true, why: null, text: '\u6458\u8981', size: 10, x: 20 })])
     const svg = run.svgOf(1)
     expect(svg.querySelector('[data-n="1"]')?.textContent).toBe('\u6458\u8981')
-    // its erase the page's first operation, the unit's after it; its characters accounted, which no put-back returns
-    expect(run.rows[0]!.ops[0]).toMatchObject({ op: 'erase' })
+    // its group hidden, the page's first operation, the unit's after it; its characters accounted, which no paste returns
+    expect(run.rows[0]!.ops[0]).toMatchObject({ op: 'hidden' })
+    // (its words in the page's word table under its occurrence's hover id, where the hover lights it: one token, its box)
+    const words = run.wordsOf(1) as unknown as { spans: [number, number[]][]; tokens: { l: Float32Array; r: Float32Array } }
+    const span = words.spans.find(([id]) => id === nameOccurrenceId(1))
+    expect(span?.[1][1]).toBe(1)
+    expect(words.tokens.l[span![1][0]!]).toBeCloseTo(20, 3)
+    expect([...(run.rows[0] as unknown as { off: Set<string> }).off]).toContain('n1')
     expect(run.audit.find(a => a.what === 'erase' && a.name === 1)).toBeDefined()
     expect(run.names[0]!.chars.map(c => c.ch).join('')).toBe('Abstract')
   })
@@ -79,6 +92,11 @@ describe("v0 draws babel's names in the target's words (D1a)", () => {
     const none = await open({}, paper({ key: 'preface' }))
     await none.until(1)
     expect(none.names.map(n => [n.drawn, n.why])).toEqual([[false, 'no word']])
+    // (left the original's in its place: its hover id among the page's units shown as the original, no words of its own, lit
+    // there as the left's — Codex and Devin on #493)
+    const kept = none.wordsOf(1) as unknown as { spans: [number, number[]][]; original: number[] }
+    expect(kept.original).toContain(nameOccurrenceId(1))
+    expect(kept.spans.some(([id]) => id === nameOccurrenceId(1))).toBe(false)
     // (a run opened with no labels draws no name, as it draws no float's label in the target's)
     const plain = await open({ labels: null })
     await plain.until(1)
@@ -102,12 +120,49 @@ describe("v0 draws babel's names in the target's words (D1a)", () => {
     expect(fits.names[0]).toMatchObject({ drawn: true, text: 'Résumé', size: 10 })
   })
 
+  it("draws a name in faked small capitals at the size TeX was asked for, as a unit so set is drawn (2010.11929v2 p9's REFERENCES)", async () => {
+    // (ICLR's \\sc in Times: its "R" at 12, its "EFERENCES" the capitals NFSS's virtual face sets at 0.8 of it, 9.6; the file's
+    // size the most of its glyphs', 9.6; its own text "References", so a case change of the class's: CAPITALS)
+    const runs: [string, number, number, number][] = [['R', 20, 8, 12], ['EFERENCES', 28, 50, 9.6]]
+    const zh = await open({}, paper({ name: 'REFERENCES', key: 'ref', width: 58, nameSize: 9.6, flags: NAME_FLAG.CAPITALS, runs }))
+    await zh.until(1)
+    expect(zh.names[0]).toMatchObject({ drawn: true, text: '\u53c2\u8003\u6587\u732e', size: 12 })
+    // (an alphabet's word in its own case, its small capitals drawn by the layer at the capitals' size, never in capitals)
+    const de = await open({ target: 'de' }, paper({ name: 'REFERENCES', key: 'ref', width: 58, nameSize: 9.6, flags: NAME_FLAG.CAPITALS, runs, column: [20, 200] }))
+    await de.until(1)
+    expect(de.names[0]).toMatchObject({ drawn: true, text: 'Literatur', size: 12 })
+    // (a case change's capitals, all at one size: drawn at it, in the target's capitals, as before)
+    const upper = await open({ target: 'de' }, paper({ name: 'REFERENCES', key: 'ref', width: 58, flags: NAME_FLAG.CAPITALS, runs: [['REFERENCES', 20, 58, 10]], column: [20, 200] }))
+    await upper.until(1)
+    expect(upper.names[0]).toMatchObject({ drawn: true, text: 'LITERATUR', size: 10 })
+  })
+
+  it('draws a word of two scripts in runs by script, each in its face, as a unit\'s words are (the served CJK faces hold no Latin)', async () => {
+    // (zh's word for the abstract's heading with a Latin letter and a digit after its ideographs: drawn whole, one CJK run and
+    // one Latin run, never the whole in the CJK face, which a face check refuses where the CJK face's slices hold no ASCII)
+    const rules = structuredClone(BUILTIN_RULES) as unknown as { languages: Record<string, { labels: Record<string, string> }> }
+    rules.languages.zh!.labels.abstract = '\u6458\u8981 A1'
+    const zh = await open({ rules }, paper({ column: [20, 200] }))
+    await zh.until(1)
+    expect(zh.names[0]).toMatchObject({ drawn: true, text: '\u6458\u8981 A1' })
+    const spans = [...(zh.svgOf(1).querySelectorAll('[data-n="1"] tspan') ?? [])]
+    expect(spans.map(t => t.textContent)).toEqual(['\u6458\u8981', ' A1'])
+    const cls = spans.map(t => t.getAttribute('class'))
+    expect(cls[0]).not.toBe(cls[1])
+    // (one script alone: one run, in its face, as before)
+    const plain = await open({}, paper())
+    await plain.until(1)
+    expect([...(plain.svgOf(1).querySelectorAll('[data-n="1"] tspan') ?? [])].map(t => t.textContent)).toEqual(['\u6458\u8981'])
+  })
+
   it("sets a run-in name as its unit's line start whatever its width, the original's joint and glue after it", async () => {
     // IEEEtran's "Abstract—…": zh's word, narrower than "Abstract", leaves no gap before the dash
     const zh = await open({}, paper({ runIn: true }))
     await zh.until(1)
     expect(zh.names[0]).toMatchObject({ drawn: true, why: null, text: '\u6458\u8981', unit: 0, size: 10, x: 20 })
     expect(zh.svgOf(1).querySelector('[data-n]')).toBeNull()
+    // (its words its unit's: no span of the name's own)
+    expect((zh.wordsOf(1) as unknown as { spans: [number, number[]][] }).spans.some(([id]) => id === nameOccurrenceId(1))).toBe(false)
     // the dash right where the word ends, no gap: its place after the second ideograph one advance on, as the second's
     // after the first (a run of single characters, each at its own place)
     const run = [...(zh.svgOf(1).querySelectorAll('tspan') ?? [])].find(t => t.textContent?.startsWith('\u6458\u8981\u2014'))
@@ -115,10 +170,6 @@ describe("v0 draws babel's names in the target's words (D1a)", () => {
     expect(xs[0]).toBe(20)
     expect(xs[2]! - xs[1]!).toBeCloseTo(xs[1]! - xs[0]!, 1)
     expect(zh.names[0]!.chars.map(c => c.ch).join('')).toBe('Abstract')
-    // (the same where v0 lays the unit by its own geometry: the joint is the file's label of it)
-    const own = await open({}, paper({ runIn: true, whole: false }))
-    await own.until(1)
-    expect(own.svgOf(1).textContent?.replace(/\s+/g, '')).toContain('\u6458\u8981\u2014\u6c49\u5b57')
     // de's, wider than its own room (75 against 40): not shrunk, and no space after the dash, as the original has none
     // (the unit's text begins with the source's white space after \begin{abstract}, which TeX skips)
     const de = await open({ target: 'de' }, paper({ runIn: true, text: ' Tiefe Netze' }))
@@ -146,6 +197,40 @@ describe("v0 draws babel's names in the target's words (D1a)", () => {
     await left.until(1)
     expect(left.names[0]).toMatchObject({ drawn: false, why: 'inline: served', unit: 0 })
     expect(left.svgOf(1).textContent).not.toContain('Zusammenfassung')
+  })
+
+  it('sets the counter TeX set after a name in its row after the target\'s word, the line\'s alignment kept (IEEEtran\'s appendices)', async () => {
+    // (a contents line, "Appendix A:" from 20 to 71, left-set: "\u9644\u5f55 A:" from 20; its title after it on its line, led by
+    // nothing, laid from where the word and counter end, the original's 4 between them)
+    // (the row's slot 12, a name leading no unit: the counter's width at its end, where the maker split it off; 8 here)
+    const entry = await open({}, paper({ key: 'appendix', x: 20, width: 51, glue: 8, runs: [['Appendix', 20, 40, 10], ['A:', 63, 8, 10]], after: 75 }))
+    await entry.until(1)
+    expect(entry.names[0]).toMatchObject({ drawn: true, text: '\u9644\u5f55 A:', x: 20 })
+    const w = entry.names[0]!.w as number
+    const first = (entry.stats.find(r => r.id === 0) as unknown as { lines: number[][] }).lines[0]!
+    expect(first[6]).toBeCloseTo(20 + w + 4, 1)
+    // (a unit past the name's column, across the gutter, is the other column's: where TeX set it)
+    const across = await open({}, paper({ key: 'appendix', x: 20, width: 51, glue: 8, column: [20, 72], runs: [['Appendix', 20, 40, 10], ['A:', 63, 8, 10]], after: 75 }))
+    await across.until(1)
+    expect(across.names[0]).toMatchObject({ drawn: true })
+    expect((across.stats.find(r => r.id === 0) as unknown as { lines: number[][] }).lines[0]![6]).toBeCloseTo(75, 1)
+    // (a heading "APPENDIX A" centred over its title: "\u9644\u5f55 A" about the line's middle, 124)
+    const head = await open({}, paper({ key: 'appendix', x: 100, width: 48, glue: 5, flags: NAME_FLAG.CENTRED, runs: [['APPENDIX', 100, 40, 10], ['A', 143, 5, 10]] }))
+    await head.until(1)
+    expect(head.names[0]).toMatchObject({ drawn: true, text: '\u9644\u5f55 A' })
+    expect((head.names[0]!.x as number) + (head.names[0]!.w as number) / 2).toBeCloseTo(124, 1)
+    // (a name whose row holds no counter: its word alone, as before)
+    const plain = await open({}, paper({ key: 'appendix', x: 20, width: 40, name: 'Appendix' }))
+    await plain.until(1)
+    expect(plain.names[0]).toMatchObject({ drawn: true, text: '\u9644\u5f55' })
+    // (the split the maker's, never read again from the gaps: a counter a thin space after the name, \appendixname\,A, kept; a
+    // name letter-spaced past a word's space, 2.5 of 10, its last letter no counter where the maker found none)
+    const thin = await open({}, paper({ key: 'appendix', x: 20, width: 46.67, glue: 5, runs: [['Appendix', 20, 40, 10], ['A', 61.67, 5, 10]] }))
+    await thin.until(1)
+    expect(thin.names[0]).toMatchObject({ drawn: true, text: '\u9644\u5f55 A' })
+    const tracked = await open({}, paper({ key: 'appendix', x: 100, width: 57.5, runs: [...'APPENDIX'].map((c, i) => [c, 100 + 7.5 * i, 5, 10] as [string, number, number, number]) }))
+    await tracked.until(1)
+    expect(tracked.names[0]).toMatchObject({ drawn: true, text: '\u9644\u5f55' })
   })
 
   it("takes its room from its TeX column (the file's), on a page no unit holds as on any other", async () => {

@@ -64,16 +64,16 @@ await b.evaluate(() => window.__reader.controller.setSync(true))
 await settle(b)
 check('the reader\'s switch writes it back', (await state(b)).settings.pdfReader.sync === true && (await b.evaluate(() => window.__reader.debug.syncMode)) === 'same')
 
-// the highlight and figure text follow their switches
-await patch(b, { reading: { sentenceHighlight: false }, image: { enabled: false } })
+// the highlight and figure text follow their switches (the figures' text: What to translate's figures, pdfReader.classes)
+await patch(b, { reading: { sentenceHighlight: false }, pdfReader: { classes: { figures: false, tables: true, heads: true, references: false, names: false } } })
 await settle(b)
 const leftBox = await b.locator('#left').boundingBox()
 await b.mouse.move(leftBox.x + leftBox.width * 0.3, leftBox.y + leftBox.height * 0.5)
 await b.waitForTimeout(300)
 check('no band with the highlight off', (await b.evaluate(() => document.querySelectorAll('.axt-hl').length)) === 0)
 await b.waitForTimeout(800)
-check('no figure text with the image switch off', (await b.evaluate(() => document.querySelectorAll('.axt-fig').length)) === 0)
-await patch(b, { reading: { sentenceHighlight: true }, image: { enabled: true } })
+check('no figure text with the figures toggle off', (await b.evaluate(() => document.querySelectorAll('.axt-fig').length)) === 0)
+await patch(b, { reading: { sentenceHighlight: true }, pdfReader: { classes: { figures: true, tables: true, heads: true, references: false, names: false } } })
 await settle(b)
 
 // an address that names a display writes nothing, and holds it whatever the settings say

@@ -1,0 +1,25 @@
+\documentclass{article}
+\usepackage{xcolor}
+\usepackage{soul}
+\definecolor{Sun}{RGB}{255,232,128}
+\definecolor{Sky}{RGB}{184,214,255}
+\newcommand{\hlsun}[1]{{\sethlcolor{Sun}\hl{#1}}}
+\newcommand{\hlsky}[1]{{\sethlcolor{Sky}\hl{#1}}}
+\pagestyle{empty}
+\begin{document}
+
+On the far bank the miller kept a small \hlsun{water}\hlsky{wheel} turning all winter, and the whole village relied on it for flour.
+
+Each morning a \hlsun{fore}cast was pinned to the door of the inn; the bak\hlsky{er}y opened at six, and the ferry\hlsun{man} waited for the bell.
+
+The old road ran along the valley, and \hlsky{the travellers who walked it in the evening could see the lights of three towns spread along the river far below them} before the path turned north into the hills.
+
+Nobody in the village remembered who first called it the \hl{lantern} path, nor why the name had stayed.
+
+\begin{figure}[h]
+\centering
+\fbox{\rule{0pt}{2cm}\rule{5cm}{0pt}}
+\caption{A sketch of the mill race (the boards that were replaced are \hlsun{shad}\hlsky{ed}). The rest is drawn as it stood.}
+\end{figure}
+
+\end{document}

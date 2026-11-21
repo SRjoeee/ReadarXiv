@@ -16,9 +16,10 @@ const BASE = fresh()
 
 describe('the value of a field for a target', () => {
   it('is the language\'s own over the script\'s, as resolveRules reads them', () => {
-    // (de overrides latinPatterns; zh does not)
+    // (de and fr override latinPatterns; ru does not)
     expect(fieldValue(BASE, field('latinPatterns'), 'Latn', 'de')).toBe('de')
-    expect(fieldValue(BASE, field('latinPatterns'), 'Latn', 'fr')).toBe('en')
+    expect(fieldValue(BASE, field('latinPatterns'), 'Latn', 'fr')).toBe('fr')
+    expect(fieldValue(BASE, field('latinPatterns'), 'Cyrl', 'ru')).toBe('en')
     expect(fieldValue(BASE, field('leadBase'), 'Hans', 'zh')).toBe(1.3)
     // a language's own field and a set's field
     expect(fieldValue(BASE, field('labels'), 'Hans', 'zh')).toEqual(BASE.languages.zh!.labels)
@@ -35,7 +36,7 @@ describe('where the value comes from', () => {
   it('is the script, the language, the set, or an unsaved edit', () => {
     expect(sourceOf(BASE, BASE, field('leadBase'), 'Hans', 'zh')).toBe('script')
     expect(sourceOf(BASE, BASE, field('latinPatterns'), 'Latn', 'de')).toBe('language')
-    expect(sourceOf(BASE, BASE, field('latinPatterns'), 'Latn', 'fr')).toBe('script')
+    expect(sourceOf(BASE, BASE, field('latinPatterns'), 'Cyrl', 'ru')).toBe('script')
     expect(sourceOf(BASE, BASE, field('labels'), 'Hans', 'zh')).toBe('language')
     expect(sourceOf(BASE, BASE, field('hyphenation.minWord'), 'Hans', 'zh')).toBe('set')
     const edited = edit(BASE, field('leadBase'), 'Hans', 'zh', 1.35)
@@ -130,21 +131,28 @@ describe('how two sets differ', () => {
   })
 
   it('names each field that differs with its two values, a field absent from one side left out of it', () => {
-    const next = edit(edit(edit(BASE, field('leadBase'), 'Hans', 'zh', 1.35), field('trackStart'), 'Latn', 'fr', 0.01, 'script'), field('hyphenation.en.left'), 'Latn', 'fr', 3)
+    const next = edit(edit(edit(BASE, field('leadBase'), 'Hans', 'zh', 1.35), field('trackMin'), 'Latn', 'fr', -0.01, 'script'), field('hyphenation.en.left'), 'Latn', 'fr', 3)
     expect(diffRules(BASE, next)).toEqual([
       { path: 'hyphenation.en.left', from: 2, to: 3 },
-      { path: 'scripts.Latn.trackStart', from: BASE.scripts.Latn.trackStart, to: 0.01 },
+      { path: 'scripts.Latn.trackMin', from: BASE.scripts.Latn.trackMin, to: -0.01 },
       { path: 'languages.zh.leadBase', to: 1.35 },
     ])
     expect(diffRules(next, BASE).at(-1)).toEqual({ path: 'languages.zh.leadBase', from: 1.35 })
+  })
+
+  it('names a hyphenation minimum of every language the set gives one, French, Spanish, Portuguese (#121-4) and the languages of 2026-10-29 as English and German', () => {
+    for (const lang of ['fr', 'es', 'pt', 'it', 'nl', 'pl', 'tr', 'id', 'cs', 'sv', 'uk', 'bg']) {
+      const next = edit(BASE, field(`hyphenation.${lang}.left`), 'Latn', lang, 3)
+      expect(diffRules(BASE, next), lang).toEqual([{ path: `hyphenation.${lang}.left`, from: 2, to: 3 }])
+    }
   })
 
   it('takes an object field whole, and a language only one set holds whole', () => {
     const next = edit(BASE, field('adaptiveFill'), 'Hans', 'zh', { band: 0.1, track: 0.05, size: 1.1 })
     expect(diffRules(BASE, next)).toEqual([{ path: 'languages.zh.adaptiveFill', to: { band: 0.1, track: 0.05, size: 1.1 } }])
     const more = fresh()
-    more.languages.sv = { labels: null }
-    expect(diffRules(BASE, more)).toEqual([{ path: 'languages.sv', to: { labels: null } }])
+    more.languages.da = { labels: null }
+    expect(diffRules(BASE, more)).toEqual([{ path: 'languages.da', to: { labels: null } }])
   })
 
   it('does not depend on the order of an object\'s keys', () => {

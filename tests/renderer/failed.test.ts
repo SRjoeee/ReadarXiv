@@ -5,15 +5,18 @@ import { ERROR_CLASS, FOR_ATTR, PARTIAL_ATTR, SPLIT_CLASS, STATE_ATTR } from '@/
 import { REASON_ATTR, relabelFailed, renderFailed } from '@/core/renderer/failed'
 import { restore } from '@/core/renderer/page'
 import { renderPending } from '@/core/renderer/pending'
-import { resolve } from '@/shared/tokens'
+import { resolve, S, setLocale } from '@readarxiv/ui'
 import { ruleOf, rules, sheet } from '../styles/css-rules'
 import { splitFigures } from '@/core/renderer/split-figures'
 import { clearTranslation, markPartial, renderTable } from '@/core/renderer/translation'
 import { docOfChecked, frag } from './helpers'
-import { S, reasonText, setLocale } from '@/ui/strings'
+import { reasonText } from '@/ui/strings'
 
 // Every document a case renders into is held to the tail mark's invariant afterwards (helpers.ts)
 const docOf = docOfChecked()
+
+/** a click as the reader's pointer or keyboard makes it: trusted, as no page script's can be (the retry acts on no other) */
+const userClick = () => Object.defineProperty(new MouseEvent('click', { bubbles: true, cancelable: true, composed: true }), 'isTrusted', { value: true })
 
 const page = '<p class="ltx_p" id="p1">Text.</p>'
 
@@ -38,6 +41,29 @@ describe('renderFailed', () => {
     setLocale('zh-CN')
     relabelFailed(doc)
     expect(host.getAttribute('title')).toBe(reasonText('auth'))
+  })
+
+  it('a relabelled widget is read in its new words\' language: its lang follows the interface\'s (Codex and Devin on #577)', () => {
+    try {
+      setLocale('ja')
+      const doc = docOf('<p class="ltx_p" id="p1">x</p>')
+      renderFailed(extract(doc)[0] as TextBlock, 'network: down', () => undefined)
+      const host = doc.querySelector<HTMLElement>(`.${ERROR_CLASS}`)!
+      setLocale('ko')
+      relabelFailed(doc)
+      expect([host.lang, host.shadowRoot?.querySelector('button')?.textContent]).toEqual(['ko', S.page.retry])
+    } finally { setLocale('zh-CN') }
+  })
+
+  it('carries the interface\'s language, not the target\'s of the translation node around it: its words are the interface\'s (UI.md §1, fonts)', () => {
+    try {
+      setLocale('ja')
+      const doc = docOf('<p class="ltx_p" id="p1">x</p>')
+      const block = extract(doc)[0] as TextBlock
+      renderFailed(block, 'network: down', () => undefined)
+      const host = doc.querySelector<HTMLElement>(`.${ERROR_CLASS}`)!
+      expect([host.lang, host.shadowRoot?.querySelector('button')?.textContent]).toEqual(['ja', S.page.retry])
+    } finally { setLocale('zh-CN') }
   })
 
   it('removes pending, marks failed, inserts the widget with a shadow root: button + reason', () => {
@@ -80,9 +106,24 @@ describe('renderFailed', () => {
     const retry = vi.fn()
     const host = renderFailed(p, 'x', retry)
     const button = host.shadowRoot!.querySelector('button')!
-    button.click()
+    button.dispatchEvent(userClick())
     expect(retry).toHaveBeenCalledTimes(1)
     expect(button.disabled).toBe(true)
+  })
+
+  it('a page script cannot retry for the reader: an untrusted click or a synthetic key does nothing, the button stays live (DESIGN §4.0c)', () => {
+    const doc = docOf(page)
+    const p = extract(doc)[0] as TextBlock
+    const retry = vi.fn()
+    const button = renderFailed(p, 'x', retry).shadowRoot!.querySelector('button')!
+    button.click()
+    button.dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true }))
+    for (const type of ['keydown', 'keyup', 'keypress']) for (const key of ['Enter', ' ']) button.dispatchEvent(new KeyboardEvent(type, { key, bubbles: true, composed: true }))
+    expect(retry).not.toHaveBeenCalled()
+    expect(button.disabled).toBe(false)
+    // and the reader's own click still works afterwards
+    button.dispatchEvent(userClick())
+    expect(retry).toHaveBeenCalledTimes(1)
   })
 
   it('clearTranslation / restore remove it cleanly, the DOM equal node for node (§7.1)', () => {
@@ -111,6 +152,8 @@ describe('renderFailed', () => {
     expect(widget.getAttribute(REASON_ATTR)).toBe('network: boom')
     expect(copy.textContent).not.toContain('cap')
     widget.shadowRoot!.querySelector('button')!.click()
+    expect(retry).not.toHaveBeenCalled()
+    widget.shadowRoot!.querySelector('button')!.dispatchEvent(userClick())
     expect(retry).toHaveBeenCalledWith(caption.id)
     // The original's own widget is untouched and still live
     expect(doc.querySelectorAll(`.${ERROR_CLASS}`)).toHaveLength(2)

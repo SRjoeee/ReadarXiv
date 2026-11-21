@@ -5,12 +5,8 @@
 // finds a paper. Every measure is popup.css's
 import './popup.css'
 import { CircleAlert, Info, Settings } from 'lucide'
-import { Button } from '@/ui/controls/Button'
-import { Icon } from '@/ui/controls/Icon'
-import { Segmented } from '@/ui/controls/Segmented'
-import { Switch } from '@/ui/controls/Switch'
-import { useTip } from '@/ui/controls/tip'
-import { MODE_ORDER, R, S } from '@/ui/strings'
+import { Button, Icon, Segmented, Switch, useTip, R, S } from '@readarxiv/ui'
+import { MODE_ORDER } from '@/ui/strings'
 import type { PopupActions } from './data'
 import { Entries } from './ui/Entries'
 import { Find } from './ui/Find'
@@ -123,7 +119,8 @@ function Primary({ view, actions }: { view: View; actions: PopupActions }) {
 
 /**
  * The foot (§5.1): the two switches with their words, their whole row their label (§9); the styles trailing — greyed
- * where there are none to choose (the reader), so that the foot is the same on every page
+ * where there are none to choose (the reader), so that the foot is the same on every page. The image switch is greyed on
+ * the reader as well, where the figures' text is the reader's own setting (S-P-03c)
  */
 function Foot({ view, actions }: { view: View; actions: PopupActions }) {
   return (
@@ -134,8 +131,8 @@ function Foot({ view, actions }: { view: View; actions: PopupActions }) {
         {S.rows.highlight}
       </label>
       {/* biome-ignore lint/a11y/noLabelWithoutControl: the control is the switch button inside it, which the rule cannot see through */}
-      <label className="toggle">
-        <Switch label={S.rows.images} checked={view.images} onChange={actions.setImages} />
+      <label className="toggle" data-greyed={view.imagesGreyed || undefined}>
+        <Switch label={S.rows.images} checked={view.images} disabled={view.imagesGreyed} onChange={actions.setImages} />
         {S.rows.images}
       </label>
       <StyleButton value={view.style?.value ?? null} menu={view.menus?.style ?? null} open={view.menu === 'style'} actions={actions} onPick={actions.chooseStyle} />

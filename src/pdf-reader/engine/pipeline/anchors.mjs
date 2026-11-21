@@ -70,7 +70,8 @@ export function tokens(s) {
 /**
  * The document as one stream of tokens in content order, each with its page and box in PDF units (origin at the
  * bottom left). `pages` is [{ page, items, styles }] from getTextContent. A word the text layer gives in two parts is
- * joined back into the first part's token — cut by a hyphen at a line end, or cut on its line where the font changes
+ * joined back into the first part's token — cut by a hyphen at a line end (the end an item's own, or an empty item's after
+ * it: PDF.js's where marked content closes), or cut on its line where the font changes
  * inside it (a heading's small capitals after its capital letter: E + XPERIMENTAL), the second part beginning where
  * the first ends with no space between; the second part keeps its own box with no text, so a line's box still starts
  * where its text does. An item's width is shared evenly between its characters, so a Latin word's box is approximate.
@@ -88,6 +89,18 @@ export function tokens(s) {
  * against the word (its ink, which inkEdges reads across alone, is its box); the carry of an item of marks alone, read along
  * x, is that of text whose baseline runs rightwards alone
  */
+/** how many items on a word a hyphen cut at its line's end waits for its line below */
+const PENDING_ITEMS = 4
+/** and how many of its size further along than its line's item its line below may start: a hanging label's width in (a list's
+ *  bullet, 1.1 sizes, 2307.16209v1 p22's "inves-"/"tigate"; a list of figures' number, 2.3; a bibliography's label, 4), never a
+ *  figure's text set to the right */
+const HANG = 6
+/** and how many past its line's end, above it, the next column's first line may start: a column's gutter (2.7 sizes at most in the
+ *  two-column classes: ACM's 2pc at 9 pt), at its line's size within SAME_SIZE; never a figure's label in that column (2610.21765v1
+ *  p7's "q", 15 sizes past "Sim-", and its axis's "0", 4.6, both smaller than the text) */
+const GUTTER = 3, SAME_SIZE = 0.1
+/** a hyphen's word waiting for its line below: the token, and where its item ended, along which direction, at what size */
+const pendingOf = (token, at) => ({ token, x: at.x, y: at.y, ex: at.ex, ey: at.ey, ux: at.ux, uy: at.uy, size: at.size, left: PENDING_ITEMS })
 export function tokenizeDocument(pages) {
   const doc = []
   const WORD_END = /[\p{L}\p{N}]$/u, WORD_START = /^[\p{L}\p{N}]/u
@@ -97,12 +110,30 @@ export function tokenizeDocument(pages) {
     // carry: the token the next one joins; last: the token holding the last word's text; prev: the last item's end;
     // inkOpen, inkEnd: whether an item of marks alone may still carry the last token's ink on, and from where; lastAcross:
     // whether the last token's item is read along x
-    let carry = null, last = null, prev = null, inkOpen = false, inkEnd = 0, lastAcross = true
+    let carry = null, last = null, prev = null, inkOpen = false, inkEnd = 0, lastAcross = true, hyphened = null, pending = null
     for (const it of items) {
-      if (!it.str) continue
+      // (an empty item that ends a line ends the item before's: PDF.js gives the line's end so where marked content closes after
+      // the item, our wrapped page's groups, so that a word a hyphen cut there was read as two on our page and one on arXiv's,
+      // and 2610.19274v1's list of figures fell under the line check's PAGE_SAME, its pages not drawn)
+      if (!it.str) { if (it.hasEOL && prev) { if (hyphened) pending = pendingOf(hyphened, prev); prev.word = false } continue }
       const [a, b, c, d, x, y] = it.transform
       const along = Math.hypot(a, b), size = along || it.height || Math.abs(d)
       if (prev && Math.abs(x - prev.x) < 0.1 * size && Math.abs(y - prev.y) < 0.05 * size && it.str === prev.str) continue
+      // (a word a hyphen cut at its line's end goes on in the line below, or at the next column's top, never in text set elsewhere
+      // that the stream gives next: a figure's axis label in the next column, "Sim-" and "q" read as "simq" on 2610.21765v1 p7,
+      // its page then another's to the line check; within PENDING_ITEMS items, those between read as they are)
+      if (pending) {
+        const z = Math.max(size, pending.size)
+        const off = (y - pending.ey) * pending.ux - (x - pending.ex) * pending.uy, along = (x - pending.x) * pending.ux + (y - pending.y) * pending.uy
+        const past = (x - pending.ex) * pending.ux + (y - pending.ey) * pending.uy
+        // (below it by half a size to three across the line's direction, starting no further along it than its line's item did,
+        // HANG sizes of slack: a line's start, a hanging label's width in at most; or above it, starting past its end by a
+        // column's gutter at most, at its size: the next column's first line)
+        const below = off < -0.5 * size && off > -3 * z && along <= HANG * z
+        const column = off > 0.5 * size && past >= -size && past <= GUTTER * z && Math.abs(size - pending.size) <= SAME_SIZE * z
+        if (below || column) { carry = pending.token; pending = null }
+        else if (--pending.left <= 0) pending = null
+      }
       const st = styles?.[it.fontName], asc = st?.ascent > 0 ? st.ascent : 0.75, desc = st?.descent < 0 ? st.descent : -0.22
       const perChar = it.str.length ? it.width / it.str.length : 0
       const toks = tokens(it.str)
@@ -160,12 +191,14 @@ export function tokenizeDocument(pages) {
         }
       }
       const tail = it.str.trimEnd()
-      carry = it.hasEOL && /[-­]$/.test(tail) && toks.length && !CJK.test(tail.at(-2) ?? '') ? last : null
+      hyphened = /[-­]$/.test(tail) && toks.length && !CJK.test(tail.at(-2) ?? '') ? last : null
+      carry = null
       // (one object a page, set again for every item: a heavy paper's every item made one more, of more fields, cost its
       // tokenizing a twentieth more)
       prev ??= { str: '', x: 0, y: 0, ex: 0, ey: 0, ux: 1, uy: 0, size: 0, square: true, word: false }
       prev.str = it.str; prev.x = x; prev.y = y; prev.ex = ex; prev.ey = ey; prev.ux = ux; prev.uy = uy; prev.size = size; prev.square = square
       prev.word = !it.hasEOL && toks.length > 0 && WORD_END.test(it.str) && !CJK.test(it.str.at(-1))
+      if (it.hasEOL && hyphened) pending = pendingOf(hyphened, prev)
     }
   }
   return doc
@@ -277,25 +310,37 @@ let shared = new Float64Array(256)
 // ---------------------------------------------------------------- marks
 /** a token whose baseline is within this share of its height of a mark's stands on the mark's own baseline */
 const ON_BASE = 0.1
-/** the token a mark sits right after, on the mark's baseline: for a start mark the word whose box is nearest it, for
- *  an end mark the last word that begins before it (boxes are approximate, see tokenizeDocument), of the words within
- *  0.4 of their height of the mark's baseline — those on its own baseline (ON_BASE) first: a figure's label set large
- *  4.7 pt above a heading's baseline begins after the heading's last word and is no word of its line (1706's
- *  "Attention Visualizations" and the "Layer5" beside it) */
+/** the token a mark stands at, on the mark's baseline: for a start mark the word whose box is nearest it of those it does not
+ *  stand past (a start mark is set before its unit's first glyph: a word whose box holds the mark is its word), else of those it
+ *  does; for an end mark, its mirror, the last word that begins before it (a point of slack: boxes are approximate, see
+ *  tokenizeDocument; a last word's shared box may overrun the mark by a word's length, 2610.10069's "given by|" 9.8 pt), of
+ *  the words within 0.4 of their height of the mark's
+ *  baseline — those on its own baseline (ON_BASE) first: a figure's label set large 4.7 pt above a heading's baseline begins
+ *  after the heading's last word and is no word of its line (1706's "Attention Visualizations" and the "Layer5" beside it).
+ *  A start mark past a word's box and short of the next one's is the next word's: the boxes of one text item are its width
+ *  shared by its characters, so that the gap after a caption's label ("Figure 1:", its \hskip) may fall either side of the
+ *  mark, and the nearest box was the label's on a document read as one item and the caption's first word's on the same page
+ *  read in items cut at the mark (our base page wrapped by optional content: 24 units of 11 papers, a start mark after a
+ *  caption's label or a paragraph's run-in number, left the original's). No slack past a word's end: a label's digit is one
+ *  narrow character, and half of one took 2610.22214's "9" (its box 1.4 pt short of the mark) for its caption's first word */
 export function tokenAtMark(doc, byPage, mk, start) {
   let best = null, on = null
-  const better = (cur, k, d) => !cur || (start ? d < cur.d : doc[k].x > doc[cur.k].x)
+  const better = (cur, k, d, past) => !cur || (start ? (past !== cur.past ? !past : d < cur.d) : doc[k].x > doc[cur.k].x)
   for (const k of byPage.get(mk.page) ?? []) {
     const t = doc[k], dy = Math.abs(t.y - mk.y)
     if (dy > t.h * 0.4) continue
-    let d = 0
-    if (start) { d = mk.x < t.x ? t.x - mk.x : mk.x > t.x + t.w ? mk.x - t.x - t.w : 0; if (d >= 8) continue } else if (!(t.x < mk.x + 1)) continue
-    if (better(best, k, d)) best = { k, d }
-    if (dy <= ON_BASE * t.h && better(on, k, d)) on = { k, d }
+    let d = 0, past = false
+    if (start) { past = mk.x > t.x + t.w; d = mk.x < t.x ? t.x - mk.x : past ? mk.x - t.x - t.w : 0; if (d >= 8) continue } else if (!(t.x < mk.x + 1)) continue
+    if (better(best, k, d, past)) best = { k, d, past }
+    if (dy <= ON_BASE * t.h && better(on, k, d, past)) on = { k, d, past }
   }
   return (on ?? best)?.k ?? null
 }
 
+/** whether a token (tokenizeDocument's) is upright: its `y` its baseline, nearer its box's bottom than its top, the font's
+ *  descent below it and its ascent above; a turned token's `y` is the middle of its run, its box as high above it as below (a
+ *  token may keep no item: layout/arxiv.mjs lets it go) */
+export const uprightToken = t => typeof t?.top === 'number' && typeof t.bottom === 'number' && t.top - t.y > 1.5 * (t.y - t.bottom)
 /** each mark with the word it follows in `doc`, the document the marks were recorded in: { page, x, y, t } */
 export function markWords(doc, marks) {
   const byPage = pageIndex(doc), out = new Map()
@@ -308,25 +353,88 @@ export const pageIndex = d => { const m = new Map(); d.forEach((t, k) => (m.get(
  *  last */
 const cut = (t, start) => (t && t.length > 1 && CJK.test(t) ? ((start ? tokens(t)[0] : tokens(t).at(-1))?.t ?? t) : t)
 
+/** whether a carried word is token k's (as it was, or as the tokenizer cuts it now), or that of the word beside k on its line the
+ *  mark faces, before a start mark and after an end mark: the marked original's word boxes are approximate (one text item a
+ *  line, its width shared by its characters) where the page the marks are carried to may have them exact (our base page,
+ *  wrapped, read in items cut at its groups), so the marked original's word at a mark may be the one beside the mark (a start
+ *  mark's nearer a caption's label; an end mark's the next word, its shared box begun before the mark: 2610.20716's "model|
+ *  the", 2610.20581's "Theorem| 2.2", 2610.22195's cells) — never further. With `either` (the maker's: the marks carried to
+ *  the final pass of their own compile, every mark where TeX set it), the word beside k on the other side too: a shared box
+ *  may put a mark in the word either side of it — a start mark set before a paper's macro's text and the word after it in the
+ *  next word's box (2610.40394v1's `\schedforwardgap{} is`: "strongest" where the base page has "is"; 2608.25210v2's "A
+ *  strictly"), an end mark in the box of the word it follows, where the base page's next word begins at the mark (25210's
+ *  "DOI:|10.14778", 0.02 pt past it) */
+function wordAt(doc, k, t, start, either = false) {
+  const same = j => t === doc[j].t || cut(t, start) === doc[j].t
+  if (same(k)) return true
+  const beside = step => {
+    let j = k + step
+    while (j >= 0 && j < doc.length && doc[j].t === '') j += step
+    return j >= 0 && j < doc.length && doc[j].page === doc[k].page && Math.abs(doc[j].y - doc[k].y) <= 0.4 * doc[k].h && same(j)
+  }
+  return beside(start ? -1 : 1) || (either && beside(start ? 1 : -1))
+}
+
 /**
  * Marks → Map id → [first token, last token]. `marks` is Map `${id}s` / `${id}e` → { page, x, y, t? }. A mark that
  * carries the word it followed where it was recorded (`t`, from markWords) is kept only where `doc` has the same word
  * there: the marks of our own compile of the original then serve arXiv's PDF wherever the two are laid out alike,
  * and nowhere else. `byPage`: the tokens of each page (made here where not given: a caller that bounds a unit at a time makes
- * it once)
+ * it once). `reach` (the layout maker's): a start mark that stands at no word, here and in the marks' own compile (its carried
+ * word null: a unit that opens with a formula, a dash or a comma), is bounded by the word `reach(mark)` gives, or none; and
+ * `reachBack` (the maker's too) an end mark that stands at no word so (no word before it on its line: a `\}` alone on its
+ * unit's last line, an end mark on the empty line TeX resumes after a display) by the word `reachBack(mark)` gives, or none; a
+ * reader's anchors keep tokenAtMark's word alone. `either` (the maker's: `doc` the final pass of the marks' own compile) takes a
+ * carried word beside the mark's token on either side as its word (wordAt)
  */
-export function boundsFromMarks(doc, marks, byPage = pageIndex(doc)) {
+export function boundsFromMarks(doc, marks, byPage = pageIndex(doc), reach = null, reachBack = null, either = false) {
   const out = new Map()
   for (const [name, s] of marks) {
     if (!name.endsWith('s')) continue
     const id = name.slice(0, -1), e = marks.get(`${id}e`)
     if (!e) continue
-    const a = tokenAtMark(doc, byPage, s, true), b = tokenAtMark(doc, byPage, e, false)
+    let a = tokenAtMark(doc, byPage, s, true), b = tokenAtMark(doc, byPage, e, false)
+    const reached = a == null && reach !== null && s.t === null, reachedEnd = b == null && reachBack !== null && e.t === null
+    if (reached) a = reach(s)
+    if (reachedEnd) b = reachBack(e)
     if (a == null || b == null || b < a) continue
     // a carried word as it was, or as the tokenizer cuts it now (cut): the tokenizer still joins a word a hyphen cuts
-    // at a line's end with the CJK character after it, as the carried word has it (the review of A1, M2)
-    if ((s.t !== undefined && s.t !== doc[a].t && cut(s.t, true) !== doc[a].t) || (e.t !== undefined && e.t !== doc[b].t && cut(e.t, false) !== doc[b].t)) continue
+    // at a line's end with the CJK character after it, as the carried word has it (the review of A1, M2); a reached start
+    // has none to compare
+    if ((!reached && s.t !== undefined && !wordAt(doc, a, s.t, true, either)) || (!reachedEnd && e.t !== undefined && !wordAt(doc, b, e.t, false, either))) continue
     out.set(id, [a, b])
+  }
+  return out
+}
+
+/**
+ * The units' bounds with their pieces' points (anchors' bounds, Map id → [first, last]; `points` Map id → each piece's two
+ * points, [opening, closing], each the mark TeX set there ({ page, x, y }) or null, on `doc`'s own pages: the layout maker's,
+ * whose base page is the compile they were read from): Map id → [first, last, tokens], `tokens` the tokens the points stand at
+ * inside the unit's bounds, rising. An opening point stands before its piece's first glyph: the word whose box is nearest it on
+ * its baseline (tokenAtMark's reading of a start mark, never one 8 pt or more away: another column's). A closing point stands
+ * after its piece's last glyph, which a text layer may give no word (a closing parenthesis, a script): the last word that
+ * begins before it on its baseline (an end mark's reading), none before its opening point's word in the stream (so none of
+ * the column before). A unit with no such token keeps its bounds as they are. TeX set each point on the line its piece is set
+ * in, so that line is the unit's whatever words the match found on it (rangeOnPages, placeWith): a line a formula fills, a line
+ * of a piece's at a page's head (2307.16209v1's u128, `with $z_0c_{z_0} = …$` over the whole of page 44's first line; u88's
+ * `${}_sS_{\ell m}(\theta)$` alone on page 34's), one of formulas and citations the 3-grams of the unit's text find no word on
+ * (2610.21026v1's u166)
+ */
+export function withPoints(doc, bounds, points, byPage = pageIndex(doc)) {
+  if (!points?.size) return bounds
+  const out = new Map(bounds)
+  for (const [id, ab] of bounds) {
+    const pairs = points.get(id)
+    if (!pairs?.length) continue
+    const ks = new Set(), inside = k => k !== null && k >= ab[0] && k <= ab[1]
+    for (const [open, close] of pairs) {
+      const a = open ? tokenAtMark(doc, byPage, open, true) : null
+      if (inside(a)) ks.add(a)
+      const b = close ? tokenAtMark(doc, byPage, close, false) : null
+      if (inside(b) && b >= (inside(a) ? a : ab[0])) ks.add(b)
+    }
+    if (ks.size) out.set(id, [ab[0], ab[1], Int32Array.from([...ks].sort((x, y) => x - y))])
   }
   return out
 }
@@ -791,56 +899,185 @@ function walker(doc, ms, owner, line, inFrame, lineOwner, owned, wrote) {
 /**
  * Every unit's place in the document: { rects: [{ page, x0, y0, x1, y1 }], coverage, tokens, bounded } or null when
  * it was not found. `units` is [{ id, text, gaps? }] in document order (`gaps`: mt.mjs unitText). With `bounds` (boundsFromMarks) a unit's first and
- * last token are known and its text is matched inside them only; a unit without marks is searched between its
- * marked neighbours. Without any marks the whole document is searched and a unit needs 60 % of its tokens matched.
+ * last token are known and its text is matched inside them only; where each other unit is searched is searchHead's rule, of
+ * `own` (each unit's own marks' pages; by default its bounds' pages): on its own pages, or between its neighbours with marks.
+ * Without any marks the whole document is searched and a unit needs 60 % of its tokens matched.
  * `floating(id)`: a unit TeX sets away from where the source has it — a caption, with its float; a footnote, at the
  * foot of the page — which is no neighbour to search between: a heading's neighbours in the source were a caption
  * placed a column later, and the heading was searched in a range that ended before it began (2608.02163, Japanese).
- * `floatMatch`: floatMatches' of this `doc` and these units, taken in place of a float's search of the whole document.
+ * `floatMatch`: floatMatches' of this `doc` and these units, taken in place of a float's search of the whole document (a float
+ * without marks not found in its stretch).
  * `forward` (rule 5: a Set of the indices of the units written inside a float, the source parse's `inFloat`): a float's search
  * of the whole document begins at the page of its last body neighbour (pageStarts), `floatMatch` unread.
  * `frame(doc, ms)`: the pages' frame's rule (pageFrame, today's). The matching (matchUnits) and the placing (placeUnits),
  * one after the other
  */
-export function anchorUnits(doc, units, { minCoverage = 0.6, bounds, floating = () => false, floatMatch = null, frame = pageFrame, forward = null } = {}) {
-  return placeUnits(doc, units, matchUnits(doc, units, { minCoverage, bounds, floating, floatMatch, forward }), { frame })
+export function anchorUnits(doc, units, { minCoverage = 0.6, bounds, own = null, floating = () => false, floatMatch = null, frame = pageFrame, forward = null } = {}) {
+  return placeUnits(doc, units, matchUnits(doc, units, { minCoverage, bounds, own, floating, floatMatch, forward }), { frame })
 }
 
+/** the units' order TeX sets them in (openPaper's `texOrder`: their indices, each once), or null where it is their own; one that
+ *  is not an order of the `n` units is refused, never read. The anchoring reads its units' order as the text's (anchorUnits'
+ *  `units` "in document order", left-part.mjs rangedAnchors'): a caller gives them in this one, not in their numbers' */
+export function orderOf(texOrder, n) {
+  if (texOrder == null) return null
+  if (!Array.isArray(texOrder) || texOrder.length !== n) throw new TypeError(`source.texOrder: not an order of the ${n} units`)
+  const seen = new Uint8Array(n)
+  for (const i of texOrder) { if (!Number.isInteger(i) || i < 0 || i >= n || seen[i]) throw new TypeError(`source.texOrder: not an order of the ${n} units`); seen[i] = 1 }
+  return texOrder.every((i, k) => i === k) ? null : texOrder
+}
+/** the units of `ids` (their indices) as places in that order (null: their own) */
+export const placesIn = (ids, order) => { if (!order) return new Set(ids); const at = new Map(order.map((i, k) => [i, k])); return new Set(ids.map(i => at.get(i))) }
 /** a unit without marks — a heading, whose words are also in the running head of every page of its section — is searched
  *  between its marked neighbours in the text only, with room for a float or a footnote that the stream passes through:
  *  MARGIN tokens either side */
 const MARGIN = 100
-/** each unit's nearest marked neighbours in the text (no float: its marks are where TeX set it), by the units' order: the
- *  last token of the one before (-1 for none), the first token of the one after (doc.length for none); with `inFloat` (the
- *  indices of the units written inside a float), also `body`: the last token of the one before that is no unit written inside
- *  a float (rule 5's neighbour: a paragraph in a figure is set where its figure is) */
-function neighbours(doc, units, hard, floating, inFloat = null) {
-  const before = [], after = [], body = inFloat ? [] : null
-  const inText = u => hard[u] && !floating(units[u].id)
-  for (let u = 0, e = -1, b = -1; u < units.length; u++) {
-    before[u] = e
-    if (body) body[u] = b
-    if (inText(u)) { e = hard[u][1]; if (body && !inFloat.has(u)) b = hard[u][1] }
-  }
-  for (let u = units.length - 1, a = doc.length; u >= 0; u--) { after[u] = a; if (inText(u)) a = hard[u][0] }
-  return { before, after, body }
+/** a unit whose marks do not bound it is searched on the pages its own marks stand on and DRIFT pages either side: a mark
+ *  TeX writes before a page break stands a page from its words, and the marked original's pages and the document's drift some
+ *  lines apart (layout/carry.mjs, the drift runs: 15 at the most, 2307.16209's), never a page more */
+export const DRIFT = 1
+
+/** each page's first token and last (the tokens are in page order), a page with none taking the next page's first and the
+ *  last page's before it, and the last page with a token: a page's tokens as an interval */
+export function pageSpans(doc) {
+  const N = doc.length, P = N ? doc[N - 1].page : 0
+  const first = new Int32Array(P + 2).fill(N), last = new Int32Array(P + 2).fill(-1)
+  doc.forEach((t, k) => { if (k < first[t.page]) first[t.page] = k; last[t.page] = k })
+  for (let p = P; p >= 1; p--) if (first[p] === N) first[p] = first[p + 1]
+  for (let p = 1; p <= P; p++) if (last[p] < 0) last[p] = last[p - 1]
+  return { first, last, P }
 }
+
+/** the pages each bounded unit's first and last token stand on (Map id → [low, high]): the own pages of a caller that has
+ *  marks only where they bound (the marks a bound is made of stand on its tokens' pages) */
+export function ownOfBounds(doc, bounds) {
+  const out = new Map()
+  for (const [id, [a, b]] of bounds ?? []) out.set(String(id), [doc[a].page, doc[b].page])
+  return out
+}
+
 /**
- * Each page's first token (the tokens are in page order): `pageStarts(doc)(k)` the first token of token k's page, 0 for k -1.
- * Rule 5's start of a float's search of the whole document (the page stream's bound on where it may stand: E2b design §1.3) is
- * that of its last body neighbour's end (`body`, neighbours'): a float's source comes after that neighbour's, so TeX sets it on
- * that page or a later one (here, at the top, at the bottom, on a page of floats; a figure* the next page at the earliest; a
- * footnote at its call's page's foot or the next)
+ * Where each unit is searched, as the head of the marked original tells it before any mark is read (the one rule of the
+ * matcher, matchUnits, and of the page stream, left-part.mjs rangedAnchors and leftReach). `own` (Map id → [low, high]): the
+ * pages a unit's own marks stand on in the marked original, for every unit with any (its bounds, once read, stand on them).
+ * Each unit's nearest neighbours with marks in the text (no float: its marks are where TeX set it), by the units' order, give
+ * its stretch: from the page before the last of the one before's own pages to the page after the first of the one after's
+ * (`rlo`, `rhi`, tokens); a float's reaches on to the page after the last own page of the float with marks before it (its
+ * table's caption: TeX sets a float with its own units, never before its source, often pages after the text around it:
+ * 2610.30854v1's two tables of page 6, the text around their source on page 4). In it, a unit's gap (edgesOf): between its
+ * nearest bounded neighbours within the stretch, or, for a unit in the text, an unbounded one's own text where it stands on its
+ * own pages. A unit with marks is searched within its bounds; where they do not bound it, first in the part of its gap on its
+ * own pages, DRIFT either side, by the gap's rules, then on those pages alone, and where its stretch meets them nowhere
+ * (`apart`), on them alone. A unit without marks is searched in its gap (MARGIN past its edges for its 3-grams), a float of K
+ * words or more then by its match over the whole document (floatMatches', made at step T). TeX says where each marked unit
+ * stands; the units' order is only the source's, which a float, a note or a unit numbered after the text (an affiliation set at
+ * the paper's end, a figure's units) does not keep: a window between neighbours by their bounds alone ran to wherever the next
+ * bounded one stood, known only once its marks were read, and the page stream held every page such a window could meet
+ * (2610.21884v1's affiliation u2, its marks on page 31, numbered among page 1's units, held page 1 until page 31 was read).
+ * Each step against #584's (the sweep's 78 papers): a float without marks by its match over the whole document alone lost 22
+ * figure units of 2610.37818v1 and took 2610.19159v1's cells from a table 42 pages on; in its whole stretch, a table's cells
+ * took a neighbouring table's (2608.04322v1, 2610.11256v1); a unit whose marks do not bound it on its own pages alone lost a
+ * short text whose words come twice there (2608.06007v1's "Stepfun", 2307.16209v1's "Expansion for :") and took a neighbour's
+ * words (2608.25210v2); a gap bounded at an unbounded neighbour's pages put two paragraphs a page on (2307.16209v1). `inFloat`
+ * (rule 5, `forward`): the places of the units written inside a float, no body neighbour (`bodyOf`). Where no unit has own
+ * pages (`any` false: no marks at all) the whole document is searched
  */
-export function pageStarts(doc) {
-  const first = new Map()
-  doc.forEach((t, k) => { if (!first.has(t.page)) first.set(t.page, k) })
-  return k => (k < 0 ? 0 : first.get(doc[k].page))
+export function searchHead(doc, units, { own = null, floating = () => false, inFloat = null } = {}) {
+  const n = units.length, N = doc.length, { first, last, P } = pageSpans(doc)
+  const ownOf = new Array(n).fill(null)
+  if (P) for (let u = 0; u < n; u++) {
+    const o = own?.get(String(units[u].id))
+    if (!o) continue
+    const a = Math.min(Math.max(1, o[0]), P), b = Math.min(Math.max(1, o[1]), P)
+    ownOf[u] = [Math.min(a, b), Math.max(a, b)]
+  }
+  const any = ownOf.some(o => o !== null), float = new Uint8Array(n)
+  for (let u = 0; u < n; u++) float[u] = floating(units[u].id) ? 1 : 0
+  const inText = u => ownOf[u] !== null && !float[u]
+  // (each unit's nearest neighbours with marks in the text, -1 for none; under rule 5 also the last such that is written inside
+  // no float)
+  const prev = new Int32Array(n), next = new Int32Array(n), bodyOf = inFloat ? new Int32Array(n) : null
+  for (let u = 0, p = -1, b = -1; u < n; u++) { prev[u] = p; if (bodyOf) bodyOf[u] = b; if (inText(u)) { p = u; if (bodyOf && !inFloat.has(u)) b = u } }
+  for (let u = n - 1, q = -1; u >= 0; u--) { next[u] = q; if (inText(u)) q = u }
+  const rlo = new Int32Array(n), rhi = new Int32Array(n), apart = new Uint8Array(n)
+  for (let u = 0, f = -1; u < n; u++) {
+    rlo[u] = prev[u] < 0 ? 0 : first[Math.max(1, ownOf[prev[u]][1] - DRIFT)]
+    rhi[u] = next[u] < 0 ? N - 1 : last[Math.min(P, ownOf[next[u]][0] + DRIFT)]
+    // (a float's stretch on to the pages of the last float with marks before it, its table's caption: TeX sets a float with its
+    // own units, never before its source, often pages after the text around its source; 2610.30854v1's two tables of page 6,
+    // their cells' text neighbours on page 4)
+    if (float[u] && f >= 0) rhi[u] = Math.max(rhi[u], last[Math.min(P, ownOf[f][1] + DRIFT)])
+    if (float[u] && ownOf[u]) f = u
+    // (a unit with marks whose own pages its stretch meets nowhere: its gap between its neighbours is none of its pages)
+    if (ownOf[u]) { const a = first[Math.max(1, ownOf[u][0] - DRIFT)], b = last[Math.min(P, ownOf[u][1] + DRIFT)]; apart[u] = b < rlo[u] || a > rhi[u] ? 1 : 0 }
+  }
+  return { N, P, first, last, own: ownOf, any, float, prev, next, bodyOf, rlo, rhi, apart }
 }
-/** where unit u's text is searched: its own bounds; with marks elsewhere, between its marked neighbours, MARGIN past them;
- *  with no marks at all, the whole document */
-function windowOf(doc, u, hard, bounds, before, after) {
-  return hard[u] ?? (bounds?.size ? [Math.max(0, before[u] + 1 - MARGIN), Math.min(doc.length - 1, after[u] - 1 + MARGIN)] : [0, doc.length - 1])
+/** unit u's own pages as tokens, DRIFT pages either side (searchHead's `o`, its own pages) */
+export const ownWindow = (head, o) => [head.first[Math.max(1, o[0] - DRIFT)], head.last[Math.min(head.P, o[1] + DRIFT)]]
+/** where each unit with marks stands by its text alone (`ownPlaces(doc, units, head, minCoverage)(v)`): its 3-grams' match on its
+ *  own pages and DRIFT beside, of `minCoverage` of its words at least (matchUnits'), a shorter text's words in a row once there;
+ *  or null. A function of the unit's text and its own pages, made once a unit. A neighbour whose marks do not bound it bounds a
+ *  gap there: its pages' edge took the next page's words into a gap (2307.16209v1's "Expansion for :", between two paragraphs
+ *  over page breaks no mark of which is carried, put a page on, past the paragraph after it) */
+export function ownPlaces(doc, units, head, minCoverage = 0.6) {
+  const memo = new Map()
+  return v => {
+    if (memo.has(v)) return memo.get(v)
+    let r = null
+    const o = head.own[v]
+    if (o) {
+      const w = unitWords(units[v].text, units[v].gaps), [a, z] = ownWindow(head, o)
+      if (w.ws.length >= K && a <= z) { const m = locate(doc, buildIndex(doc, a, z), w.ws, a, z, false)?.tokens; if (m && Math.min(1, m.length / w.ws.length) >= minCoverage) r = m } else if (w.ws.length) r = inRow(doc, w.ws, a, z, false, w.gap)
+    }
+    memo.set(v, r)
+    return r
+  }
+}
+/** the gap a unit without bounds is searched in (searchHead's), `hard` each unit's bounds or null, `place` ownPlaces': [the last
+ *  token before it, the first after it], from its nearest neighbours with marks in the text outwards while their own pages meet
+ *  its stretch: the first bounded one's bounds, or, for a unit in the text, where an unbounded one's own text stands on its own
+ *  pages; else the stretch's edge, never past it. A float takes no neighbour's text place: TeX sets a figure at its page's top,
+ *  not between its text neighbours' words (1810.04805v2's page 16), and a table's cells between its caption and the text after
+ *  it, past an unbounded paragraph's words (2610.21880v1). `marked(v)` (the page stream's): whether unit v's marks are read;
+ *  null where the walk meets one not marked, the gap not known yet. A function of the units it walks over alone */
+export function edgesOf(head, hard, u, place, marked = null) {
+  const text = !head.float[u], lowPage = head.own[head.prev[u]]?.[1] - DRIFT, highPage = head.own[head.next[u]]?.[0] + DRIFT
+  let e = head.rlo[u] - 1, s = head.rhi[u] + 1
+  for (let p = head.prev[u]; p >= 0 && head.own[p][1] >= lowPage; p = head.prev[p]) {
+    if (marked && !marked(p)) return null
+    if (hard[p]) { e = hard[p][1]; break }
+    if (text) { const r = place(p); if (r?.length) { e = Math.max(...r); break } }
+  }
+  for (let q = head.next[u]; q >= 0 && head.own[q][0] <= highPage; q = head.next[q]) {
+    if (marked && !marked(q)) return null
+    if (hard[q]) { s = hard[q][0]; break }
+    if (text) { const r = place(q); if (r?.length) { s = Math.min(...r); break } }
+  }
+  return [Math.max(e, head.rlo[u] - 1), Math.min(s, head.rhi[u] + 1)]
+}
+/** rule 5's start of a float's search of the whole document: the first token of the page its last body neighbour (searchHead's
+ *  `bodyOf`) ends on, its bounds' end, else the page before its last own page; 0 for none. A float's source comes after that
+ *  neighbour's, so TeX sets it on that page or a later one (here, at the top, at the bottom, on a page of floats; a figure* the
+ *  next page at the earliest; a footnote at its call's page's foot or the next) */
+export function bodyStart(head, hard, u, doc) {
+  const v = head.bodyOf[u]
+  if (v < 0) return 0
+  const k = hard[v] ? hard[v][1] : head.first[Math.max(1, head.own[v][1] - DRIFT)]
+  return k >= head.N ? head.N : head.first[doc[k].page]
+}
+/** whether a unit's words make 3-grams (K of them or more): a float without marks of so many is searched over the whole
+ *  document, a shorter one between its neighbours (floatMatches makes a match for the first alone) */
+export const threeGrams = u => unitWords(u.text, u.gaps).ws.length >= K
+/** where unit u's text is searched first (searchHead's rule): its own bounds; with marks that do not bound it, its own pages
+ *  and DRIFT beside; else between its neighbours, MARGIN past their bounds, within its stretch; with no marks at all, the whole
+ *  document */
+function windowOf(head, u, hard, before, after) {
+  if (hard[u]) return hard[u]
+  if (!head.any) return [0, head.N - 1]
+  const o = head.own[u]
+  if (o) return ownWindow(head, o)
+  return [Math.max(head.rlo[u], before[u] + 1 - MARGIN), Math.min(head.rhi[u], after[u] - 1 + MARGIN)]
 }
 
 /**
@@ -907,67 +1144,148 @@ export function forwardSpans(doc, units, floating = () => false, index = buildIn
 /**
  * Each unit's match (anchorUnits' first half): an array by the units' order, each { m, coverage, bounded, ws?, pairs?,
  * textPairs? } or null. `only`: a Set of indices into `units`, the units matched (the others null), their neighbours still
- * read from every unit's bounds: a unit's match is a function of its own bounds, its neighbours', its text and the document's
- * tokens in its window. The 3-gram index is made over the windows searched alone and let go (a window's hits are those
+ * read from every unit's bounds: a unit's match is a function of its own bounds, its neighbours', its text (and, for a heading
+ * found by the gap's rule, the texts of the units between the same marked neighbours: below) and the document's tokens in its
+ * window. The 3-gram index is made over the windows searched alone and let go (a window's hits are those
  * inside it: locate). `forward`: anchorUnits' (rule 5); `wholeIndex` (a holder, { index }): the whole document's index
  * its forward searches read, made there once and kept (the page stream's, a range at a time), in place of one made a call.
- * `known` { hard, before, after, body }: each unit's bounds (`bounds`' of its id, or null) and its neighbours (neighbours'),
- * a caller's that keeps them (the page stream), true at least of the units `only` holds: a call is then of those units alone
+ * `known` { head, hard, before, after, body }: searchHead's head, each unit's bounds (`bounds`' of its id, or null), and its gap
+ * (edgesOf) and rule 5 start (bodyStart), a caller's that keeps them (the page stream), true at least of the units `only` holds:
+ * a call is then of those units alone. `own` as anchorUnits'; every bounded unit has its own pages (a TypeError where one has
+ * none)
  */
-export function matchUnits(doc, units, { minCoverage = 0.6, bounds, floating = () => false, floatMatch = null, only = null, forward = null, wholeIndex = null, known = null } = {}) {
+export function matchUnits(doc, units, { minCoverage = 0.6, bounds, own = null, floating = () => false, floatMatch = null, only = null, forward = null, wholeIndex = null, known = null } = {}) {
   const hard = known ? known.hard : units.map(u => bounds?.get(String(u.id)) ?? null)
-  const { before, after, body } = known ?? neighbours(doc, units, hard, floating, forward)
-  // (rule 5: a float's search of the whole document from the page of its last body neighbour on)
-  const start = forward ? pageStarts(doc) : null
-  const fromOf = u => start(body[u])
+  const head = known ? known.head : searchHead(doc, units, { own: own ?? ownOfBounds(doc, bounds), floating, inFloat: forward })
+  if (!known) for (let u = 0; u < units.length; u++) if (hard[u] && !head.own[u]) throw new TypeError(`matchUnits: unit ${units[u].id} bounded, its own pages not given`)
+  // (each unit's gap between its neighbours, and under rule 5 its search's start: the caller's, or made here of every unit's)
+  let before = known?.before, after = known?.after, body = known?.body
+  if (!known) {
+    before = new Int32Array(units.length); after = new Int32Array(units.length); body = forward ? new Int32Array(units.length) : null
+    const place = ownPlaces(doc, units, head, minCoverage)
+    for (let u = 0; u < units.length; u++) { if (!hard[u] && !head.apart[u]) [before[u], after[u]] = edgesOf(head, hard, u, place); if (body) body[u] = bodyStart(head, hard, u, doc) }
+  }
+  const fromOf = u => body[u]
   // the units matched (`only`'s, rising; else every one), their words, and the span of the document their searches by
   // 3-grams read
   const list = only ? [...only].sort((a, b) => a - b) : units.map((_, u) => u)
   const words = new Array(units.length).fill(null)
   for (const u of list) words[u] = unitWords(units[u].text, hard[u] ? null : units[u].gaps)
+  /** a float without marks of K words or more: searched between its neighbours, then over the whole document (searchHead's rule) */
+  const overWhole = u => !hard[u] && head.any && !head.own[u] && floating(units[u].id) && words[u].ws.length >= K
   let from = Infinity, to = -Infinity
   for (const u of list) {
     const { id } = units[u], w = words[u]
     if (!w || w.ws.length < K) continue
-    const [lo, hi] = windowOf(doc, u, hard, bounds, before, after)
-    // (a float's search of the whole document, where no match of it is given; under rule 5 from its start, on an index of the
-    // whole document's given where it is)
-    const all = !hard[u] && bounds?.size && floating(id) && (forward ? !wholeIndex : !floatMatch?.has(id))
-    from = Math.min(from, all ? (forward ? fromOf(u) : 0) : lo); to = Math.max(to, all ? doc.length - 1 : hi)
+    const whole = overWhole(u), [lo, hi] = windowOf(head, u, hard, before, after)
+    from = Math.min(from, lo); to = Math.max(to, hi)
+    // (its search of the whole document, where no match of it is given; under rule 5 from its start, on an index of the whole
+    // document's given where it is)
+    if (whole && (forward ? !wholeIndex : !floatMatch?.has(id))) { from = Math.min(from, forward ? fromOf(u) : 0); to = doc.length - 1 }
   }
   const index = from <= to ? buildIndex(doc, from, to) : new Map()
   const found = new Array(units.length).fill(null)
-  for (const u of list) {
+  /** each unit's match found by its words in a row in the gap between its marked neighbours (the rule below), by index; and
+   *  those whose words come so once in the gap, whose place is certain */
+  const byRow = new Set(), once = new Set()
+  /** unit u's match (the loop's body), or null, its 3-grams searched in `idx` (one made over its window at least); `byRow` told
+   *  where the gap's rule found it */
+  const matchOne = (u, idx = index) => {
     const { id } = units[u]
-    if (!words[u]) continue
+    if (!words[u]) return null
     const b = hard[u]
     // where its placeholders stood matters to a unit found as a run of words, which a unit with marks never is
     const { ws, gap } = words[u]
-    const [lo, hi] = windowOf(doc, u, hard, bounds, before, after)
+    // (where it is searched: within its bounds; without them, in the gap between its neighbours (its words in a row, `gLo` to
+    // `gHi`; its 3-grams MARGIN past, within its stretch, `lo` to `hi`), a unit whose marks do not bound it the part of that gap on
+    // its own pages and DRIFT beside (none where its stretch meets them nowhere), then those pages alone; a float without marks of
+    // K words or more, then over the whole document)
+    const o = !b && head.any ? head.own[u] : null, whole = overWhole(u)
+    let gLo = 0, gHi = -1, lo = 0, hi = -1
+    if (b) [lo, hi] = b
+    else if (!head.any) [lo, hi] = [0, doc.length - 1]
+    else if (!o || !head.apart[u]) {
+      gLo = before[u] + 1; gHi = after[u] - 1
+      lo = Math.max(head.rlo[u], before[u] + 1 - MARGIN); hi = Math.min(head.rhi[u], after[u] - 1 + MARGIN)
+      if (o) { const [x, y] = ownWindow(head, o); gLo = Math.max(gLo, x); gHi = Math.min(gHi, y); lo = Math.max(lo, x); hi = Math.min(hi, y) }
+    }
     // a heading — no marks, in the text between its located neighbours: its words in a row in the gap between them
     // alone, no margin, the last place they come there, since a heading is followed by its own text; a running head
     // with its words comes before it, and the next section's text is past the gap. By 3-grams it was taken from a
     // paragraph beside it that has the same words (2608.02163 in Chinese: a heading of four characters the text
-    // around it keeps using)
-    let m = !b && bounds?.size && ws.length && !floating(id) ? inRow(doc, ws, before[u] + 1, after[u] - 1, true, gap) : null
+    // around it keeps using). A unit whose marks do not bound it so too, in the part of the gap on its own pages (2608.25210v2's
+    // prompt paragraph, whose 3-grams on its own pages took its neighbour's words)
+    let m = !b && gLo <= gHi && ws.length && !floating(id) ? inRow(doc, ws, gLo, gHi, true, gap) : null
+    if (m && !o) { byRow.add(u); const f = inRow(doc, ws, gLo, gHi, false, gap); if (f && f[0] === m[0]) once.add(u) }
     let pairs = null
-    if (!m && ws.length >= K && lo <= hi) { const r = locate(doc, index, ws, lo, hi, !!b); if (r) { m = r.tokens; pairs = r.pairs } }
-    // a float's text too short for 3-grams (a table's cell of one or two words): the words in a row, once, in the gap
-    // between its located neighbours alone
-    if (!m && !b && ws.length && ws.length < K && bounds?.size) m = inRow(doc, ws, before[u] + 1, after[u] - 1, false, gap)
-    // a float's text that is not there: its float may stand anywhere, so the whole document, as with no marks at all —
+    if (!m && ws.length >= K && lo <= hi) { const r = locate(doc, idx, ws, lo, hi, !!b); if (r) { m = r.tokens; pairs = r.pairs } }
+    // a text too short for 3-grams (a table's cell of one or two words): the words in a row, once, in the gap alone
+    if (!m && !b && ws.length && ws.length < K && gLo <= gHi) m = inRow(doc, ws, gLo, gHi, false, gap)
+    // a unit whose marks do not bound it, not in that gap (or there too little of it to keep): on its own pages and DRIFT beside,
+    // by 3-grams, a short text by its words in a row once (an affiliation TeX set at the paper's end, its neighbours in the
+    // units' order on page 1)
+    if (o && m && Math.min(1, m.length / ws.length) < minCoverage) { m = null; pairs = null }
+    if (!m && o) {
+      const [x, y] = ownWindow(head, o)
+      if (ws.length >= K) { const r = locate(doc, idx, ws, x, y, false); if (r) { m = r.tokens; pairs = r.pairs } } else if (ws.length) m = inRow(doc, ws, x, y, false, gap)
+    }
+    // a float without marks not between its neighbours: its float may stand anywhere, so the whole document, as with no marks at all —
     // the words of a located unit are that unit's (owner, below)
-    if (!m && !b && ws.length >= K && bounds?.size && floating(id)) {
+    if (!m && whole) {
       // (rule 5: from the page of its last body neighbour on, never step T's match of the whole document, which may stand before)
       if (forward) m = locate(doc, wholeIndex ? (wholeIndex.index ??= buildIndex(doc)) : index, ws, fromOf(u), doc.length - 1, false)?.tokens ?? null
       else m = (floatMatch?.has(id) ? floatMatch.get(id) : locate(doc, index, ws, 0, doc.length - 1, false)?.tokens) ?? null
     }
     // a run takes a placeholder's words besides the unit's own, which are all there
     const coverage = m ? Math.min(1, m.length / ws.length) : 0
-    if (!b && (!m || coverage < minCoverage)) continue
+    if (!b && (!m || coverage < minCoverage)) { byRow.delete(u); once.delete(u); return null }
     // a unit with marks keeps its words and which of them were matched where, for a break (wordsBetween); one found by
     // its text alone keeps the match's map too, for its sentences' starts before any marks come (sentenceStarts, B3c)
-    found[u] = b ? { m: m ?? [], coverage, bounded: b, ws, pairs } : { m: m ?? [], coverage, bounded: b, textPairs: pairs }
+    return b ? { m: m ?? [], coverage, bounded: b, ws, pairs } : { m: m ?? [], coverage, bounded: b, textPairs: pairs }
+  }
+  for (const u of list) found[u] = matchOne(u)
+  // a unit found by its words in a row in the gap between its marked neighbours, the last of several places they come there, is
+  // searched again between its nearest neighbours whose place is certain, before and after it in the units' order (no float,
+  // whose place is its own): found by their text, or so too where their words come once in the gap. The last place in the gap
+  // between marked neighbours is no unit's where that gap holds a float or a note with the same words after it. On arXiv's PDF
+  // the marks of 2610.37668v1's units 234 to 262 were not carried (pages 21 and 22), and the heading "Surface losses." (u242)
+  // took a panel title of the figure at the top of page 22, the last of eight places of its words in the gap, where its own,
+  // the fourth, stands right before its text (u243, found by its words at the next token): its text, laid after it in K, found
+  // no lead and was laid where the English head had ended. A neighbour found by the same rule at one of several places is no
+  // bound: 2610.16663v1's two headings of one title (pages 56 and 60) both took the gap's last place (page 64), and either as the
+  // other's bound put it on the other's place. A neighbour outside `only` is matched here as the loop matches it (a function of
+  // its window, which is the unit's), so that a call of some units alone finds what the call of every unit finds: the
+  // neighbours' matches are those of the loop alone, never one this search moved. Where the narrower gap holds no such run, the
+  // match stays
+  const first = found.slice(), near = new Map(), windows = new Map()
+  const matchedOf = v => {
+    if (!only || only.has(v)) return first[v]
+    if (!near.has(v)) {
+      // (its words, and its window, the gap's of every unit between the same marked neighbours: an index of it where the call's
+      // does not hold it)
+      words[v] ??= unitWords(units[v].text, hard[v] ? null : units[v].gaps)
+      const [lo, hi] = windowOf(head, v, hard, before, after), key = `${lo} ${hi}`
+      if (lo >= from && hi <= to) near.set(v, matchOne(v))
+      else { if (!windows.has(key)) windows.set(key, lo <= hi ? buildIndex(doc, lo, hi) : new Map()); near.set(v, matchOne(v, windows.get(key))) }
+    }
+    return near.get(v)
+  }
+  for (const u of [...byRow]) {
+    if (!first[u] || once.has(u)) continue
+    const neighbour = step => {
+      for (let v = u + step; v >= 0 && v < units.length; v += step) {
+        if (head.own[v] && !floating(units[v].id)) return null
+        if (floating(units[v].id)) continue
+        const f = matchedOf(v)
+        if (f?.m?.length && (!byRow.has(v) || once.has(v))) return f.m
+      }
+      return null
+    }
+    const left = neighbour(-1), right = neighbour(1)
+    const lo = Math.max(before[u], left ? Math.max(...left) : -1) + 1, hi = Math.min(after[u], right ? Math.min(...right) : doc.length) - 1
+    if (lo <= before[u] + 1 && hi >= after[u] - 1) continue
+    const m = lo <= hi ? inRow(doc, words[u].ws, lo, hi, true, words[u].gap) : null
+    if (m) found[u] = { ...found[u], m, coverage: Math.min(1, m.length / words[u].ws.length) }
   }
   return found
 }
@@ -989,6 +1307,87 @@ function placeLines(doc) {
   made = { line, lineSize: { get: l => counts[l] }, lines: counts.length }
   linesMade.set(doc, made)
   return made
+}
+/**
+ * A marked unit's range as it owns tokens (placeWith): on one page, its marks' [first, last]; over a page break, on each page it
+ * reaches, from its first own line there to its last, its marks' tokens on their own pages — never the page's text past its lines.
+ * Its own lines are those its tokens are most of (ownOnLines: its matched words and a placeholder's tokens between two of them), or
+ * next to one that they are most of (placeWith's `keep`, the words it keeps), and its marks' lines. A footnote over a page break is set at the foot of both pages, and the stream between its two
+ * parts is the next page's column: 1810.04805v2's footnote 1, over pages 3 and 4, owned page 4's left column, and the three
+ * headings there that no mark bounds, matched inside it, were the footnote's words and placed nowhere. The same for every unit
+ * that runs over a break (a paragraph owns no more of its next page's head than its own first line on): `f` matchUnits' match
+ * of the unit ({ bounded, m }), `line` and `lineSize` placeLines'. { ranges, own }: `own(k)` whether token k stands on one of the
+ * unit's own lines (null for a unit on one page)
+ */
+/**
+ * How many of a unit's tokens each line holds, as its own lines are told (rangeOnPages, placeWith's `keep`): its matched words
+ * `ks`, and the tokens between two of them on one line that are words next to each other in its text (`pairs`, the match's map
+ * of a word's place in the text to its token), which no word of its text stands between: its placeholder's, a formula's or a
+ * citation's, as `between` takes them. A line a formula fills holds more of its tokens than of its words: 2610.40645v1's u9,
+ * over pages 2 and 3, had 7 of the 18 tokens of its first line on page 3 matched, under the 40 % a line needs, its neighbours
+ * the page's number and its display, and the line was no one's (its formula LOST, the unit the original's). Map line -> count
+ */
+function ownOnLines(ks, pairs, line) {
+  const per = new Map()
+  for (const k of ks) per.set(line[k], (per.get(line[k]) ?? 0) + 1)
+  if (!pairs) return per
+  const mine = new Set(ks)
+  for (const [w, k] of pairs) {
+    const next = pairs.get(w + 1)
+    if (next === undefined || next - k < 2 || !mine.has(k) || !mine.has(next) || line[k] !== line[next]) continue
+    per.set(line[k], per.get(line[k]) + next - k - 1)
+  }
+  return per
+}
+function rangeOnPages(doc, f, line, lineSize) {
+  const [a, b, points] = f.bounded
+  if (doc[a].page === doc[b].page) return { ranges: [[a, b]], own: null }
+  const per = ownOnLines(f.m.filter(k => k >= a && k <= b), f.pairs, line)
+  const most = l => per.get(l) >= Math.min(3, lineSize.get(l)) * 0.5 && per.get(l) / lineSize.get(l) >= 0.4
+  // (and the lines its pieces' points stand on, TeX's lines of the unit: withPoints)
+  const pointed = new Set(points ? Array.from(points, k => line[k]) : [])
+  const own = l => l === line[a] || l === line[b] || pointed.has(l) || (per.has(l) && (most(l) || (per.has(l - 1) && most(l - 1)) || (per.has(l + 1) && most(l + 1))))
+  const out = []
+  let lo = -1, hi = -1
+  for (let k = a; k <= b; k++) {
+    if (lo >= 0 && doc[k].page !== doc[lo].page) { out.push([lo, hi]); lo = -1 }
+    if (own(line[k])) { if (lo < 0) lo = k; hi = k }
+  }
+  if (lo >= 0) out.push([lo, hi])
+  return { ranges: out, own: k => own(line[k]) }
+}
+
+/**
+ * Every marked unit's ranges (rangeOnPages'), as [[first, last], unit], none of those over a page break begun or ended inside
+ * another's range it would cross: a range its own lines shrank stops short of a range whose start it would hold and not its end,
+ * or begins after one whose end it would hold and not its start. A unit's lines are its matched words' lines, and a caption set
+ * above a paragraph's next lines may repeat its words densely enough to count as one of them: 2307.16209v1's paragraph 408, over
+ * pages 114 and 115, began its page-115 range at the second line of caption 396 above it and took that line, where its whole
+ * range held the caption's inside it. Shrunk so, it holds what its whole range held there, the caption the caption's
+ */
+function rangesOf(doc, found, line, lineSize) {
+  const per = found.map(f => (f?.bounded ? rangeOnPages(doc, f, line, lineSize) : null))
+  const all = per.flatMap((o, u) => (o ? o.ranges.map(r => [r, u]) : []))
+  const out = []
+  per.forEach((o, u) => {
+    if (!o) return
+    if (!o.own) { out.push([o.ranges[0], u]); return }
+    for (let [lo, hi] of o.ranges) {
+      // (a range of another unit's that this one would cross, its first token inside it and its last past it, or the reverse:
+      // the nearest end of it moved past it, onto this one's own line beyond, until none crosses; none left, none)
+      for (let moved = true; moved && lo <= hi;) {
+        moved = false
+        for (const [[c, d], v] of all) {
+          if (v === u || c > hi || d < lo) continue
+          if (c < lo && lo <= d && hi > d) { lo = d + 1; moved = true }
+          else if (c <= hi && hi < d && lo < c) { hi = c - 1; moved = true }
+          if (moved) { while (lo <= hi && !o.own(lo)) lo++; while (hi >= lo && !o.own(hi)) hi--; break }
+        }
+      }
+      if (lo <= hi) out.push([[lo, hi], u])
+    }
+  })
+  return out
 }
 /** placeUnits' owners of a document's tokens and of its lines (-1: none), kept a document and -1 throughout between calls
  *  (each call sets back what it wrote): a call reads and writes the tokens its units own, not the whole document's */
@@ -1021,9 +1420,10 @@ export function placeUnits(doc, units, found, { frame = pageFrame, only = null }
  *  and its displays taken all the same), its owners' arrays given, -1 throughout, and what it writes kept for the caller to set
  *  back: the ranges filled (`ranges`), the tokens and lines written one at a time (`wrote`) */
 function placeWith(doc, units, found, frame, only, line, lineSize, owner, lineOwner, wrote, ranges) {
-  // who owns each token: a marked unit its whole range, the innermost range winning (a footnote inside a paragraph
-  // is the footnote's); an unmarked unit its matched words
-  const ranged = found.map((f, u) => [f?.bounded, u]).filter(([b]) => b).sort((x, y) => (y[0][1] - y[0][0]) - (x[0][1] - x[0][0]))
+  // who owns each token: a marked unit its range, the innermost range winning (a footnote inside a paragraph is the
+  // footnote's); an unmarked unit its matched words. A range on each page it reaches holds the unit's own lines there and
+  // what stands between them, never the page's text past them (rangeOnPages)
+  const ranged = rangesOf(doc, found, line, lineSize).sort((x, y) => (y[0][1] - y[0][0]) - (x[0][1] - x[0][0]))
   for (const [[a, b], u] of ranged) { owner.fill(u, a, b + 1); ranges.push([a, b]) }
   // two ranges that cross (neither apart nor one inside the other): a paragraph and a footnote both going on over a page,
   // the stream's order u's lines, v's first lines (the page's foot), u's next lines (the next page's head), v's last lines.
@@ -1064,8 +1464,7 @@ function placeWith(doc, units, found, frame, only, line, lineSize, owner, lineOw
     const f = found[u]
     if (!f) return null
     const mine = f.m.filter(k => owner[k] === u || (!f.bounded && owner[k] === -1))
-    const perLine = new Map()
-    for (const k of mine) perLine.set(line[k], (perLine.get(line[k]) ?? 0) + 1)
+    const perLine = ownOnLines(mine, f.pairs ?? f.textPairs, line)
     const most = l => perLine.get(l) >= Math.min(3, lineSize.get(l)) * 0.5 && perLine.get(l) / lineSize.get(l) >= 0.4
     const keep = l => most(l) || (perLine.has(l - 1) && most(l - 1)) || (perLine.has(l + 1) && most(l + 1))
     let kept = mine.filter(k => keep(line[k]))
@@ -1077,7 +1476,13 @@ function placeWith(doc, units, found, frame, only, line, lineSize, owner, lineOw
       const same = kept.filter(k => Math.abs(doc[k].h - body) <= body * 0.15)
       if (same.length) kept = same
     }
-    const m = f.bounded ? [...new Set([f.bounded[0], ...kept, f.bounded[1]])].sort((x, y) => x - y) : kept
+    // (over a page break, a bounded unit's pieces' points on a page none of its kept words is on, where it owns them: its tokens
+    // whatever their size or share of their line, as its marks are, so that the lines they stand on are among its lines there
+    // (rangeOnPages, withPoints). On a page its words were found on, they place it, as before; on one page its range is its own
+    // throughout, and what of it joins its marks is between's)
+    const keptOn = new Set(kept.map(k => doc[k].page))
+    const points = f.bounded?.[2] && doc[f.bounded[0]].page !== doc[f.bounded[1]].page ? Array.from(f.bounded[2]).filter(k => owner[k] === u && !keptOn.has(doc[k].page)) : []
+    const m = f.bounded ? [...new Set([f.bounded[0], ...kept, ...points, f.bounded[1]])].sort((x, y) => x - y) : kept
     return m.length ? m : null
   })
   // a display a unit sets before its first words or after its last (latex-front's `lead`, `trail`: its letters) stands

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { ABS_LINK_CLASS, AUTO_TRANSLATE_HASH, injectBilingualLink, relabelBilingualLink, retargetBilingualLink, startsTranslation } from '@/core/abstract/link'
-import { LOCALES } from '@/locales'
+import { LOCALES } from '@readarxiv/ui'
 
 // The bilingual entry on the abstract page (issue #146). The fixture is a real arxiv.org/abs page: the insertion point relies on arXiv's own
 // markup, and only a test against the real markup says anything
@@ -20,6 +20,15 @@ describe('the bilingual entry on the abstract page (#146)', () => {
     expect(doc.querySelector(`.${ABS_LINK_CLASS}`)?.textContent).toBe(en)
     // On a page without this link nothing happens, and nothing throws
     expect(relabelBilingualLink(pageOf(), en)).toBe(false)
+  })
+
+  it('carries the interface\'s language on our own node, on arXiv\'s English page, and follows a change of it (UI.md §1, fonts)', () => {
+    const doc = pageOf()
+    expect(injectBilingualLink(doc, LOCALES.ja.S.page.abstractLink(LOCALES.ja.S.brand), { lang: 'ja' })).toBe(true)
+    const link = doc.querySelector<HTMLAnchorElement>(`.${ABS_LINK_CLASS}`)!
+    expect(link.lang).toBe('ja')
+    relabelBilingualLink(doc, LOCALES.ko.S.page.abstractLink(LOCALES.ko.S.brand), 'ko')
+    expect([link.lang, link.textContent]).toEqual(['ko', '이중 언어 버전(Read arXiv)'])
   })
 
   it('opens in a new tab by default, so the abstract page the reader is on stays where it is (the owner, 2026-09-18)', () => {

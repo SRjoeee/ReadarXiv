@@ -6,15 +6,21 @@
 // may hold a smaller unit id), and the drawing reads none: no row's font, no name's, no index.font.
 
 import { indexLayout, LAYOUT_SCHEMA, mergeLayout } from '../layout/file.mjs'
+import { layerDraws } from './format.mjs'
 
 /**
- * The layout of a paper's parts as one layout file, the head's (`head`: readHead's: the paper, its versions and its lineskip).
- * `index`: indexLayout's shape ({ file, unit, onPage, names, view, font }), the same object for the door's life, answering from
- * the parts added so far (before any: a file of no unit, the head's lineskip). `add(part)`: a part read by readPart, in the
- * chain's order; its views kept, its layout merged where it has one (a part with `layout: null` adds no unit).
+ * The layout of a paper's parts as one layout file, the head's (`head`: readHead's: the paper, its versions, its base and its
+ * lineskip). `index`: indexLayout's shape ({ file, unit, onPage, names, view, font }), the same object for the door's life,
+ * answering from the parts added so far (before any: a file of no unit, the head's lineskip). `add(part)`: a part read by
+ * readPart, in the chain's order; its views kept, its layout merged where it has one (a part with `layout: null`, or a refusal's
+ * record, adds no unit).
+ * The layer draws a unit only from the layout file, and a file's coordinates are the base page's: a head whose base is arXiv's
+ * (`base.source` 'arxiv': a paper whose own compile was no base page, or a bundle of 7, drawn over arXiv's PDF) adds no layout
+ * of its parts, so that its layer draws nothing and the host shows arXiv's PDF untranslated.
  */
 export function layoutFacade(head) {
   const { id, version, pages } = head.paper
+  const ours = layerDraws(head.base)
   const layouts = [], views = []
   const fileOf = () => ({
     schema: LAYOUT_SCHEMA, layout: head.versions.layout, pdfjs: head.versions.pdfjs, paper: { id, version, pages }, left: '',
@@ -34,7 +40,7 @@ export function layoutFacade(head) {
     add(part) {
       const [a] = part.pages
       for (let q = a; q <= part.reach; q++) if (views.length < 4 * q) views.push(...part.views.slice(4 * (q - a), 4 * (q - a + 1)))
-      if (part.layout === null) return
+      if (part.layout === null || !ours) return
       layouts.push(part.layout)
       now = indexLayout(fileOf())
     },

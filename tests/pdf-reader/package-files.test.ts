@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { inMemory } from '@/pdf-reader/engine/source/latex-front.mjs'
-import { openPaper, originalFiles, translationFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
-import { analyze } from '@/pdf-reader/engine/source/paper-meta.mjs'
-import { untar } from '@/pdf-reader/engine/source/tar.mjs'
+import { inMemory } from '../../packages/engine/src/source/latex-front.ts'
+import { openPaper, originalFiles } from '../../packages/engine/src/compile/live.ts'
+import { analyze } from '../../packages/engine/src/source/paper-meta.ts'
+import { untar } from '../../packages/engine/src/source/tar.ts'
 
 // One name for one file across the PDF reader's engine: the name the source package holds it under, which is the one
 // TeX's file system has too (the TeX page writes each file at its path joined to the project's directory). Under two
@@ -59,21 +59,15 @@ describe('analyze: the main file and its bibliography as TeX reads them', () => 
   })
 })
 
-describe('the original\'s and the translation\'s files: each a file the package holds, or what TeX writes for its main file', () => {
-  // 2608.12333's main file is latex/arxiv.tex: TeX runs in the root, where it writes and reads arxiv.aux and arxiv.bbl;
-  // written back as latex/arxiv.aux and latex/arxiv.bbl the run's references and bibliography were in no preview
+describe('the original\'s files: each a file the package holds', () => {
+  // 2608.12333's main file is latex/arxiv.tex: TeX runs in the root, where it writes and reads arxiv.aux and arxiv.bbl
   const paper = () => openPaper(new Map([
     ['00README.json', enc(readme('latex/arxiv.tex'))],
     ['latex/arxiv.tex', enc('\\documentclass{article}\n\\begin{document}\n\\input{./sections/intro}\n\\import{sections/}{method}\n\\bibliography{refs}\n\\end{document}\n')],
     ['sections/intro.tex', enc('An introduction.\n')],
     ['sections/method.tex', enc('A method.\n')],
   ]))
-  const strategy = { xe: false, engine: 'pdflatex', pre: () => '' }
   it('the marked original', () => {
     expect([...originalFiles(paper()).keys()].sort()).toEqual(['latex/arxiv.tex', 'sections/intro.tex', 'sections/method.tex'])
-  })
-  it('the translation, with the run\'s .aux and .bbl in the root under the job\'s name', () => {
-    const out = translationFiles(paper(), new Map(), { strategy, fonts: {}, draft: true, aux: '\\relax', bbl: '\\begin{thebibliography}{1}\\end{thebibliography}' })
-    expect([...out.keys()].sort()).toEqual(['arxiv.aux', 'arxiv.bbl', 'latex/arxiv.tex', 'sections/intro.tex', 'sections/method.tex'])
   })
 })

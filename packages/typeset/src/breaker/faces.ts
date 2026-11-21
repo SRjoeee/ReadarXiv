@@ -1,0 +1,138 @@
+// B.faces: the face a run of the translation is set in, by the role table (faces are the role table's only,
+// docs/PDF-READER.md §18.1): a CJK run in its target's CJK family by weight (its slant a shear, CJK_SLANT_DEG,
+// docs/PDF-READER.md §18.1); a Latin run in its design's group, math in the math face, small capitals in Latin Modern's caps
+// face where the design is Computer Modern's or none; the nearest style of the group that holds the target's letters; with
+// its fallbacks and its size correction. The catalogue (each face's family, weight, style, size, letters, smcp) and the
+// role table's groups, the letters a target is set in and the readings over them that keep nothing (styled, capsLetters,
+// ownSmallCaps) are @readarxiv/text's, held once for the engine's role table and this (data/faces.ts gives the
+// catalogue's four fields the typesetter reads).
+//
+// alphabetOf and scriptOf are cached by their argument (pure functions of a language tag; computed each call they were a
+// third of the typesetter's main-thread time while a paper was scrolled, measured 2026-11-12), each by a cache of its own
+// (TAGS_CACHED), so rolesFor and faceFor, which read them, stay here beside the engine's. Its inputs: the target, the
+// paper's English family (read off page 1) and the target's CJK family (the rule set's `cjkFaces`) ←
+// Rules.faces, built by rulesFor.
+import {
+  ALPHABETS,
+  CM_TEXT,
+  capsLetters,
+  LATIN_FALLBACKS,
+  LATIN_GROUPS,
+  LETTERS,
+  OTHER_GROUPS,
+  styled,
+  styleOf,
+} from '@readarxiv/text'
+import { FACES } from '../data/faces.ts'
+import type { Face, TStyle } from './tokens.ts'
+
+export { capsLetters, ownSmallCaps } from '@readarxiv/text'
+
+/** the slant of a CJK italic run, degrees: the body's own face sheared (docs/PDF-READER.md §18.1) */
+export const CJK_SLANT_DEG = 13
+/** the roles a target draws in (rolesFor) */
+export type Roles = Readonly<{
+  target: string
+  family: string
+  cjk: Readonly<{ body: string; bold: string }> | null
+  fallbacks: Readonly<Record<string, readonly string[]>>
+}>
+/** a target's CJK family as the rule set gives it (rules/layout.mjs cjkFaces), null for an alphabet */
+export type CjkFaces = { group: string } | null | undefined
+/** a run as faceFor reads it */
+export type Run = {
+  script: 'cjk' | 'latin'
+  cls: string
+  design: string
+  bold: boolean
+  italic: boolean
+  caps: boolean
+}
+
+/** the most tags a cache below holds: the tags it is asked are the targets a reader lays (the product's language table, a few
+ *  dozen), so it holds one entry a target; past this many (a caller with tags of its own) it computes and keeps nothing more */
+export const TAGS_CACHED = 256
+/** `f`, a pure function of a language tag, cached by the tag (at most TAGS_CACHED tags) */
+function byTag<T>(f: (tag: string) => T): (tag: string) => T {
+  const kept = new Map<string, T>()
+  return (tag) => {
+    if (kept.has(tag)) return kept.get(tag) as T
+    const v = f(tag)
+    if (kept.size < TAGS_CACHED) kept.set(tag, v)
+    return v
+  }
+}
+
+/** the script a BCP 47 tag is written in: its likely script (Intl.Locale's maximize), cached by the tag */
+export const scriptOf = byTag((lang: string): string | undefined => new Intl.Locale(lang).maximize().script)
+
+/** what a target draws in, for a paper's English family and the target's CJK family */
+export function rolesFor(target: string, family: string, cjkFaces: CjkFaces): Roles {
+  const script = scriptOf(target)
+  let cjk: Roles['cjk'] = null
+  const fallbacks: Record<string, readonly string[]> = { ...LATIN_FALLBACKS }
+  if (cjkFaces) {
+    const { group } = cjkFaces
+    cjk = { body: `${group}-regular`, bold: `${group}-bold` }
+    if (script === 'Hant')
+      // (the face table's weights of Source Han Serif, each the font's own file: SourceHanSerifTC-Regular.otf, -Medium, -Bold)
+      for (const w of ['regular', 'medium', 'bold'] as const) fallbacks[`shs-tc-${w}`] = Object.freeze([`shs-sc-${w}`])
+  } else if (!ALPHABETS.has(script ?? '')) throw new Error(`no font roles for ${target} (script ${script}) yet`)
+  return Object.freeze({ target, family, cjk: cjk && Object.freeze(cjk), fallbacks: Object.freeze(fallbacks) })
+}
+
+/** the alphabet a target's letters are: its language's own, else its script's, cached by the target */
+export const alphabetOf = byTag((target: string): string => {
+  const language = new Intl.Locale(target).language
+  return Object.hasOwn(LETTERS, language) ? language : scriptOf(target) === 'Cyrl' ? 'Cyrl' : 'Latn'
+})
+
+/** the face a run is drawn in */
+function faceFor(roles: Roles, run: Run): string | null {
+  const c = roles.cjk
+  if (run.script === 'cjk' && c) return run.bold ? c.bold : c.body
+  if (run.cls === 'math') return 'lm-math'
+  const cyrillic = scriptOf(roles.target) === 'Cyrl' ? 1 : 0
+  const groups = Object.hasOwn(LATIN_GROUPS, run.design)
+    ? LATIN_GROUPS[run.design]!
+    : Object.hasOwn(OTHER_GROUPS, run.cls)
+      ? OTHER_GROUPS[run.cls]!
+      : OTHER_GROUPS.serif!
+  const column = groups[cyrillic]!
+  const group = typeof column === 'string' ? column : column[styleOf(run.bold, run.italic)]!
+  if (run.caps && !run.bold && !cyrillic && (group === 'lm-roman' || column === CM_TEXT))
+    return run.italic ? 'lm-roman-caps-italic' : 'lm-roman-caps'
+  return styled(group, run.bold, run.italic, alphabetOf(roles.target))
+}
+
+/** B.faces: the face a run of style `st` and script class `cls` is set in, with its fallbacks, its slant and its size
+ *  correction */
+export function faceOf(roles: Roles, st: TStyle, cls: 'cjk' | 'latin'): Face {
+  const run: Run = {
+    script: cls,
+    cls: st.fam === 'math' ? 'serif' : st.fam!,
+    design: st.design ?? 'times',
+    bold: !!st.bold,
+    italic: !!st.italic,
+    caps: !!st.caps,
+  }
+  const id = faceFor(roles, run)!
+  const F = FACES[id]!
+  const latin =
+    cls === 'cjk' && roles.cjk ? [faceFor(roles, { ...run, script: 'latin', italic: false, caps: false })!] : []
+  const ids = [
+    ...new Set([id, ...(roles.fallbacks[id] ?? []), ...(cls !== 'cjk' && roles.cjk ? [roles.cjk.body] : []), ...latin]),
+  ].filter((f) => Object.hasOwn(FACES, f))
+  const slant = cls === 'cjk' && !!st.italic && !!roles.cjk
+  return {
+    family: [...new Set(ids.map((f) => `"${FACES[f]!.family}"`))].join(', '),
+    weight: F.weight,
+    style: F.style,
+    oblique: slant ? CJK_SLANT_DEG : 0,
+    stand: st.italic ? (cls === 'cjk' ? (slant ? 'oblique' : '') : 'italic') : '',
+    caps: !!st.caps && cls !== 'cjk' && !capsLetters(id),
+    size: F.size ?? 1,
+    id,
+    ids,
+  }
+}

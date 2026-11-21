@@ -21,7 +21,7 @@ if (!recording && !existsSync(base)) throw new Error('no baseline: run with --ba
 /** the reader's own tokens before the redesign (reader.css), read off the root */
 const TOKENS = ['--n-0', '--n-1', '--n-2', '--n-3', '--n-4', '--n-5', '--n-7', '--n-8', '--n-10', '--danger', '--focus', '--page-shadow', '--float-shadow', '--pop-shadow', '--font', '--bar', '--side', '--canvas', '--chrome', '--chrome-line', '--ink', '--ink-2', '--ink-3', '--line-strong', '--fill', '--well', '--lift', '--float-bg', '--ease']
 /** the toolbar's popovers, by their buttons' names */
-const MENUS = { language: '目标语言', service: '翻译服务', zoom: '缩放比例', options: '阅读选项' }
+const MENUS = { language: '译为', service: '翻译服务', zoom: '缩放比例', options: '阅读选项' }
 const ZOOM_IN = '放大'
 
 const { context, readerUrl } = await launchWithReader({ profile: 'reader-pixels', demos: true, viewport: { width: 1440, height: 900 } })

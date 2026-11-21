@@ -9,7 +9,6 @@ import { splitFigures } from '@/core/renderer/split-figures'
 import { docOf } from './helpers'
 import { splitSentences } from '../sentences/lengths'
 import { turn } from '../turn'
-import { verifyAlignment } from '@/providers/alignment'
 
 const FIXTURE_DIR = join(import.meta.dirname, '../fixtures/arxiv')
 const doc = () => new DOMParser().parseFromString('<html><body></body></html>', 'text/html')
@@ -373,8 +372,9 @@ describe('sentence lookup round trip (#105)', () => {
           const block = serialize(b.el, fmt)
           const lengths = splitSentences(block.text, fmt)
           if (lengths.length < 2) continue
-          const alignment = verifyAlignment({ source: lengths, target: lengths }, block.text, block.text)
-          expect([f, b.id, fmt, alignment !== undefined]).toEqual([f, b.id, fmt, true])
+          // the identity alignment, which tiles the text (what a translator's sentences must do to be kept)
+          const alignment = { source: lengths, target: lengths }
+          expect([f, b.id, fmt, lengths.reduce((n, l) => n + l, 0)]).toEqual([f, b.id, fmt, block.text.length])
 
           const frag = rehydrate(block.text, block, d)
           const target = d.createElement(b.el.tagName)

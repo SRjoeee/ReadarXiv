@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { texErrors, unitsAtErrors } from '@/pdf-reader/engine/pipeline/tex-errors.mjs'
+import { texErrors, unitsAtErrors } from '../../packages/engine/src/compile/tex-errors.ts'
 
 // A compile's TeX errors and the units they stand in (plans/2026-10-04-compile-resilience.md, Task 2): the safety net
 // that sets a unit TeX cannot set in the source, so that the rest of the paper is set translated
 
 const enc = (s: string) => new TextEncoder().encode(s)
 const MAIN = ['\\documentclass{article}', '\\begin{document}', 'A first paragraph, untouched.', '', 'TRANSLATED with \\cite{}<>[\\url{x}]{ modified _ code } here.', '', 'A last one.', '\\end{document}'].join('\n')
-// the lines of main.tex each unit stands on, as translationFiles gives them
+// the lines of main.tex each unit stands on
 const LINES = [{ file: 'main.tex', unit: 'u0', first: 3, last: 3 }, { file: 'main.tex', unit: 'u1', first: 5, last: 5 }, { file: 'main.tex', unit: 'u2', first: 7, last: 7 }]
 
 describe('texErrors: what TeX stopped at, and where it was reading', () => {

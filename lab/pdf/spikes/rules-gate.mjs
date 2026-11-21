@@ -22,7 +22,7 @@
 // comment and the numbers are searched for every string of the fixtures' translations before they are written, and withheld
 // (exit 2) where one is found. A ruling's words are the maintainer's, and are the only free text in the comment.
 import { execFileSync, spawn } from 'node:child_process'
-import { appendFileSync, createWriteStream, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { appendFileSync, createWriteStream, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -168,11 +168,18 @@ export function wholeness(side, run, outputs) {
  * different instrument, a run that is not whole (`wholeness`), an output missing or failed), and a regression fails it unless
  * one of the `rulings` covers its target and its measure.
  */
+/** why an output did not run, where it is the engine's own module that did not load in the page (a path of the repository's,
+ *  names alone: never a paper's text), else null: `the engine's layer-proto/run.mjs did not load` */
+export function loadFailureOf(why) {
+  const m = /^(?:[a-z0-9_./-]+\.mjs: )?Failed to fetch dynamically imported module: https?:\/\/127\.0\.0\.1:\d+\/engine\/([a-z0-9_-]+(?:\/[a-z0-9_.-]+)*\.mjs)$/.exec(typeof why === 'string' ? why : '')
+  return m ? `the engine's ${m[1]} did not load` : null
+}
+
 export function judge(base, head, { rulings = [], outputs = null } = {}) {
   const problems = []
   for (const [side, run] of [['base', base], ['head', head]]) {
     if (run.tier !== 'model') problems.push(`the ${side} run is not the model tier`)
-    for (const f of run.failed ?? []) problems.push(typeof f?.name === 'string' && FIXTURE.test(f.name) ? `${f.name} did not run in the ${side} run` : `an output did not run in the ${side} run`)
+    for (const f of run.failed ?? []) { const cause = loadFailureOf(f?.why); problems.push(`${typeof f?.name === 'string' && FIXTURE.test(f.name) ? f.name : 'an output'} did not run in the ${side} run${cause ? `: ${cause}` : ''}`) }
     problems.push(...wholeness(side, run, outputs))
   }
   for (const k of INSTRUMENT) {
@@ -287,7 +294,7 @@ export function reportJson(report, meta = {}) {
 
 /**
  * The comment, as markdown: its verdict first, a table for each target that moved (the others folded), the pages that
- * moved with their lab links, and what the run could not say. `o`: { headSha, baseSha, pack, enginePipeline, targets (the
+ * moved with their lab links, and what the run could not say. `o`: { headSha, baseSha, targets (the
  * targets the engine offers), changedTargets (those whose rules the change touches), label }.
  */
 export function commentOf(report, o) {
@@ -297,7 +304,6 @@ export function commentOf(report, o) {
   const L = [MARK, `## Rules gate: ${verdict}`, '']
   L.push(`Model tier of the layer gate on ${report.targets.reduce((a, t) => a + t.outputs.length, 0)} outputs of ${report.targets.length} targets, ${short(o.headSha)} against the merge base ${short(o.baseSha)}${o.label ? ` (${o.label})` : ''}, both runs on one runner.`, '')
   if (report.problems.length) L.push('**This run cannot pass:**', ...report.problems.map(p => `- ${p}`), '')
-  if (o.pack && o.enginePipeline && String(o.pack.pipeline) !== String(o.enginePipeline)) L.push(`The pack was made under PIPELINE ${o.pack.pipeline} and the engine is at PIPELINE ${o.enginePipeline}: remake the pack.`, '')
   if (o.changedTargets) L.push(o.changedTargets.length ? `Rules changed for: ${o.changedTargets.join(', ')}.` : 'The rule set changes no target.', '')
   if (o.targets) {
     const have = new Set(report.targets.map(t => t.target)), none = o.targets.filter(t => !have.has(t))
@@ -334,11 +340,12 @@ export function commentOf(report, o) {
 
 // ---------------------------------------------------------------- running the gate
 
-/** the layer gate's flags and environment for one side of the comparison: the production configuration, the model tier, 4
- *  workers, every input from the pack (`pack` is its directory) */
+/** the layer gate's flags and environment for one side of the comparison: the production configuration (our base page wrapped
+ *  by optional content from the pack's sources at load), the model tier, 4 workers, every input from the pack (`pack` is its
+ *  directory) */
 export function gateArgs({ engine, rules, pack, workers = 4 }) {
   return {
-    args: ['--tier=model', '--engine-kind=proto', '--proto-tex=lines', '--removal=draw', `--fixtures=${join(pack, 'fixtures')}`, `--engine=${engine}`, `--rules=${rules}`, `--workers=${workers}`],
+    args: ['--tier=model', '--engine-kind=proto', '--proto-tex=lines', `--fixtures=${join(pack, 'fixtures')}`, `--sources=${join(pack, 'sources')}`, `--engine=${engine}`, `--rules=${rules}`, `--workers=${workers}`],
     env: { AXT_DATA: join(pack, 'data'), LAYER_REFS: join(pack, 'refs'), LAYER_GEOMETRY: join(pack, 'geometry'), TEXMF_DIST: join(pack, 'texmf') },
   }
 }
@@ -350,21 +357,24 @@ export function gateArgs({ engine, rules, pack, workers = 4 }) {
  * digest of the parts of the committed listing (gate-pack.json, whose files `gate-pack.mjs verify` checked in the directory the
  * run read) the references, the geometry, the fixtures' own inputs (the PDFs and the translations), the served faces and the
  * hyphenation patterns. Not among them, because an engine makes them and the pull request may move them: the made layout files
- * (`fixtures/<output>/layout.json`). A pack with another reference, another geometry, another PDF, translation, face or pattern
+ * (`fixtures/<output>/layout.json`) and our base pages they were made over with their record (`fixtures/<output>/base.pdf`, the final
+ * pass of the marked original, and `base.json`: BUNDLE 8, design note §3.1). A pack with another reference, another geometry, another PDF, translation, face or pattern
  * is another instrument, whichever directory it is in.
  */
 export function instrumentOfPack(pack) {
   const files = pack?.files
   if (!Array.isArray(files) || !files.length) throw new Error('the pack names no files: it is not a gate-pack.json')
   const part = test => listingDigest(files.filter(f => test(String(f.path))))
-  const stray = files.map(f => String(f.path)).filter(p => !/^(?:fixtures|refs|geometry|data|texmf)\//.test(p))
+  const stray = files.map(f => String(f.path)).filter(p => !/^(?:fixtures|refs|geometry|data|texmf|sources)\//.test(p))
   if (stray.length) throw new Error(`the pack holds ${stray.length} file${stray.length === 1 ? '' : 's'} outside the parts the instrument names (${stray[0]}…): name the part in instrumentOfPack`)
   return {
-    fixtures: part(p => p.startsWith('fixtures/') && !/^fixtures\/[^/]+\/layout\.json$/.test(p)),
+    fixtures: part(p => p.startsWith('fixtures/') && !/^fixtures\/[^/]+\/(?:layout\.json|base\.pdf|base\.json)$/.test(p)),
     refs: part(p => p.startsWith('refs/')),
     geometry: part(p => p.startsWith('geometry/')),
     data: part(p => p.startsWith('data/')),
     texmf: part(p => p.startsWith('texmf/')),
+    // (the papers' sources, which the wrap reads each base's units from: a pack of none, from before the wrap, names no part)
+    ...(files.some(f => String(f.path).startsWith('sources/')) ? { sources: part(p => p.startsWith('sources/')) } : {}),
   }
 }
 
@@ -400,7 +410,7 @@ const LINKS_LINE = new RegExp(`^  ${NAME}: (?:links wrong at|links kept \\d+(?:\
 export function publicLine(line) {
   if (OK_LINE.test(line) || TIER_LINE.test(line) || COMPLETE_LINE.test(line) || INK_LINE.test(line) || LINKS_LINE.test(line)) return line
   const fail = FAIL_LINE.exec(line)
-  if (fail) return `FAIL ${fail[1]}`
+  if (fail) { const cause = loadFailureOf(line.slice(`FAIL ${fail[1]}: `.length).replace(/ \(\d+(?:\.\d+)? s\)$/, '')); return `FAIL ${fail[1]}${cause ? `: ${cause}` : ''}` }
   if (line.startsWith('FAIL requests that would have left the machine')) return 'FAIL requests that would have left the machine'
   return null
 }
@@ -455,6 +465,10 @@ export function parseEngines(json) {
 }
 
 const git = (...args) => execFileSync('git', args, { cwd: REPO, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 1 << 26 })
+/** an engine's worktree given modules of its own, from the store this tree's install filled (rules-gate.yml's merge base alike): a
+ *  workspace's links are relative (node_modules/@readarxiv/engine -> ../../packages/engine), so a node_modules borrowed from this
+ *  tree would load this tree's packages into the engine's run */
+export const installEngine = dir => { execFileSync('pnpm', ['-C', dir, 'install', '--frozen-lockfile', '--prefer-offline'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 1 << 26 }) }
 
 /** the rule set's file, which a ruling is bound to by the version it held where the ruling came in */
 const RULES_FILE = 'src/pdf-reader/engine/rules/layout-rules.json'
@@ -498,8 +512,8 @@ function leakCount(text, rulings, strings) {
   return leaksIn(text, strings) + free.reduce((n, t) => n + fragmentsIn(t, haystack), 0)
 }
 
-/** `deps`: the gate's run, git and the two uses of the network, so that a test runs the whole command on fakes */
-export async function engines(argv, { run = runGate, git: gitFn = git, fetchImpl = fetch } = {}) {
+/** `deps`: the gate's run, git, the engine's install and the uses of the network, so that a test runs the whole command on fakes */
+export async function engines(argv, { run = runGate, git: gitFn = git, fetchImpl = fetch, install = installEngine } = {}) {
   const arg = n => option(argv, n)
   const list = parseEngines(JSON.parse(readFileSync(resolve(arg('list')), 'utf8')))
   if (!list.length) { console.log('no live engine is named in live-engines.json: nothing to check'); return 0 }
@@ -528,7 +542,8 @@ export async function engines(argv, { run = runGate, git: gitFn = git, fetchImpl
     const dir = join(work, e.name.replace(/[^A-Za-z0-9._-]+/g, '-'))
     gitFn('worktree', 'add', '--detach', dir, sha)
     try {
-      symlinkSync(join(REPO, 'node_modules'), join(dir, 'node_modules'))
+      // (the engine on modules of its own, or not at all: a run on this tree's would measure this tree's packages under its name)
+      try { install(dir) } catch (err) { throw new Error(`its own install failed, and borrowed modules would run this tree's packages: ${String(err?.message ?? err).split('\n')[0].slice(0, 160)}`) }
       // the set published for this engine: what a reader of its schema takes now; none yet, the engine's own built-in
       let published = join(dir, ENGINE, 'rules/layout-rules.json'), from = 'the built-in set (none is published)'
       if (arg('published')) {
@@ -602,11 +617,8 @@ async function compareCommand(argv) {
     const rulesOf = (set, t) => { const { version: _, ...rules } = E.resolveRules(set, t); return JSON.stringify(rules) }
     if (sets[0] && sets[1]) meta.changedTargets = E.TARGETS.filter(t => rulesOf(sets[0], t) !== rulesOf(sets[1], t))
   }
-  // (the engine keeps its versions in pipeline/; an engine from before the move, as --head-engine may name, keeps them at its root)
-  const versionsFile = ['pipeline/versions.mjs', 'versions.mjs'].map(f => join(engineDir, f)).find(f => existsSync(f))
-  const pipeline = versionsFile ? /export const PIPELINE_VERSION = '([^']+)'/.exec(readFileSync(versionsFile, 'utf8'))?.[1] ?? null : null
   meta.pack = pack
-  const text = commentOf(report, { headSha, baseSha, pack, enginePipeline: pipeline, targets: E.TARGETS, changedTargets: meta.changedTargets, rulings, label: typeof arg('label') === 'string' ? arg('label') : undefined })
+  const text = commentOf(report, { headSha, baseSha, targets: E.TARGETS, changedTargets: meta.changedTargets, rulings, label: typeof arg('label') === 'string' ? arg('label') : undefined })
   const json = `${JSON.stringify(reportJson(report, meta), null, 1)}\n`
   mkdirSync(out, { recursive: true })
   // (what a parser said of a ruling file is the pull request author's text: a file of the runner, which the job does not show or upload)

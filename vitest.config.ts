@@ -1,11 +1,34 @@
 import { availableParallelism, totalmem } from 'node:os'
+import { join } from 'node:path'
+import type { Plugin } from 'vite'
 import { configDefaults, defineConfig } from 'vitest/config'
 import { WxtVitest } from 'wxt/testing/vitest-plugin'
 import { availableMemoryMB, workersFor } from './tests/pool'
 
+/**
+ * A relative import no file answers fails, wherever the checkout is. Vitest fetches an import it could not resolve from its
+ * importer by the raw specifier and resolves it again with no importer (vitest 4.1.12, ModuleFetcher.fetch: "handle unresolved
+ * id of dynamic import skipped by Vite import analysis"), which Vite reads as the root's index.html (vite 8.3.5,
+ * EnvironmentPluginContainer.resolveId's default importer): `../../src/x.mjs` missing beside a test of tests/<folder>/ was
+ * then the file two folders above the root, which for a worktree under .worktrees/ is the main checkout's, and the test
+ * passed on another tree's code. A relative specifier with that default importer is refused here
+ */
+const noRootRelative = (): Plugin => ({
+  name: 'axt-no-root-relative',
+  enforce: 'pre',
+  resolveId(id, importer) {
+    if (/^\.\.?\//.test(id) && importer === join(this.environment.config.root, 'index.html'))
+      throw new Error(`${id}: no such file from the module that imports it (resolved again from the root, it would be read outside the tree)`)
+  },
+})
+
 // WxtVitest: in-memory browser extension APIs, auto-imports, the @/ alias
+//
+// Two kinds of project. `extension` inherits everything set here and runs tests/. Each workspace package (packages/*) carries a
+// vitest.config.ts that names the environment its code needs (Node; happy-dom for reader and ui) and extends nothing, so no
+// extension plugin or setup file reaches a package's tests
 export default defineConfig({
-  plugins: [WxtVitest()],
+  plugins: [WxtVitest(), noRootRelative()],
   test: {
     environment: 'happy-dom',
     // The fixtures link external CSS / scripts; the test environment never loads them and runs no page script
@@ -50,5 +73,6 @@ export default defineConfig({
     // 13 here. `--expose-gc` is tests/setup/memory.test.ts's: it asks whether a parsed paper is really collected
     maxWorkers: workersFor({ cores: availableParallelism(), totalMemoryMB: availableMemoryMB(totalmem()) }),
     execArgv: ['--expose-gc', '--max-old-space-size=2048'],
+    projects: [{ extends: true, test: { name: 'extension' } }, 'packages/*/vitest.config.ts'],
   },
 })

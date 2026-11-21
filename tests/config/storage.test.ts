@@ -2,28 +2,48 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fakeBrowser } from 'wxt/testing/fake-browser'
 import { z } from 'zod'
 import { appearanceSchema } from '@/config/appearance'
-import { CONFIG_VERSION, type Config, DEFAULT_CONFIG, GLOSSARY_LIMITS, configSchema, normalizeGlossary } from '@/config/schema'
+import { CLASSES as READER_CLASSES, DEFAULTS as READER_DEFAULTS } from '@readarxiv/reader'
+import { CONFIG_VERSION, type Config, DEFAULT_CONFIG, DEFAULT_PDF_CLASSES, DEFAULT_PDF_READER, GLOSSARY_LIMITS, configSchema, normalizeGlossary } from '@/config/schema'
 import { serviceSchema } from '@/config/services'
 import { chooseFirstTarget, configItem, getConfig, readConfig, resetConfig, setConfig, watchConfigChange } from '@/config/storage'
+
+/**
+ * What a reader's machine holds under `pdfReader.classes` (v21), the contract a new version must still meet (hard rule 7): a
+ * FROZEN copy of today's engine's five toggles and their defaults, recorded from src/pdf-reader/engine/rules/content-classes.mjs
+ * TOGGLE_DEFAULTS at 0c069a6ea (that file's blob e3cd968f3, last changed by 5c2554d00), which the cut-over deletes. A change of
+ * these keys or defaults owes a CONFIG_VERSION and a migration, never an edit of this literal
+ */
+const SAVED_CLASSES = { heads: true, tables: true, figures: true, references: false, names: false } as const
 
 /** A reader-added service, the shape v12 stores */
 const SVC = { id: 'svc-abcd1234', kind: 'openai-compat' as const, name: 'Mine', baseURL: 'https://openrouter.ai/api/v1', apiKey: 'sk-x', model: 'x/y', thinking: 'disabled' as const }
 
 /**
  * What v19 stored, literally: today's DEFAULT_CONFIG carries v20's shapes (`preload` a word, `image` without its list,
- * `pdfReader` without its appearance, a `theme`), and a fixture spreading it would test a migration from a shape no
- * v19 ever held. v18 stored the same `preload` and `image`, and no `pdfReader`
+ * `pdfReader` without its appearance, a `theme`) and v21's (`pdfReader.classes`), and a fixture spreading it would test a
+ * migration from a shape no v19 ever held. v18 stored the same `preload` and `image`, and no `pdfReader`
  */
 function v19Stored(over: Record<string, unknown> = {}): Record<string, unknown> {
-  const { theme: _v20, ...rest } = DEFAULT_CONFIG
+  const { theme: _v20, ...rest } = v21Stored()
   return {
     ...rest, version: 19,
     preload: { margin: 1000, threshold: 0 },
     image: { enabled: true, modes: ['stack', 'side', 'only'] },
-    pdfReader: { ...DEFAULT_CONFIG.pdfReader, appearance: 'system' },
+    pdfReader: { ...DEFAULT_PDF_READER, appearance: 'system' },
     ...over,
   }
 }
+/** What v20 stored: v21's shapes but the reader's "What to translate" (`pdfReader.classes`, v21) */
+function v20Stored(over: Record<string, unknown> = {}): Record<string, unknown> {
+  return { ...v21Stored(), version: 20, pdfReader: { ...DEFAULT_PDF_READER }, ...over }
+}
+/** What v21 stored: today's shapes but the mark of a translator chosen (`providerChosen`, v22) */
+function v21Stored(over: Record<string, unknown> = {}): Record<string, unknown> {
+  const { providerChosen: _v22, ...rest } = DEFAULT_CONFIG as Config & { providerChosen?: boolean }
+  return { ...rest, version: 21, ...over }
+}
+/** what migration 21 writes for a reader whose image switch was `figures` */
+const v21Classes = (figures: boolean) => ({ figures, tables: true, heads: true, references: false, names: false })
 
 describe('config storage', () => {
   beforeEach(() => {
@@ -265,21 +285,7 @@ describe('the preload, v15 to v20', () => {
 })
 
 describe('provider selection', () => {
-  it('both providers can be stored and read, getProvider returns the matching implementation', async () => {
-    const { getProvider } = await import('@/providers')
-    // A reader's service becomes an engine carrying that service's id and name
-    const llm = getProvider({ ...DEFAULT_CONFIG, provider: SVC.id, services: [SVC] })
-    expect(llm.id).toBe(SVC.id)
-    expect(llm.kind).toBe('llm')
-    // A service the reader deleted while it was chosen: the shipped default, not a crash
-    expect(getProvider({ ...DEFAULT_CONFIG, provider: 'svc-gone0000', services: [] }).id).toBe('microsoft')
-
-    const free = getProvider({ ...DEFAULT_CONFIG, provider: 'google-web' })
-    expect(free.id).toBe('google-web')
-    expect(free.kind).toBe('mt')
-    expect(free.wireFormats).toEqual(['tags', 'markers'])
-    expect(await free.isAvailable()).toBe(true)
-
+  it('a provider can be stored and read (the translators it makes: tests/providers/translators.test.ts)', async () => {
     await setConfig({ ...DEFAULT_CONFIG, provider: 'google-web' })
     expect((await getConfig()).provider).toBe('google-web')
   })
@@ -541,12 +547,13 @@ describe('provider selection', () => {
     const stripped = await import('@/config/storage')
     expect(await stripped.getConfig()).toEqual(DEFAULT_CONFIG)
     expect((await stripped.readConfig()).fallbackReason).toMatchObject({ kind: 'invalid', where: 'services.0.thinking' })
-    // A v13 value with both present migrates unchanged, apart from what later versions add: v16's `reading.openIn`
-    const full = { ...DEFAULT_CONFIG, version: 13, reading: { sentenceHighlight: false }, provider: SVC.id, services: [{ ...SVC, thinking: 'enabled' as const }], preload: { margin: 1000, threshold: 0 } }
+    // A v13 value with both present migrates unchanged, apart from what later versions add: v16's `reading.openIn`, and
+    // v22's mark of the service the reader picked
+    const full = { ...v21Stored(), version: 13, reading: { sentenceHighlight: false }, provider: SVC.id, services: [{ ...SVC, thinking: 'enabled' as const }], preload: { margin: 1000, threshold: 0 } }
     await fakeBrowser.storage.local.set({ config: full, config$: { v: 13 } })
     vi.resetModules()
     const again = await (await import('@/config/storage')).getConfig()
-    expect(again).toEqual({ ...full, version: CONFIG_VERSION, reading: { sentenceHighlight: false, openIn: 'new-tab' }, preload: 'on-demand' })
+    expect(again).toEqual({ ...full, version: CONFIG_VERSION, reading: { sentenceHighlight: false, openIn: 'new-tab' }, preload: 'on-demand', providerChosen: true })
   })
 
   it('no field of the stored shape, at any depth, carries a zod default: the version alone says what is in storage (DESIGN §9)', () => {
@@ -706,7 +713,7 @@ describe('provider selection', () => {
     expect((await fresh.readConfig()).fallbackReason).toBeNull()
     expect(config.version).toBe(CONFIG_VERSION)
     // a configuration from before v19 has no appearance, and reaches v20 following the system
-    expect(config.pdfReader).toEqual({ enabled: true, original: false, sync: true, swapped: false, dimPages: true })
+    expect(config.pdfReader).toEqual({ enabled: true, original: false, sync: true, swapped: false, dimPages: true, classes: v21Classes(true) })
     expect(config.theme).toBe('system')
     // the whole value, so that "nothing else" is held: what the reader had, and v20's own preload and figure switch
     expect(config).toEqual({ ...DEFAULT_CONFIG, mode: 'only', targetLanguage: 'jpn', reading: { sentenceHighlight: false, openIn: 'same-tab' }, preload: 'on-demand', image: { enabled: true } })
@@ -720,7 +727,7 @@ describe('provider selection', () => {
     const config = await fresh.getConfig()
     expect((await fresh.readConfig()).fallbackReason).toBeNull()
     expect(config.theme).toBe('dark')
-    expect(config.pdfReader).toEqual({ enabled: false, original: true, sync: false, swapped: true, dimPages: false })
+    expect(config.pdfReader).toEqual({ enabled: false, original: true, sync: false, swapped: true, dimPages: false, classes: v21Classes(true) })
     // the whole value, so that "nothing else" is held: what the reader had, and v20's own preload and figure switch
     expect(config).toEqual({ ...DEFAULT_CONFIG, mode: 'only', targetLanguage: 'jpn', theme: 'dark', pdfReader: config.pdfReader, preload: 'on-demand', image: { enabled: true } })
   })
@@ -737,20 +744,60 @@ describe('provider selection', () => {
 
   it('v20 carries a light or a system appearance to the theme as well, and leaves one no theme holds for the schema to name', async () => {
     for (const appearance of ['light', 'system'] as const) {
-      await fakeBrowser.storage.local.set({ config: v19Stored({ pdfReader: { ...DEFAULT_CONFIG.pdfReader, appearance } }), config$: { v: 19 } })
+      await fakeBrowser.storage.local.set({ config: v19Stored({ pdfReader: { ...DEFAULT_PDF_READER, appearance } }), config$: { v: 19 } })
       vi.resetModules()
       const fresh = await import('@/config/storage')
       const reading = await fresh.readConfig()
       expect(reading.config.theme).toBe(appearance)
       expect(reading.fallbackReason).toBeNull()
     }
-    await fakeBrowser.storage.local.set({ config: v19Stored({ pdfReader: { ...DEFAULT_CONFIG.pdfReader, appearance: 'sepia' } }), config$: { v: 19 } })
+    await fakeBrowser.storage.local.set({ config: v19Stored({ pdfReader: { ...DEFAULT_PDF_READER, appearance: 'sepia' } }), config$: { v: 19 } })
     vi.resetModules()
     const fresh = await import('@/config/storage')
     // no throw: the defaults in use, and the reason names the field (S-O-02 shows it)
     const reading = await fresh.readConfig()
     expect(reading.config).toEqual(DEFAULT_CONFIG)
     expect(reading.fallbackReason).toMatchObject({ kind: 'invalid', where: 'theme' })
+  })
+
+  it('v21 adds the reader\'s "What to translate" as it showed them: the figures by the image switch, the rest by the engine\'s defaults, and touches nothing else', async () => {
+    for (const enabled of [true, false]) {
+      const v20 = v20Stored({ mode: 'only', targetLanguage: 'jpn', image: { enabled }, pdfReader: { ...DEFAULT_PDF_READER, swapped: true, dimPages: false } })
+      await fakeBrowser.storage.local.set({ config: v20, config$: { v: 20 } })
+      vi.resetModules()
+      const fresh = await import('@/config/storage')
+      const config = await fresh.getConfig()
+      expect((await fresh.readConfig()).fallbackReason).toBeNull()
+      expect(config.version).toBe(CONFIG_VERSION)
+      expect(config.pdfReader.classes).toEqual(v21Classes(enabled))
+      // the whole value, so that "nothing else" is held: the image switch stays the HTML page's, as it was
+      expect(config).toEqual({ ...DEFAULT_CONFIG, mode: 'only', targetLanguage: 'jpn', image: { enabled }, pdfReader: { ...DEFAULT_PDF_READER, swapped: true, dimPages: false, classes: v21Classes(enabled) } })
+      fakeBrowser.reset()
+    }
+  })
+
+  it('v21 leaves a pdfReader that is not an object, or an image switch that is no boolean, for the schema to name: the image named, never the toggle made of it', async () => {
+    for (const [over, where] of [[{ pdfReader: 'broken' }, 'pdfReader'], [{ image: { enabled: 'yes' } }, 'image.enabled'], [{ image: 'broken' }, 'image']] as const) {
+      await fakeBrowser.storage.local.set({ config: v20Stored(over), config$: { v: 20 } })
+      vi.resetModules()
+      const fresh = await import('@/config/storage')
+      // no throw: the defaults in use, and the reason names the field (S-O-02 shows it)
+      const reading = await fresh.readConfig()
+      expect(reading.config).toEqual(DEFAULT_CONFIG)
+      expect(reading.fallbackReason).toMatchObject({ kind: 'invalid', where })
+      fakeBrowser.reset()
+    }
+  })
+
+  it('the saved reader classes are today\'s five keys and defaults, frozen (hard rule 7): the schema\'s, the defaults\' and the rebuilt reader\'s (packages/reader prefs CLASSES and DEFAULTS) are all of them', () => {
+    const keys = Object.keys(SAVED_CLASSES).sort()
+    // (a key the schema lacks would be stripped from what a reader saves; one it has that a reader's machine lacks refused)
+    expect(Object.keys(configSchema.shape.pdfReader.shape.classes.shape).sort()).toEqual(keys)
+    expect(DEFAULT_PDF_CLASSES).toEqual(SAVED_CLASSES)
+    expect(DEFAULT_CONFIG.pdfReader.classes).toEqual(SAVED_CLASSES)
+    // (the rebuilt reader reads and writes the same five, with the same defaults: no migration is owed)
+    expect([...READER_CLASSES].sort()).toEqual(keys)
+    expect(READER_DEFAULTS.classes).toEqual(SAVED_CLASSES)
   })
 
   it('a v12 configuration climbs to the latest: services and profiles as stored, the interface language following the browser, a stored preload margin becoming on demand', async () => {
@@ -814,38 +861,69 @@ describe('provider selection', () => {
     await expect(setConfig({ ...DEFAULT_CONFIG, glossary: [...at, { term: 'a', translation: '译' }] })).rejects.toThrow()
   })
 
-  it('the fallback chain: the configured engine first, the free engines behind it; with the switch off only the configured one remains', async () => {
-    const { buildChain } = await import('@/providers')
-    const withKey = { ...DEFAULT_CONFIG, provider: SVC.id, services: [SVC] }
-    // An environment without the built-in translation API (happy-dom, an old Chrome): the built-in engine is filtered out by isAvailable
-    expect((await buildChain(withKey)).chain.map(p => p.id)).toEqual([SVC.id, 'google-web'])
-    expect((await buildChain({ ...withKey, fallback: { enabled: false } })).chain.map(p => p.id)).toEqual([SVC.id])
-    // A free engine as the first choice does not appear twice
-    expect((await buildChain({ ...withKey, provider: 'google-web' })).chain.map(p => p.id)).toEqual(['google-web'])
-    // A first choice without a key stays at the head of the chain: the popup points to the settings page by it rather than swapping the engine quietly
-    expect((await buildChain({ ...DEFAULT_CONFIG, provider: SVC.id, services: [{ ...SVC, apiKey: '' }] })).chain.map(p => p.id)).toEqual([SVC.id, 'google-web'])
-    // The shipped default is the free service that needs no key (UI.md §2)
-    expect((await buildChain(DEFAULT_CONFIG)).chain.map(p => p.id)).toEqual(['microsoft', 'google-web'])
-  })
-
-  it('with the language pack ready the built-in engine comes before google-web; not ready, it is skipped', async () => {
-    const { buildChain } = await import('@/providers')
-    const withKey = { ...DEFAULT_CONFIG, provider: SVC.id, services: [SVC] }
-    const stub = (availability: string) => ({ availability: async () => availability, create: async () => ({ translate: async () => '' }) })
-
-    vi.stubGlobal('Translator', stub('available'))
-    expect((await buildChain(withKey)).chain.map(p => p.id)).toEqual([SVC.id, 'chrome-builtin', 'google-web'])
-    // The built-in as the first choice does not appear again in the fallback
-    expect((await buildChain({ ...withKey, provider: 'chrome-builtin' })).chain.map(p => p.id)).toEqual(['chrome-builtin', 'google-web'])
-
-    vi.stubGlobal('Translator', stub('downloadable'))
-    expect((await buildChain(withKey)).chain.map(p => p.id)).toEqual([SVC.id, 'google-web'])
-    vi.unstubAllGlobals()
-  })
-
   it('a preload that is neither of the two choices is refused by the schema', async () => {
     await expect(setConfig({ ...DEFAULT_CONFIG, preload: 'some' as never })).rejects.toThrow()
     await expect(setConfig({ ...DEFAULT_CONFIG, preload: { margin: 1000, threshold: 0 } as never })).rejects.toThrow()
+  })
+})
+
+// The mark of a translator chosen (v22; the owner's ruling of 2026-11-19): the PDF reader of a reader who never chose asks the
+// website's chain (providers/translators.ts readerTranslatorsOf). What a v21 value says of it is its provider alone: the
+// install writes `microsoft` (the default since c57dbcc4d, 2026-09-10, before the first release, 0.4.0 of 2026-09-17), so a
+// stored `microsoft` may be nobody's pick; Google's and Chrome's ids were never a default, and a service's id is written by
+// an add or a pick (migration 12 made one of v11's `openai-compat`, a default of builds before any release, never shipped)
+describe('the translator chosen, v21 to v22', () => {
+  beforeEach(() => {
+    fakeBrowser.reset()
+  })
+  const climb = async (v21: Record<string, unknown>) => {
+    await fakeBrowser.storage.local.set({ config: v21, config$: { v: 21 } })
+    vi.resetModules()
+    const fresh = await import('@/config/storage')
+    return fresh.readConfig()
+  }
+
+  it('a stored Microsoft is chosen by nobody: the install wrote it, and nothing tells it from a pick', async () => {
+    const reading = await climb(v21Stored({ mode: 'only', targetLanguage: 'jpn' }))
+    expect(reading.fallbackReason).toBeNull()
+    // the whole value, so that "nothing else" is held
+    expect(reading.config).toEqual({ ...DEFAULT_CONFIG, mode: 'only', targetLanguage: 'jpn', providerChosen: false })
+  })
+
+  it("Google's, Chrome's and a service of the reader's own are picks, kept: the install never wrote one", async () => {
+    for (const [provider, services] of [['google-web', []], ['chrome-builtin', []], [SVC.id, [SVC]]] as const) {
+      const reading = await climb(v21Stored({ provider, services }))
+      expect(reading.fallbackReason, provider).toBeNull()
+      expect(reading.config, provider).toEqual({ ...DEFAULT_CONFIG, provider, services, providerChosen: true })
+      fakeBrowser.reset()
+    }
+  })
+
+  it('a value from before v21 climbs through both: a stored Microsoft nobody chose, a stored Google chosen', async () => {
+    for (const [provider, chosen] of [['microsoft', false], ['google-web', true]] as const) {
+      await fakeBrowser.storage.local.set({ config: v20Stored({ provider }), config$: { v: 20 } })
+      vi.resetModules()
+      const fresh = await import('@/config/storage')
+      const reading = await fresh.readConfig()
+      expect(reading.fallbackReason).toBeNull()
+      expect([reading.config.version, reading.config.provider, reading.config.providerChosen]).toEqual([CONFIG_VERSION, provider, chosen])
+      fakeBrowser.reset()
+    }
+  })
+
+  it('a hand-edited provider is not repaired: passed on, it fails the schema and the fallback names it, never the mark', async () => {
+    const reading = await climb(v21Stored({ provider: 42 }))
+    expect(reading.config).toEqual(DEFAULT_CONFIG)
+    expect(reading.fallbackReason).toMatchObject({ kind: 'invalid', where: 'provider' })
+  })
+
+  it('the defaults, a new install and a reset choose nothing', async () => {
+    expect(DEFAULT_CONFIG.providerChosen).toBe(false)
+    expect(await chooseFirstTarget(() => 'jpn')).toBe(true)
+    expect((await getConfig()).providerChosen).toBe(false)
+    await setConfig({ ...DEFAULT_CONFIG, provider: 'google-web', providerChosen: true })
+    await resetConfig()
+    expect(await getConfig()).toEqual(DEFAULT_CONFIG)
   })
 })
 

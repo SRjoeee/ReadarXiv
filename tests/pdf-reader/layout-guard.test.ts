@@ -1,11 +1,14 @@
+import * as PL from '@cantoo/pdf-lib'
+import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
-import { auxUnits, braceBalance, errorCount, errorUnits, firstError, marksOutOfPlace, ownErrors, pagesOfLog, texLiveOf, unbalancedUnits, unmarkedFiles } from '@/pdf-reader/engine/layout/guard.mjs'
-import { WHY_MAX } from '@/pdf-reader/engine/layer-proto/format.mjs'
-import { inkSamples, LAYOUT_CLASSES, probeSamples, readInkProbe, readMarkProbe } from '@/pdf-reader/engine/layout/marks.mjs'
-import { handoverOf, layoutMarksOfPaper, markedOfPaper } from '@/pdf-reader/engine/layout/paper.mjs'
-import { type Compiled, type CompileRequest, openPaper, originalFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
-import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
-import type { UnitLines } from '@/pdf-reader/engine/pipeline/tex-errors.mjs'
+import { auxUnits, braceBalance, compilerOfPdf, contextUnits, cutCopyUnits, errorCount, errorUnits, firstError, marksOutOfPlace, ownErrors, pagesOfLog, preambleUnits, tellsTwice, texLiveOf, texLiveOfPdf, unbalancedUnits, unmarkedFiles } from '../../packages/engine/src/compile/guard.ts'
+import { WHY_MAX } from '../../packages/engine/src/instrument/format.ts'
+import { ALLOCATION_FAILED } from '@readarxiv/engine'
+import { inkSamples, LAYOUT_CLASSES, probeSamples, readInkProbe, readMarkProbe } from '../../packages/engine/src/marks/marks.ts'
+import { handoverOf, markedOfPaper } from '../../packages/engine/src/compile/paper.ts'
+import { type Compiled, type CompileRequest, markedPreamble, openPaper, originalFiles, probeFiles } from '../../packages/engine/src/compile/live.ts'
+import type { SourceUnit } from '../../packages/engine/src/source/latex-front.ts'
+import type { UnitLines } from '../../packages/engine/src/compile/tex-errors.ts'
 
 // The layout guard (layout/guard.mjs, layout/paper.mjs markedOfPaper; R1 of 2026-10-19): the marked original must be the paper.
 // Each check on synthetic answers (a brace a unit's writing doubled, a mark of ours a compile wrote into a file where no
@@ -27,8 +30,13 @@ const out = (pages: number) => `Output written on main.pdf (${pages} pages, 9999
 const PDF = enc('%PDF-1.7 the marked original'), PDF1 = enc('%PDF-1.7 the first again'), PDF2 = enc('%PDF-1.7 the second again'), UNMARKED = enc('%PDF-1.7 the paper alone')
 /** a compile that ran through: its banner, `body` (errors), AXT-END and its pages */
 const ran = (pdf: Uint8Array, body = '', pages = 3, more: Partial<Compiled> = {}): Compiled => ({ ok: true, pdf, log: `${TEX}${body}${END}${out(pages)}`, ...more })
+/** the same compile with its PDF written by its driver (XeTeX's .xdv made a PDF by xdvipdfmx): its log tells no destination of
+ *  ours set twice, so a mark of ours in a file it wrote is out of place whatever else it shows (guard.mjs copiesOutOfPlace) */
+const viaDriver = (c: Compiled): Compiled => ({ ...c, log: (c.log ?? '').replace(/Output written on main\.pdf/, 'Output written on main.xdv') })
 /** a compile TeX ran that stopped short of the document's end */
 const stopped = (body: string): Compiled => ({ ok: true, pdf: PDF, log: `${TEX}${body}! Emergency stop.\n*** (job aborted, no legal \\end found)\n` })
+/** a compile's answer as written, typed as the host's (the guard reads only some of its fields) */
+const answer = (c: Compiled): Compiled => c
 
 function compiler(answers: (Compiled | Error)[]) {
   const asked: CompileRequest[] = []
@@ -46,7 +54,7 @@ function compiler(answers: (Compiled | Error)[]) {
 function markedFiles(paper = paperOf(), o: { unmarked?: number[]; names?: boolean } = {}) {
   const switches = readMarkProbe(PROBE_LOG, probeSamples(paper.units)), inkless = readInkProbe(PROBE_LOG, inkSamples(paper.units))
   const spans: { lines?: () => UnitLines<SourceUnit>[]; skip?: number } = {}
-  const files = originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES, switches, inkless, ...(o.unmarked ? { unmarked: o.unmarked } : {}), ...(o.names === false ? { names: false } : {}), spans })
+  const files = originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES, switches, inkless, ...(o.unmarked ? { unmarked: o.unmarked as unknown as ReadonlySet<number> } : {}), ...(o.names === false ? { names: false } : {}), spans })
   return { files, spans, paper }
 }
 /** an error TeX logs at a unit's line in the marked file, its place before `at` in that line's text */
@@ -60,6 +68,8 @@ function errorAt(unit: number, at: string, message = 'Undefined control sequence
   return { log: `! ${message}\n<recently read> \\foo \n\nl.${x.last} ${line.slice(0, k)}\n${' '.repeat(k + 5)}${line.slice(k)}\n`, line: x.last }
 }
 const has = (req: CompileRequest | undefined, s: string) => dec(req?.overrides.get('main.tex')).includes(s)
+/** a host's `textOf` that read a compile's pages and found no mark of ours printed there */
+const unshown = async () => ['Notes 1 Another paragraph']
 const NAMES_OFF = '\\let\\axt@nmall\\relax'
 
 describe('braceBalance: a text\'s braces outside comments and verbatim', () => {
@@ -152,10 +162,103 @@ describe('marksOutOfPlace and auxUnits: a mark of ours a compile wrote where no 
       ['main.aux', enc('\\@writefile{toc}{\\etoc@depthtag {x\\axtpma {p218.6a}}}\\@writefile{toc}{\\etoc@depthtag {\\axthmark {h69s}\\axtmark {t185s}\\axtcolour {c5.3}\\axtmark {c2-3}\\axtmark {g1a}}}\n')],
       ['main.log', enc('l.12 \\axtend {9e}\n')],
     ])
-    expect(auxUnits({ ok: true, files }, 1000, 'main')).toEqual(new Set([2, 218, 69, 185, 5]))
-    expect(auxUnits({ ok: true, aux: '\\@writefile{toc}{\\etoc@depthtag {main\\axtend {2e}}}\n' }, 1000, 'main')).toEqual(new Set([2]))
+    expect(auxUnits(answer({ ok: true, files }), 1000, 'main')).toEqual(new Set([2, 218, 69, 185, 5]))
+    expect(auxUnits(answer({ ok: true, aux: '\\@writefile{toc}{\\etoc@depthtag {main\\axtend {2e}}}\n' }), 1000, 'main')).toEqual(new Set([2]))
     // (ids past the paper's units are no unit of it)
-    expect(auxUnits({ ok: true, files }, 100, 'main')).toEqual(new Set([2, 69, 5]))
+    expect(auxUnits(answer({ ok: true, files }), 100, 'main')).toEqual(new Set([2, 69, 5]))
+  })
+})
+
+describe('tellsTwice: a log that names every destination of ours set twice', () => {
+  it('is TeX\'s own PDF\'s (pdfTeX, LuaTeX), never one its driver writes (XeTeX\'s .xdv, a DVI)', () => {
+    expect(tellsTwice(`${TEX}${out(3)}`)).toBe(true)
+    expect(tellsTwice(`${TEX}Output written on\nmain.pdf (3 pages, 9 bytes).\n`)).toBe(false)
+    expect(tellsTwice(`${TEX}Output written on main.xdv (3 pages, 9 bytes).\n`)).toBe(false)
+    expect(tellsTwice(`${TEX}Output written on main.dvi (3 pages, 9 bytes).\n`)).toBe(false)
+    expect(tellsTwice(`${TEX}! Emergency stop.\n`)).toBe(false)
+    expect(tellsTwice(null)).toBe(false)
+  })
+})
+
+describe('the preamble as the marked original writes it, read by the mark probe: the units TeX\'s errors there stand at', () => {
+  const FRONT = '\\documentclass{article}\n\\title{A Title}\n\\author{Ann Lee}\n\\begin{document}\n\\maketitle\nWe use words here.\n\\end{document}\n'
+  const front = () => paperOf(FRONT)
+
+  it('marks the units the main file\'s preamble holds; none there, no marked preamble (the probe byte for byte as before)', () => {
+    expect(markedPreamble(paperOf())).toBeNull()
+    const p = front(), mp = markedPreamble(p)
+    if (!mp) throw new Error('no marked preamble')
+    expect(p.units.slice(0, 2).map(u => u.kind)).toEqual(['heading', 'author'])
+    expect(mp.text).toContain('\\title{\\axthmark{h0s}A Title\\axthmark{h0e}}')
+    expect(mp.text).toContain('\\author{\\leavevmode\\axtmark{1s}Ann Lee\\axtend{1e}}')
+    expect(mp.text).not.toContain('\\begin{document}')
+    // (the probe over it: the paper's own preamble in its place, the line probes inert, and its lines where `first` says)
+    const probe = new TextDecoder().decode(probeFiles(p, { marks: true, preamble: mp }).get('main.tex'))
+    expect(probe).toContain(`${mp.text}`)
+    expect(probe).toContain('\\protected\\def\\axtlines#1{}')
+    expect(probe.split('\n')[mp.first - 1]).toBe('\\documentclass{article}')
+    expect(probe.split('\n')[mp.last - 1]).toBe('\\author{\\leavevmode\\axtmark{1s}Ann Lee\\axtend{1e}}')
+    expect(new TextDecoder().decode(probeFiles(p, { marks: true }).get('main.tex'))).not.toContain('\\axtmark{1s}')
+    // (under `latex`, the probe's head holds the DVI marks too: `first` counts them)
+    const readme = JSON.stringify({ sources: [{ usage: 'toplevel', filename: 'main.tex' }], process: { compiler: 'latex' } })
+    const dvi = paperOf(FRONT, [['00README.json', readme]]), dmp = markedPreamble(dvi)
+    if (!dmp) throw new Error('no marked preamble')
+    expect(new TextDecoder().decode(probeFiles(dvi, { marks: true, preamble: dmp }).get('main.tex')).split('\n')[dmp.first - 1]).toBe('\\documentclass{article}')
+  })
+
+  it('preambleUnits: an error on a line of the preamble whose text holds a mark of ours names its unit; no other', () => {
+    const range = { first: 10, last: 20 }
+    const csname = (line: number, at: string) => `! Missing \\endcsname inserted.\n<to be read again> \n                   \\unhbox \nl.${line} ${at}\n\n`
+    expect(preambleUnits(csname(12, '...ode\\axtmark{1s}Ann Lee\\axtend{1e}}'), 5, range)).toEqual(new Set([1]))
+    expect(preambleUnits(csname(12, '\\author{\\axtlines{3}\\leavevmode'), 5, range)).toEqual(new Set([3]))
+    // (past the preamble, a line of another file, no mark in its text, a unit past the paper's)
+    expect(preambleUnits(csname(25, '\\axtmark{1s}Ann Lee'), 5, range)).toEqual(new Set())
+    expect(preambleUnits(csname(12, '\\author{Ann Lee}'), 5, range)).toEqual(new Set())
+    expect(preambleUnits(csname(12, '\\axtmark{9s}Ann Lee'), 5, range)).toEqual(new Set())
+    // (a title on the author's line: the error stands in the author's group, closed just before its place or open at it, its
+    // opening brace cut off by the log or not; an error in no group names none)
+    const at = (line: number, before: string, after: string) => `! Missing \\endcsname inserted.\n<to be read again> \n                   \\unhbox \nl.${line} ${before}\n${' '.repeat(before.length + 5)}${after}\n\n`
+    const title = '\\title{\\axtmark{0s}A Title\\axtend{0e}}'
+    expect(preambleUnits(csname(12, `${title}\\author{\\axtmark{1s}Ann Lee\\axtend{1e}}`), 5, range)).toEqual(new Set([1]))
+    expect(preambleUnits(at(12, `${title}\\author{\\leavevmode\\axtmark`, '{1s}Ann Lee\\axtend{1e}}'), 5, range)).toEqual(new Set([1]))
+    expect(preambleUnits(at(12, 'ode\\axtmark', '{1s}Ann Lee\\axtend{1e}}'), 5, range)).toEqual(new Set([1]))
+    expect(preambleUnits(at(12, `${title} \\foo`, '\\author{\\axtmark{1s}Ann Lee\\axtend{1e}}'), 5, range)).toEqual(new Set())
+  })
+
+  it('in markedOfPaper: units TeX raised errors at in the probe\'s preamble unmarked before the marked compile, no compile more (2610.37668v1)', async () => {
+    const p = front(), mp = markedPreamble(p)
+    if (!mp) throw new Error('no marked preamble')
+    const line = mp.first + mp.text.split('\n').findIndex(l => l.includes('\\axtmark{1s}'))
+    const err = `! Missing \\endcsname inserted.\n<to be read again> \n                   \\unhbox \nl.${line} ...ode\\axtmark{1s}Ann Lee\\axtend{1e}}\n\n`
+    const blamed = compiler([{ ok: false, log: `${PROBE_LOG.replace('This is pdfTeX', `${TEX}${err}`)}AXT-END\n` }, PROBE, ran(PDF, '', 3)])
+    const made = await markedOfPaper(p, { final: false, compile: blamed.compile, pages: 3 })
+    expect(made).toMatchObject({ pdf: PDF, guard: { extra: 0, unmarked: [1], names: true, failed: ['preamble'] } })
+    expect(blamed.asked).toHaveLength(3)
+    // (the first probe over the marked preamble, the second over the paper's own, whose answers are taken)
+    expect(has(blamed.asked[0], '\\axtmark{1s}')).toBe(true)
+    expect(dec(blamed.asked[1]?.overrides.get('main.tex'))).toBe(dec(probeFiles(p, { marks: true }).get('main.tex')))
+    expect([has(blamed.asked[2], '\\axtmark{1s}'), has(blamed.asked[2], '\\axthmark{h0s}')]).toEqual([false, true])
+    // (a probe over the marked preamble that ran through with no error of ours there: its answers, one probe, every unit marked)
+    const clean = compiler([{ ok: false, log: `${PROBE_LOG}AXT-END\n` }, ran(PDF, '', 3)])
+    expect(await markedOfPaper(p, { final: false, compile: clean.compile, pages: 3 })).toEqual({ pdf: PDF, log: expect.any(String), probeLog: expect.any(String), options: expect.any(Object), ms: expect.any(Object) })
+    expect(clean.asked).toHaveLength(2)
+    expect(has(clean.asked[1], '\\axtmark{1s}')).toBe(true)
+    // (one that stopped before its body wrote a row: asked again over the paper's own preamble, nothing blamed, the guard as before)
+    const short = compiler([{ ok: false, log: `${TEX}! Emergency stop.\n` }, PROBE, ran(PDF, '', 3)])
+    expect(await markedOfPaper(p, { final: false, compile: short.compile, pages: 3 })).toEqual({ pdf: PDF, log: expect.any(String), probeLog: expect.any(String), options: expect.any(Object), ms: expect.any(Object) })
+    expect(short.asked).toHaveLength(3)
+    expect(has(short.asked[2], '\\axtmark{1s}')).toBe(true)
+    // (one that stopped there after an error at a mark of ours: its unit named all the same, no compile more)
+    const stopped = compiler([{ ok: false, log: `${TEX}${err}! Emergency stop.\n` }, PROBE, ran(PDF, '', 3)])
+    expect(await markedOfPaper(p, { final: false, compile: stopped.compile, pages: 3 })).toMatchObject({ pdf: PDF, guard: { extra: 0, unmarked: [1], failed: ['preamble'] } })
+    expect(stopped.asked).toHaveLength(3)
+    expect(has(stopped.asked[2], '\\axtmark{1s}')).toBe(false)
+    // (one that stopped in its body, in a sample of its own (2610.21884v1's \ar@{-} in the ink section, a cell of xy-pic's syntax a
+    // unit until PIPELINE 45 kept its diagrams as the paper has them; 2610.21377v1's still): the paper's own preamble's
+    // probe stops there too, and its rows are taken as they are; one probe)
+    const body = compiler([{ ok: false, log: `${PROBE_LOG}! TeX capacity exceeded, sorry [input stack size=10000].\n` }, ran(PDF, '', 3)])
+    expect(await markedOfPaper(p, { final: false, compile: body.compile, pages: 3 })).toEqual({ pdf: PDF, log: expect.any(String), probeLog: expect.any(String), options: expect.any(Object), ms: expect.any(Object) })
+    expect(body.asked).toHaveLength(2)
   })
 })
 
@@ -197,14 +300,14 @@ describe('markedOfPaper: the checks after the marked compile, each remedy, and t
   it('a paper whose marked original passes costs no compile more and has no guard record (a caption\'s marks in its list are text)', async () => {
     const aux = '\\@writefile{lof}{\\contentsline {figure}{\\numberline {1}{\\ignorespaces \\axtmark {1s}A caption.\\axtend {1e}}}{3}{figure.1}}\n'
     const c = compiler([PROBE, ran(PDF, '', 3, { aux })])
-    const made = await markedOfPaper(paperOf(), { compile: c.compile, pages: 3 })
-    expect(made).toEqual({ pdf: PDF, log: expect.any(String), options: expect.any(Object), ms: { probe: expect.any(Number), compile: expect.any(Number) } })
+    const made = await markedOfPaper(paperOf(), { final: false, compile: c.compile, pages: 3 })
+    expect(made).toEqual({ pdf: PDF, log: expect.any(String), probeLog: expect.any(String), options: expect.any(Object), ms: { probe: expect.any(Number), compile: expect.any(Number) } })
     expect(c.asked).toHaveLength(2)
   })
 
   it('a mark out of place: the units it names unmarked, the names kept, one compile more', async () => {
     const aux = '\\@writefile{toc}{\\etoc@depthtag {main\\axtend {2e}}}\n'
-    for (const answer of [ran(PDF, '', 3, { aux }), ran(PDF, '', 3, { files: new Map([['main.toc', enc('\\etoc@depthtag {main\\axtend {2e}}\n')]]) })]) {
+    for (const answer of [viaDriver(ran(PDF, '', 3, { aux })), viaDriver(ran(PDF, '', 3, { files: new Map([['main.toc', enc('\\etoc@depthtag {main\\axtend {2e}}\n')]]) }))]) {
       const c = compiler([PROBE, answer, ran(PDF1)])
       const made = await markedOfPaper(paperOf(), { compile: c.compile })
       expect(made).toMatchObject({ pdf: PDF1, ms: { guard: expect.any(Number) }, guard: { extra: 1, unmarked: [2], names: true, failed: ['aux'] } })
@@ -214,14 +317,125 @@ describe('markedOfPaper: the checks after the marked compile, each remedy, and t
     }
     // (with an error in another unit: both unmarked, then the error's unit marked again, the smaller remedy, where it holds)
     const e = errorAt(1, 'here.')
-    const both = compiler([PROBE, ran(PDF, e.log, 3, { aux }), ran(PDF1), ran(PDF2)])
+    const both = compiler([PROBE, viaDriver(ran(PDF, e.log, 3, { aux })), ran(PDF1), ran(PDF2)])
     expect(await markedOfPaper(paperOf(), { compile: both.compile })).toMatchObject({ pdf: PDF2, guard: { extra: 2, unmarked: [2], names: true, failed: ['aux', 'errors'] } })
     expect([has(both.asked[2], '\\axtmark{1s}'), has(both.asked[2], '\\axtmark{2s}')]).toEqual([false, false])
     expect([has(both.asked[3], '\\axtmark{1s}'), has(both.asked[3], '\\axtmark{2s}')]).toEqual([true, false])
     // (mended by neither: the units unmarked, then the names off too; the best that ran stands, as before the guard)
-    const c = compiler([PROBE, ran(PDF, '', 3, { aux }), ran(PDF1, '', 3, { aux }), ran(PDF2, '', 3, { aux })])
+    const c = compiler([PROBE, viaDriver(ran(PDF, '', 3, { aux })), viaDriver(ran(PDF1, '', 3, { aux })), viaDriver(ran(PDF2, '', 3, { aux }))])
     expect(await markedOfPaper(paperOf(), { compile: c.compile })).toMatchObject({ pdf: PDF, guard: { extra: 2, failed: ['aux'] } })
     expect(has(c.asked[3], NAMES_OFF)).toBe(true)
+  })
+
+  it('a mark a file holds that TeX set once where the paper sets its text, or never: no compile more, the unit marked (2609.36054v2, 2610.21201v1)', async () => {
+    // (an endnote package writes each note's text into the aux and prints it from there: its marks are set once, at the notes;
+    // a class that writes an author's name into the aux and discards it sets it never: both the paper's, and TeX's own log, which
+    // names every destination it set twice, names none)
+    for (const aux of [
+      '\\enotez@note {1}{1}{0}{0}{0}{a}{\\axtlines {2}\\leavevmode \\axtmark {2s}Another paragraph of words.\\axtend {2e}}\n',
+      '\\jmlr@author{\\leavevmode \\axtmark {1s}We use\\axtend {1e}}{\\leavevmode \\axtmark {1s}We use\\axtend {1e}}\n',
+    ]) {
+      for (const answer of [ran(PDF, '', 3, { aux }), ran(PDF, '', 3, { files: new Map([['main.aux', enc(aux)]]) })]) {
+        const c = compiler([PROBE, answer])
+        expect(await markedOfPaper(paperOf(), { final: false, compile: c.compile, pages: 3, textOf: unshown })).toEqual({ pdf: PDF, log: expect.any(String), probeLog: expect.any(String), options: expect.any(Object), ms: expect.any(Object) })
+        expect(c.asked).toHaveLength(2)
+      }
+    }
+  })
+
+  it('a mark a file holds that TeX set twice is out of place: the unit unmarked, one compile more, the class\'s copy the paper\'s own (2610.21084v1)', async () => {
+    // (cas-common writes each \ead's author into the aux, `\emailauthor{…}{<the \author argument>}`, and reads it back for the
+    // e-mail footnote: \parsename splits the name at its spaces, takes the last word for the surname and each other word's head,
+    // \tl_head:n, for an initial, so that our marks are words of it — the first given name's head our \leavevmode, its initial
+    // nothing: "(. Chung)" where arXiv's footnote reads "(M. Chung)" —, and the surname with our end mark is set again, which
+    // pdfTeX names. The reading would drop the mark set twice and leave the unit the original's anyway: no mark of ours is kept
+    // where a class sets the unit's text again from what it stored)
+    const aux = '\\emailauthor{a@b.c}{\\leavevmode \\axtmark {2s}Another paragraph of words.\\axtend {2e}}\n'
+    const twice = 'pdfTeX warning (ext4): destination with the same identifier (name{axt-2e}) has been already used, duplicate ignored\n'
+    const c = compiler([PROBE, ran(PDF, twice, 3, { aux }), ran(PDF1)])
+    const made = await markedOfPaper(paperOf(), { final: false, compile: c.compile, pages: 3, textOf: unshown })
+    expect(made).toMatchObject({ pdf: PDF1, guard: { extra: 1, unmarked: [2], names: true, failed: ['aux'] } })
+    expect(c.asked).toHaveLength(3)
+    expect([has(c.asked[2], '\\axtmark{2s}'), has(c.asked[2], '\\axtend{2e}'), has(c.asked[2], '\\axtmark{1s}')]).toEqual([false, false, true])
+    // (one TeX set once there, the paper's own text read back from the file (enotez), stands, though the log names another set
+    // twice: the units of the destinations it names alone)
+    const once = '\\enotez@note {1}{1}{0}{0}{0}{a}{\\axtlines {2}\\leavevmode \\axtmark {2s}Another paragraph of words.\\axtend {2e}}\n'
+    const other = 'pdfTeX warning (ext4): destination with the same identifier (name{axt-h9e}) has been already used, duplicate ignored\n'
+    const kept = compiler([PROBE, ran(PDF, other, 3, { aux: once })])
+    expect(await markedOfPaper(paperOf(), { final: false, compile: kept.compile, pages: 3, textOf: unshown })).toEqual({ pdf: PDF, log: expect.any(String), probeLog: expect.any(String), options: expect.any(Object), ms: expect.any(Object) })
+    expect(kept.asked).toHaveLength(2)
+  })
+
+  it("a class's verbatim copy of our source that begins inside a mark of ours: the unit unmarked, one compile more (cas-common's abstract, 2610.21084v1)", async () => {
+    // (cas-sc's abstract: cas-common.sty's \\RenewDocumentEnvironment{abstract}{o}{…\\verbatimwrite{\\jobname.abs}}{\\endverbatimwrite},
+    // read back by \\file_input:n. The look-ahead for its optional argument reads the body's first token before moreverb's
+    // \\verbatimwrite makes every character other, and the copy loses it where it is a control word: our probe's name, its
+    // argument printed — "4Scientific…" on our page, the unit refused for that content of ours. A letter, the paper's own first
+    // character, is kept)
+    const src = '\\documentclass{cas-sc}\n\\begin{document}\n\\begin{abstract}\nScientific prediction under uncertainty needs more than one estimate.\n\nWe establish an approximation theory for the method.\n\\end{abstract}\n\\maketitle\n\nAnother paragraph of words.\n\\end{document}\n'
+    const copyOf = (req: CompileRequest) => (/\\begin\{abstract\}\n([\s\S]*?)\\end\{abstract\}/.exec(dec(req.overrides.get('main.tex')))?.[1] ?? '').replace(/^\\[A-Za-z]+/, '')
+    /** cas-common's compile: the abstract's copy among the files it wrote, after the probe */
+    const casCompiler = (copy: (req: CompileRequest) => string, ext = 'abs') => {
+      const asked: CompileRequest[] = []
+      const compile = async (req: CompileRequest): Promise<Compiled> => {
+        asked.push(req)
+        if (asked.length === 1) return PROBE
+        return ran(asked.length === 2 ? PDF : PDF1, '', 3, { files: new Map([[`main.${ext}`, enc(copy(req))], ['main.log', enc('l.4 \\axtlines{0}\\leavevmode\\axtmark{0s}Sci')]]) })
+      }
+      return { asked, compile }
+    }
+    const c = casCompiler(copyOf)
+    expect(await markedOfPaper(paperOf(src), { final: false, compile: c.compile, pages: 3, textOf: unshown })).toMatchObject({ pdf: PDF1, guard: { extra: 1, unmarked: [0], names: true, failed: ['aux'] } })
+    expect(c.asked).toHaveLength(3)
+    expect([has(c.asked[2], '\\axtmark{0s}'), has(c.asked[2], '\\axtlines{0}'), has(c.asked[2], '\\axtmark{1s}')]).toEqual([false, false, true])
+    // (a copy of whole lines — comment.sty's, acmart's acks, 2608.25210v2 — and one that begins inside the paper's own text: they
+    // stand)
+    const whole = casCompiler(req => /\\begin\{abstract\}\n([\s\S]*?)\\end\{abstract\}/.exec(dec(req.overrides.get('main.tex')))?.[1] ?? '', 'cut')
+    expect(await markedOfPaper(paperOf(src), { final: false, compile: whole.compile, pages: 3, textOf: unshown })).toMatchObject({ pdf: PDF })
+    expect(whole.asked).toHaveLength(2)
+    const own = casCompiler(req => copyOf(req).replace(/^\{0\}\\leavevmode\\axtmark\{0s\}Sc/, ''))
+    expect(await markedOfPaper(paperOf(src), { final: false, compile: own.compile, pages: 3, textOf: unshown })).toMatchObject({ pdf: PDF })
+    expect(own.asked).toHaveLength(2)
+  })
+
+  it("cutCopyUnits: the units whose mark of ours a line a compile wrote begins inside, that line a copy of our source's", () => {
+    const ours = new Map([['main.tex', enc('\\begin{abstract}\n\\axtlines{4}\\leavevmode\\axtmark{4s}Scientific words.\\axtend{4e}\n\nText \\axtmark{6s}more.\\axtend{6e}\n')]])
+    const wrote = (files: [string, string][]) => ({ files: new Map(files.map(([p, t]): [string, Uint8Array] => [p, enc(t)])) })
+    // (the probe's name lost, its argument left; the \\leavevmode before a start mark lost: both inside ours)
+    expect(cutCopyUnits(wrote([['x.abs', '{4}\\leavevmode\\axtmark{4s}Scientific words.\\axtend{4e}\n']]), ours, 9)).toEqual(new Set([4]))
+    expect(cutCopyUnits(wrote([['x.abs', '\\axtmark{4s}Scientific words.\\axtend{4e}\n']]), ours, 9)).toEqual(new Set([4]))
+    // (a whole line, one whose head is a suffix of the paper's own text, \\write's form (a space after the control word), a record
+    // of the compile's own, and a unit past `count`: none)
+    expect(cutCopyUnits(wrote([['x.cut', '\\axtlines{4}\\leavevmode\\axtmark{4s}Scientific words.\\axtend{4e}\n'], ['y.cut', 'xt \\axtmark{6s}more.\\axtend{6e}\n']]), ours, 9)).toEqual(new Set())
+    expect(cutCopyUnits(wrote([['x.aux', '{4}\\leavevmode \\axtmark {4s}Scientific\n'], ['x.log', '{4}\\leavevmode\\axtmark{4s}Sci\n']]), ours, 9)).toEqual(new Set())
+    expect(cutCopyUnits(wrote([['x.abs', '{4}\\leavevmode\\axtmark{4s}Scientific words.\\axtend{4e}\n']]), ours, 4)).toEqual(new Set())
+    // (no files given, or none written)
+    expect(cutCopyUnits({}, ours, 9)).toEqual(new Set())
+  })
+
+  it('a mark a file holds stays out of place where the compile shows anything else, or its log cannot tell a destination set twice', async () => {
+    const aux = '\\enotez@note {1}{1}{0}{0}{0}{a}{\\axtlines {2}\\leavevmode \\axtmark {2s}Another paragraph of words.\\axtend {2e}}\n'
+    // (its PDF written by its driver: XeTeX's xdvipdfmx, the DVI driver latexmk runs, tell no log the host returns)
+    const xe = compiler([PROBE, viaDriver(ran(PDF, '', 3, { aux })), ran(PDF1)])
+    expect(await markedOfPaper(paperOf(), { final: false, compile: xe.compile, pages: 3 })).toMatchObject({ pdf: PDF1, guard: { extra: 1, unmarked: [2], names: true, failed: ['aux'] } })
+    expect(has(xe.asked[2], '\\axtmark{2s}')).toBe(false)
+    // (a TeX error, wherever it stands: 2610.21201's etoc depth tag inside a \csname of its contents)
+    const csname = '! Missing \\endcsname inserted.\n<to be read again> \n                   \\axtend \nl.1 \\etoc@depthtag {main\\axtend {2e}}\n\n'
+    const err = compiler([PROBE, ran(PDF, csname, 3, { aux: '\\@writefile{toc}{\\etoc@depthtag {main\\axtend {2e}}}\n' }), ran(PDF1)])
+    expect(await markedOfPaper(paperOf(), { final: false, compile: err.compile, pages: 3 })).toMatchObject({ pdf: PDF1, guard: { extra: 1, unmarked: [2], failed: ['aux', 'errors'] } })
+    // (other pages than arXiv's)
+    const long = compiler([PROBE, ran(PDF, '', 4, { aux }), ran(PDF1, '', 3)])
+    expect(await markedOfPaper(paperOf(), { final: false, compile: long.compile, pages: 3 })).toMatchObject({ pdf: PDF1, guard: { extra: 1, unmarked: [2], failed: ['pages', 'aux'] } })
+    // (a mark of ours printed on a page)
+    const shown = compiler([PROBE, ran(PDF, '', 3, { aux }), ran(PDF1)])
+    const textOf = async (pdf: Uint8Array) => [pdf === PDF ? 'Notes 1 \\axtmark {2s}Another paragraph' : 'Notes 1 Another paragraph']
+    expect(await markedOfPaper(paperOf(), { final: false, compile: shown.compile, pages: 3, textOf })).toMatchObject({ pdf: PDF1, guard: { extra: 1, failed: ['aux', 'text'] } })
+    // (its pages' text not read — no `textOf`, or one that failed —: a mark printed is not known absent, `\\detokenize`'s copy
+    // sets no destination twice and raises no error)
+    for (const textOf of [undefined, async () => { throw new Error('no text') }]) {
+      const unread = compiler([PROBE, ran(PDF, '', 3, { aux }), ran(PDF1)])
+      expect(await markedOfPaper(paperOf(), { final: false, compile: unread.compile, pages: 3, ...(textOf ? { textOf } : {}) })).toMatchObject({ pdf: PDF1, guard: { extra: 1, unmarked: [2], failed: ['aux'] } })
+    }
   })
 
   it('errors above the unmarked original\'s: the original compiled, the units its other errors stand in unmarked', async () => {
@@ -234,6 +448,34 @@ describe('markedOfPaper: the checks after the marked compile, each remedy, and t
     expect(has(c.asked[2], '\\axtmark')).toBe(false)
     expect(has(c.asked[3], '\\axtmark{2s}')).toBe(false)
     expect(has(c.asked[3], '\\axtmark{1s}')).toBe(true)
+  })
+
+  it('errors no unit\'s line stands at: the unit whose mark TeX shows just before the error\'s place, inside what it read, unmarked, the names kept (2610.40394v1)', async () => {
+    // (TeX read an author block as a command's argument and raised the error in it: the input line is the block's closing
+    // brace, in no unit, and the argument's context shows our start mark before the undefined name)
+    const ctx = (place: string, rest: string) => `! Undefined control sequence.\n<argument> ...${place}\n${' '.repeat(place.length + 14)}${rest}\nl.7 }\n\n`
+    const log = `${TEX}${ctx('vmode \\axtmark {1s}\\bfseriesYouqing ', 'Fang\\protect \\axtpmm {p1.3...')}${END}${out(3)}`
+    const c = compiler([PROBE, ran(PDF, log.slice(TEX.length, log.indexOf(END))), ran(UNMARKED), ran(PDF1)])
+    const made = await markedOfPaper(paperOf(), { compile: c.compile })
+    expect(made).toMatchObject({ pdf: PDF1, guard: { extra: 2, unmarked: [1], names: true, failed: ['errors'] } })
+    expect([has(c.asked[3], '\\axtmark{1s}'), has(c.asked[3], '\\axtmark{2s}'), has(c.asked[3], NAMES_OFF)]).toEqual([false, true, false])
+  })
+
+  it('contextUnits: the mark of ours nearest before the place in the innermost context that holds one; none for the paper\'s own error, a name mark\'s or the input line\'s', () => {
+    const ctx = (level: string, place: string, rest: string, line = 'l.7 }') => `! Undefined control sequence.\n${level}${place}\n${' '.repeat(level.length + place.length)}${rest}\n${line}\n\n`
+    const one = ctx('<argument> ', '...vmode \\axtmark {1s}\\bfseriesYouqing ', 'Fang\\protect \\axtpmm {p1.3...')
+    expect(contextUnits(one, 5)).toEqual(new Set([1]))
+    // (a placeholder's pair mark, a cell's; the first after the place where none is before it; one past the paper's units)
+    expect(contextUnits(ctx('<argument> ', '... \\axtpm {p3.11b}, \\authorcr \\bfseriesBin ', ''), 5)).toEqual(new Set([3]))
+    // (a mark the log cut at the line's end keeps its unit's number; one cut at the line's start, `...pm {p3.11b}`, is no mark)
+    expect(contextUnits(ctx('<argument> ', '...pm {p3.11b}, \\authorcr \\bfseriesBin ', 'Liu\\protect \\axtpmm {p2.17...'), 5)).toEqual(new Set([2]))
+    expect(contextUnits(ctx('\\@author ->', '\\foo ', '\\leavevmode \\axtmark {t4s}Words'), 5)).toEqual(new Set([4]))
+    expect(contextUnits(ctx('<argument> ', '...\\axtmark {9s}\\foo ', ''), 5)).toEqual(new Set())
+    // (the paper's own error, as the unmarked original has it; a name mark of ours in its context, the names' remedy; marks on
+    // the input line alone, which errorUnits reads)
+    expect(contextUnits(one, 5, ownErrors(ctx('<argument> ', '...vmode \\bfseriesYouqing ', 'Fang')))).toEqual(new Set())
+    expect(contextUnits(ctx('<argument> ', '...\\axtmark {1s}\\relax \\axtnma {appendix}\\foo ', ''), 5)).toEqual(new Set())
+    expect(contextUnits(`! Undefined control sequence.\nl.7 \\axtmark{1s}\\foo\n          bar\n\n`, 5)).toEqual(new Set())
   })
 
   it('errors no more than the unmarked original\'s are the paper\'s own: the marked original stands, one compile more', async () => {
@@ -292,14 +534,14 @@ describe('markedOfPaper: the checks after the marked compile, each remedy, and t
     const aux = '\\@writefile{toc}{\\etoc@depthtag {main\\axtend {2e}}}\n'
     const timed = (c: Compiled, ms: number): Compiled => ({ ...c, ms })
     // (probe 10, marked 100: 50 left is under 1.2 x 100)
-    const thin = compiler([timed(PROBE, 10), timed(ran(PDF, '', 3, { aux }), 100), ran(PDF1)])
+    const thin = compiler([timed(PROBE, 10), timed(viaDriver(ran(PDF, '', 3, { aux })), 100), ran(PDF1)])
     expect(await markedOfPaper(paperOf(), { compile: thin.compile, compileBudgetMs: 160 })).toMatchObject({ pdf: PDF, guard: { extra: 0, judged: 'no compile left' } })
     expect(thin.asked).toHaveLength(2)
     const short = compiler([timed(PROBE, 10), timed(stopped('! Undefined control sequence.\nl.3 x\n'), 100)])
     expect(await markedOfPaper(paperOf(), { compile: short.compile, compileBudgetMs: 160 })).toMatchObject({ refused: 'compile', why: expect.stringContaining('the paper\'s own source was not compiled') })
     expect(short.asked).toHaveLength(2)
     // (room for one: the remedy, and no more)
-    const one = compiler([timed(PROBE, 10), timed(ran(PDF, '', 3, { aux }), 100), timed(ran(PDF1, '', 3, { aux }), 100), ran(PDF2)])
+    const one = compiler([timed(PROBE, 10), timed(viaDriver(ran(PDF, '', 3, { aux })), 100), timed(viaDriver(ran(PDF1, '', 3, { aux })), 100), ran(PDF2)])
     expect(await markedOfPaper(paperOf(), { compile: one.compile, compileBudgetMs: 240 })).toMatchObject({ pdf: PDF, guard: { extra: 1 } })
     expect(one.asked).toHaveLength(3)
     // (TeX never ran: `engine` only where the host names the engine unknown; any other answer with no TeX in it, the web's over-cap
@@ -339,30 +581,31 @@ describe('markedOfPaper: the checks after the marked compile, each remedy, and t
     const c = compiler([PROBE, ran(PDF, '', 3), ran(PDF1, '', 4)])
     expect(await markedOfPaper(paperOf(), { compile: c.compile, pages: async () => 4 })).toMatchObject({ pdf: PDF1, guard: { extra: 1, names: false, failed: ['pages'] } })
     expect(c.asked).toHaveLength(3)
-    // (more pages than arXiv's, mended by nothing: the marked original stands for the carry to judge, as before)
+    // (more pages than arXiv's, mended by nothing: without the base page the marked original stands for the carry to judge,
+    // as before; with it, none of other pages than arXiv's stands, and the unmarked original tells whose fault it is:
+    // here its own 5 pages, TeX's, with no final pass asked; layout-route-fallbacks.test.ts has the other cases)
     const more = compiler([PROBE, ran(PDF, '', 5), ran(PDF1, '', 5), ran(UNMARKED, '', 5)])
-    expect(await markedOfPaper(paperOf(), { compile: more.compile, pages: 4 })).toMatchObject({ pdf: PDF, guard: { failed: ['pages'] } })
+    expect(await markedOfPaper(paperOf(), { final: false, compile: more.compile, pages: 4 })).toMatchObject({ pdf: PDF, guard: { failed: ['pages'] } })
+    const based = compiler([PROBE, ran(PDF, '', 5), ran(PDF1, '', 5), ran(UNMARKED, '', 5)])
+    expect(await markedOfPaper(paperOf(), { compile: based.compile, pages: 4 })).toMatchObject({ refused: 'compile', why: 'the paper\'s own source (article) has 5 pages, arXiv\'s PDF 4 on TeX Live 2025', own: { ran: true, short: false } })
+    expect(based.asked).toHaveLength(4)
     const readme = JSON.stringify({ sources: [{ usage: 'toplevel', filename: 'main.tex' }, { usage: 'toplevel', filename: 'supplement.tex' }], process: { compiler: 'pdflatex' } })
     const paper = paperOf(SOURCE, [['00README.json', readme], ['supplement.tex', '\\documentclass{article}\\begin{document}S\\end{document}\n']])
     expect(paper.meta.toplevels).toBe(2)
     const two = compiler([PROBE, ran(PDF, '', 3)])
-    expect(await markedOfPaper(paper, { compile: two.compile, pages: 4 })).toEqual({ pdf: PDF, log: expect.any(String), options: expect.any(Object), ms: expect.any(Object) })
+    expect(await markedOfPaper(paper, { final: false, compile: two.compile, pages: 4 })).toEqual({ pdf: PDF, log: expect.any(String), probeLog: expect.any(String), options: expect.any(Object), ms: expect.any(Object) })
     expect(two.asked).toHaveLength(2)
     // (no 00README, two uncited \documentclass files, 1008.0072v1's case: the toplevel sources guessed, the same rule)
     const guessed = paperOf(SOURCE, [['supplement.tex', '\\documentclass{article}\\begin{document}S\\end{document}\n']])
     expect(guessed.meta).toMatchObject({ main: 'main.tex', mainGuessed: true, toplevels: 2 })
     const both = compiler([PROBE, ran(PDF, '', 3)])
-    expect(await markedOfPaper(guessed, { compile: both.compile, pages: 4 })).toEqual({ pdf: PDF, log: expect.any(String), options: expect.any(Object), ms: expect.any(Object) })
+    expect(await markedOfPaper(guessed, { final: false, compile: both.compile, pages: 4 })).toEqual({ pdf: PDF, log: expect.any(String), probeLog: expect.any(String), options: expect.any(Object), ms: expect.any(Object) })
     expect(both.asked).toHaveLength(2)
   })
 })
 
 describe('the refusal names the unmarked original\'s verdict and the trees tried; handoverOf, the host\'s rule over it', () => {
   const fail = stopped('! Undefined control sequence.\nl.3 \\newcommand{\\bert}{\\foo}\n')
-  const ERR = '! Undefined control sequence. (l.3 \\newcommand{\\bert}{\\foo})'
-  const TEX23 = 'This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023) (preloaded format=pdflatex)\n'
-  const fail23: Compiled = { ok: true, pdf: PDF, log: `${TEX23}! Undefined control sequence.\nl.3 \\newcommand{\\bert}{\\foo}\n! Emergency stop.\n` }
-  const declaring = (year: string) => paperOf(SOURCE, [['00README.json', JSON.stringify({ sources: [{ usage: 'toplevel', filename: 'main.tex' }], texlive_version: year, process: { compiler: 'pdflatex' } })]])
 
   it('names it where the unmarked original was compiled: TeX\'s failure, a short one, a host\'s limit, a throw, and ours', async () => {
     const texs = compiler([PROBE, fail, fail, fail])
@@ -392,17 +635,17 @@ describe('the refusal names the unmarked original\'s verdict and the trees tried
     expect(await markedOfPaper(paperOf(), { compile: errors.compile })).not.toHaveProperty('own')
   })
 
-  it('takes the host\'s `tried` for its why: every tree tried, then the box\'s; texlive where the paper declares a year none of them is', async () => {
+  it('takes the host\'s `tried` for its why: every tree tried, then the box\'s; texlive where the paper declares a year none of them is (markedOfPaper)', async () => {
+    const ERR = '! Undefined control sequence. (l.3 \\newcommand{\\bert}{\\foo})'
+    const TEX23 = 'This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023) (preloaded format=pdflatex)\n'
+    const fail23: Compiled = { ok: true, pdf: PDF, log: `${TEX23}! Undefined control sequence.\nl.3 \\newcommand{\\bert}{\\foo}\n! Emergency stop.\n` }
+    const declaring = (year: string) => paperOf(SOURCE, [['00README.json', JSON.stringify({ sources: [{ usage: 'toplevel', filename: 'main.tex' }], texlive_version: year, process: { compiler: 'pdflatex' } })]])
     // (undeclared: the compile's, on both trees)
     const plain = compiler([PROBE, fail, fail, fail])
     expect(await markedOfPaper(paperOf(), { compile: plain.compile, tried: ['2023'] })).toMatchObject({ refused: 'compile', why: `the paper's own source (article) does not run through on TeX Live 2023 or 2025: ${ERR}` })
     // (declares 2023, tried there first and then here: its own year was tried, so the compile's)
     const routed = compiler([PROBE, fail, fail, fail])
     expect(await markedOfPaper(declaring('2023'), { compile: routed.compile, tried: ['2023'] })).toMatchObject({ refused: 'compile', why: `the paper (article) declares TeX Live 2023; its own source does not run through on TeX Live 2023 or 2025: ${ERR}`, own: { tree: '2025' } })
-    // (and through layoutMarksOfPaper, which takes the same options: refused before anything is opened)
-    const whole = compiler([PROBE, fail, fail, fail])
-    const open = async () => { throw new Error('nothing to open') }
-    expect(await layoutMarksOfPaper(declaring('2023'), { compile: whole.compile, open, OPS: {}, tried: ['2023'] })).toMatchObject({ refused: 'compile', why: `the paper (article) declares TeX Live 2023; its own source does not run through on TeX Live 2023 or 2025: ${ERR}`, own: { tree: '2025' } })
     // (declares a year no tree tried is: TeX Live's, every tree named)
     const other = compiler([PROBE, fail23, fail23, fail23])
     expect(await markedOfPaper(declaring('2022'), { compile: other.compile, tried: ['2025'] })).toMatchObject({ refused: 'texlive', why: `the paper (article) declares TeX Live 2022; on TeX Live 2025 or 2023 its own source does not run through: ${ERR}`, own: { tree: '2023' } })
@@ -433,4 +676,128 @@ describe('the refusal names the unmarked original\'s verdict and the trees tried
       [undefined, { served, last: false }],
     ] as const) expect(handoverOf(own, { declared: null, ...o })).toBeNull()
   })
+})
+
+describe('texLiveOfPdf: the TeX Live year arXiv\'s PDF says, from the Info dictionary PDF.js resolves', () => {
+  const BANNER = (year: string) => `This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live ${year}) kpathsea version 6.3.5`
+  /** a PDF.js document that answers getMetadata with this (PDF.js 6 puts the Info keys it has no field for in `info.Custom`, a Map) */
+  const docOf = (custom: Map<string, unknown> | undefined) => ({ getMetadata: async () => ({ info: custom ? { Producer: 'pikepdf', Custom: custom } : { Producer: 'pikepdf' }, metadata: null }) }) as never
+
+  it('reads the year from the banner of the Info dictionary', async () => {
+    expect(await texLiveOfPdf(docOf(new Map([['DOI', 'x'], ['PTEX.Fullbanner', BANNER('2023')]])))).toBe('2023')
+    expect(await texLiveOfPdf(docOf(new Map([['PTEX.Fullbanner', BANNER('2025')]])))).toBe('2025')
+    // (the year is a string, the type texLiveOf gives; a banner a distribution words otherwise still has it)
+    expect(typeof await texLiveOfPdf(docOf(new Map([['PTEX.Fullbanner', BANNER('2025')]])))).toBe('string')
+    expect(await texLiveOfPdf(docOf(new Map([['PTEX.Fullbanner', 'This is pdfTeX (TeX Live 2020/Debian) kpathsea']])))).toBe('2020')
+  })
+
+  it('is null where the document does not say: no banner, a banner without a year, another value, nothing of Info', async () => {
+    expect(await texLiveOfPdf(docOf(undefined))).toBeNull()
+    expect(await texLiveOfPdf(docOf(new Map([['DOI', 'x'], ['arXivID', '2610.20713']])))).toBeNull()
+    expect(await texLiveOfPdf(docOf(new Map([['PTEX.Fullbanner', 'This is pdfTeX, Version 3.141592653-2.6-1.40.25']])))).toBeNull()
+    expect(await texLiveOfPdf(docOf(new Map<string, unknown>([['PTEX.Fullbanner', { name: 'TeX Live 2023' }], ['PTEX.Fullbanner2', BANNER('2023')]])))).toBeNull()
+    // (no other signal counts: not the Producer, not another key)
+    expect(await texLiveOfPdf({ getMetadata: async () => ({ info: { Producer: 'pdfTeX-1.40.25 TeX Live 2023', Custom: new Map([['Notes', BANNER('2023')]]) } }) } as never)).toBeNull()
+    expect(await texLiveOfPdf({ getMetadata: async () => null } as never)).toBeNull()
+    expect(await texLiveOfPdf({ getMetadata: async () => ({}) } as never)).toBeNull()
+    expect(await texLiveOfPdf({} as never)).toBeNull()
+    expect(await texLiveOfPdf(null as never)).toBeNull()
+  })
+
+  it('does not throw where getMetadata does, and lets a memory-class error through', async () => {
+    expect(await texLiveOfPdf({ getMetadata: async () => { throw new Error('broken') } } as never)).toBeNull()
+    expect(await texLiveOfPdf({ getMetadata: () => { throw new Error('broken') } } as never)).toBeNull()
+    await expect(texLiveOfPdf({ getMetadata: async () => { throw new RangeError(ALLOCATION_FAILED) } } as never)).rejects.toThrow(ALLOCATION_FAILED)
+  })
+
+  it('reads a real PDF through PDF.js: the Info the trailer names, not the banner of an included PDF or of an object nothing names', async () => {
+    const pdf = await PL.PDFDocument.create({ updateMetadata: false })
+    pdf.addPage([612, 792])
+    // (the objects an included figure leaves behind: pdfTeX copies its Info dictionary as an object, banner and all, and a
+    // superseded Info stays in the file; both come after the page and before the document's own Info in object order)
+    const decoy = (year: string) => pdf.context.register(pdf.context.obj({ Producer: PL.PDFString.of('pdfTeX-1.40.20'), 'PTEX.Fullbanner': PL.PDFString.of(BANNER(year)) }))
+    decoy('2019'); decoy('2021')
+    const info = pdf.context.lookup(pdf.context.trailerInfo.Info) as PL.PDFDict | undefined ?? pdf.context.obj({})
+    info.set(PL.PDFName.of('PTEX.Fullbanner'), PL.PDFString.of(BANNER('2023')))
+    pdf.context.trailerInfo.Info = pdf.context.register(info)
+    decoy('2024')
+    const bytes = await pdf.save({ useObjectStreams: false })
+    // (the banners are in the bytes in that order, the document's second: a scan of the file would not tell it)
+    const raw = new TextDecoder('latin1').decode(bytes)
+    expect([...raw.matchAll(/\(TeX Live (\d{4})\)/g)].map(m => m[1])).toEqual(['2019', '2021', '2023', '2024'])
+    const doc = await getDocument({ data: bytes.slice(), verbosity: 0 }).promise
+    try {
+      expect(((await doc.getMetadata()).info as { Custom?: unknown }).Custom).toBeInstanceOf(Map)
+      expect(await texLiveOfPdf(doc as never)).toBe('2023')
+    } finally { await doc.loadingTask.destroy() }
+  })
+})
+
+describe('compilerOfPdf: the compiler arXiv\'s PDF says made it, from the Info dictionary\'s Creator and Producer', () => {
+  const docOf = (info: Record<string, unknown> | null) => ({ getMetadata: async () => (info === null ? null : { info }) }) as never
+
+  it('names the compiler of the route that wrote the PDF: dvips is latex, pdfTeX pdflatex, XeTeX\'s driver xelatex, LuaTeX lualatex', async () => {
+    // 1007.0072v1: a figure-less revtex4 paper arXiv made with latex, dvips and Ghostscript
+    expect(await compilerOfPdf(docOf({ Creator: 'dvips(k) 5.98 Copyright 2009 Radical Eye Software', Producer: 'GPL Ghostscript GIT PRERELEASE 9.22' }))).toBe('latex')
+    expect(await compilerOfPdf(docOf({ Creator: 'dvips(k) 2024.1 (TeX Live 2024) Copyright 2024 Radical Eye Software', Producer: 'Ghostscript 10.03.1' }))).toBe('latex')
+    expect(await compilerOfPdf(docOf({ Creator: 'LaTeX with hyperref', Producer: 'pdfTeX-1.40.25' }))).toBe('pdflatex')
+    expect(await compilerOfPdf(docOf({ Creator: 'LaTeX with hyperref', Producer: 'xdvipdfmx (20240305)' }))).toBe('xelatex')
+    expect(await compilerOfPdf(docOf({ Creator: 'LaTeX with hyperref', Producer: 'LuaTeX-1.17.0' }))).toBe('lualatex')
+  })
+
+  it('is null where the document does not say, or says a tool that is no compiler of the route (a PDF library, a converter)', async () => {
+    expect(await compilerOfPdf(docOf({}))).toBeNull()
+    expect(await compilerOfPdf(docOf({ Creator: 'Microsoft Word', Producer: 'Adobe PDF Library' }))).toBeNull()
+    expect(await compilerOfPdf(docOf({ Producer: 'pikepdf 8.0' }))).toBeNull()
+    expect(await compilerOfPdf(docOf({ Creator: 5, Producer: { name: 'pdfTeX' } }))).toBeNull()
+    expect(await compilerOfPdf(docOf(null))).toBeNull()
+    expect(await compilerOfPdf({} as never)).toBeNull()
+    expect(await compilerOfPdf(null as never)).toBeNull()
+  })
+
+  it('does not throw where getMetadata does, and lets a memory-class error through', async () => {
+    expect(await compilerOfPdf({ getMetadata: async () => { throw new Error('broken') } } as never)).toBeNull()
+    await expect(compilerOfPdf({ getMetadata: async () => { throw new RangeError(ALLOCATION_FAILED) } } as never)).rejects.toThrow(ALLOCATION_FAILED)
+  })
+})
+
+describe('markedOfPaper: the compiler a package does not name is arXiv\'s PDF\'s, when the host reads it', () => {
+  // (1007.0072v1: no 00README, no figure, so the compiler is a guess, pdflatex; arXiv made the PDF with latex and dvips, Letter,
+  // where our pdfTeX base is A4)
+  const ENGINES = (asked: CompileRequest[]) => asked.map(r => r.engine)
+
+  it('asks every compile of the engine the host read, the probe included, and the DVI marks go with it', async () => {
+    const paper = paperOf()
+    expect(paper.meta).toMatchObject({ compiler: 'pdflatex', compilerGuessed: true })
+    const c = compiler([PROBE])
+    await markedOfPaper(paper, { compile: c.compile, compilerOf: async () => 'latex' })
+    expect(ENGINES(c.asked)[0]).toBe('latex')
+    // (the probe's source carries the DVI marks under latex: the engine's dviEngine)
+    expect(dec(c.asked[0]?.overrides?.get('main.tex'))).toContain('axt@dvidest')
+    expect(paper.meta).toMatchObject({ compiler: 'latex', compilerGuessed: false })
+  })
+
+  it('leaves the guess alone where the host reads nothing, throws, or names an engine that is none of the four', async () => {
+    for (const compilerOf of [undefined, async () => null, async () => { throw new Error('no PDF') }, async () => 'tex' as string]) {
+      const paper = paperOf()
+      const c = compiler([PROBE])
+      await markedOfPaper(paper, { compile: c.compile, ...(compilerOf ? { compilerOf } : {}) })
+      expect(ENGINES(c.asked)[0]).toBe('pdflatex')
+      expect(paper.meta).toMatchObject({ compiler: 'pdflatex', compilerGuessed: true })
+    }
+  })
+
+  it('does not ask for a compiler the package names (00README.json): arXiv\'s own word stands', async () => {
+    const paper = paperOf(SOURCE, [['00README.json', JSON.stringify({ process: { compiler: 'pdflatex' }, sources: [{ filename: 'main.tex', usage: 'toplevel' }] })]])
+    expect(paper.meta.compilerGuessed).toBeFalsy()
+    let asks = 0
+    const c = compiler([PROBE])
+    await markedOfPaper(paper, { compile: c.compile, compilerOf: async () => { asks++; return 'latex' } })
+    expect([asks, ENGINES(c.asked)[0]]).toEqual([0, 'pdflatex'])
+  })
+
+  it('lets a failed allocation of the host\'s reader through', async () => {
+    await expect(markedOfPaper(paperOf(), { compile: compiler([PROBE]).compile, compilerOf: async () => { throw new RangeError(ALLOCATION_FAILED) } })).rejects.toThrow(ALLOCATION_FAILED)
+  })
+
 })

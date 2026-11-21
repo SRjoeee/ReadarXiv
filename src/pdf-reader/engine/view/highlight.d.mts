@@ -5,13 +5,18 @@ import type { Anchor, DocToken } from '../pipeline/anchors.mjs'
 /** a run's row: lines merged where they overlap, and the unit's reach across them (PDF units); lo, hi: its glyphs' */
 export interface Row { y0: number; y1: number; x0: number; x1: number; lo: number; hi: number; r0: number | null; r1: number | null }
 /** a unit's run: one page and one column of it, its extent inside the column's text edges, its rows, the boundaries
- *  between them, and the page's half leading; its tokens, the row each is on, and where the unit's head begins on it */
-export interface Run { id: number; page: number; col: 'F' | 'L' | 'R'; x0: number; x1: number; top: number; bottom: number; hi: number; lo: number; lead: number; rows: Row[]; mids: number[]; toks: number[]; rowOf: number[]; head: number | null; sx0: number; sx1: number }
+ *  between them, and the page's half leading; its tokens, the row each is on, where the unit's head begins on it, and whether
+ *  the unit's own display stands right above it or right below it */
+export interface Run { id: number; page: number; col: 'F' | 'L' | 'R'; x0: number; x1: number; top: number; bottom: number; hi: number; lo: number; lead: number; rows: Row[]; mids: number[]; toks: number[]; rowOf: number[]; head: number | null; sx0: number; sx1: number; afterDisplay: boolean; beforeDisplay: boolean }
 /** a side's layout (layoutOf): opaque to its callers */
 export interface Layout { readonly pagesOf: Map<number, number[]> }
 
-/** whether a kind of unit may light by sentence: running text */
+/** whether a kind of unit may light by sentence: running text and captions (a heading, a cell, a drawing's text whole) */
 export declare function bySentence(kind: string | undefined): boolean
+/** the kinds of a drawing's text, which no layout holds (only where it stands, its `drawings`): none lights */
+export declare const DRAWING: ReadonlySet<string>
+/** a table's cell no unit holds as a run of its own: its words' box, one row */
+export declare function cellRunOf(id: number, page: number, col: Run['col'], box: { x0: number; y0: number; x1: number; y1: number; lo: number; hi: number }, lead: number): Run
 /** each page's columns by a rule (pageColumns, today's: from the located units' lines; columnsOfTokens': the text's alone), [null,
  *  page 1, …]; layoutOf reads a rule given for the far push alone */
 export type ColumnRule = (views: number[][], anchors: Map<number, Anchor | null>, kindOf?: (id: number) => string | undefined) => unknown[]
@@ -25,8 +30,8 @@ export declare function layoutOf(doc: DocToken[], views: number[][], anchors: Ma
 /** a page's tokens as a layout keeps them (format.mjs ReadLeftPart's table): ink across, baseline, size, the glyphs' top and foot */
 export interface PageTable { n: number; l: Float32Array; r: Float32Array; y: Float32Array; h: Float32Array; top: Float32Array; bottom: Float32Array }
 /** what the document part reads of a part (format.mjs ReadPart): its pages, the views of pages from its first (stride 4)
- *  and its units, their line rectangles */
-export interface PartRects { readonly pages: readonly [number, number]; readonly views: readonly number[]; readonly left: readonly UnitWire[] }
+ *  and its units, their line rectangles; `quiet` units told by where the layout lays them, no part of the pages' columns */
+export interface PartRects { readonly pages: readonly [number, number]; readonly views: readonly number[]; readonly left: readonly UnitWire[]; readonly quiet?: boolean }
 /** a side's layout made page by page: empty until told (layoutParts, layoutPage) */
 export declare function pageLayout(kindOf?: (id: number) => string | undefined): Layout
 /** the document part made again with these parts' views and units, every page's geometry let go; false where they told
@@ -35,6 +40,8 @@ export declare function layoutParts(layout: Layout, parts: readonly PartRects[])
 /** a page's part: its tokens, ids from `first`, and each unit's tokens there; false where it was given already; a
  *  RangeError where its ids reach into another page's */
 export declare function layoutPage(layout: Layout, page: number, part: { first: number; table: PageTable; spans: readonly (readonly [number, ArrayLike<number>])[] }): boolean
+/** units' tokens on a page given already: a unit told after its page came; false where the page is not in */
+export declare function layoutSpans(layout: Layout, page: number, spans: readonly (readonly [number, ArrayLike<number>])[]): boolean
 /** a unit's stream (its first token) told again where its pages bring it (the right's laid pages); false where the unit is
  *  not told or its stream is that already */
 export declare function layoutStream(layout: Layout, id: number, stream: number): boolean

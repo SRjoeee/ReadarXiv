@@ -1,0 +1,154 @@
+// lab/typeset/added.mjs: the added pairs walked apart from a gate's set, and the root of links their today's side is read through
+import { spawnSync } from 'node:child_process'
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, describe, expect, it } from 'vitest'
+import { ADDED, addedEnv, apartOf, dropAdded } from '../../lab/typeset/added.mjs'
+
+const dirs: string[] = []
+afterEach(() => {
+  for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true })
+})
+/** a lab-data root of its own: the set's folders with a file each, the corpus list, the added pairs' folder */
+function labOf(): string {
+  const lab = mkdtempSync(join(tmpdir(), 'added-lab-'))
+  dirs.push(lab)
+  const put = (rel: string, text: string) => {
+    mkdirSync(join(lab, rel, '..'), { recursive: true })
+    writeFileSync(join(lab, rel), text)
+  }
+  put('bin/heavy-slot.sh', '#!/bin/sh\n')
+  put('refactor-2026-11/STATE.md', 'state\n')
+  put('refactor-2026-11/lanes/L1-papers87.tsv', 'a\t/papers/a\n')
+  put('refactor-2026-11/lanes/x/note.md', 'x\n')
+  put('refactor-2026-11/baseline/acceptance.json', '[]\n')
+  put('refactor-2026-11/baseline/prepare/a.prepare.json', '{}\n')
+  put('refactor-2026-11/baseline/reader/a-zh.reader.json', '{}\n')
+  put('refactor-2026-11/baseline/tap/ledgers/a-zh.ledger.json.gz', 'l')
+  put('refactor-2026-11/baseline/tap/metrics/a-zh.metrics.json.gz', 'm')
+  put('refactor-2026-11/baseline/tap/tokens/a-zh.tokens.json.gz', 't')
+  put('refactor-2026-11/baseline/tap/samples/U.x.json.gz', 's')
+  put('refactor-2026-11/baseline/added/pairs.txt', 'b-zh\n')
+  put('refactor-2026-11/baseline/added/papers.tsv', 'b\t/papers/b\n')
+  put('refactor-2026-11/baseline/added/prepare/b.prepare.json', '{"b":1}\n')
+  put('refactor-2026-11/baseline/added/reader/b-zh.reader.json', '{"b":1}\n')
+  put('refactor-2026-11/baseline/added/tap/ledgers/b-zh.ledger.json.gz', 'L')
+  put('refactor-2026-11/baseline/added/tap/metrics/b-zh.metrics.json.gz', 'M')
+  put('refactor-2026-11/baseline/added/tap/tokens/b-zh.tokens.json.gz', 'T')
+  put('refactor-2026-11/baseline/added/cache/papers/b/catalog.json', '{}\n')
+  return lab
+}
+
+describe('the added pairs', () => {
+  it('are walked after a gate\'s set, apart: every one in a walk of the set, the named ones in a named walk', () => {
+    expect(ADDED).toEqual(['2111.09276v1-zh', '2611.03953v2-zh'])
+    const set = ['1512.03385v1-zh', '2610.21312v1-zh']
+    expect(apartOf(set, { named: false, argv: [] })).toEqual({ pairs: set, later: [...ADDED], apart: false })
+    // (a folder the set's walk reads that holds an added pair: it is walked apart, never in the set)
+    expect(apartOf([...set, ADDED[0]!], { named: false, argv: [] })).toEqual({ pairs: set, later: [...ADDED], apart: false })
+    expect(apartOf([set[0]!, ADDED[1]!], { named: true, argv: [] })).toEqual({ pairs: [set[0]], later: [ADDED[1]], apart: false })
+    expect(apartOf([ADDED[0]!], { named: true, argv: [] })).toEqual({ pairs: [], later: [ADDED[0]], apart: false })
+    expect(apartOf(set, { named: true, argv: [] }).later).toEqual([])
+    // (the run of the added pairs walks what it is given)
+    expect(apartOf([...ADDED], { named: true, argv: ['--apart'] })).toEqual({ pairs: [...ADDED], later: [], apart: true })
+  })
+
+  it('read their today\'s side through a root of links where the set\'s stands, the set\'s files the same', () => {
+    const lab = labOf()
+    const env = addedEnv(lab)
+    dirs.push(env.AXT_LAB_DATA)
+    const root = env.AXT_LAB_DATA
+    expect(env.AXT_SWEEP_CACHE).toBe(join(lab, 'refactor-2026-11/baseline/added/cache'))
+    // (every folder the gates read: the set's files and the added pairs' side by side)
+    expect(readdirSync(join(root, 'refactor-2026-11/baseline/tap/ledgers')).sort()).toEqual(['a-zh.ledger.json.gz', 'b-zh.ledger.json.gz'])
+    expect(readdirSync(join(root, 'refactor-2026-11/baseline/reader')).sort()).toEqual(['a-zh.reader.json', 'b-zh.reader.json'])
+    expect(readdirSync(join(root, 'refactor-2026-11/baseline/prepare')).sort()).toEqual(['a.prepare.json', 'b.prepare.json'])
+    expect(readFileSync(join(root, 'refactor-2026-11/baseline/tap/metrics/b-zh.metrics.json.gz'), 'utf8')).toBe('M')
+    expect(readFileSync(join(root, 'refactor-2026-11/baseline/tap/tokens/a-zh.tokens.json.gz'), 'utf8')).toBe('t')
+    // (the corpus list the parity finds arXiv's PDFs by: the set's lines, then the added papers')
+    expect(readFileSync(join(root, 'refactor-2026-11/lanes/L1-papers87.tsv'), 'utf8')).toBe('a\t/papers/a\nb\t/papers/b\n')
+    // (everything else a link to the real lab-data's entry)
+    for (const r of ['bin', 'refactor-2026-11/STATE.md', 'refactor-2026-11/lanes/x', 'refactor-2026-11/baseline/acceptance.json', 'refactor-2026-11/baseline/tap/samples', 'refactor-2026-11/baseline/added']) {
+      expect([r, lstatSync(join(root, r)).isSymbolicLink(), realpathSync(join(root, r))]).toEqual([r, true, realpathSync(join(lab, r))])
+    }
+    // (the real lab-data is not written)
+    expect(readdirSync(join(lab, 'refactor-2026-11/baseline/tap/ledgers'))).toEqual(['a-zh.ledger.json.gz'])
+  })
+
+  it("read them through a root of the run's own: two runs at once never share one, and one run's end removes none of the other's files", () => {
+    // (a root shared by every run that linked the same files lost a file between the run that made it and a run days later; one
+    // run may also end, and remove its root, while another still reads)
+    const lab = labOf()
+    const a = addedEnv(lab),
+      b = addedEnv(lab)
+    dirs.push(a.AXT_LAB_DATA, b.AXT_LAB_DATA)
+    expect(b.AXT_LAB_DATA).not.toBe(a.AXT_LAB_DATA)
+    const ledgers = (root: string) => readdirSync(join(root, 'refactor-2026-11/baseline/tap/ledgers')).sort()
+    expect(ledgers(a.AXT_LAB_DATA)).toEqual(['a-zh.ledger.json.gz', 'b-zh.ledger.json.gz'])
+    // (b's run ends: its root goes, its links alone, a's root and the real lab-data whole)
+    dropAdded(b)
+    expect(existsSync(b.AXT_LAB_DATA)).toBe(false)
+    expect(ledgers(a.AXT_LAB_DATA)).toEqual(['a-zh.ledger.json.gz', 'b-zh.ledger.json.gz'])
+    expect(readFileSync(join(a.AXT_LAB_DATA, 'refactor-2026-11/baseline/tap/metrics/b-zh.metrics.json.gz'), 'utf8')).toBe('M')
+    expect(readdirSync(join(lab, 'refactor-2026-11/baseline/added/tap/ledgers'))).toEqual(['b-zh.ledger.json.gz'])
+    expect(readdirSync(join(lab, 'refactor-2026-11/baseline/tap/ledgers'))).toEqual(['a-zh.ledger.json.gz'])
+    // (a later run makes its own again, whatever an earlier one left)
+    utimesSync(join(lab, 'refactor-2026-11/baseline/added/reader/b-zh.reader.json'), new Date(), new Date(Date.now() + 5000))
+    const c = addedEnv(lab)
+    dirs.push(c.AXT_LAB_DATA)
+    expect([a.AXT_LAB_DATA, b.AXT_LAB_DATA]).not.toContain(c.AXT_LAB_DATA)
+    // (a folder that is no root addedEnv made is never removed)
+    dropAdded({ AXT_LAB_DATA: lab })
+    expect(existsSync(join(lab, 'refactor-2026-11/STATE.md'))).toBe(true)
+  })
+
+  it("remove the run's own root once the added pairs' run is done", () => {
+    const lab = labOf()
+    const dir = mkdtempSync(join(tmpdir(), 'added-drop-'))
+    dirs.push(dir)
+    const added = join(import.meta.dirname, '../../lab/typeset/added.mjs')
+    // (the child writes where its root stands; the parent's runApart removes that root when the child exits)
+    writeFileSync(join(dir, 'child.mjs'), `import { writeFileSync } from 'node:fs'\nwriteFileSync(${JSON.stringify(join(dir, 'root.txt'))}, process.env.AXT_LAB_DATA)\n`)
+    writeFileSync(join(dir, 'parent.mjs'), `import { runApart } from ${JSON.stringify(added)}\nprocess.exit(await runApart(${JSON.stringify(join(dir, 'child.mjs'))}, ['b-zh'], { argv: [] }))\n`)
+    const r = spawnSync(process.execPath, [join(dir, 'parent.mjs')], { encoding: 'utf8', env: { ...process.env, AXT_LAB_DATA: lab } })
+    expect(r.status).toBe(0)
+    const root = readFileSync(join(dir, 'root.txt'), 'utf8')
+    expect(root).toContain('axt-added-')
+    expect(existsSync(root)).toBe(false)
+    expect(existsSync(join(lab, 'refactor-2026-11/baseline/added/tap/ledgers/b-zh.ledger.json.gz'))).toBe(true)
+  })
+
+  it('are refused where one of their files is the set\'s already, or where lab-data holds none', () => {
+    const lab = labOf()
+    writeFileSync(join(lab, 'refactor-2026-11/baseline/tap/ledgers/b-zh.ledger.json.gz'), 'l')
+    expect(() => addedEnv(lab)).toThrow(/b-zh\.ledger\.json\.gz is the set's file already/)
+    const none = mkdtempSync(join(tmpdir(), 'added-none-'))
+    dirs.push(none)
+    expect(() => addedEnv(none)).toThrow(/no added pairs' today's side/)
+    expect(existsSync(join(none, 'refactor-2026-11'))).toBe(false)
+  })
+
+  it('print after the set: the set\'s last lines before the added pairs\' run, whatever the caller\'s output still holds', () => {
+    // (a gate's run prints its set's numbers, then runApart walks the added pairs in a child of its own. On macOS a process's
+    // stdout to a pipe is asynchronous: lines the caller wrote and the pipe has not taken yet were written after the child's, so
+    // the release check read no set numbers before the added pairs' heading (lane cm-c's sentence cover, 2026-11-16). The caller
+    // here writes more than a pipe holds, then its last line, then runs the child)
+    const lab = labOf()
+    const env = addedEnv(lab)
+    dirs.push(env.AXT_LAB_DATA)
+    const dir = mkdtempSync(join(tmpdir(), 'added-order-'))
+    dirs.push(dir)
+    const added = join(import.meta.dirname, '../../lab/typeset/added.mjs')
+    writeFileSync(join(dir, 'child.mjs'), "console.log('THE CHILD')\n")
+    writeFileSync(
+      join(dir, 'parent.mjs'),
+      `import { runApart } from ${JSON.stringify(added)}\nprocess.stdout.write('x'.repeat(4 * 2 ** 20) + '\\n')\nconsole.log('THE SET ENDS')\nprocess.exit(await runApart(${JSON.stringify(join(dir, 'child.mjs'))}, ['b-zh'], { argv: [] }))\n`,
+    )
+    const r = spawnSync(process.execPath, [join(dir, 'parent.mjs')], { encoding: 'utf8', maxBuffer: 64 * 2 ** 20, env: { ...process.env, AXT_LAB_DATA: lab } })
+    expect(r.status).toBe(0)
+    const end = r.stdout.indexOf('THE SET ENDS')
+    expect(end).toBeGreaterThan(0)
+    expect(r.stdout.indexOf('THE CHILD')).toBeGreaterThan(end)
+  })
+})

@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { type Closure, closureOf, type NeedEntry, needBound, needsOf, rowLeadOf, SHARED_SEP } from '@/pdf-reader/engine/layer-proto/need.mjs'
+import { type Closure, closureOf, leftStreams, lineAfterOf, lineReader, type NeedEntry, needBound, needsOf, rowLeadOf, SHARED_SEP } from '@/pdf-reader/engine/layer-proto/need.mjs'
 
 // needsOf (what laying a paper's pages reads of its units' rows, in order) and closureOf (Need(p), what laying page p alone
 // reads: the 1b-D design §1.2) live in a leaf the door and the cutter both import. These tests hold them to restatements written
@@ -290,6 +290,16 @@ describe('rowLeadOf: the unit a unit\'s first row continues on one of TeX\'s lin
     expect(rowLeadOf(indexOf([[1, 'heading', [[1, 20, 80, 250.02]]], [2, 'para', [[1, 90, 280, 250]]]]), 2)).toBe(null)
     expect(rowLeadOf(indexOf([[1, 'heading', [[1, 20, 95, 250]]], [2, 'para', [[1, 90, 280, 250]]]]), 2)).toBe(null)
   })
+  it('takes one baseline the file writes a hundredth apart, each row rounded on its own: 2610.40645v1 p34', () => {
+    // (u290, "Proof of Proposition 4.4.", its glyphs placed by Td at 539.605, and u291, the proof's text, by Tm at PDF.js's float32
+    // 539.60498: one of TeX's lines, written 539.61 and 539.60; its text was laid from TeX's x0, 5.14 em after the translated head)
+    const I = indexOf([[290, 'heading', [[34, 72, 189.95, 539.61]]], [291, 'para', [[34, 195.4, 540.2, 539.6], [34, 72, 540.2, 526.05]]]])
+    expect(rowLeadOf(I, 291)).toEqual({ id: 290, page: 34, baseline: 539.61, x0: 72, x1: 189.95, size: 10 })
+    // (and the other way, float64 noise of two moves: 2609.20976v1 p1's names, 489.78 and 489.79)
+    expect(rowLeadOf(indexOf([[1, 'author', [[1, 82.81, 160.2, 489.78]]], [2, 'author', [[1, 168, 240, 489.79]]]]), 2)?.id).toBe(1)
+    // (two hundredths apart are two baselines, as before)
+    expect(rowLeadOf(indexOf([[1, 'heading', [[1, 20, 80, 250.02]]], [2, 'para', [[1, 90, 280, 250]]]]), 2)).toBe(null)
+  })
   it('chosen among the units before it in the lay order (`before`): the door\'s facade answers as the whole layout, however the parts come', () => {
     // (a head (2) and, nearer the text's (3) start on its row, a unit of a smaller id (1) that comes after the text in K, which a
     // later part tells: the door's facade over the parts told so far holds the head and the text alone)
@@ -302,5 +312,50 @@ describe('rowLeadOf: the unit a unit\'s first row continues on one of TeX\'s lin
     expect(rowLeadOf(told, 3, beforeIt)).toEqual(rowLeadOf(whole, 3, beforeIt))
     // (and none where nothing before it in K is on the row)
     expect(rowLeadOf(whole, 3, () => false)).toBe(null)
+  })
+  it('with `before`, the lay order alone: an ink unit, numbered after every source unit, that heads a theorem on its row (2610.40645v1 p15)', () => {
+    // (u380, "Theorem 3.3 ([Ang, Theorem 1.1]).", a theorem's head whose note is a citation, left by the wrap to an ink unit; u110
+    // the theorem's text on the row from 252.75. Before u110 in K (the stream), after it by id: its text was laid where the
+    // English head ended, a blank after the translated head)
+    const I = indexOf([[110, 'theorem', [[15, 252.75, 539.58, 317.11], [15, 72, 539.94, 303.56]]], [380, 'para', [[15, 71.56, 247.77, 317.11]]]])
+    expect(rowLeadOf(I, 110, id => id === 380)).toEqual({ id: 380, page: 15, baseline: 317.11, x0: 71.56, x1: 247.77, size: 10 })
+    // (by the ids alone, with no lay order given, none)
+    expect(rowLeadOf(I, 110)).toBe(null)
+    // (and never one after it in K, whatever its id)
+    expect(rowLeadOf(I, 110, () => false)).toBe(null)
+  })
+  it('lineAfterOf: a unit the left does not hold stands beside the left unit it shares one of TeX\'s lines with, whatever the ids', () => {
+    // (2610.21547v1 p16: the run-in "Label flipping." (u236, the layout file's alone) and its text on the row (u237, stream 9899);
+    // a caption of page 17 (u234, stream 10272) numbered before the head set K's slot after it by id, after the head's own text)
+    const I = indexOf([[234, 'caption', [[17, 115.86, 540, 221.52]]], [235, 'heading', [[16, 94.42, 125.41, 102.88]]], [236, 'heading', [[16, 72, 132.73, 82.91]]], [237, 'para', [[16, 142.69, 539.99, 82.91], [16, 72, 539.99, 69.36]]]])
+    const streams = new Map([[234, 10272], [235, 9896], [237, 9899]])
+    expect(lineAfterOf(I, 236, leftStreams(streams), lineReader(I))).toBe(9898)
+    // (amsart's keywords after "Key words and phrases.", an ink unit numbered after every source unit: 2610.21037v1 p1, u177 and u8)
+    const J = indexOf([[7, 'para', [[1, 108.87, 180.31, 104.87]]], [8, 'heading', [[1, 186.12, 540, 82.96], [1, 72, 170.99, 72]]], [177, 'para', [[1, 83.96, 181.51, 82.96]]]])
+    expect(lineAfterOf(J, 8, leftStreams(new Map([[7, 497], [177, 507]])), lineReader(J))).toBe(507)
+    // (none where its line's other unit is the layout file's alone too, or it shares no line; a cell sets its rows by its table)
+    expect(lineAfterOf(I, 236, leftStreams(new Map([...streams].filter(([id]) => id !== 237))), lineReader(I))).toBe(null)
+    expect(lineAfterOf(I, 235, leftStreams(streams), lineReader(I))).toBe(null)
+    const C = indexOf([[1, 'cell', [[1, 20, 80, 250]]], [2, 'cell', [[1, 90, 140, 250]]]])
+    expect(lineAfterOf(C, 1, leftStreams(new Map([[2, 5]])), lineReader(C))).toBe(null)
+    // (of two units on its line that its last row leads, the least stream; a first row's lead before both)
+    const L = indexOf([[1, 'heading', [[1, 20, 80, 250]]], [2, 'para', [[1, 90, 140, 250]], 0], [3, 'para', [[1, 90, 280, 250]], 0]])
+    expect(lineAfterOf(L, 1, leftStreams(new Map([[2, 40], [3, 30]])), lineReader(L))).toBe(29)
+    const M = indexOf([[1, 'para', [[1, 20, 100, 238]]], [2, 'heading', [[1, 110, 150, 238]]], [3, 'para', [[1, 160, 280, 238]]]])
+    expect(lineAfterOf(M, 2, leftStreams(new Map([[1, 12], [3, 30]])), lineReader(M))).toBe(12)
+  })
+  it('lineAfterOf: a chain of units the left does not hold on one of TeX\'s lines stands in its line\'s order, whatever their ids', () => {
+    // (A, the left's, then B and C, the file's alone, on one line: B right after A, C one past B; their ids against their order)
+    const I = indexOf([[1, 'para', [[1, 20, 100, 238]]], [5, 'heading', [[1, 110, 150, 238]]], [3, 'para', [[1, 160, 200, 238]]]])
+    expect([lineAfterOf(I, 5, leftStreams(new Map([[1, 12]])), lineReader(I)), lineAfterOf(I, 3, leftStreams(new Map([[1, 12]])), lineReader(I))]).toEqual([12, 13])
+    // (no room past B before the next left unit's stream: beside it, by the ids)
+    expect(lineAfterOf(I, 3, leftStreams(new Map([[1, 12], [9, 13]])), lineReader(I))).toBe(12)
+    // (no left unit before them, one after: C right before D, B one before C; and no room before C after the left unit before it)
+    const J = indexOf([[5, 'heading', [[1, 20, 100, 238]]], [3, 'para', [[1, 110, 150, 238]]], [7, 'para', [[1, 160, 280, 238]]]])
+    expect([lineAfterOf(J, 5, leftStreams(new Map([[7, 30]])), lineReader(J)), lineAfterOf(J, 3, leftStreams(new Map([[7, 30]])), lineReader(J))]).toEqual([28, 29])
+    expect(lineAfterOf(J, 5, leftStreams(new Map([[7, 30], [2, 29]])), lineReader(J))).toBe(29)
+    // (two rows of no width that each lead the other: no lead is met twice, and neither has a place)
+    const K = indexOf([[1, 'heading', [[1, 100, 100.3, 238]]], [2, 'heading', [[1, 100, 100.2, 238]]]])
+    expect([lineAfterOf(K, 1, leftStreams(new Map()), lineReader(K)), lineAfterOf(K, 2, leftStreams(new Map()), lineReader(K))]).toEqual([null, null])
   })
 })

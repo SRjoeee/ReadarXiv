@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { setLocale } from '@/ui/strings'
-import { S, parseFatal, reasonText, serviceName } from '@/ui/strings'
+import { setLocale, S } from '@readarxiv/ui'
+import { parseFatal, reasonText, serviceName } from '@/ui/strings'
 
 // The copy tables of UI.md §3 are the Chinese ones; this file checks that pack
 setLocale('zh-CN')
@@ -9,11 +9,34 @@ describe('reasonText', () => {
   it('has a reader-facing sentence for every kind, free of implementation words', () => {
     const kinds = ['no-key', 'network', 'rate-limit', 'auth', 'bad-request', 'invalid-response', 'timeout', 'aborted', 'unknown'] as const
     for (const kind of kinds) {
-      const text = reasonText(kind)
-      expect(text, kind).not.toMatch(/引擎|降级|块|会话|provider|fallback|helper/)
+      for (const engine of [undefined, 'microsoft', 'svc-abcd1234']) {
+        const text = reasonText(kind, engine)
+        expect(text, `${kind} ${engine}`).not.toMatch(/引擎|降级|块|会话|provider|fallback|helper/)
+      }
     }
-    expect(reasonText('auth')).toBe('API Key 无效或已过期')
+    expect(reasonText('auth', 'svc-abcd1234')).toBe('API Key 无效或已过期')
     expect(reasonText('aborted')).toBe('')
+  })
+
+  it('names a key only for an engine that carries one: the reader\'s own services; a built-in, or an engine not known, is told without one (#88 E5)', () => {
+    for (const keyed of ['svc-abcd1234', 'openai-compat']) {
+      expect(reasonText('auth', keyed), keyed).toBe('API Key 无效或已过期')
+      expect(reasonText('no-key', keyed), keyed).toBe('尚未配置 API Key')
+    }
+    for (const keyless of ['microsoft', 'google-web', 'chrome-builtin', undefined]) {
+      for (const kind of ['auth', 'no-key'] as const) expect(reasonText(kind, keyless), `${kind} ${keyless}`).not.toMatch(/API Key|密钥/i)
+    }
+    expect(reasonText('auth', 'google-web')).toBe('翻译服务拒绝访问')
+    expect(reasonText('no-key', 'chrome-builtin')).toBe('翻译服务尚未就绪')
+    // the other kinds are the same for every engine
+    expect(reasonText('network', 'microsoft')).toBe(reasonText('network', 'svc-abcd1234'))
+    setLocale('en')
+    try {
+      for (const keyless of ['microsoft', 'google-web', 'chrome-builtin', undefined]) for (const kind of ['auth', 'no-key'] as const) expect(reasonText(kind, keyless), `${kind} ${keyless}`).not.toMatch(/key/i)
+      expect(reasonText('auth', 'svc-abcd1234')).toMatch(/API key/)
+    } finally {
+      setLocale('zh-CN')
+    }
   })
 })
 
@@ -56,12 +79,13 @@ describe('fallbackText', () => {
   it('names the field in the interface language and leaves the zod diagnostic out when the pack knows the field', async () => {
     // The namespace, not a destructured copy: S and O are live bindings that setLocale reassigns
     const strings = await import('@/ui/strings')
+    const ui = await import('@readarxiv/ui')
     setLocale('zh-CN')
-    expect(strings.fallbackText(invalid('provider'))).toBe(`provider：${strings.O.fallbackWhy.field.provider}`)
-    expect(strings.fallbackText(invalid('appearance.styles.2.color'))).toBe(`appearance.styles.2.color：${strings.O.fallbackWhy.field.color}`)
+    expect(strings.fallbackText(invalid('provider'))).toBe(`provider：${ui.O.fallbackWhy.field.provider}`)
+    expect(strings.fallbackText(invalid('appearance.styles.2.color'))).toBe(`appearance.styles.2.color：${ui.O.fallbackWhy.field.color}`)
     expect(strings.fallbackText(invalid('provider'))).not.toContain('zod said so')
     setLocale('en')
-    expect(strings.fallbackText(invalid('services.0.baseURL'))).toBe(`services.0.baseURL: ${strings.O.fallbackWhy.field.baseURL}`)
+    expect(strings.fallbackText(invalid('services.0.baseURL'))).toBe(`services.0.baseURL: ${ui.O.fallbackWhy.field.baseURL}`)
     setLocale('zh-CN')
   })
   it('falls back to the diagnostic for a field the pack has no sentence for', async () => {
@@ -78,26 +102,40 @@ describe('BUILD_REF', () => {
 })
 
 describe('the built-in appearance profiles and the packs', () => {
-  it('every pack names every built-in profile, and the Chinese pack\'s names are the ones the configuration ships', async () => {
+  it('every pack names every built-in profile, and the Chinese pack\'s style names are the ones the configuration ships', async () => {
     // A built-in is stored with its shipped (Chinese) name and shown by id in the interface language as long as the
     // reader has not renamed it (`profileName` compares the stored name with the shipped one). An id without a name in
-    // a pack would show Chinese in that language; a shipped name that drifted from the Chinese pack's would show two
-    // names for one profile — in the settings' list and in a copy made from it
+    // a pack would show Chinese in that language; a shipped style name that drifted from the Chinese pack's would show
+    // two names for one profile — in the settings' list and in a copy made from it, the name an editor opens on
     const { BUILT_IN_HIGHLIGHTS, BUILT_IN_STYLES } = await import('@/config/appearance')
-    const { LOCALES } = await import('@/locales')
+    const { LOCALES } = await import('@readarxiv/ui')
     for (const [code, pack] of Object.entries(LOCALES)) {
       expect(Object.keys(pack.O.reading.builtInStyles).sort(), code).toEqual(BUILT_IN_STYLES.map(p => p.id).sort())
       expect(Object.keys(pack.O.reading.builtInHighlights).sort(), code).toEqual(BUILT_IN_HIGHLIGHTS.map(p => p.id).sort())
     }
     const zh = LOCALES['zh-CN'].O.reading
     for (const p of BUILT_IN_STYLES) expect([p.id, (zh.builtInStyles as Record<string, string>)[p.id]]).toEqual([p.id, p.name])
-    for (const p of BUILT_IN_HIGHLIGHTS) expect([p.id, (zh.builtInHighlights as Record<string, string>)[p.id]]).toEqual([p.id, p.name])
+  })
+
+  it('names a built-in band by the pack in every language, its stored name kept: a band is never renamed nor copied, so the stored one is shown nowhere (UI.md S-O-49, 2026-11-03)', async () => {
+    const { BUILT_IN_HIGHLIGHTS } = await import('@/config/appearance')
+    const { profileName } = await import('@/ui/strings')
+    const { setLocale } = await import('@readarxiv/ui')
+    try {
+      // what a saved configuration and the website's copy hold for the three, which must keep reading as not renamed
+      expect(BUILT_IN_HIGHLIGHTS.map(p => [p.id, p.name])).toEqual([['soft-green', '\u67d4\u548c\u7eff'], ['sand', '\u6de1\u9ec4'], ['sky', '\u6de1\u84dd']])
+      setLocale('zh-CN')
+      // light green, light yellow, light blue
+      expect(BUILT_IN_HIGHLIGHTS.map(p => profileName(p, 'highlights'))).toEqual(['\u6d45\u7eff', '\u6d45\u9ec4', '\u6d45\u84dd'])
+      setLocale('en')
+      expect(BUILT_IN_HIGHLIGHTS.map(p => profileName(p, 'highlights'))).toEqual(['Soft green', 'Sand', 'Sky'])
+    } finally { setLocale('zh-CN') }
   })
 })
 
 describe('the English pack', () => {
   it('speaks to a reader: no word that names how the extension is built (issue #155\'s first principle)', async () => {
-    const { LOCALES } = await import('@/locales')
+    const { LOCALES } = await import('@readarxiv/ui')
     const texts: { path: string; text: string }[] = []
     const walk = (value: unknown, path: string) => {
       // the search's keywords are what a reader may type, never drawn: the gate reads what is drawn

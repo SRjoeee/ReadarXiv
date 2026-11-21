@@ -1,21 +1,22 @@
 import { describe, expect, it } from 'vitest'
 import { cutsOf, plainTranslated, translateUnits } from '@/pdf-reader/engine/translate/mt.mjs'
-import { verifyAlignment } from '@/providers/alignment'
-import { markSentences, stripMarkers, unmarkSentences } from '@/providers/sentence-markers'
+import { tagsWire } from '@readarxiv/translate'
+import { alignmentOf, unitOfWire, wholeAlignment, wireOfContent } from '@/core/protector/units'
 
-// The tags path's sentences end to end (B3b): the reader's units and cuts (mt.mjs), the service's markers at the cuts and
-// its reading of where they landed (sentence-markers.ts, alignment.ts, as translate-service.ts does it), and a fake LLM
-// between them that keeps the markers, or merges, splits or reorders the sentences they stand between
+// The tags path's sentences end to end (B3b), as the reader meets the chain (stage 4b, session/translate.mjs): the
+// reader's units and cuts (mt.mjs), each text read as a unit by the shim, the chain's tags codec's boundary markers and
+// its reading of where they landed, the result written back as the text; and a fake LLM between them that keeps the
+// markers, or merges, splits or reorders the sentences they stand between
 
-/** the background as the reader's engine meets it: each text marked at its cuts, the engine's reply unmarked and verified */
+/** the background as the reader's engine meets it: each text a unit, written and read by the tags codec, written back */
 const background = (engine: (marked: string) => string) => async (texts: string[], cuts?: number[][]) =>
   texts.map((text, i) => {
-    const c = cuts?.[i]
-    if (!c) return { text: engine(text), by: 'llm' }
-    if (!c.length) return { text: engine(text), by: 'llm', alignment: verifyAlignment({ source: [text.length], target: [engine(text).length] }, text, engine(text)) }
-    const mark = markSentences(text, c)!, reply = engine(mark.text), back = unmarkSentences(reply, mark.ids)
-    if (!back) return { text: stripMarkers(reply, mark.ids), by: 'llm' }
-    return { text: back.text, by: 'llm', alignment: verifyAlignment({ source: mark.source, target: back.target }, text, back.text) }
+    const from = unitOfWire(String(i), text, 'tags', { sentences: (cuts?.[i]?.length ?? 0) > 0 })
+    const read = tagsWire.read(from.unit, engine(tagsWire.write(from.unit)))
+    if (!read) return null
+    const back = wireOfContent(read.content, from)
+    const alignment = cuts?.[i]?.length === 0 ? wholeAlignment(text, back.wire) : alignmentOf(read.sentences, from, text, back)
+    return { text: back.wire, by: 'llm', ...(alignment ? { alignment } : {}) }
   })
 /** a fake LLM: each sentence, between the markers, "translated" (upper case), the markers where `place` puts them */
 const llm = (place: (parts: string[], markers: string[]) => string) => (marked: string) => {

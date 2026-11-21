@@ -64,7 +64,7 @@ TeX the engine writes (`typeset-tex-cases.mjs`, `typeset-busytex-cases.mjs`, `co
 (`cache-revisit.mjs`, `cache-faults.mjs`), and the reader's browser checks that need the local TeX page: `diag-anchors`,
 `reader-a11y`, `reader-click`, `reader-in-source`, `reader-live`, `reader-partial`, `reader-ui-live`, `service-faults`,
 `sync-frames`, `sync-smoke` and `viewer-faults` (all `.mjs`). `records/`: `typesetting.md`, the record the typesetting
-rule in `src/pdf-reader/engine/pipeline/typeset/` cites, `typeset-gate.json` (each paper's record the gate holds a change to) and
+rule cited (once `src/pdf-reader/engine/pipeline/typeset/`, taken out of the engine on 2026-11-04), `typeset-gate.json` (each paper's record the gate holds a change to) and
 `round-34.json` (the round of 34 papers the rule was chosen on).
 
 Last ran at the freeze: the tag `exp-freeze-2026-10-07`, which names commit `a2267b287b2c7cb87dfdb70481a3832d140b8eb8`,

@@ -21,15 +21,18 @@ function columnOf(u, j) {
 }
 /**
  * The unit a unit's first row continues on one of TeX's lines, by the layout file (`index`: layout/file.mjs indexLayout's, or
- * the door's facade over it): of the units framed on that row's page before it in the paper (a smaller id) and, with
- * `before`, before it in the lay order (`before(aid)`: an entry of K before its own), the one whose last row is on the row's
+ * the door's facade over it): of the units framed on that row's page before it in the lay order (`before(aid)`: an entry of K
+ * before its own; with none given, before it in the paper, a smaller id), the one whose last row is on the row's
  * baseline in its column (the frames'), ends at or before its start and no more than SHARED_SEP em of its size from it, the
  * nearest. Neither unit a table's cell or a figure's text (OWN_PLACE), and neither row held (its ink stays the original's: a
  * translation set over it would cover it). Returns the lead's last row { id, page, baseline, x0, x1, size }, or null.
  * 1810.04805's "Model Architecture" and its text, 10.9 pt apart on one row (a \quad of 10.91 pt type). The run and the cut
  * pass `before`: the entries of K before a unit's are all told with it (a part tells a prefix of K, each entry with its
  * layout rows), so the door's facade answers as the whole layout does however the parts come, where a smaller id told by a
- * later part would have changed the answer between a streamed and a whole opening
+ * later part would have changed the answer between a streamed and a whole opening. The order is K's alone then, not the ids':
+ * an ink unit is numbered after every source unit, and a theorem's head whose note is a citation is one (own.mjs `labelKept`,
+ * ink-pass.mjs labelsOverInk), before its text in the stream: 2610.40645v1 p15's "Theorem 3.3 ([Ang, Theorem 1.1]).", u380,
+ * and u110's text after it on the row, which was laid where the English head ended, a blank after the translated head
  */
 export function rowLeadOf(index, id, before = null) {
   const b = index?.unit(id)
@@ -37,17 +40,127 @@ export function rowLeadOf(index, id, before = null) {
   const L = b.lines, page = L[0], x0 = L[1], base = L[3], size = L[6], col = columnOf(b, 0)
   let best = null
   for (const aid of index.onPage(page)) {
-    if (!(aid < id) || (before && !before(aid))) continue
+    if (before ? !before(aid) : !(aid < id)) continue
     const a = index.unit(aid)
     if (!a?.lines.length || OWN_PLACE.has(a.kind)) continue
     const j = a.lines.length / 8 - 1, o = 8 * j, A = a.lines
-    // (one of TeX's lines: one baseline, as the file writes it to a hundredth)
-    if (A[o] !== page || Math.abs(A[o + 3] - base) > 0.005 || a.held.includes(j) || columnOf(a, j) !== col) continue
+    // (one of TeX's lines: one baseline as the file writes it, each row's to a hundredth on its own (file.mjs r2, of its
+    // glyphs' y), so that one baseline is written one hundredth apart where float noise falls on either side of a half:
+    // 2610.40645v1 p34's head by Td at 539.605, its text by Tm, which PDF.js reads as a float32, at 539.60498, written
+    // 539.61 and 539.60. Two hundredths at most one apart are one line; two of TeX's lines in a column are points apart)
+    if (A[o] !== page || Math.abs(Math.round(A[o + 3] * 100) - Math.round(base * 100)) > 1 || a.held.includes(j) || columnOf(a, j) !== col) continue
     const x1 = A[o + 2]
     if (x1 > x0 + 0.5 || x0 - x1 > SHARED_SEP * size) continue
     if (!best || x1 > best.x1) best = { id: aid, page, baseline: A[o + 3], x0: A[o + 1], x1, size: A[o + 6] }
   }
   return best
+}
+
+/**
+ * A unit only the layout file holds that shares no line with a left unit stands after the left units before it by id that the
+ * left places on its own page or an earlier one: a float or a note numbered before it and set on a later page is no unit before
+ * it in the stream. By the ids over the whole paper, 2610.21884v1's affiliation of page 31 (u5) put every such unit after it at the
+ * paper's end, among them units of pages 1 to 3, and page 3's frontier reached there: the first part (pages 1 to 3) told entries
+ * up to page 31 and held 255 KB, which the page stream could not cut before page 31 was made (the release sweep, 2026-11-04: 1,257
+ * of 5,241 such units stood among another page's streams). This reads it: `add(page, stream)` a left unit's stream at its first
+ * page, `upTo(page)` the largest stream added at a page up to `page`, -1 for none; pages 1 to N, a page past N read as N + 1
+ * (a Fenwick tree of maxima: each add and each read a logarithm of the pages)
+ */
+export function pagedBefore(N) {
+  const n = N + 1, t = new Float64Array(n + 1).fill(-1)
+  const at = page => Math.max(1, Math.min(n, page))
+  return {
+    add(page, s) { for (let p = at(page); p <= n; p += p & -p) if (t[p] < s) t[p] = s },
+    upTo(page) { let m = -1; for (let p = page < 1 ? 0 : at(page); p > 0; p -= p & -p) if (t[p] > m) m = t[p]; return m },
+  }
+}
+
+/**
+ * The left's streams as lineAfterOf reads them, from `streamOf` (a Map: a left unit's id to its stream): `of(id)`, a unit's stream
+ * (undefined for one the left does not hold); `above(v)`, the least stream over v (Infinity for none); `below(v)`, the greatest
+ * under v (-1 for none)
+ */
+export function leftStreams(streamOf) {
+  const sorted = Float64Array.from(streamOf.values()).sort()
+  /** the first index whose stream is over v (`strict`) or at or over it */
+  const firstOver = (v, strict) => { let lo = 0, hi = sorted.length; while (lo < hi) { const m = (lo + hi) >> 1; if (strict ? sorted[m] <= v : sorted[m] < v) lo = m + 1; else hi = m } return lo }
+  return {
+    of: id => streamOf.get(id),
+    above: v => { const i = firstOver(v, true); return i < sorted.length ? sorted[i] : Infinity },
+    below: v => { const i = firstOver(v, false); return i > 0 ? sorted[i - 1] : -1 },
+  }
+}
+
+/**
+ * Where in the stream a unit the layout file alone holds stands (no left unit: no stream of its own), where TeX's own line says
+ * so: the stream it stands right after (its K slot that plus a half), or null where it shares no line with a left unit. Each of
+ * TeX's lines by rowLeadOf over the layout file in any order: a shared line is a fact of the page, not of the ids. Its place is
+ * taken from the unit its first row continues on the line: that unit's stream, where the left holds it; where that unit is the
+ * file's alone too, its own place here, and one past it, so that the line's units keep their order in K whatever their ids,
+ * within the room before the next left unit's stream (where none is left, beside it, by the ids). Where nothing before it on the
+ * line leads to a left unit, its place is taken the other way: right before the units whose first row continues its last, a left
+ * unit's stream less one, or one before the place of a unit the file alone holds, within the room after the left unit before it.
+ * `streams` leftStreams', `lines` lineReader's over the same index (one a K). A chain of such units on one line, A (the left's) then B and C (the file's alone), stands A, B, C; the
+ * line's units are read once each (a line's leads cannot come round, but a unit already met is no lead again). The cutter's and
+ * the door's K then place a unit with none after the largest stream of a left unit with a smaller id (cut.mjs entriesOf).
+ * The ids are the source's order, which a float, a note or an ink unit (numbered after every source unit) does not keep in the
+ * stream: 2610.21547v1 p16's run-in "Label flipping." stood in K after a caption of page 17 numbered before it, and so after its
+ * own text, which found no lead and was laid where the English head had ended (the release sweep's census of 2026-11-04, four
+ * heads; amsart's keywords after "Key words and phrases.", an ink unit, shared their line only where an affiliation of the last
+ * page stood before them by id)
+ */
+export function lineAfterOf(index, id, streams, lines) {
+  const b = index?.unit(id)
+  if (!b?.lines.length || OWN_PLACE.has(b.kind)) return null
+  return fromLeft(lines, id, streams, new Set()) ?? fromRight(index, lines, id, streams, new Set())
+}
+/**
+ * A layout file's shared lines as lineAfterOf reads them, each read once (`index`'s state: one reader a K): `lead(id)`, the unit
+ * a unit's first row continues on one of TeX's lines (rowLeadOf in any order), null for none; `followers(page, id)`, the units of
+ * page `page` whose first row continues unit `id`'s last there. A page's units' leads read once each, not once a unit asked
+ * (a page of 800 headings read every unit's lead for each of its units)
+ */
+export function lineReader(index) {
+  const leadOf = new Map(), byPage = new Map()
+  const lead = id => {
+    let l = leadOf.get(id)
+    if (l === undefined) { l = rowLeadOf(index, id, aid => aid !== id)?.id ?? null; leadOf.set(id, l) }
+    return l
+  }
+  const followers = (page, id) => {
+    let m = byPage.get(page)
+    if (!m) {
+      m = new Map()
+      for (const f of index.onPage(page)) { const l = lead(f); if (l !== null) (m.get(l) ?? m.set(l, []).get(l)).push(f) }
+      byPage.set(page, m)
+    }
+    return m.get(id) ?? []
+  }
+  return { lead, followers }
+}
+/** lineAfterOf's place from the unit before it on its line, null where none of them leads to a left unit */
+function fromLeft(lines, id, streams, seen) {
+  seen.add(id)
+  const lead = lines.lead(id)
+  if (lead === null || seen.has(lead)) return null
+  const s = streams.of(lead)
+  if (s !== undefined) return s
+  const a = fromLeft(lines, lead, streams, seen)
+  return a === null ? null : Math.min(a + 1, streams.above(a) - 1)
+}
+/** lineAfterOf's place from the units after it on its line, null where none of them leads to a left unit */
+function fromRight(index, lines, id, streams, seen) {
+  seen.add(id)
+  const L = index.unit(id).lines
+  let least = null
+  for (const fid of lines.followers(L[L.length - 8], id)) {
+    if (seen.has(fid)) continue
+    const s = streams.of(fid)
+    let t = s !== undefined ? s - 1 : null
+    if (s === undefined) { const r = fromRight(index, lines, fid, streams, seen); if (r !== null) t = Math.max(r - 1, streams.below(r + 1)) }
+    if (t !== null && (least === null || t < least)) least = t
+  }
+  return least
 }
 
 /**

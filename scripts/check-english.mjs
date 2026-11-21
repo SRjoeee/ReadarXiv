@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// The English gate: no Chinese (CJK) text may enter developer-visible files beyond what the allow-list already
+// The English gate: no CJK text (Chinese, Japanese, Korean) may enter developer-visible files beyond what the allow-list already
 // grants. The allow-list is a ratchet: each entry names a file and the number of lines with CJK characters it may
 // hold — product copy quoted as evidence, multilingual test inputs, observed machine-translation outputs, the CJK
 // ranges of regexes. A file over its allowance, or a file with CJK and no entry, fails the check — and so does an
@@ -13,8 +13,13 @@
 import { execFileSync } from 'node:child_process'
 import { readFileSync, writeFileSync } from 'node:fs'
 
-const CJK = /[\u3000-\u303f\u3400-\u4dbf\u4e00-\u9fff\uff00-\uffef]/
-const OUTSIDE = [/^src\/locales\//, /^public\/_locales\//, /^public\/ocr\//, /^tests\/fixtures\//, /^reference\//, /\.zh-CN\.md$/, /^README\.zh/, /^scripts\/check-english\.mjs$/, /\.(png|jpg|jpeg|gif|webp|svg|ico|pdf|woff2?)$/]
+// CJK punctuation, kana, Han, full-width forms and hangul: a line of Japanese with no Han in it, or of Korean, is no more
+// English than a line of Chinese (the interface languages of 2026-11-04)
+const CJK = /[\u1100-\u11ff\u3000-\u303f\u3040-\u30ff\u3130-\u318f\u31f0-\u31ff\u3400-\u4dbf\u4e00-\u9fff\ua960-\ua97f\uac00-\ud7af\ud7b0-\ud7ff\uff00-\uffef]/
+// (a package's test fixtures are data as tests/fixtures/ is: the reader's bundles hold binary objects, an add-on's deflated
+// streams read as text; the string catalogue's snapshot, packages/ui/tests/fixtures/, is every pack's words flattened; the
+// locale packs are packages/ui's since the catalogue moved there, 2026-11-07)
+const OUTSIDE = [/^packages\/ui\/src\/locales\//, /^public\/_locales\//, /^public\/ocr\//, /^tests\/fixtures\//, /^packages\/[^/]+\/e2e\/fixtures\//, /^packages\/ui\/tests\/fixtures\//, /^reference\//, /\.zh-CN\.md$/, /^README\.zh/, /^scripts\/check-english\.mjs$/, /\.(png|jpg|jpeg|gif|webp|svg|ico|pdf|woff2?)$/]
 const ALLOW_FILE = 'scripts/english-allowlist.txt'
 const writing = process.argv.includes('--write')
 const allow = new Map()
@@ -59,7 +64,7 @@ if (writing) {
   process.exit(0)
 }
 if (problems.length) {
-  console.error('Chinese text outside the allowance (developer-visible text is English; see CLAUDE.md § Language):')
+  console.error('CJK text outside the allowance (developer-visible text is English; see CLAUDE.md § Language):')
   for (const p of problems) console.error(`  ${p}`)
   process.exit(1)
 }

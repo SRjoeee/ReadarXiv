@@ -7,7 +7,7 @@ import { Combobox, type ComboOption } from '@/entrypoints/options/ui/Combobox'
 import { ConfirmButton, DISARM_MS } from '@/entrypoints/options/ui/ConfirmButton'
 import { insertAt, useFocusWhenDrawn, withUndo } from '@/entrypoints/options/ui/lists'
 import { UNDO_MS, UndoRow } from '@/entrypoints/options/ui/UndoRow'
-import { O, setLocale } from '@/ui/strings'
+import { O, setLocale } from '@readarxiv/ui'
 import { mountElement } from '../ui/render-hook'
 
 const buttons = (c: HTMLElement) => [...c.querySelectorAll('button')]

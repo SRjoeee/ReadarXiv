@@ -17,6 +17,7 @@ import { announceUsablePage } from '@/shared/action-icon'
 import { answerEntryMessages } from '@/shared/entry-page'
 import { watchEntrySettings } from '@/shared/entry-settings'
 import { installFloatingButton } from '@/shared/floating'
+import { extensionOrigin, vouchFor } from '@/shared/frame-owner'
 
 export default defineContentScript({
   matches: ['https://arxiv.org/pdf/*'],
@@ -92,13 +93,17 @@ async function openReader(id: string, translate: boolean, closed: () => void): P
   frame.setAttribute('data-axt-pdf-reader', '')
   frame.setAttribute('allow', 'clipboard-write')
   Object.assign(frame.style, { position: 'fixed', inset: '0', width: '100%', height: '100%', border: '0', zIndex: '2147483647', background: '#e9e9ec' })
+  // the reader acts only once this script vouches for its frame (shared/frame-owner.ts): a page that frames it does nothing
+  const stopVouching = vouchFor(frame, url)
   document.documentElement.append(frame)
   frame.focus()
-  // the reader's own page alone takes it away: a page its frame has been sent to has another origin (Devin on #297)
-  const origin = new URL(url).origin
+  // the reader's own page alone takes it away: a page its frame has been sent to has another origin (Devin on #297). The
+  // extension's origin, not the URL's: loaded at the session's dynamic address, the reader runs at the static one
+  const origin = extensionOrigin()
   const onMessage = (e: MessageEvent) => {
     if (e.source !== frame.contentWindow || e.origin !== origin || (e.data as { type?: unknown } | null)?.type !== 'axt-pdf-reader-close') return
     removeEventListener('message', onMessage)
+    stopVouching()
     frame.remove()
     closed()
   }

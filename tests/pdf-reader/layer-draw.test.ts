@@ -53,13 +53,29 @@ describe('draw in a left part', () => {
     const inputs = drawInputsOf(r.draw!)
     const keys = [...inputs.fonts.keys()]
     expect(new Set(keys).size).toBe(5)
-    expect(inputs.fonts.get(keys[0]!)!.mapped).toBeNull()
-    expect(inputs.fonts.get(keys[1]!)!.mapped).toEqual(new Set())
-    expect(inputs.fonts.get(keys[2]!)!.mapped).toEqual(new Set(['\ud800', 'x\udc00y', '\u{1F600}']))
+    // (a draw of 13, its fonts' maps read into each item's unmapped characters as the live reading reads them: none to read, an
+    // empty map every character, a map its own; what no Unicode stands for under any)
+    const of13 = drawInputsOf({ ...d, items: [['ab\ue000', 1, 0, 1, 0, 0, 1, 1, 0, -1], ['ab', 1, 0, 1, 0, 0, 1, 1, 1, -1], ['x\ud800', 1, 0, 1, 0, 0, 1, 1, 2, -1], ['a b', 1, 0, 1, 0, 0, 1, 1, -1, -1]] })
+    expect(of13.nus).toEqual([[2, 3], [0, 2], [0, 1], null])
+    // (a draw of no font row, 13's or 15's alike: what no Unicode stands for is its items' unmapped characters, as 13 read them)
+    const noFonts = drawInputsOf({ fonts: [], items: [['a\ue000 \ue001b', 1, 0, 1, 0, 0, 1, 1, -1, -1], ['ab', 1, 0, 1, 0, 0, 1, 1, -1, -1]], links: [] })
+    expect(noFonts.nus).toEqual([[1, 4], null])
     // a font's key is its content's, in a namespace of its own
     expect(drawFontKey(d.fonts[0]!)).toBe(drawFontKey(['A', null, 0, null]))
     expect(drawFontKey(d.fonts[0]!)).not.toBe(drawFontKey(['A', null, 0, []]))
     expect(keys[0]).toMatch(/^axt-draw-/)
+  })
+
+  it('a draw of 15: each font row its name, fallback and type3, each item its own unmapped characters, runs of code points', () => {
+    const d: Draw = { fonts: [['F', 'serif', 0], [null, null, 2]], items: [['a\u{1F600}b', 1, 0, 1, 2, 3, 4, 5, 0, -1, [1, 2]], ['plain', 1, 0, 1, 2, 3, 4, 5, 1, -1]], links: [] }
+    expect(checkDraw(d)).toBe(d)
+    expect(drawInputsOf(d).nus).toEqual([[1, 2], null])
+    expect(wireOf(d)).toEqual(d)
+    for (const [why, nu] of [['empty', []], ['odd', [1]], ['an empty run', [1, 1]], ['past the string', [0, 4]], ['not rising', [2, 3, 0, 1]], ['negative', [-1, 1]], ['not an integer', [0.5, 1]]] as const) {
+      expect(() => checkDraw({ ...d, items: [['a\u{1F600}b', 1, 0, 1, 2, 3, 4, 5, 0, -1, nu as never]] }), why).toThrow(DrawRefusal)
+    }
+    // (13's rows hold their maps and no item its own: an eleventh value there is refused)
+    expect(() => checkDraw({ fonts: [['F', 'serif', 0, null]], items: [['ab', 1, 0, 1, 2, 3, 4, 5, 0, -1, [0]]], links: [] } as never)).toThrow(DrawRefusal)
   })
 
   it('gives the layer its inputs: items with their transform, fonts by content, Link annotations with their dests as PDF.js gives them', () => {

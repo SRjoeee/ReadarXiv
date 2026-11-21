@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { createSurfaceConfig } from '@/shared/surface-config'
 import * as configStorage from '@/config/storage'
 import { DEFAULT_CONFIG, type Config } from '@/config/schema'
-import { displayOf, figuresShown, firstConfig, followOf, withDisplay } from '@/pdf-reader/settings'
+import { CLASS_ROWS, displayOf, firstConfig, followOf, sameClasses, withDisplay } from '@/pdf-reader/settings'
 
 const with_ = (patch: Partial<Config>, reader: Partial<Config['pdfReader']> = {}): Config => ({ ...DEFAULT_CONFIG, ...patch, pdfReader: { ...DEFAULT_CONFIG.pdfReader, ...reader } })
 
@@ -39,15 +39,16 @@ describe('withDisplay: what a display chosen in the reader writes', () => {
   })
 })
 
-describe('figuresShown: figure text in a display', () => {
-  it('follows the switch alone: figure text shows in every translated display (the redesign\'s design, §4)', () => {
-    expect(figuresShown(with_({}), 'bilingual')).toBe(true)
-    expect(figuresShown(with_({}), 'translation')).toBe(true)
-    expect(figuresShown(with_({ image: { enabled: false } }), 'bilingual')).toBe(false)
+describe('what to translate: its rows and their sameness', () => {
+  it('lists the five toggles in the owner\'s order, every one the configuration holds (2026-10-25)', () => {
+    expect([...CLASS_ROWS]).toEqual(['figures', 'tables', 'heads', 'references', 'names'])
+    expect([...CLASS_ROWS].sort()).toEqual(Object.keys(DEFAULT_CONFIG.pdfReader.classes).sort())
   })
 
-  it('is off for the original alone, which has no figure text to show', () => {
-    expect(figuresShown(with_({}), 'original')).toBe(false)
+  it('tells two settings apart by any one toggle, and nothing else', () => {
+    const base = DEFAULT_CONFIG.pdfReader.classes
+    expect(sameClasses(base, { ...base })).toBe(true)
+    for (const t of CLASS_ROWS) expect(sameClasses(base, { ...base, [t]: !base[t] })).toBe(false)
   })
 })
 
@@ -56,23 +57,24 @@ describe("followOf: what a landing of the settings changes in the reader (Part 2
   const side = with_({ mode: 'side' }), only = with_({ mode: 'only' })
 
   it('follows a display chosen elsewhere', () => {
-    expect(followOf(side, only, 'elsewhere', at())).toEqual({ reload: false, display: 'translation', sync: null, retry: false })
+    expect(followOf(side, only, 'elsewhere', at())).toEqual({ retarget: false, display: 'translation', sync: null, retry: false })
   })
 
   it('changes nothing for a change of something it does not show, nor for its own write of what is on screen', () => {
-    expect(followOf(side, with_({ mode: 'side', reading: { sentenceHighlight: true, openIn: 'same-tab' } }), 'elsewhere', at())).toEqual({ reload: false, display: null, sync: null, retry: false })
-    expect(followOf(side, only, 'own', at({ display: 'translation' }))).toEqual({ reload: false, display: null, sync: null, retry: false })
+    expect(followOf(side, with_({ mode: 'side', reading: { sentenceHighlight: true, openIn: 'same-tab' } }), 'elsewhere', at())).toEqual({ retarget: false, display: null, sync: null, retry: false })
+    expect(followOf(side, only, 'own', at({ display: 'translation' }))).toEqual({ retarget: false, display: null, sync: null, retry: false })
   })
 
   it('follows nothing on a refused write, not even a language the defaults name while a translation runs', () => {
     const defaults = { ...only, targetLanguage: 'cmn' as const }
-    expect(followOf({ ...side, targetLanguage: 'jpn' as const }, defaults, 'refused', at({ translating: true }))).toEqual({ reload: false, display: null, sync: null, retry: false })
+    expect(followOf({ ...side, targetLanguage: 'jpn' as const }, defaults, 'refused', at({ translating: true }))).toEqual({ retarget: false, display: null, sync: null, retry: false })
   })
 
-  it('starts again for a new target language once a translation has started, and only then', () => {
-    expect(followOf(side, { ...side, targetLanguage: 'deu' as const }, 'elsewhere', at({ translating: true })).reload).toBe(true)
-    expect(followOf(side, { ...side, targetLanguage: 'deu' as const }, 'own', at({ translating: true })).reload).toBe(true)
-    expect(followOf(side, { ...side, targetLanguage: 'deu' as const }, 'elsewhere', at()).reload).toBe(false)
+  it('retargets for a new target language once a translation has started, and only then; what else changed is followed with it', () => {
+    expect(followOf(side, { ...side, targetLanguage: 'deu' as const }, 'elsewhere', at({ translating: true })).retarget).toBe(true)
+    expect(followOf(side, { ...side, targetLanguage: 'deu' as const }, 'own', at({ translating: true })).retarget).toBe(true)
+    expect(followOf(side, { ...side, targetLanguage: 'deu' as const }, 'elsewhere', at()).retarget).toBe(false)
+    expect(followOf(side, { ...only, targetLanguage: 'deu' as const }, 'elsewhere', at({ translating: true }))).toEqual({ retarget: true, display: 'translation', sync: null, retry: false })
   })
 
   it('keeps a display the address names', () => {
@@ -89,9 +91,9 @@ describe("followOf: what a landing of the settings changes in the reader (Part 2
     expect(followOf(side, { ...side, provider: 'google-web' }, 'elsewhere', at()).retry).toBe(false)
   })
 
-  it('reloads for a new language rather than run again', () => {
-    const f = followOf(side, { ...side, targetLanguage: 'deu' as const }, 'elsewhere', at({ stopped: true, translating: true }))
-    expect([f.reload, f.retry]).toEqual([true, false])
+  it('retargets for a new language rather than run again: the new target opens the service again of itself', () => {
+    const f = followOf(side, { ...side, targetLanguage: 'deu' as const, provider: 'google-web' }, 'elsewhere', at({ stopped: true, translating: true }))
+    expect([f.retarget, f.retry]).toEqual([true, false])
   })
 
   it('keeps the original a paper or a language that cannot be had holds, whatever another page chooses (the final review)', () => {

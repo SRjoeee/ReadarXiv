@@ -8,16 +8,17 @@
 // stopped and the information for something that goes on; every menu the view offers is drawn whether open or not (a
 // popover's contents exist before it opens), they open at any time, a change while the page is on restarts it in place
 // (data.ts), and only a choice that cannot run leaves the page behind the settings.
-import { languageItems, READER_LANGUAGES } from '@/pdf-reader/ui/languages'
+import { languageItems, READER_LANGUAGES } from '@/pdf-reader/host/languages'
 import { activeStyle } from '@/config/appearance'
-import { LANG_CODES, LANG_CODE_TO_EN_NAME, LANG_CODE_TO_LOCALE_NAME, LANG_CODE_TO_ZH_NAME, toBcp47 } from '@/config/languages'
+import { LANG_CODES, toBcp47 } from '@/config/languages'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
 import { CONFIG_UNREADABLE } from '@/config/storage'
 import { chosenService, isBuiltInService, isLlmChosen, serviceRuns } from '@/config/services'
 import type { Mode } from '@/core/renderer'
-import { supportsTarget } from '@/providers/microsoft'
+import { supportsTarget } from '@/providers/targets'
 import { BUILT_IN_PROMPTS } from '@/providers/prompt-library'
 import type { ProviderStatus } from '@/providers/transport'
+import { REQUEST_TIMEOUT_ERROR_NAME } from '@/providers/types'
 import type { EntryStatus, PageStatus } from '@/shared/messages'
 import type { StartResult } from '@/core/session'
 import { keyMadeGood, pageDecision } from '@/shared/page-action'
@@ -26,8 +27,9 @@ import { promptName } from '@/ui/prompt-name'
 import { MANAGE_SERVICES, serviceItems } from '@/ui/service-items'
 import { styleSample } from '@/ui/style-sample'
 import { NoActiveTabError } from '@/shared/messages'
-import type { MenuListItem } from '@/ui/controls/MenuList'
-import { PREVIEW_TARGET, S, languageLabel, languageName, parseFatal, profileName, reasonText, serviceName } from '@/ui/strings'
+import { type MenuListItem, PREVIEW_LANG, PREVIEW_TARGET, S } from '@readarxiv/ui'
+import { languageKeywords } from '@/ui/language-keywords'
+import { languageLabel, languageName, parseFatal, profileName, reasonText, serviceName } from '@/ui/strings'
 import { isPaperAddress, offeredQuery, readQuery } from './find'
 
 export type { PackState }
@@ -87,7 +89,7 @@ export interface Entry { label: string; disabled: boolean }
  * goes on; `settings` adds the button that opens the options page
  */
 export interface Note { text: string; tone: 'alert' | 'info'; settings: boolean }
-/** A menu as the shared menu list draws it (@/ui/controls/MenuList, Part 3): its name, whether it searches, its rows */
+/** A menu as the shared menu list draws it (@readarxiv/ui's MenuList, Part 3): its name, whether it searches, its rows */
 export interface MenuView { label: string; search: boolean; items: MenuListItem[] }
 /** One of P0's entries for a paper it names: the address it opens, or null where the checks ruled it out */
 export interface FoundEntry { label: string; href: string | null }
@@ -128,6 +130,11 @@ export interface PopupView {
   style: Row | null
   highlight: boolean
   images: boolean
+  /**
+   * The image switch greyed where it changes nothing: the reader, whose figure text is its own "What to translate"
+   * (S-R-27), as the style button is greyed there (S-P-03c); its value the HTML page's, as stored
+   */
+  imagesGreyed: boolean
   /** Every menu the view offers, drawn whether open or not; null before the settings are read */
   menus: { service: MenuView; language: MenuView; prompt: MenuView | null; style: MenuView | null } | null
   /** Which of them is open: the popup's own state, where the view has that menu */
@@ -161,6 +168,7 @@ const blank = (kind: PopupView['kind']): PopupView => ({
   style: null,
   highlight: true,
   images: true,
+  imagesGreyed: false,
   menus: null,
   menu: null,
   note: null,
@@ -227,7 +235,7 @@ function serviceNote(config: Config, { pack, saved, rejected }: PopupInput): Not
 }
 
 /**
- * Every menu of a view, built from the settings (§5.3): the reader open lists the nine languages it typesets and has no
+ * Every menu of a view, built from the settings (§5.3): the reader open lists the languages it typesets and has no
  * styles; an entry page shows no styles either
  */
 function menusOf(config: Config, { pack, rejected }: PopupInput, { reader = false, style = !reader }: { reader?: boolean; style?: boolean } = {}): NonNullable<PopupView['menus']> {
@@ -240,14 +248,14 @@ function menusOf(config: Config, { pack, rejected }: PopupInput, { reader = fals
     language: {
       label: S.rows.language,
       search: true,
-      // the reader's nine are named in their own languages, and say so (`lang`, round 3); the full list names each in the
+      // the reader's languages are named in their own languages, and say so (`lang`, round 3); the full list names each in the
       // interface's language with its own after it, one string of two languages, which no single `lang` fits
       items: reader
         ? languageItems(config.targetLanguage).map(({ selected, ...item }) => ({ ...item, checked: selected, lang: toBcp47(item.id) }))
         : LANG_CODES.map(code => ({
             id: code,
             name: languageLabel(code),
-            keywords: `${LANG_CODE_TO_EN_NAME[code]} ${LANG_CODE_TO_LOCALE_NAME[code]} ${LANG_CODE_TO_ZH_NAME[code]} ${code}`,
+            keywords: languageKeywords(code),
             checked: code === config.targetLanguage,
           })),
     },
@@ -272,7 +280,7 @@ function menusOf(config: Config, { pack, rejected }: PopupInput, { reader = fals
           label: S.rows.style,
           search: false,
           items: [
-            ...config.appearance.styles.map(p => ({ id: p.id, name: profileName(p), hint: PREVIEW_TARGET, preview: styleSample(p), lang: 'zh-CN', checked: p.id === config.appearance.activeStyle })),
+            ...config.appearance.styles.map(p => ({ id: p.id, name: profileName(p), hint: PREVIEW_TARGET, preview: styleSample(p), lang: PREVIEW_LANG, checked: p.id === config.appearance.activeStyle })),
             // The same position and role as in the service menu: the way in to managing them (S-P-83)
             { id: MANAGE_STYLES, name: S.rows.manageStyles, checked: false, manage: true as const },
           ],
@@ -311,6 +319,7 @@ function entryView(entry: EntryStatus, config: Config, input: PopupInput): Popup
     style: null,
     highlight: config.reading.sentenceHighlight,
     images: config.image.enabled,
+    imagesGreyed: false,
     menus,
     menu: openOf(input.menu, menus),
     // The service's note first: it is why both entries are greyed, or who takes over. Then the HTML version's, which
@@ -330,10 +339,10 @@ function entryView(entry: EntryStatus, config: Config, input: PopupInput): Popup
 
 /**
  * The popup while the PDF reader is laid over a PDF page (the reader's design, §9.2): it acts on the reader through the
- * settings alone, which the reader follows. The rows are the ordinary ones, the language menu holds the nine the reader
+ * settings alone, which the reader follows. The rows are the ordinary ones, the language menu holds the ones the reader
  * typesets, stacked is greyed (a stored stacked shows as side by side, what the reader shows), the primary shows the
  * original or the translation, and there is no style to choose: styles do nothing on a typeset PDF (the foot greys its
- * button)
+ * button). The image switch is greyed too: it is the HTML page's, and the reader's figure text is its own setting
  */
 function readerView(entry: EntryStatus, config: Config, input: PopupInput): PopupView {
   const base = entryView(entry, config, input)
@@ -343,6 +352,8 @@ function readerView(entry: EntryStatus, config: Config, input: PopupInput): Popu
   return {
     ...base,
     kind: 'reader',
+    // the HTML page's figure text changes nothing here: the reader's own is its "What to translate" (S-R-27)
+    imagesGreyed: true,
     menus,
     menu: openOf(input.menu, menus),
     // the note of a service that cannot run; the HTML version's is not this page's matter
@@ -454,9 +465,12 @@ export function derivePopupView(input: PopupInput): PopupView {
   // How the translation looks. The page applies a change straight away, so this needs no restart
   const style: Row = { value: profileName(activeStyle(config.appearance)) }
 
-  const note: Note | null = paused ? { text: S.note.paused(reasonText(parseFatal(progress.fatal ?? '').kind)), tone: 'alert', settings: true }
-    : demoted && session && !madeGood ? { text: S.note.replaced(named(demoted.id), reasonText(demoted.kind), named(session.engine.id)), tone: 'info', settings: true }
-    : page.images?.fatal ? { text: S.note.imagesPaused(reasonText(parseFatal(page.images.fatal).kind)), tone: 'alert', settings: true }
+  // A key's reason is the key's only for an engine that carries one (reasonText, #88 E5): the one put aside, for a hand-over; for a
+  // stop, the service the page's session started on — a built-in chosen, no engine of its chain has a key
+  const stoppedOn = page.running?.provider ?? config.provider
+  const note: Note | null = paused ? { text: S.note.paused(reasonText(parseFatal(progress.fatal ?? '').kind, stoppedOn)), tone: 'alert', settings: true }
+    : demoted && session && !madeGood ? { text: S.note.replaced(named(demoted.id), reasonText(demoted.kind, demoted.id), named(session.engine.id)), tone: 'info', settings: true }
+    : page.images?.fatal ? { text: S.note.imagesPaused(reasonText(parseFatal(page.images.fatal).kind, stoppedOn)), tone: 'alert', settings: true }
     : !canRun && (!on || behind)
       ? !on && saved?.fallback
         ? { text: S.note.willFallback(cannotRunWhy(config, pack, rejected), named(saved.fallback.id)), tone: 'info', settings: true }
@@ -483,6 +497,7 @@ export function derivePopupView(input: PopupInput): PopupView {
     style,
     highlight: config.reading.sentenceHighlight,
     images: config.image.enabled,
+    imagesGreyed: false,
     menus,
     menu: openOf(input.menu, menus),
     note,
@@ -507,6 +522,8 @@ export function actionErrorText(e: unknown): string {
   if (e instanceof NoActiveTabError) return S.noActiveTab
   // By name: thrown here by a write of the popup's own, or in the page by the mode's save and carried back as a failure reply
   if (e instanceof Error && e.name === CONFIG_UNREADABLE) return S.settingsUnreadable
+  // A timeout of the background's queue is worded like every other timeout; its message (a task id, milliseconds) is for the console
+  if (e instanceof Error && e.name === REQUEST_TIMEOUT_ERROR_NAME) return reasonText('timeout')
   return e instanceof Error ? e.message : String(e)
 }
 
@@ -518,6 +535,7 @@ export function startRefusalText(result: Extract<StartResult, { started: false }
     case 'not-paper': return S.page.notPaper
     case 'nothing-to-translate': return S.page.nothingToTranslate
     case 'backend-silent': return S.page.backendSilentWith(result.detail ?? '')
+    case 'backend-timeout': return reasonText('timeout')
     case 'no-service': return S.page.noService
   }
 }

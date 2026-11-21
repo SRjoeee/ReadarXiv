@@ -1,60 +1,73 @@
-// The layout maker (Plan 8b, Task 6; spec §4.2 and §11's amendment of 2026-10-06; the layout research of 2026-10-06):
-// a paper's layout file, from the marks file of its layout compile (the marked original with the layout marks, a compile
-// of its own: marks.mjs) and arXiv's PDF. The marks are TeX's own places in our compile; the ink is arXiv's, read glyph
-// by glyph from its operator lists (ink.mjs); the marks go over to arXiv's PDF by line (carry.mjs), and arXiv's text
-// layer locates the units between them (anchors.mjs). Each located unit gets its lines (baseline, size and font from the
-// glyphs), its frames (its lines by page and column, each with its share of the source and the room below it), the
-// rectangles that erase it, each placeholder's rendering by its source piece index k, and its label (a heading's number,
-// an item's mark, a caption's "Figure 1:", a footnote's mark). A placeholder's rendering is its own ink: the glyphs and
-// rules the marked compile's content stream shows between its points (layout/stream.mjs, kept in the marks file), each
-// carried and matched on arXiv's page (layout/match.mjs); found where every one is matched, or, a reference or a citation
-// whose own words our compile set otherwise (cleveref's "Appendix C" where arXiv's set "Section C"), by its link annotations
-// paired with arXiv's by destination (the link-anchor locator, phOf's `linked`), EMPTY where its points hold nothing, else
-// LOST; a display group's later displays, which TeX gives no point, JOINED to its first, which owns the
-// group's ink; a LOST piece outside the unit's lines (before its start mark, a display after its end mark) OUTSIDE; a
-// citation's or a reference's own text with it, for the layer to set in the page's face. What
-// cannot be placed is left out, and the layer leaves that unit as the original's: a line of the marked original not
-// carried (a reflow of the layout compile costs only its own lines), a unit on a page whose ink is not whole (its
-// operator list too long, too slow, its walk too deep or too long, or its carry over its bound), a placeholder whose own
-// ink is not all found. The file is refused where too few lines are carried, where arXiv's page count is out of bounds,
-// and where its own parser refuses it: a file the parser refuses is never returned.
-// Arithmetic alone once the PDF is read: the same marks file and PDF give the same bytes, but for a page that passes a
-// clock, its operator list not given within OPS_MS (`stats.timedOut`) or its ink's walk past its backstop (ink.mjs INK_MS,
-// `stats.inkTimedOut`). No real page comes near either (the walk's own bound is counted, STEPS_MAX), and a page past one is
-// dark, its units the original's: a slower machine may show a hostile page untranslated where a faster one reads it.
-import { anchorUnits, boundsFromMarks, frameOfTokens, markWords, pageFrame, pageIndex, tokenAtMark, tokens } from '../pipeline/anchors.mjs'
+// The layout maker (Plan 8b, Task 6; spec §4.2 and §11's amendment of 2026-10-06; the layout research of 2026-10-06; the layer
+// route's step 2, our compile as the base page, 2026-10-22): a paper's layout file, from the marks file of its layout compile
+// (the marked original with the layout marks, a compile of its own: marks.mjs) and the base page, the final pass of that
+// compile (layout/paper.mjs markedOfPaper `base`: the same files with graphicx's draft option out, its marks where the draft
+// has them, layout/base.mjs finalCheck). The marks are TeX's own places on the base page; its ink is read glyph by glyph from
+// its operator lists (ink.mjs), and its text layer locates the units between their marks (anchors.mjs). Each located unit
+// gets its lines (baseline, size and font from the glyphs), its frames (its lines by page and column, each with its share of
+// the source and the room below it), the rectangles that erase it, each placeholder's rendering by its source piece index k,
+// and its label (a heading's number, an item's mark, a caption's "Figure 1:", a footnote's mark). A placeholder's rendering is
+// its own ink: the glyphs and rules the marked compile's content stream shows between its points (layout/stream.mjs, kept in
+// the marks file), each the base page's glyph or rule at its own place (no matching: ownedOn); EMPTY where its points hold
+// nothing, LOST where our compile gives it no own ink of its own (no mark, an open ownership); a display group's later
+// displays, which TeX gives no point, JOINED to its first, which owns the group's ink; a LOST piece outside the unit's lines
+// (before its start mark, a display after its end mark) OUTSIDE — but a display its unit opens with, which the marking passes over,
+// found by its unit's start mark (stream.mjs headInk: what TeX shipped from the paragraph it begins to that mark), and one
+// past its unit's end mark that runs to a later unit's opening as to its start mark; a citation's or a reference's own text with it, for the
+// layer to set in the page's face. What cannot be placed is left out, and the layer leaves that unit as the original's: a
+// unit on a page whose ink is not whole (its operator list too long, too slow, its walk too deep or too long), a placeholder
+// whose own ink is not all on the page, a unit on a page that is not arXiv's page. The line check (`lineCheck`: carry.mjs
+// lineCheckOf, the host's) is no source of positions: a unit is laid only where every page it is on is drawable (drawable: the
+// page's words arXiv's page's, none of its lines on another page), the rest left the original's, and the file is refused
+// ('carry') where no unit is; and where the
+// page count is out of bounds, and where its own parser refuses it: a file the parser refuses is never returned.
+// Arithmetic alone once the PDF is read: the same marks file and PDF give the same bytes on every machine. No clock decides
+// what is read: a page's operator list and its annotations are waited for however long they take (oplist.mjs listOf, orNull),
+// and what a page holds is bounded by counts (ink.mjs OPS_CAP, STEPS_MAX, GLYPHS_PAGE, BOXES_CAP: a page past one is dark, its
+// units the original's, on every machine alike); a page whose list fails is dark too (`stats.unread`). A parse that never ends
+// is the run's deadline's.
+import { anchorUnits, boundsFromMarks, frameOfTokens, markWords, orderOf, pageFrame, pageIndex, placesIn, tokenAtMark, tokens, uprightToken, withPoints } from '../pipeline/anchors.mjs'
 import { rangedAnchors } from '../pipeline/left-part.mjs'
 import { readArxivText } from './arxiv.mjs'
-import { displayEdges, plainSource, shown as shownText, unitText } from '../translate/mt.mjs'
-import { carrier as carrierFor, carrierOf, tokensOfMarks } from './carry.mjs'
-import { encodeLayout, indexLayout, isPageText, LAYOUT, LAYOUT_SCHEMA, layoutPartRows, LayoutRefusal, MIXED_FILL, NAME_FLAG, NAME_KEYS, PAGE_TEXT_KINDS, parseLayout, PH_FLAG, PH_KINDS, UNIT_FLAG, UNIT_KINDS } from './file.mjs'
-import { BOXES_PAGE, GLYPHS_PAGE, NO_FILL, packGlyphs, pageInk } from './ink.mjs'
-import { listWithin, OPS_MS, within } from './oplist.mjs'
-import { pagePlanOf } from './addon.mjs'
-import { isMemoryError } from '../pipeline/memory.mjs'
+import { displayEdges, plainSource, unitText } from '../translate/mt.mjs'
+import { tokensOfMarks } from './carry.mjs'
+import { counterAfter } from './names.mjs'
+import { encodeLayout, indexLayout, isPageText, LAYOUT, LAYOUT_SCHEMA, layoutPartRows, LayoutRefusal, MIXED_FILL, NAME_FLAG, NAME_KEYS, PAGE_TEXT_KINDS, parseLayout, PH_FLAG, PH_KINDS, REGION_KINDS, UNIT_FLAG, UNIT_KINDS } from './file.mjs'
+import { BOXES_PAGE, GLYPHS_PAGE, NO_FILL, packGlyphs, pageInk } from '@readarxiv/engine'
+import { listOf, orNull } from './oplist.mjs'
+import { checkBoxes, pageRules } from './cell-rules.mjs'
+import { isMemoryError } from '@readarxiv/engine'
 import { drawDataOf } from '../pipeline/draw-data.mjs'
 import { DRAW_HELD_MAX } from '../layer-proto/draw.mjs'
-import { alignOf } from './remove.mjs'
-import { asSet, classOf, colourPieceOf, destRect, followsOf, headEnd, layoutMarking, LINKS_MAX, linkablePiece, markAt, symbolText, vetoTwice } from './marks.mjs'
-import { matcherOf } from './match.mjs'
-import { isReferenceWord } from '../rules/reference-words.mjs'
-import { textPieceOf } from '../rules/text-piece.mjs'
-import { TOLERANT_WORDS, wordsAt } from './tolerant.mjs'
+import { backrefPiece, classOf, colourPieceOf, followsOf, headEnd, headsOf, INK_ANY, layoutMarking, leadStep, markAt, symbolText, vetoTwice } from './marks.mjs'
 import { OWNED, OWNED_HOW } from './stream.mjs'
-import { annotsOf, linkKindOf, MAX_LINKS, readAnnots } from '../layer-proto/links.mjs'
+import { HEAD_ABUT, HEAD_PUNCT, TAIL_PUNCT } from './own.mjs'
+import { readAnnots } from '../layer-proto/links.mjs'
 
 /** the how of a later display of a display group (stream.mjs): its ink is the group's first display's */
 const IN_GROUP = OWNED_HOW.indexOf('in the display before it')
 /** an ownership whose two points were both read (stream.mjs): the one in which nothing between them is no ink */
 const CLOSED = OWNED_HOW.indexOf('closed')
+/** a text the probe showed a paper's macro sets that is one mark of punctuation: drawn as that character, as a text symbol is */
+const PUNCT_TEXT = /^[.,;:!?]$/
 
-/** the share of the marked original's lines carried, at least, for a file (the researched papers carry 97.5–99.4 %) */
-export const CARRY_MIN = 0.9
-/** a page's operator list waited for at most (oplist.mjs OPS_MS: past it the page has no ink, that page alone) */
-export { OPS_MS }
 const PAGES_MAX = 10_000, COORD_MAX = 14_400
 /** units TeX sets away from where the source has them (anchors.mjs `floating`) */
-const FLOATING = new Set(['caption', 'footnote', 'cell', 'figure'])
+const FLOATING = new Set(['caption', 'footnote', 'cell', 'figure', 'affiliation'])
+/** the pages each unit's own marks stand on, Map id → [low, high], from the names of the marked original and their pages
+ *  ([name, page]): every name of a unit's own marks ([th]?<id>[se]) of the `n` units, a mark staying on the base page of its
+ *  page's number (carryOver). Where the anchoring searches a unit its marks do not bound (pipeline/anchors.mjs searchHead),
+ *  known from the head's names before any page is read */
+function ownOfNames(named, n) {
+  const out = new Map()
+  for (const [nm, page] of named) {
+    const r = /^[th]?(\d+)[se]$/.exec(nm)
+    if (!r || Number(r[1]) >= n || !Number.isInteger(page) || page < 1) continue
+    const id = String(Number(r[1])), o = out.get(id)
+    out.set(id, o ? [Math.min(o[0], page), Math.max(o[1], page)] : [page, page])
+  }
+  return out
+}
 /** a line's body glyphs: within this share of its median size */
 const BODY = 0.15
 /** a glyph on a line, scripts included: its baseline within this of the line's (and a placeholder's of its mark's) */
@@ -92,7 +105,7 @@ const LABEL = /^(?:[\d*\u2217\u2020\u2021\u00a7\u00b6\u2022\u25e6\u25aa\u2013\u0
  *  one sits on a line within PART_ON of the line's size of its baseline; with none on one, the line within PART_NEAR of
  *  their middle baseline */
 const PART_MAIN = 0.85, PART_ON = 0.2, PART_NEAR = 0.6
-/** an inline placeholder's glyphs in stream order are parts, one a line: a new part where arXiv's next glyph stands on
+/** an inline placeholder's glyphs in stream order are parts, one a line: a new part where the page's next glyph stands on
  *  another page, back left by BREAK_X and down by BREAK_Y (a line's end), up by more than BREAK_UP of its size or
  *  BREAK_FAR across (the next column); each part on the unit's line its own baseline stands on, the nearest within
  *  INK_OFF of the line's size (a limit, a raised big operator, a fraction's numerator stay with their line's part) */
@@ -102,14 +115,9 @@ const BREAK_X = 20, BREAK_Y = 4, BREAK_UP = 3, BREAK_FAR = 150, INK_OFF = 2.5
 const WRAP = 2.5
 /** a space in a page text where two glyphs stand this share of their size apart (PDF.js's text layer, TRACKING_SPACE) */
 const TEXT_SPACE = 0.102
-/** the link-anchor locator (phOf's last tier: a reference or a citation the matcher did not find, its links paired with
- *  arXiv's): a piece's links at most; the word before its first link at most PREFIX_EM of its size wide (the corpus's widest
- *  reference word, "proposition", is 5.8 em: both PDFs of the 25 papers of the drift study, 2026-10-17) and at most GAP_EM
- *  from it; the characters after its last link at most SUFFIX_MAX */
-const LINKS_PIECE = 8, PREFIX_EM = 6, GAP_EM = 1.2, SUFFIX_MAX = 8
-/** a piece's glyph the matcher would find: a glyph of its character on arXiv's page within NEAR_X across and NEAR_Y up or
- *  down of where it is carried (the matcher's first glyph is looked for within 8 pt, the next at its neighbour's offset) */
-const NEAR_X = 12, NEAR_Y = 3
+/** a placeholder's own glyph and rule on the base page (ownedOn): at its place in the marks within this, PDF units (the marks
+ *  file's hundredths; the base page is the final pass of the compile the marks were read from, every mark where it was) */
+const OWN_TOL = 0.02
 const PAGE_TEXT = new Set(PAGE_TEXT_KINDS)
 const LINES_UNIT = 2000, PIECES_MAX = 10_000, SIZE_MAX = 200, SRC_MAX = 4000, FONTS_MAX = 512, FONT_MAX = 128
 /** a box covering most of a page (a background, a frame round it) is no ink below a frame */
@@ -126,7 +134,7 @@ const letters = s => s.normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]/gu
 const EVEN = new Set(['para', 'abstract', 'theorem'])
 /** the page stream's rules (E2b design §0: a rule of the whole run reads the whole document), each rule's values, the whole
  *  run's first: `frame` the pages' frame the anchors are placed under ('units': pageFrame of the located units; 'tokens':
- *  anchors.mjs frameOfTokens, arXiv's text alone, rule 1); `edges` the columns' text edges a page without its own takes ('all':
+ *  anchors.mjs frameOfTokens, the base page's text alone, rule 1); `edges` the columns' text edges a page without its own takes ('all':
  *  those of every page like it; 'earlier': of the pages before it and its own alone, rule 3); `columns` the left side's far-push
  *  columns (the page pass's: 'units' pageColumns, 'tokens' columnsOfTokens, rule 4; the maker reads none); `floatSearch` a
  *  float's search of the whole document where it is not found between its neighbours ('whole': step T's match of it, anywhere;
@@ -156,6 +164,9 @@ export function rulesOf(rules = null) {
 const r2 = v => Math.round(v * 100) / 100
 /** a number to a hundredth as the marks file writes it (marks.mjs: -0 written 0) */
 const r2z = v => Math.round(v * 100) / 100 + 0
+/** a name's row's slot 12 (file.mjs): RUN_IN, its glue to its unit; leading no unit, its counter's width at the row's end, none
+ *  where the row as the file holds it ([x0, x1], within its page's view) leaves the name's word no room before it */
+const slot12 = (nm, x0, x1) => (nm.lead >= 0 ? r2(nm.glue) : r2(nm.glue) < x1 - x0 ? r2(nm.glue) : 0)
 const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now())
 const median = xs => { const s = [...xs].sort((a, b) => a - b); return s[s.length >> 1] }
 
@@ -178,6 +189,35 @@ function viewOf(v) {
   return [x0, y0, x1, y1].every(n => Number.isFinite(n) && Math.abs(n) <= COORD_MAX) && x0 < x1 && y0 < y1 ? [x0, y0, x1, y1] : null
 }
 
+/**
+ * The rows K reads of a unit told (layer-proto/cut.mjs entriesOf: its unit row, its lines' pages, its placeholders' segments'
+ * pages and its labels' pages, one row a page; and its first and last lines whole, each framed in its column, its last held
+ * where the file holds it: what one of TeX's lines it shares reads of it, need.mjs rowLeadOf and lineAfterOf, so that a unit
+ * beside it on that line is placed in K as the whole file places it): what the cut of the parts after its own reads of it.
+ * `i` its id, `r` its rows as the stream holds them (layoutPartRows'). With its pages alone, a unit the layout file alone
+ * holds, told beside its line's other unit, fell back to its slot by the ids once a part after its own was cut, and K's order
+ * there was not the whole's (2610.21884v1's keywords after the ink unit "Key words and phrases.": the parts from page 4 on
+ * differed between the stream and the whole)
+ */
+export function stubOf(i, r) {
+  // (whole strides alone, as cut.mjs pagesAt reads them: a placeholder row's fill, last, is no segment's page)
+  const pagesIn = (rows, at, stride) => { const set = new Set(); for (const v of rows) for (let j = at; j + stride <= v.length; j += stride) set.add(v[j]); return [...set] }
+  const lines = pagesIn(r.lines.map(e => e[1]), 0, 8), segs = pagesIn(r.ph, 4, 6), labels = [...new Set(r.labels.map(l => l[2]))]
+  const L = r.lines[0]?.[1] ?? [], F = r.frames[0]?.[1] ?? [], held = r.held[0]?.[1] ?? [], n = L.length / 8
+  const columnOf = j => { for (let f = 0; f + 5 < F.length; f += 6) if (j >= F[f + 2] && j < F[f + 2] + F[f + 3]) return F[f + 1]; return 0 }
+  // (its first line, a row for each page between, its last line; a frame each)
+  const rows = [], frames = []
+  const add = (row, column) => { frames.push(row[0], column, rows.length / 8, 1, rows.length ? 0 : -1, 0); rows.push(...row) }
+  if (n) add(L.slice(0, 8), columnOf(0))
+  for (const p of lines) if (p !== L[0] && p !== L[8 * (n - 1)]) add([p, 0, 0, 0, 0, 0, 0, 0], 0)
+  if (n > 1) add(L.slice(8 * (n - 1)), columnOf(n - 1))
+  return {
+    units: r.units, lines: rows.length ? [[i, rows]] : [], ph: segs.length ? [[i, 0, 0, 0, ...segs.flatMap(p => [p, 0, 0, 0, 0, 0])]] : [],
+    labels: labels.map(p => [i, 0, p, 0, 0, 0, 0, 0]), frames: frames.length ? [[i, frames]] : [], erase: [], headings: [], pageText: [],
+    held: n > 1 && held.includes(n - 1) ? [[i, [rows.length / 8 - 1]]] : [],
+  }
+}
+
 /** a page's glyphs by baseline, rising, packed (ink.mjs packGlyphs: x0, x1, y, top, bottom, size, font, u; ix0 and ix1
  *  their ink across with their advance; top and bottom their own ink up and down), each glyph's owner and whether it is
  *  taken, and its boxes, each whether it is taken: a degraded page's merged boxes (from ink.mjs pageInk's `mergedAt`) are
@@ -191,9 +231,9 @@ function glyphsOf(got, fontIds) {
   const P = { ...packGlyphs(got.glyphs, { order, fontIds }), owner: new Int32Array(order.length).fill(-1), taken: new Uint8Array(order.length), boxes: [], boxTaken: new Uint8Array(got.boxes.length >> 2) }
   for (let i = 0; i + 3 < got.boxes.length; i += 4) P.boxes.push([got.boxes[i], got.boxes[i + 1], got.boxes[i + 2], got.boxes[i + 3]])
   if (Number.isInteger(got.mergedAt)) P.boxTaken.fill(1, got.mergedAt)
-  // (read with the remover's indices: what the add-on's plan reads of the page besides, kept beside the maker's columns, so
-  // that the page's one operator list gives both: each glyph's place in the stream, its showing operation and its place
-  // there, whether it is blank, its own ink across as read; each box's path)
+  // (read with the ink's indices: what the cell rules read of the page besides, kept beside the maker's columns, so that the
+  // page's one operator list gives both: each glyph's place in the stream, its showing operation and its place there, whether
+  // it is blank, its own ink across as read; each box's path)
   if (got.paths) {
     const n = order.length, stream = new Int32Array(n), on = new Int32Array(n), at = new Int32Array(n), blank = new Uint8Array(n), rix0 = new Float64Array(n), rix1 = new Float64Array(n)
     for (let i = 0; i < n; i++) {
@@ -205,8 +245,8 @@ function glyphsOf(got, fontIds) {
   return P
 }
 
-/** a page's ink as the add-on's plan reads it (pageInk with `indices`), made again of the maker's columns and the plan's
- *  (glyphsOf): its glyphs in stream order, each with what the plan reads of it, its boxes, paths and showing operations */
+/** a page's ink as the cell rules read it (pageInk with `indices`), made again of the maker's columns and the plan's
+ *  (glyphsOf): its glyphs in stream order, its boxes, paths and showing operations */
 function planInkOf(P) {
   const { stream, on, at, blank, rix0, rix1, paths, shows } = P.plan, glyphs = new Array(P.n)
   for (let i = 0; i < P.n; i++) {
@@ -218,21 +258,13 @@ function planInkOf(P) {
   for (const b of P.boxes) boxes.push(b[0], b[1], b[2], b[3])
   return { glyphs, boxes, points: [], boxAt: [], paths: Array.from(paths), shows, capped: false, rotated: false }
 }
-/** a page's alignment facts (remove.mjs alignOf) packed: each showing operation's codes in one column (null as NaN), where
- *  each begins, and the paths' count; and back */
-function packFacts({ codes, paths }) {
-  let n = 0
-  for (const row of codes) n += row.length
-  const all = new Float64Array(n), from = new Int32Array(codes.length + 1)
-  let i = 0
-  codes.forEach((row, r) => { from[r] = i; for (const c of row) all[i++] = c === null ? Number.NaN : c })
-  from[codes.length] = i
-  return { all, from, paths }
-}
-function unpackFacts({ all, from, paths }) {
-  const codes = []
-  for (let r = 0; r + 1 < from.length; r++) { const row = []; for (let i = from[r]; i < from[r + 1]; i++) row.push(Number.isNaN(all[i]) ? null : all[i]); codes.push(row) }
-  return { codes, paths }
+/** a page's cell rules (cell-rules.mjs pageRules over the page's ink), checked as a part's reader checks them; null where it has
+ *  none, or where they cannot be written (a box past the page's view by the reader's slack, or empty: that page's loss alone) */
+function cellRulesOf(index, p, ink) {
+  if (ink.rotated || ink.capped || ink.timedOut) return null
+  const rules = pageRules(index, p, ink)
+  if (!rules.length) return null
+  try { return checkBoxes(rules, p, index.file.views, 'rules') } catch { return null }
 }
 /** the first index whose baseline is at least y */
 function lowest(P, y) {
@@ -261,6 +293,21 @@ const charsOf = s => s.normalize('NFKC').toLowerCase()
 /** a glyph's characters as two PDFs are compared by them: NFKC, no white space, no variation selector (match.mjs's) */
 const NF = s => (typeof s === 'string' ? s.normalize('NFKC').replace(/\s|\p{Variation_Selector}/gu, '') : '')
 
+/** a mark on a turned token's box, within this (PDF units): a turned run's first mark stands at its box's edge, to the marks
+ *  file's hundredth */
+const ON_TURNED = 0.5
+/** whether mark `mk` stands on token `t` and `t` is turned (anchors.mjs uprightToken: its box as high above its `y` as below,
+ *  a run set at an angle): the mark is on a turned line. A token that kept no box is none */
+const turnedAt = (t, mk) => typeof t.top === 'number' && typeof t.bottom === 'number' && !uprightToken(t) && t.page === mk.page
+  && mk.x >= t.x - ON_TURNED && mk.x <= t.x + t.w + ON_TURNED && mk.y >= t.bottom - ON_TURNED && mk.y <= t.top + ON_TURNED
+
+/** whether a line rectangle's glyphs (lineOf's first band: on its baseline's band, within its words' extent) hold one another
+ *  unit or a babel name took (`owner`): what makes a line of unit `unit`'s glyphs none */
+function takenAt(P, r, unit) {
+  const L = r.x0 - 0.5, R = r.x1 + 0.5
+  return band(P, Math.min(r.y0, r.y1), Math.max(r.y0, r.y1)).some(i => mid(P, i) >= L && mid(P, i) <= R && P.owner[i] !== -1 && P.owner[i] !== unit)
+}
+
 /** tokens → line rectangles as anchors.mjs lineRects makes them, each with its tokens */
 function rectsOf(doc, idx) {
   const rects = []
@@ -280,12 +327,13 @@ function rectsOf(doc, idx) {
 }
 
 /**
- * A line of a unit from arXiv's glyphs: its rectangle (rectsOf) gives its page and words; its baseline is the one most of
+ * A line of a unit from the base page's glyphs: its rectangle (rectsOf) gives its page and words; its baseline is the one most of
  * its body glyphs share, its glyphs every one on that baseline's window (scripts too) inside its words' extent and glued
  * to its ends, not left of `from` (the unit's start mark on its first line) nor right of `to` (its end mark on its last),
- * none another unit's. Null where it has no glyph
+ * none another unit's; on such a line, where its words' glyphs stand on the baseline TeX set that mark on (`at`, its height),
+ * that baseline (rowOf's). Null where it has no glyph
  */
-function lineOf(P, r, from, to, unit) {
+function lineOf(P, r, from, to, unit, at = null) {
   // by its middle: a glyph is the unit's from its start mark on, to its end mark (set after the last glyph)
   const ok = i => (P.owner[i] === -1 || P.owner[i] === unit) && (from === null || mid(P, i) >= from - 0.05) && (to === null || mid(P, i) <= to + 0.05)
   const L = r.x0 - 0.5, R = r.x1 + 0.5
@@ -314,14 +362,16 @@ function lineOf(P, r, from, to, unit) {
   const right = near.filter(i => !taken.has(i) && mid(P, i) > R).sort((a, b) => P.x0[a] - P.x0[b] || a - b)
   for (const i of right) { if (P.x0[i] - x1 > glue && to === null) break; taken.add(i); x1 = Math.max(x1, P.x1[i]) }
   // its closing punctuation glued past its end mark: a mark carried past its line's last word stands where the formula
-  // before it ends in our compile, which arXiv's may set wider (1706's "… by 1/√dk." left its full stop standing)
+  // before it ends in our compile, which the page may set wider (1706's "… by 1/√dk." left its full stop standing); the wrap
+  // gives it to the unit's text alike (own.mjs MR 4c)
   if (to !== null) {
-    const after = window.filter(i => !taken.has(i) && mid(P, i) > to + 0.05 && /^[.,;:!?)\]]$/.test(P.u[i])).sort((a, b) => P.x0[a] - P.x0[b] || a - b)
+    const after = window.filter(i => !taken.has(i) && mid(P, i) > to + 0.05 && TAIL_PUNCT.test(P.u[i])).sort((a, b) => P.x0[a] - P.x0[b] || a - b)
     for (const i of after) { if (P.x0[i] - x1 > glue) break; taken.add(i); x1 = Math.max(x1, P.x1[i]) }
   }
   const left = near.filter(i => !taken.has(i) && mid(P, i) < L).sort((a, b) => P.x1[b] - P.x1[a] || a - b)
   for (const i of left) { if (x0 - P.x1[i] > glue && from === null) break; taken.add(i); x0 = Math.min(x0, P.x0[i]) }
-  return rowOf(P, [...taken], r.page, r.ks, base)
+  // (where the unit's own mark stands on the line, the baseline its words' glyphs give is TeX's where the mark is on it too: rowOf)
+  return rowOf(P, [...taken], r.page, r.ks, base, at !== null && Math.abs(base - at) <= OWN_TOL ? base : null)
 }
 
 /**
@@ -338,9 +388,13 @@ function mainsOf(P, gs) {
   return inBig >= MAINS_SHARE * all ? mains : gs
 }
 const MAINS_SHARE = 0.25
-/** a line from its glyphs: its extent, the baseline most of its body glyphs share (glyphs within BODY of their median
- *  size; `near` breaks a tie), the extremes of its glyphs, their median size and the font most of its characters have */
-function rowOf(P, glyphs, page, ks, near) {
+/** a line from its glyphs: its extent, its baseline, the extremes of its glyphs, their median size and the font most of its
+ *  characters have. Its baseline is the one most of its body glyphs share (glyphs within BODY of their median size; `near`
+ *  breaks a tie), or `at` (lineOf's: the baseline the unit's own mark stands on and its words' glyphs give) where that one is
+ *  another by more than OWN_TOL: TeX set the mark on the line's baseline, which glyphs set off it may outnumber (an inline
+ *  `cases` after a line's last word, its two rows of \\text either side of the axis, outvoted the line's words by 17 glyphs to
+ *  7: 2610.21026v1's u160's last line stood 6.4 pt above the baseline its end mark and its words are on, its formula LOST) */
+function rowOf(P, glyphs, page, ks, near, at = null) {
   const gl = [...glyphs].sort((a, b) => P.x0[a] - P.x0[b] || P.y[a] - P.y[b] || a - b)
   let x0 = Infinity, x1 = -Infinity, top = -Infinity, bottom = Infinity
   for (const i of gl) { x0 = Math.min(x0, P.x0[i]); x1 = Math.max(x1, P.x1[i]); top = Math.max(top, P.top[i]); bottom = Math.min(bottom, P.bottom[i]) }
@@ -349,7 +403,8 @@ function rowOf(P, glyphs, page, ks, near) {
   for (const i of body) fonts.set(P.font[i], (fonts.get(P.font[i]) ?? 0) + Math.max(1, P.u[i].length))
   let font = -1, most = -1
   for (const [f, c] of fonts) if (c > most || (c === most && f < font)) { font = f; most = c }
-  return { page, x0, x1, base: baselineOf(P, body, near), top, bottom, size, font, gl, ks }
+  const vote = baselineOf(P, body, near)
+  return { page, x0, x1, base: at !== null && Math.abs(vote - at) > OWN_TOL ? at : vote, top, bottom, size, font, gl, ks }
 }
 
 /** a rectangle that the file holds: to a hundredth, within its view, at least a hundredth across and high */
@@ -367,9 +422,9 @@ const tokenAt = tokenAtMark
  *  mark's word) or after it (an end mark's) taken off, where a letter remains */
 const unglued = (w, start) => { const v = start ? w.replace(/^\d+/, '') : w.replace(/\d+$/, ''); return /\p{L}/u.test(v) ? v : null }
 /**
- * The word a carried unit mark is checked against on arXiv's page (boundsFromMarks keeps a mark only where arXiv has its
- * word there): its word in our compile, or arXiv's word at the place where the two differ only by a footnote's number
- * glued to it in one of them (2307.16209's notes on arXiv's PDF: the number set on the line and read with the first
+ * The word a unit mark is checked against on the base page (boundsFromMarks keeps a mark only where the page's text has its
+ * word there): its word in the marks file, or the page's word at the place where the two differ only by a footnote's number
+ * glued to it in one of them (2307.16209's notes, as two text layers may read them: the number set on the line and read with the first
  * word, "1historically", which the text layer gives as that word's rest, of no text)
  */
 function sameWord(doc, byPage, c, start, ours) {
@@ -385,17 +440,16 @@ function sameWord(doc, byPage, c, start, ours) {
 /** stats before anything is read */
 function blank(units) {
   return {
+    // (the line check's: our base page's lines found on arXiv's PDF, of all; and the lines no unit's held)
     lines: { carried: 0, total: 0, held: 0 },
-    // (and the unit marks no line carried that the unit's own words beside them were looked for, and placed: tolerantOf)
-    units: { located: 0, total: units.length, byKind: {}, unplaced: 0, tolerantTried: 0, tolerant: 0, tolerantWork: 0 },
-    ph: { marked: 0, found: 0, empty: 0, lost: 0, joined: 0, outside: 0, byKind: {}, unmarked: 0, symbols: 0, inferred: 0, why: {}, textTaken: 0, owned: 0, matched: 0, unmatched: 0, twice: 0, foreign: 0, shared: 0, texts: 0, heads: [0, 0], textRuns: 0 },
-    match: { same: 0, recoded: 0, loose: 0, vote: 0, rejected: 0, work: 0, over: 0, most: 0 },
+    // (`undrawn`: the units placed on a page that is not drawable, the line check's: left the original's)
+    units: { located: 0, total: units.length, byKind: {}, unplaced: 0, undrawn: 0 },
+    ph: { marked: 0, found: 0, empty: 0, lost: 0, joined: 0, outside: 0, byKind: {}, unmarked: 0, symbols: 0, inferred: 0, why: {}, textTaken: 0, owned: 0, matched: 0, unmatched: 0, twice: 0, foreign: 0, shared: 0, texts: 0, heads: [0, 0] },
     labels: {}, frames: { units: 0, split: 0, lineCountChecked: 0, lineCountEqual: 0 }, baselines: { first: [], last: [] },
-    names: { marked: 0, located: 0, runIn: 0, why: {} },
-    links: { tried: 0, placed: [], why: {} },
+    names: { marked: 0, located: 0, runIn: 0, counters: 0, why: {} },
     // (the colour pieces of the units the file holds, and those whose run's fill TeX wrote: marks.mjs readColours)
     colours: { pieces: 0, evaluated: 0 },
-    capped: [], timedOut: [], inkTimedOut: [], degraded: [], over: [], bytes: { raw: 0, gzip: 0 }, ms: { text: 0, ops: 0, carry: 0, anchor: 0, rows: 0 },
+    capped: [], unread: [], degraded: [], bytes: { raw: 0, gzip: 0 }, ms: { text: 0, ops: 0, carry: 0, anchor: 0, rows: 0 },
     // (the page stream's, the marked original read a page at a time: rows found after their unit's own ink was taken, and points
     // read twice after their unit's placeholders were matched; none on a paper read whole)
     late: { rows: 0, vetoes: 0 },
@@ -411,24 +465,30 @@ async function gzipSize(bytes) {
   return (await new Response(stream).arrayBuffer()).byteLength
 }
 
+/** the layout file's `left`: the empty string, which every maker has written since the file's left side became the left parts'
+ *  (BUNDLE 4); the key goes with the file's next schema (the rules audit's F11, 2026-11-04) */
+const LEFT = ''
+
 /**
  * A paper's layout file, or why none is made: { file, stats } or { refused, stats }. `units` the paper's (ids their
- * indices); `marks` the marks file of its layout compile; `arxiv` a PDF.js document of arXiv's PDF, which the caller
- * opens and destroys, each of its pages cleaned up once read (page.cleanup: its operator list and images let go), so
- * that a caller that reads its operator lists again pays a parse again (the add-on relies on PDF.js keeping them, and
- * takes a document of its own: addon.mjs); `OPS` PDF.js's operator codes. `text`: arXiv's text as layout/arxiv.mjs
- * readArxivText read it from this document (the prepare's step T, read once for the left and the maker), else read here;
+ * indices); `marks` the marks file of its layout compile; `base` a PDF.js document of the base page (the final pass of that
+ * compile: layout/paper.mjs markedOfPaper `base`, its coordinates the file's), which the caller opens and destroys, each of its pages cleaned up once read (page.cleanup: its operator list and images let go), so
+ * that a caller that reads its operator lists again pays a parse again; `OPS` PDF.js's operator codes. `text`: the base page's text as layout/arxiv.mjs
+ * readArxivText read it from this document (the prepare's step T), else read here. `lineCheck`: the line check (carry.mjs
+ * lineCheckOf of the base page's own tokens, this document's, over arXiv's): a unit is laid only where every page it is on is
+ * drawable (drawable), the rest counted (`stats.units.undrawn`) and left the original's, and the file is refused
+ * ('carry') where no unit is; its counts information alone (`stats.lines`, and each marked page's in `lines` in the result);
+ * none: no line is checked, every unit placed laid;
  * `floatMatch`: anchors.mjs floatMatches of its tokens and the units' texts, else each float's is searched here; `frame`: the
  * pages' frame's rule its anchors are placed under (anchors.mjs FrameRule), given; else the rule set's (`rules`, DEFAULT_RULES'
  * where not given: rule 1's frameOfTokens; pageFrame under rules.frame 'units', the whole paper alone: the page stream, which
- * places a range's units alone, needs the whole document's). `plans`:
- * the add-on's plans as well, { file, stats, plans }: each page's (addon.mjs pagePlanOf) of the ink and the alignment
- * facts read here of the page's one operator list, as pagePlansOf makes them of the list read again (null where they
- * fail, `plansFailed` why: the add-on's loss, never the file's). A page whose ink
+ * places a range's units alone, needs the whole document's). `cellRules`:
+ * the rules near the table cells as well, { file, stats, cellRules }: each page's (cell-rules.mjs pageRules) of the ink read
+ * here of the page's one operator list (null where they fail, `rulesFailed` why: the reader's loss, never the file's). A page whose ink
  * passes GLYPHS_PAGE glyphs is capped (stats.capped), that page alone. `parts`: the file is cut into parts (layer-proto/
- * cut.mjs partCutter), which hold the bounds of what a part holds and the carry's share, each part's: the file is made
- * whatever share of the lines is carried (some), and checked without the bounds a part holds of its own (file.mjs
- * parseLayout `sized`); `lines` in the result, each marked page's lines [carried, total] (carry.mjs pageLines)
+ * cut.mjs partCutter), which hold the bounds of what a part holds: the file is checked without the bounds a part holds of
+ * its own (file.mjs parseLayout `sized`); `lines` in the result, each page's lines [in place, total] (the line check's
+ * pageLines, information)
  */
 export async function makeLayout(o) {
   const m = await makerOf(o)
@@ -438,9 +498,9 @@ export async function makeLayout(o) {
 }
 
 /**
- * The maker of a paper's layout file (makeLayout's), its work a page and a unit at a time: `readPage(p)` reads arXiv's page p's
- * ink (pages in order: a font's id is its first appearance's); `carrying()`, the marks carried to arXiv's PDF; `anchoring()`,
- * the units located on arXiv's tokens; then, a unit at a time and pass by pass, `place(i)` (its lines), the names (`nameAt`),
+ * The maker of a paper's layout file (makeLayout's), its work a page and a unit at a time: `readPage(p)` reads the base page
+ * p's ink (pages in order: a font's id is its first appearance's); `carrying()`, the marks where they stand;
+ * `anchoring()`, the units located on the base page's tokens; then, a unit at a time and pass by pass, `place(i)` (its lines), the names (`nameAt`),
  * `phOf`, `heldOf`, `outsideOf`, `labelOf`, `rowsOf`; `bars()` and `assemble()` the file. `whole()` runs them in their order
  * over every unit. Each pass reads and writes the ink of its own pages alone. `columnEdges`: the columns' text edges (Map
  * `page|column`, `twoCols|parity|column` or `twoCols|column` to [x0, x1]) the names, the displays' numbers and the centred
@@ -450,22 +510,25 @@ export async function makeLayout(o) {
  * at most `drawHeldMax` at a time; none for a page the read fails on, a font a host would read
  * differently, or past the budget. It reads no ink and writes none: the layout file is the same bytes with it on or off
  */
-export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, text = null, floatMatch = null, frame: frameGiven = null, plans: wantPlans = false, parts = false, columnEdges = null, check = false, rules: rulesGiven = null, inFloat = null, draw: wantDraw = false, drawHeldMax = DRAW_HELD_MAX }) {
+export async function makerOf({ units, marks, base, OPS, paper, pdfjs, text = null, lineCheck = null, floatMatch = null, frame: frameGiven = null, cellRules: wantRules = false, parts = false, columnEdges = null, check = false, rules: rulesGiven = null, inFloat = null, texOrder = null, draw: wantDraw = false, drawHeldMax = DRAW_HELD_MAX }) {
   const rules = rulesOf(rulesGiven)
   // (rule 5: the units written inside a float, the source parse's, no body neighbour of a float's)
   if (rules.floatSearch === 'forward' && !Array.isArray(inFloat)) throw new TypeError('inFloat: the indices of the units written inside a float, for rules.floatSearch \'forward\'')
-  const forward = rules.floatSearch === 'forward' ? new Set(inFloat) : null
+  // (the units in the order TeX sets them, which the anchoring reads as the text's: anchors.mjs orderOf, openPaper's texOrder;
+  // rule 5's units written inside a float as places in that order)
+  const order = orderOf(texOrder, units.length)
+  const forward = rules.floatSearch === 'forward' ? placesIn(inFloat, order) : null
   const stats = blank(units)
   for (const u of units) { const k = u.kind; stats.units.byKind[k] ??= [0, 0]; stats.units.byKind[k][1]++ }
-  const pages = arxiv?.numPages
+  const pages = base?.numPages
   if (!Number.isInteger(pages) || pages < 1 || pages > PAGES_MAX) return { refused: 'pages', stats }
-  // ---------------------------------------------------------------- arXiv's text, page by page
+  // ---------------------------------------------------------------- the base page's text, page by page
   const t = now()
-  const read = text ?? await readArxivText(arxiv, { draw: wantDraw })
+  const read = text ?? await readArxivText(base, { draw: wantDraw })
   // (each page's text as its draw reads it, step T's: taken as the page's draw is read, and let go; none where the text was read
   // without it, the draw then reading the page's text itself)
   const drawTexts = wantDraw ? read.draw ?? null : null
-  if (read.pages !== pages) throw new TypeError(`arXiv's text is of ${read.pages} pages, its document of ${pages}`)
+  if (read.pages !== pages) throw new TypeError(`the base page's text is of ${read.pages} pages, its document of ${pages}`)
   const views = [], dark = new Set()
   for (let p = 1; p <= pages; p++) {
     // a page that could not be had has no view; one whose text could not be read keeps its own
@@ -477,19 +540,20 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
   // (the pages whose ink is never read: dark by their text alone; and those whose ink was read, whether or not it is held still)
   const unread = new Set(dark), inked = new Uint8Array(pages + 1)
   const doc = read.tokens
-  /** arXiv's tokens by page (tolerantOf's) */
-  const docByPage = pageIndex(doc), byPageOf = p => docByPage.get(p) ?? []
-  // the frame's rule given (a whole run's, the oracle's), else the rule set's: rule 1's of arXiv's text, made once; the whole
+  // (the line check, of this document's own tokens: each token's line, each line in place or not, each rest of a word)
+  if (lineCheck && !(ArrayBuffer.isView(lineCheck.tokenLine) && lineCheck.tokenLine.length === doc.length && Array.isArray(lineCheck.undrawable))) throw new TypeError('lineCheck: carry.mjs lineCheckOf of the base page\'s own tokens')
+  const undrawablePages = new Set(lineCheck?.undrawable ?? [])
+  // the frame's rule given (a whole run's, the oracle's), else the rule set's: rule 1's of the base page's text, made once; the whole
   // run's (pageFrame) the whole paper's alone, none for the page stream (its ranges are placed from their own units)
   let tokensFrame = null
   const frame = frameGiven ?? (rules.frame === 'tokens' ? () => (tokensFrame ??= frameOfTokens(doc)) : null)
   const viewAt = p => views.slice(4 * (p - 1), 4 * p)
   stats.ms.text = now() - t
-  // ---------------------------------------------------------------- arXiv's ink: glyphs and graphics, page by page
+  // ---------------------------------------------------------------- the base page's ink: glyphs and graphics, page by page
   // (`check`: a pass reading a page's ink outside the pages it was given throws, the pages a task in another order may run on
   // being exactly those: `allowed`, null where any page is a pass's)
   let allowed = null
-  const pagesInk = new Array(pages + 1).fill(null), facts = new Array(pages + 1).fill(null), names = [], nameId = new Map()
+  const pagesInk = new Array(pages + 1).fill(null), names = [], nameId = new Map()
   const ink = check ? new Proxy(pagesInk, {
     get(target, key, receiver) {
       if (allowed !== null && typeof key === 'string' && /^\d+$/.test(key) && !allowed.has(Number(key))) throw new RangeError(`a pass read page ${key}'s ink, outside its pages`)
@@ -497,80 +561,28 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     },
   }) : pagesInk
   const fontIds = raw => { const n = fontName(raw); if (!nameId.has(n)) { nameId.set(n, names.length); names.push(n) } return nameId.get(n) }
-  const seen = { warned: false }
-  // ---------------------------------------------------------------- the links, the link-anchor locator's (phOf)
-  // Our compile's (the marks file's `links`: the pages a placeholder that names a link has a point on, document order) by page,
-  // and arXiv's, read only on the pages the locator may pair a link on (`wanted`, made once the marks are carried: prepareWanted, judge)
-  // and only where ours has any (theirLinks: undefined not asked, null not known, else its Link annotations that name a
-  // destination, in PDF.js's order). Each link is paired by its order within its unit, both sides' (phOf's `linked`), so a
-  // page's links are read for that page's units alone: PDF.js reads a page's annotations at a cost of its own
-  // (the marks of a marked original read a page at a time hold no link yet: the paper's count and destinations are its head's,
-  // marks.mjs marksOfHead, and each page's links are taken as it is read: takeLinks)
-  const ourLinks = marks.links ?? [], linking = ourLinks.length > 0 || (marks.linkCount ?? 0) > 0
-  const familyOf = d => { const at = d.indexOf('.'); return at > 0 ? d.slice(0, at) : d }
-  const ourOnPage = new Map(), ourDests = new Set(marks.linkDests ?? [])
-  ourLinks.forEach((L, j) => { ourDests.add(L[0]); (ourOnPage.get(L[1]) ?? ourOnPage.set(L[1], []).get(L[1])).push(j) })
-  /** a marked page's links (markedPages' page `links`), taken after those of the pages before it: the marks file's order */
-  const takeLinks = rows => { for (const L of rows ?? []) { const j = ourLinks.length; ourLinks.push(L); ourDests.add(L[0]); (ourOnPage.get(L[1]) ?? ourOnPage.set(L[1], []).get(L[1])).push(j) } }
-  const theirLinks = new Array(pages + 1)
-  let wanted = null
-  /** the pages whose ink readPage has read, so far */
-  const readSoFar = new Set()
-  /** a page's Link annotations that name a destination, as the locator reads them: null where not read, or past MAX_LINKS;
-   *  each one ours would hold (marks.mjs destRect, the one rule of both sides' order), so that an order is read over the same
-   *  links in both PDFs */
-  const theirsOf = (raw, p) => {
-    if (!Array.isArray(raw)) return null
-    const ls = raw.filter(a => a?.subtype === 'Link')
-    if (ls.length > MAX_LINKS) return null
-    return ls.filter(a => destRect(a) !== null).map(a => ({ page: p, dest: a.dest, raw: { subtype: 'Link', rect: [...a.rect], dest: a.dest, ...(a.quadPoints ? { quadPoints: Array.from(a.quadPoints) } : {}) } }))
-  }
-  /** page p's links read, once (readAnnots never rejects; one not answered within OPS_MS is not known, nor a page not had): those
-   *  its draw's read held (heldTheirs), else read here */
-  async function readTheirs(p) {
-    if (!linking || theirLinks[p] !== undefined) return
-    theirLinks[p] = null
-    if (unread.has(p)) return
-    if (heldTheirs.has(p)) { theirLinks[p] = heldTheirs.get(p); dropHeld(p); return }
-    let page = null
-    try { page = await arxiv.getPage(p) } catch (e) { if (isMemoryError(e)) throw e }
-    if (page) theirLinks[p] = theirsOf(await within(readAnnots(page), OPS_MS), p)
-  }
   /** page p's ink, read once, its time spent on the paper's `ms.ops` */
   async function readPage(p) {
     const t0 = now()
     await inkOf(p)
-    readSoFar.add(p)
-    // (the pieces whose pages are read judged, and the links of the pages wanted so far read: here once the marks are carried
-    // first, the page stream's order; else by the passes' start, whole() and byTasks(), the same pages)
-    if (pending) {
-      judge(p)
-      for (const q of [...wanted].sort((a, b) => a - b)) if (q <= p) await readTheirs(q)
-    }
     stats.ms.ops += now() - t0
   }
-  // A page's annotations are read once (PDF.js reads them anew at each ask, at a cost of their own): where its draw is read
-  // (gatherDraw) with the draw, and what the locator takes of them (theirsOf) held for readTheirs until it reads that page's
-  // links or no unit may want them (dropUnwanted, the passes' start), at most LINKS_MAX links (past it a page's are asked
-  // again where wanted: a paper of that many is refused by our side's own bound)
-  const annotsAsked = new Map(), heldTheirs = new Map()
-  let heldLinks = 0
-  const annotsOnce = (p, page) => { let a = annotsAsked.get(p); if (!a) { a = within(readAnnots(page), OPS_MS); annotsAsked.set(p, a) } return a }
-  const holdTheirs = (p, rows) => { const k = rows ? rows.length : 0; if (heldLinks + k > LINKS_MAX) return; heldTheirs.set(p, rows); heldLinks += k }
-  const dropHeld = p => { if (!heldTheirs.has(p)) return; const rows = heldTheirs.get(p); heldTheirs.delete(p); heldLinks -= rows ? rows.length : 0 }
+  // A page's annotations are read once, with its draw (gatherDraw: PDF.js reads them anew at each ask, at a cost of their own)
+  const annotsAsked = new Map()
+  const annotsOnce = (p, page) => { let a = annotsAsked.get(p); if (!a) { a = orNull(() => readAnnots(page)); annotsAsked.set(p, a) } return a }
   /** page p's draw geometry (pipeline/draw-data.mjs), held as its encoded text for the left part that will carry it (`drawOf`); none for
    *  a page past the held budget, one that cannot be read, or one whose font a host would read differently: the browser reads it */
   const draws = new Map(), drawStats = { pages: 0, none: 0, why: {}, bytes: 0, ms: 0, fills: { items: 0, glyphs: 0, told: 0, runs: 0 } }
   let drawHeld = 0
   async function gatherDraw(p, page, tx, glyphs) {
     const t0 = now()
-    let r = null, timer
+    let r = null
     try {
-      r = await Promise.race([drawDataOf(page, () => annotsOnce(p, page), tx, glyphs), new Promise(resolve => { timer = setTimeout(() => resolve({ draw: null, why: 'time' }), OPS_MS) })])
+      r = await drawDataOf(page, () => annotsOnce(p, page), tx, glyphs)
     } catch (e) {
       if (isMemoryError(e)) throw e
       r = { draw: null, why: 'read' }
-    } finally { clearTimeout(timer) }
+    }
     drawStats.ms += now() - t0
     let why = r.why
     if (r.draw !== null) {
@@ -596,45 +608,64 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
   }
   /** page p's draw, once: null for none */
   const drawOf = p => { const text = drawJsonOf(p); return text === null ? null : JSON.parse(text) }
+  /** each page's regions (regionRowsOf), the file's `regions`, as its pages are read; a part's taken by page */
+  const regionRows = new Map()
+  const regionsHeld = () => [...regionRows.keys()].sort((x, y) => x - y).flatMap(q => regionRows.get(q))
   async function inkOf(p) {
     const tx = drawTexts ? drawTexts[p - 1] ?? null : null
     if (drawTexts) drawTexts[p - 1] = null
     if (unread.has(p)) return
     // (the page its text was read from: PDF.js keeps each page's proxy; a memory-class failure is no dark page, C8.4)
     let page = null
-    try { page = await arxiv.getPage(p) } catch (e) { if (isMemoryError(e)) throw e }
+    try { page = await base.getPage(p) } catch (e) { if (isMemoryError(e)) throw e }
     if (!page) { dark.add(p); return }
-    // (within OPS_MS, else given up on and let go: that page alone, oplist.mjs)
-    const ops = await listWithin(page, seen)
-    if (!ops) { stats.timedOut.push(p); dark.add(p); return }
-    const got = pageInk(OPS, ops, page.commonObjs ?? { get: () => null }, { rotate: page.rotate ?? 0, indices: wantPlans, glyphsMax: GLYPHS_PAGE, boxesMax: BOXES_PAGE })
+    // (however long it takes; one that fails is that page alone, dark, the page let go: oplist.mjs)
+    const ops = await listOf(page)
+    if (!ops) { stats.unread.push(p); dark.add(p); return }
+    const got = pageInk(OPS, ops, page.commonObjs ?? { get: () => null }, { rotate: page.rotate ?? 0, indices: wantRules, glyphsMax: GLYPHS_PAGE, boxesMax: BOXES_PAGE })
     // the page's draw geometry (E-C), read once its fonts are loaded, within the same limit, before the page is let go; its items'
     // fills from the ink's glyphs where the page's ink is whole (layout/fills.mjs), none told else
     if (wantDraw) {
       await gatherDraw(p, page, tx, got.capped || got.timedOut || got.rotated ? null : got.glyphs)
-      const asked = annotsAsked.get(p)
       annotsAsked.delete(p)
-      if (asked && linking && theirLinks[p] === undefined) holdTheirs(p, theirsOf(await asked, p))
     }
-    // (the add-on's alignment facts read of the same list, before it is let go: `plans`)
-    if (wantPlans && !got.capped && !got.timedOut && !got.rotated) facts[p] = packFacts(alignOf(OPS, ops))
     // its operator list and decoded images let go once its ink is read, so that PDF.js holds them for one page at a time,
     // not every page's to the document's end (48 MiB on 2303.18223's 144 pages; an image a late decode brings is dropped
-    // with them). Nothing here reads a page's list again, and the callers destroy the document after the maker (the
-    // add-on's plans are made of what was read here where `plans` asks, else of a document of its own: addon.mjs)
+    // with them). Nothing here reads a page's list again, and the callers destroy the document after the maker (the cell rules
+    // are made of what was read here where `cellRules` asks)
     page.cleanup?.()
     // (each page once, by what befell it: past a cap, past the walk's backstop (apart from a list that never came), or
     // read with its boxes past BOXES_PAGE merged by cell, its ink kept: its text is whole, ink.mjs pageInk)
     if (got.capped) stats.capped.push(p)
-    else if (got.timedOut) stats.inkTimedOut.push(p)
     else if (got.degraded) stats.degraded.push(p)
     // a page whose ink is not whole has no ink: its units stay the original's, never erased in part
     if (got.capped || got.timedOut || got.rotated) { dark.add(p); return }
     ink[p] = glyphsOf(got, fontIds)
     inked[p] = 1
+    // (the page's regions, each a rectangle of the ink of the glyphs TeX set in it, the file's `regions`)
+    const rows = regionRowsOf(p, got)
+    if (rows.length) regionRows.set(p, rows)
+  }
+  /** page p's regions as the file holds them (schema 6): [p, kind, x0, bottom, x1, top] for each region of pageInk's (a line TeX
+   *  set between a region's points) that holds a glyph shown, its rectangle that ink's, within the page's view */
+  function regionRowsOf(p, got) {
+    const out = [], view = viewAt(p)
+    for (const r of got.regions ?? []) {
+      const kind = REGION_KINDS.indexOf(r.kind)
+      if (kind < 0) continue
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
+      for (let g = r.from; g < r.to; g++) {
+        const x = got.glyphs[g]
+        if (!x || !/\S/u.test(x.u ?? '')) continue
+        x0 = Math.min(x0, x.ix0 ?? x.x0); x1 = Math.max(x1, x.ix1 ?? x.x1); y0 = Math.min(y0, x.bottom); y1 = Math.max(y1, x.top)
+      }
+      if (x0 < x1 && y0 < y1) out.push([p, kind, ...solid(view, x0, y0, x1, y1)])
+    }
+    return out
   }
 
   const texts = units.map((u, i) => ({ id: i, ...unitText(u.pieces), ...displayEdges(u) }))
+  const anchorTexts = order ? order.map(i => texts[i]) : texts
   /** a line's column: 0 or 1 on a page of two columns, 2 for a line across both, 0 on a page of one */
   const twoCols = p => marks.columns[p - 1] === 2
   const middle = p => { const v = viewAt(p); return (v[0] + v[2]) / 2 }
@@ -649,8 +680,10 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     return small.size < SCRIPT_SIZE * big.size && Math.abs(small.base - big.base) < SCRIPT(small.size) && small.x0 < big.x1 + big.size && small.x1 > big.x0 - big.size
   }
 
-  // ---------------------------------------------------------------- the marks carried to arXiv's PDF by line
-  let at = null, ours = null, carrier = null, dropped = null, carry = null, markOf = null, anchorMarkOf = null, besideOf = null, matcher = null
+  // ---------------------------------------------------------------- the marks, where they stand on the base page
+  // The base page is the final pass of the compile the marks were read from, every mark where the draft put it (base.mjs
+  // finalCheck): a mark's place is its place on the page, on a page whose ink is read, within its view (carry: no carrying)
+  let at = null, ours = null, dropped = null, carry = null, markOf = null, anchorMarkOf = null
   /** a draft image frame (graphicx's draft, g<n>a, g<n>b, g<n>t: no line of the paper's) whose start mark is `n` (at `a`): its
    *  box, [page, x0, y0, x1, y1], or null */
   const frameAt = (n, a) => {
@@ -659,247 +692,44 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     return b && top && b.page === a.page && top.page === a.page ? [a.page, Math.min(a.x, b.x) - 1, Math.min(a.y, top.y) - 1, Math.max(a.x, b.x, top.x) + 1, Math.max(a.y, top.y) + 1] : null
   }
   const drawnOf = frames => tk => !frames.some(([p, x0, y0, x1, y1]) => tk.page === p && tk.x + tk.w / 2 >= x0 && tk.x + tk.w / 2 <= x1 && tk.y >= y0 && tk.y <= y1)
-  /** the share of the marked original's lines carried: the file refused ('carry') where it is too small, else null */
-  const shareOf = () => {
-    const L = carrier.lines
-    stats.lines.total = L.total
-    stats.lines.carried = L.same + L.moved + L.respaced + L.fuzzy
-    // (for parts, the share is the cut's verdict on each part's pages: `parts`)
-    return L.total > 0 && (parts || stats.lines.carried >= CARRY_MIN * L.total) ? null : 'carry'
+  /** the line check's counts (`lineCheck`: our base page's lines in place on arXiv's PDF), information alone */
+  const noteLines = () => {
+    if (!lineCheck) return
+    stats.lines.total = lineCheck.lines.total
+    stats.lines.carried = lineCheck.lines.placed
   }
-  /** a marked page the carrier is over its bound on (carry.mjs `over`): no ink of arXiv's page of its number */
-  const overFrom = from => { for (const p of carrier.over.slice(from)) { stats.over.push(p); if (p >= 1 && p <= pages) dark.add(p) } }
-  /** the marks carried to arXiv's PDF by line: null, or 'carry' where too few of the marked original's lines are */
+  /** the file's refusal where a line check is given and no unit is laid (no page drawable, or none with a unit on it: 'carry',
+   *  the paper falls back to arXiv's PDF, untranslated), else null */
+  const noneLaid = () => (lineCheck && units.length > 0 && stats.units.located === 0 ? 'carry' : null)
+  /** the marks as they stand */
   function carrying() {
     const t = now()
     at = new Map(marks.marks.map(([n, page, x, y]) => [n, { page, x, y }]))
     const frames = []
     for (const [n, a] of at) { const f = frameAt(n, a); if (f) frames.push(f) }
     ours = tokensOfMarks(marks).filter(drawnOf(frames))
-    carrier = carrierOf(ours, doc)
-    overFrom(0)
-    const refused = shareOf()
+    noteLines()
     stats.ms.carry = now() - t
-    if (refused) return refused
     carryOver()
-    // (the pages whose links the link-anchor locator may read: of the marks, their carrier and arXiv's ink alone)
-    prepareWanted()
-    return null
   }
-  /** a place the carrier gives (carry.mjs carry), kept where it stands on a page of arXiv's with ink, within its view */
+  /** a place of the marks, kept where it stands on a page of the base page's with ink, within its view */
   const onInk = c => {
     if (!c || !Number.isInteger(c.page) || c.page < 1 || c.page > pages || dark.has(c.page) || !inked[c.page]) return null
     const v = viewAt(c.page)
     return c.x >= v[0] - 1 && c.x <= v[2] + 1 && c.y >= v[1] - 1 && c.y <= v[3] + 1 ? c : null
   }
-  /** the carry's functions over the marks as they stand (`at`, `carrier`: the whole marked original's, or what of it is read) */
+  /** the marks' places as they stand (`at`: the whole marked original's, or what of it is read) */
   function carryOver() {
-    unitMarksAnew()
-    /** a position of the marked original on arXiv's PDF: carried by its line, on a page with ink, within its view */
-    carry = (page, x, y) => onInk(carrier.carry(page, x, y))
+    /** a place of the marked original on the base page: the same place, on a page with ink, within its view */
+    carry = (page, x, y) => onInk({ page, x, y })
     dropped = new Set(marks.dropped)
     markOf = name => { const m = dropped.has(name) ? null : at.get(name); return m ? carry(m.page, m.x, m.y) : null }
-    /** a unit's own mark as the anchors take it. The rule today: carried as every mark is, so none onto a page whose ink is not
-     *  whole (past OPS_CAP, given up on, rotated, past the carry's bound): such a page drops its units' marks before anchoring,
-     *  and moves the anchors (the page stream's design, Appendix A Q2). A page-local rule would carry them regardless and leave
-     *  a dark page's units to the rows' own check (a unit with a line on a dark page is not placed): this function alone */
+    /** a unit's own mark as the anchors take it: as every mark is, so none onto a page whose ink is not whole (past OPS_CAP,
+     *  given up on, rotated): such a page drops its units' marks before anchoring */
     anchorMarkOf = markOf
-    /** a mark the carrier does not place (past its line's last word), on the line of its partner, which moved whole: by
-     *  the partner's offset */
-    besideOf = (partner, carried, name) => {
-      const p = at.get(partner), m = dropped.has(name) ? null : at.get(name)
-      if (!carried?.whole || !p || !m || p.page !== m.page || Math.abs(p.y - m.y) > 0.01) return null
-      const x = m.x + carried.x - p.x, y = m.y + carried.y - p.y, v = viewAt(carried.page)
-      return x >= v[0] - 1 && x <= v[2] + 1 && y >= v[1] - 1 && y <= v[3] + 1 ? { page: carried.page, x, y, whole: true } : null
-    }
-    matcher = matcherOf({ ink, carry })
   }
 
-  // ---------------------------------------------------------------- a unit's own mark the line carry leaves (tolerant.mjs)
-  /** a unit's own mark's name: [th]?<id>[se] */
-  const UNIT_MARK = /^[th]?(\d+)([se])$/
-  /** the classes whose rendering prints a reference's name: where the one word of a unit's that may differ stands */
-  const NAMED = new Set(['ref', 'cite', 'eqref'])
-  /** our compile's tokens by page (the whole marked original's, or what of it is read): tolerantOf's */
-  let oursByPage = null
-  /** whether token k of `list` (a page's tokens, in order) begins (`first`) or ends its line: no other within LINE_EM of
-   *  its height before (after) it on its baseline (the other column's lie farther) */
-  const LINE_EM = 1.2
-  const lineEnd = (toks, list, k, first) => {
-    const t = toks[k]
-    for (const j of list) {
-      if (j === k) continue
-      const o = toks[j]
-      if (!o.t || Math.abs(o.y - t.y) > 0.5 * Math.min(o.h, t.h)) continue
-      if (first ? o.x + o.w <= t.x + 0.05 && t.x - (o.x + o.w) < LINE_EM * t.h : o.x >= t.x + t.w - 0.05 && o.x - (t.x + t.w) < LINE_EM * t.h) return false
-    }
-    return true
-  }
-  /** our compile's unit marks by page (tolerantOf's bounds), [name, mark, unit, start], made at the first try and added to
-   *  as the marked original's pages are read (noteMark); `carriedBy` each mark's line carry and the token it stands at on
-   *  arXiv's page, the carrier's verdict on a page final once the page is added (carry.mjs carrier), the page's ink and view
-   *  asked again at each try (onInk) */
-  let unitMarksOn = null, carriedBy = new Map()
-  const indexMark = (n, mk) => {
-    const r = UNIT_MARK.exec(n)
-    if (r && mk) (unitMarksOn.get(mk.page) ?? unitMarksOn.set(mk.page, []).get(mk.page)).push([n, mk, Number(r[1]), r[2] === 's'])
-  }
-  const unitMarksAt = page => {
-    if (!unitMarksOn) { unitMarksOn = new Map(); for (const [n, mk] of at) indexMark(n, mk) }
-    return unitMarksOn.get(page) ?? []
-  }
-  /** a mark read (the marked original a page at a time): into the index, once made */
-  const noteMark = n => { if (unitMarksOn) indexMark(n, at.get(n)) }
-  /** the marks made anew (carryOver: a maker's whole() or byStream(), each from the marks file or the marked stream): the
-   *  index and the carries made again from them, never kept from a run before */
-  function unitMarksAnew() { unitMarksOn = null; carriedBy = new Map() }
-  /** a word of `toks` the text layer gives in parts (anchors.mjs tokenizeDocument: its rests, of no text, right after its
-   *  head), from its part k: [its head, its last part], on k's page */
-  const partsOf = (toks, k) => {
-    let h = k, l = k
-    while (h > 0 && toks[h].t === '' && toks[h - 1].page === toks[k].page) h--
-    while (l + 1 < toks.length && toks[l + 1].page === toks[k].page && toks[l + 1].t === '') l++
-    return [h, l]
-  }
-  /** a mark of `mk`'s, the unit's own (a start mark's where `start`), as tolerantOf's bound: the token it stands at on arXiv's
-   *  page `w` as carried, or null */
-  const boundAt = (mk, start, w) => {
-    let e = carriedBy.get(mk)
-    if (!e) carriedBy.set(mk, (e = { c: carrier.carry(mk.page, mk.x, mk.y), k: undefined }))
-    const c = onInk(e.c)
-    if (!c || c.page !== w) return null
-    if (e.k === undefined) e.k = tokenAt(doc, docByPage, c, start)
-    return e.k
-  }
-  /** the page frame of arXiv's text (anchors.mjs frameOfTokens: its running heads and feet outside it), made once */
-  const inFrame = () => (tokensFrame ??= frameOfTokens(doc))
-  /**
-   * Unit i's own mark `k` (`${i}s` or `${i}e`) that no line carried (its line set in other words on arXiv's page: our
-   * cleveref's "section B" for arXiv's "appendix B", 2609.26457's unit 28; or broken otherwise from such a name on, its
-   * unit 71), placed by the unit's own words beside it, `other` its other mark as carried. Both marks on one page of ours;
-   * the unit's words between them in our compile, the TOLERANT_WORDS at the mark's side (tolerant.mjs wordsAt: one of them
-   * at most standing for another, a reference's name inside a reference's or a citation's rendering, NAMED); arXiv's words
-   * inside the page frame (no running head or foot) on the page the other mark is carried to, from it on (back, a start
-   * mark's) up to the first start of another unit carried there after it (the last end before it), of the units whose marks
-   * stand on the mark's page of ours or the one before; the one place the words stand there, the mark's own token ending its
-   * line in arXiv's where it does in ours. The mark then stands as ours does beside its token, a word the text layer gives in
-   * parts (partsOf) read by its parts: an end mark after the word's last part where ours ends the word before it (its parts
-   * after the mark's own token on the mark's line, begun before it: 1706.03762's T_0, whose subscript is the rest of "t0"),
-   * arXiv's word in as many parts or not; where ours' word runs on past the mark (its rest the next unit's: "3-" and "I"),
-   * after the same part of arXiv's word, in as many parts as ours; a start mark where the unit's first part is the rest of
-   * the word before (2005.14165's poems), before the same part of arXiv's word, in as many parts. At our compile's offset
-   * from that token (besideOf's: a mark after a formula no token holds stands 77.5 pt past 2608.20051's last word "for",
-   * its final period between), arXiv's ink running there from the token, no gap past an em and none on past the mark, where
-   * the offset is past an em; never past the next unit's carried start (before the last end) on its line, nor outside the
-   * page's view. Null, else. A mark a line carries is never one looked for
-   */
-  function tolerantOf(i, k, other) {
-    const end = k.endsWith('e'), name = nameOf.get(k), oName = nameOf.get(`${i}${end ? 's' : 'e'}`)
-    const m = name === undefined || dropped.has(name) ? null : at.get(name), om = oName === undefined ? null : at.get(oName)
-    if (!m || !om || m.page !== om.page || !other || !Number.isInteger(other.page) || dark.has(other.page) || !inked[other.page] || !ink[other.page]) return null
-    // ---- ours: the unit's words between its two marks, the mark's side's
-    const oursOn = oursByPage.get(m.page) ?? []
-    const kM = tokenAt(ours, oursByPage, m, !end), kO = tokenAt(ours, oursByPage, om, end)
-    if (kM === null || kO === null || (end ? kO > kM : kM > kO)) return null
-    const span = oursOn.filter(j => j >= Math.min(kM, kO) && j <= Math.max(kM, kO) && ours[j].t)
-    const side = end ? span.slice(-TOLERANT_WORDS) : span.slice(0, TOLERANT_WORDS)
-    if (!side.length) return null
-    // (ours' word at the mark's own token in parts: the token the mark stands beside, an end mark's the last part set before
-    // it on its line; and whether the word runs on past the mark, an end mark's into the next unit's text, a start mark's
-    // from the unit before)
-    const [hO, lO] = partsOf(ours, kM)
-    let kOwn = kM
-    if (end) while (kOwn < lO && Math.abs(ours[kOwn + 1].y - m.y) < 0.5 * ours[kOwn + 1].h && ours[kOwn + 1].x < m.x + 1) kOwn++
-    const runsOn = end ? kOwn < lO : kM > hO
-    // (the renderings of the unit's references and citations in our compile, between their two marks, by line)
-    const spans = []
-    units[i].pieces.forEach((piece, pk) => {
-      if (!NAMED.has(classOf(piece))) return
-      const a = at.get(`p${i}.${pk}a`), b = at.get(`p${i}.${pk}b`)
-      if (a && b && a.page === m.page && b.page === m.page) spans.push([a, b])
-    })
-    const inRendering = tk => spans.some(([a, b]) => {
-      const onA = Math.abs(tk.y - a.y) < 0.5 * tk.h, onB = Math.abs(tk.y - b.y) < 0.5 * tk.h
-      return (onA && tk.x >= a.x - 0.5 && (!onB || tk.x + tk.w <= b.x + 0.5)) || (!onA && onB && tk.x + tk.w <= b.x + 0.5)
-    })
-    const oursWords = side.map(j => ({ t: ours[j].t, ref: inRendering(ours[j]) }))
-    // ---- arXiv's: the page the other mark is carried to, from it to the next unit's start carried there (an end mark's)
-    const w = other.page, list = byPageOf(w), kOther = tokenAt(doc, docByPage, other, end)
-    if (kOther === null) return null
-    let bound = end ? Infinity : -Infinity
-    for (const p of [m.page - 1, m.page]) {
-      for (const [n, mk, unit, start] of unitMarksAt(p)) {
-        stats.units.tolerantWork++
-        if (unit === i || start !== end || at.get(n) !== mk || dropped.has(n)) continue
-        const kc = boundAt(mk, start, w)
-        if (kc !== null && (end ? kc > kOther && kc < bound : kc < kOther && kc > bound)) bound = kc
-      }
-    }
-    const framed = inFrame()
-    const window = list.filter(j => (end ? j >= kOther && j < bound : j <= kOther && j > bound) && doc[j].t && framed(doc[j]))
-    // (arXiv's token the mark stands beside where it stands at word j: an end mark's, the word's last part, or where ours
-    // runs on, its part as ours', the word in as many parts; a start mark's, the part of the word before as ours', in as many
-    // parts; or null. A part past the bound would be another unit's start, which the text, the same in the two, excludes:
-    // the place is held to the bound on its line below)
-    const ownOf = j => {
-      if (end) {
-        const [hT, lT] = partsOf(doc, j)
-        return !runsOn ? lT : lT - hT === lO - hO ? hT + (kOwn - hO) : null
-      }
-      if (!runsOn) return j
-      if (j < 1 || doc[j - 1].t !== '' || doc[j - 1].page !== w) return null
-      const [hT, lT] = partsOf(doc, j - 1), q = hT + (kM - hO)
-      return lT - hT === lO - hO ? q : null
-    }
-    // (whether its token begins or ends its line, asked of a place the words stand at alone)
-    const theirs = window.map(j => ({
-      t: doc[j].t,
-      get first() { const q = ownOf(j); return q !== null && lineEnd(doc, list, q, true) },
-      get last() { const q = ownOf(j); return q !== null && lineEnd(doc, list, q, false) },
-    }))
-    const found = wordsAt(oursWords, theirs, { end, atLineEnd: lineEnd(ours, oursOn, kOwn, !end) })
-    if (found.length !== 1) return null
-    // ---- the place: beside arXiv's token as ours is beside our own
-    const q = ownOf(window[found[0].at])
-    if (q === null) return null
-    const own = ours[kOwn], t = doc[q], em = t.h
-    const dx = end ? m.x - (own.x + own.w) : own.x - m.x, x = end ? t.x + t.w + dx : t.x - dx, y = t.y + (m.y - own.y)
-    // (an offset past an em, what stood there in ours, a formula, stands there in arXiv's: its ink on the line from the
-    // token to the mark, no gap past an em, and none running on past the mark)
-    if (dx > em) {
-      const P = ink[w], from = end ? t.x + t.w : x, to = end ? x : t.x, on = []
-      for (let g = 0; g < P.n; g++) {
-        if (Math.abs(P.y[g] - t.y) >= 0.6 * em || P.x1[g] <= from - em || P.x0[g] >= to + em) continue
-        if (end ? P.x1[g] > to + 0.5 : P.x0[g] < from - 0.5) return null
-        if (P.x1[g] > from && P.x0[g] < to) on.push(g)
-      }
-      on.sort((a, b) => P.x0[a] - P.x0[b] || a - b)
-      let edge = from, gap = 0
-      for (const g of on) { gap = Math.max(gap, P.x0[g] - edge); edge = Math.max(edge, P.x1[g]) }
-      if (Math.max(gap, to - edge) > em) return null
-    }
-    // (and on no other unit's side of the bound where that stands on its line)
-    const B = Number.isFinite(bound) ? doc[bound] : null
-    if (B && Math.abs(B.y - t.y) < 0.5 * em && (end ? x > B.x + 0.5 : x < B.x + B.w - 0.5)) return null
-    const v = viewAt(w)
-    return x >= v[0] - 1 && x <= v[2] + 1 && y >= v[1] - 1 && y <= v[3] + 1 ? { page: w, x, y } : null
-  }
-  /** unit marks no line carried (`raw`, of the keys `ks`), each by tolerantOf where its other mark was carried: placed into
-   *  `raw` together, so that none is placed by another so placed */
-  const tolerate = (ks, raw) => {
-    const placed = []
-    for (const k of ks) {
-      if (raw.get(k)) continue
-      const i = Number(k.slice(0, -1)), c = raw.get(`${i}${k.endsWith('s') ? 'e' : 's'}`)
-      if (!c) continue
-      stats.units.tolerantTried++
-      const t = tolerantOf(i, k, c)
-      if (t) placed.push([k, t])
-    }
-    for (const [k, t] of placed) { raw.set(k, t); stats.units.tolerant++ }
-  }
-
-  // ---------------------------------------------------------------- the units located on arXiv's tokens
+  // ---------------------------------------------------------------- the units located on the base page's tokens
   let unitMarks = null, nameOf = null, carriedUnit = null, unplaced = null, linesTeX = null, alignTeX = null, anchors = null
   /** each unit's colour rows, [unit, k, 0xRRGGBB] by k rising (the marks file's `colours`: the fill TeX set each colour piece's
    *  run in), the file's `colours` for the units it holds */
@@ -919,7 +749,55 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     for (const [k, m, pos] of startsOn.get(b.page) ?? []) if (Math.abs(m.y - b.y) <= 0.5 && m.x >= b.x - 0.05 && colAt(m) === colAt(b) && (m.x < leadX || (m.x === leadX && pos < leadPos))) { lead = Number(k.slice(0, -1)); leadX = m.x; leadPos = pos }
     return lead
   }
-  /** the units' own marks carried, and the units located on arXiv's tokens under them */
+  /** the word a unit's start mark reaches where it stands at none (boundsFromMarks `reach`): a unit that opens with a formula, a
+   *  dash or a comma has its start mark there, and its first word further on its line. The nearest upright word on the mark's
+   *  baseline, in its column, after it, at any distance: its column bounds it, not a measure of points; or null. A turned line
+   *  (a sideways caption, a \rotatebox's cell) reaches none: its baseline is no horizontal one, and a word at the mark's height
+   *  there is another line's. Its start mark stands on its turned run (turnedAt: on a turned token's box), and the nearest
+   *  upright word at its height may be any line's: 2602.23285v2's sideways cell "Discrete & Continuous" in a table set beside
+   *  a paragraph, whose mark reached the next cell's "ODEBRAIN" and whose end mark's word was the paragraph's, 30 pt left of
+   *  the table, so that the cell took a line of the paragraph's and the paragraph was laid not at all. An end mark that stands
+   *  at a word takes the last word before it on its line at any distance (tokenAtMark); one at none, reachBackIn. `byPage`, the
+   *  base page's tokens by page */
+  const reachIn = byPage => mk => {
+    let best = null
+    const col = colAt(mk)
+    for (const k of byPage.get(mk.page) ?? []) {
+      const t = doc[k]
+      if (turnedAt(t, mk)) return null
+      if (!t.t || !uprightToken(t) || Math.abs(t.y - mk.y) > t.h * 0.4 || columnOf(t.page, t.x, t.x + t.w) !== col) continue
+      if (t.x >= mk.x && (best === null || t.x < doc[best].x)) best = k
+    }
+    return best
+  }
+  /** each unit's pieces' points where they stand on the base page (markOf), [opening, closing] a piece, by its id: the lines its
+   *  anchor owns whatever words its text's match finds there (anchors.mjs withPoints); `only` the unit's index, else every
+   *  unit's */
+  const pointsOfUnits = (only = null) => {
+    const out = new Map()
+    for (let i = only ?? 0; i < (only === null ? units.length : only + 1); i++) {
+      const pairs = []
+      for (const [, a, b] of designedOf(i)) { const pa = markOf(a), pb = markOf(b); if (pa || pb) pairs.push([pa, pb]) }
+      if (pairs.length) out.set(String(i), pairs)
+    }
+    return out
+  }
+  /** the word an end mark that stands at no word on its line reaches back to (boundsFromMarks `reachBack`; its carried word null
+   *  in the marks' own compile: a unit that ends with a `\\}` set alone on its line, or with a display, its end mark on the empty
+   *  line TeX resumes after it): the last upright word before it in its column on its page, above its line, in the document's
+   *  order; null for none, and none on a turned line, as reachIn */
+  const reachBackIn = byPage => mk => {
+    let best = null
+    const col = colAt(mk)
+    for (const k of byPage.get(mk.page) ?? []) {
+      const t = doc[k]
+      if (turnedAt(t, mk)) return null
+      if (!t.t || !uprightToken(t) || t.y - mk.y <= t.h * 0.4 || columnOf(t.page, t.x, t.x + t.w) !== col) continue
+      if (best === null || k > best) best = k
+    }
+    return best
+  }
+  /** the units' own marks where they stand, and the units located on the base page's tokens under them */
   function anchoring() {
     const t = now()
     unitMarks = new Map(); nameOf = new Map(); startsOn = new Map()
@@ -935,54 +813,78 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     const byPage = new Map(), withWords = markWords(ours, unitMarks), raw = new Map()
     doc.forEach((t, k) => (byPage.get(t.page) ?? byPage.set(t.page, []).get(t.page)).push(k))
     for (const [k] of withWords) raw.set(k, anchorMarkOf(nameOf.get(k)))
-    // a unit's mark past its line's last word in the marks file (a heading in small capitals, whose words' rests the
-    // file keeps no box of), on the line of its other mark: by that one's offset
-    for (const [k] of withWords) {
-      if (raw.get(k)) continue
-      const other = `${k.slice(0, -1)}${k.endsWith('s') ? 'e' : 's'}`
-      if (nameOf.has(other)) raw.set(k, besideOf(nameOf.get(other), raw.get(other), nameOf.get(k)))
-    }
-    oursByPage = pageIndex(ours)
-    tolerate([...withWords.keys()], raw)
     for (const [k, m] of withWords) {
       const c = raw.get(k)
       if (c) carriedUnit.set(k, { page: c.page, x: c.x, y: c.y, t: sameWord(doc, byPage, c, k.endsWith('s'), m.t) })
     }
-    const bounds = boundsFromMarks(doc, carriedUnit)
-    // a unit whose own marks were set but not carried (its lines reflowed, or set otherwise on arXiv's), or not on the same
-    // words there, stays the original's: arXiv's text alone would place it, maybe wrongly
+    const bounds = withPoints(doc, boundsFromMarks(doc, carriedUnit, byPage, reachIn(byPage), reachBackIn(byPage), true), pointsOfUnits(), byPage)
+    // a unit whose own marks were set but stand on no page with ink, or not on the same words there, stays the original's:
+    // the text alone would place it, maybe wrongly
     unplaced = new Set()
     for (let i = 0; i < units.length; i++) {
       const own = [`${i}s`, `${i}e`].filter(k => unitMarks.has(k))
       if (own.length && (own.some(k => !carriedUnit.has(k)) || (own.length === 2 && !bounds.has(String(i))))) unplaced.add(i)
     }
     linesTeX = new Map(marks.lines); alignTeX = new Map(marks.align ?? []); coloursBy = coloursOf(marks.colours)
-    anchors = anchorUnits(doc, texts, { bounds, floating: id => FLOATING.has(units[id]?.kind ?? ''), floatMatch, frame: frame ?? pageFrame, forward })
+    anchors = anchorUnits(doc, anchorTexts, { bounds, own: ownOfNames([...at].map(([nm, m]) => [nm, m.page]), units.length), floating: id => FLOATING.has(units[id]?.kind ?? ''), floatMatch, frame: frame ?? pageFrame, forward })
     stats.ms.anchor = now() - t
   }
 
   // ---------------------------------------------------------------- each located unit's lines
   const placed = [], placedById = new Map()
+  /** why each unit not laid stays the original's (file.mjs UNLAID), the first reason a pass gave: the file's `unlaid`. Every
+   *  unit the file does not lay has one (unlaidOf): none is dropped without its reason */
+  const unlaidBy = new Map()
+  const notLaid = (i, code) => { if (!unlaidBy.has(i)) unlaidBy.set(i, code) }
+  /** why a unit with no anchor has none: its own marks unplaced, or no anchor at all */
+  const unanchored = i => notLaid(i, unplaced.has(i) ? 'unplacedMarks' : 'noAnchor')
+  /** the file's `unlaid` rows of units `ids` (rising) the file does not lay (`laid(i)` false): [id, code]; a unit with no
+   *  reason is a defect of the maker's, never a row */
+  const unlaidOf = (ids, laid) => {
+    const out = []
+    for (const i of ids) {
+      if (laid(i)) continue
+      const code = unlaidBy.get(i)
+      if (code === undefined) throw new Error(`unit ${i} is not laid, and no pass said why`)
+      out.push([i, code])
+    }
+    return out
+  }
   /** each unit placed, as it is (the page stream's rule 3 edges, which take its body lines a page at a time) */
   let onPlaced = null
-  /** unit i's lines, of the ink of its anchor's pages, its glyphs taken there (`owner`); none where it has none */
+  /** unit i's lines, of the ink of its anchor's pages, its glyphs taken there (`owner`); none where it has none, and why
+   *  (notLaid) */
   function place(i) {
     const u = units[i], a = anchors.get(i)
     if (a && unplaced.has(i)) stats.units.unplaced++
-    if (!a || unplaced.has(i) || !KIND.has(u.kind) || u.pieces.length > PIECES_MAX) return
+    if (!a || unplaced.has(i)) return unanchored(i)
+    if (!KIND.has(u.kind) || u.pieces.length > PIECES_MAX) return notLaid(i, 'kind')
     const rects = rectsOf(doc, a.tokens)
-    if (!rects.length || rects.length !== a.rects.length || rects.length > LINES_UNIT || rects.some(r => dark.has(r.page) || !inked[r.page])) return
+    if (!rects.length || rects.length !== a.rects.length) return notLaid(i, 'rects')
+    if (rects.length > LINES_UNIT) return notLaid(i, 'linesUnit')
+    if (rects.some(r => dark.has(r.page) || !inked[r.page])) return notLaid(i, 'dark')
     const S = carriedUnit.get(`${i}s`), E = carriedUnit.get(`${i}e`)
     const onRect = (m, r) => m && m.page === r.page && Math.abs(m.y - r.base) < 0.5 * r.h
+    /** the tokens of the unit's own words (its text's, as the match paired them) */
+    const own = new Set(a.pairs?.values() ?? [])
     const rows = []
     for (let j = 0; j < rects.length; j++) {
       const r = rects[j]
       const from = j === 0 && onRect(S, r) ? S.x : null, to = j === rects.length - 1 && onRect(E, r) ? E.x : null
-      const row = lineOf(ink[r.page], r, from, to, i)
-      if (!row || !(r2(row.size) > 0 && row.size <= SIZE_MAX)) { rows.length = 0; break }
+      const row = lineOf(ink[r.page], r, from, to, i, from !== null ? S.y : to !== null ? E.y : null)
+      if (!row || !(r2(row.size) > 0 && row.size <= SIZE_MAX)) {
+        // (where the match paired the unit's words, a line of the anchor's that holds none of them, neither of its own marks, and
+        // no glyph of a line of text (none another unit took) is a formula's row the text layer read as a line of its own between
+        // two of its words — a vector's arrow, a script —, no line of the unit's: the unit is laid on its other lines, the
+        // formula's ink found by its own marks as any placeholder's. One such row left the whole unit the original's:
+        // 2610.22197v1's u75 and u95, two paragraphs over two pages each, 2610.21085v1's u441)
+        if (!row && own.size && from === null && to === null && !r.ks.some(k => own.has(k)) && !takenAt(ink[r.page], r, i)) continue
+        // (a line with no glyph of its own: none there, or another's, which a unit laid before it took)
+        return notLaid(i, !row && takenAt(ink[r.page], r, i) ? 'lineTaken' : 'noLine')
+      }
       rows.push(row)
     }
-    if (!rows.length) return
+    if (!rows.length) return notLaid(i, 'noLine')
     // the anchor's rectangles of one line (its tokens out of order: a script before its base, the line's two parts
     // either side of a formula, 1706.03762's note): one line, wherever the second begins
     // again over the merged rows until none is left to merge: a row may match one only once another merge has made it
@@ -1092,9 +994,9 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
   // ---------------------------------------------------------------- babel's names, by their two marks
   /**
    * Each occurrence of a babel name TeX set (marks.mjs NAMES_TEX: n<occurrence>.<key>.s and .e), located as a unit is, by
-   * its marks carried to arXiv's page and the text between them: both marks carried (a mark past its line's last word on
+   * its marks on the base page and the text between them: both marks on a page with ink (a mark past its line's last word on
    * its partner's line by the partner's offset), on one line; the words our compile sets between them (the marks file's
-   * tokens), arXiv's text layer between the carried ones, and arXiv's glyphs there that no unit holds, the same letters.
+   * tokens), the page's text layer between them, and the page's glyphs there that no unit holds, the same letters.
    * Located after the units' lines, which keep what they hold, and before the labels and the heads, which then never
    * take a name's glyphs (2608's abstract label was IEEEtran's "Abstract—"). Its row: its line box from its glyphs, their
    * size and font, centred where a unit is, in capitals where its glyphs' letters all are and its macro's own text is
@@ -1103,7 +1005,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
    * column, its own box: no room past it is known).
    * A name TeX sets right before a unit on that unit's first line (IEEEtran's "Abstract—Task…", amsthm's "Proof. The…")
    * leads it (RUN_IN, the unit in its row): the unit's start mark is the first after the name's end on that line (in its
-   * column) in our compile, and carried on that line after the name's carried end on arXiv's page. Its joint, what TeX set between the
+   * column) in our compile, and on that line after the name's end on the base page. Its joint, what TeX set between the
    * two (IEEEtran's dash), is the unit's label; its glue, the space after the joint before the unit's text (the unit's
    * carried start less the joint's last advance, none within the carry's 0.05 pt). A figure's or a table's name leading a
    * caption is its label (longtable's, whose captions set no \@captype), the label path's: no row
@@ -1120,16 +1022,15 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     const e = `n${x[1]}.${x[2]}.e`, b = dropped.has(e) ? null : at.get(e)
     if (dropped.has(n) || !b) { why('a mark not set, or set twice'); return }
     if (b.page !== a.page || Math.abs(b.y - a.y) > 0.5 || b.x <= a.x) { why('not on one line'); return }
-    const S0 = markOf(n), E0 = markOf(e)
-    const S = S0 ?? besideOf(e, E0, n), E = E0 ?? besideOf(n, S0, e)
-    if (!S || !E || S.page !== E.page || Math.abs(S.y - E.y) > 1 || E.x <= S.x) { why('not carried'); return }
+    const S = markOf(n), E = markOf(e)
+    if (!S || !E || S.page !== E.page || Math.abs(S.y - E.y) > 1 || E.x <= S.x) { why('not on a page with ink'); return }
     const want = letters(ourWords(a.page, a.x, b.x, a.y))
-    if (!want || letters(theirWords(S.page, S.x, E.x, S.y)) !== want) { why("not arXiv's text there"); return }
+    if (!want || letters(theirWords(S.page, S.x, E.x, S.y)) !== want) { why("not the page's text there"); return }
     const P = ink[S.page]
     const gs = band(P, S.y - SCRIPT(P.most), S.y + SCRIPT(P.most)).filter(g => Math.abs(P.y[g] - S.y) < 0.25 * Math.max(P.size[g], 5) && mid(P, g) >= S.x - 0.05 && mid(P, g) <= E.x + 0.05)
     if (!gs.length || gs.some(g => P.owner[g] !== -1 || P.taken[g])) { why(gs.length ? "its glyphs another's" : 'no glyph'); return }
-    if (letters(gs.slice().sort((g, h) => P.x0[g] - P.x0[h] || g - h).map(g => P.u[g]).join('')) !== want) { why("not arXiv's glyphs there"); return }
-    const row = rowOf(P, gs, S.page, [], S.y)
+    if (letters(gs.slice().sort((g, h) => P.x0[g] - P.x0[h] || g - h).map(g => P.u[g]).join('')) !== want) { why("not the page's glyphs there"); return }
+    let row = rowOf(P, gs, S.page, [], S.y)
     if (!(r2(row.size) > 0 && row.size <= SIZE_MAX)) { why('no size'); return }
     // the unit it leads (leadAt), carried after it on that line
     const lead = leadAt(b)
@@ -1143,10 +1044,25 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       for (const g of band(P, S.y - SCRIPT(P.most), S.y + SCRIPT(P.most))) if (Math.abs(P.y[g] - S.y) < 0.25 * Math.max(P.size[g], 5) && mid(P, g) > E.x && mid(P, g) < L.x) end = Math.max(end, P.x1[g])
       glue = L.x - end > 0.05 ? L.x - end : 0
     }
+    const word = gs.slice()
+    // the counter TeX set after it on its line where it leads no unit, no unit's, in its column (names.mjs counterAfter, the wrap's
+    // rule too, own.mjs): its row's, so that the layer sets it after the name's word, and the line, centred, is centred whole; its
+    // width at the row's end in the row's glue (file.mjs: a name leading no unit has no glue), where the layer splits it off
+    if (lead < 0) {
+      const last = gs.reduce((a, g) => (P.x1[g] > P.x1[a] ? g : a), gs[0])
+      const next = band(P, S.y - SCRIPT(P.most), S.y + SCRIPT(P.most)).filter(g => !gs.includes(g) && /\S/.test(P.u[g] ?? '') && Math.abs(P.y[g] - S.y) < 0.25 * Math.max(P.size[g], 5) && mid(P, g) > P.x1[last]).sort((g, h) => P.x0[g] - P.x0[h] || g - h)
+      const k = counterAfter(P.x1[last], row.size, next.map(g => ({ u: P.u[g], x0: P.x0[g], x1: P.x1[g], size: P.size[g] })))
+      if (k && next.slice(0, k).every(g => P.owner[g] === -1 && !P.taken[g] && columnOf(S.page, P.x0[g], P.x1[g]) === columnOf(S.page, row.x0, row.x1))) {
+        gs.push(...next.slice(0, k))
+        row = rowOf(P, gs, S.page, [], S.y)
+        glue = row.x1 - P.x0[next[0]]
+        stats.names.counters++
+      }
+    }
     // centred as a unit is (its one line's centre its column's, the line short of it)
     const col = columnOf(S.page, row.x0, row.x1), edge = edgesOf(S.page, col)
     const centred = !!edge && Math.abs((row.x0 + row.x1) / 2 - (edge[0] + edge[1]) / 2) <= CENTRE && row.x1 - row.x0 < SHORT * (edge[1] - edge[0])
-    const cased = [...gs.map(g => P.u[g]).join('').normalize('NFKC')].filter(c => c.toUpperCase() !== c.toLowerCase())
+    const cased = [...word.map(g => P.u[g]).join('').normalize('NFKC')].filter(c => c.toUpperCase() !== c.toLowerCase())
     const capitals = cased.length >= 2 && cased.every(c => c === c.toUpperCase()) && marks.marking.names?.[x[2]] === 1
     for (const g of gs) P.owner[g] = NAME_OWNER
     named.push({ occurrence: Number(x[1]), key, row, flags: (centred ? NAME_FLAG.CENTRED : 0) | (capitals ? NAME_FLAG.CAPITALS : 0) | (lead >= 0 ? NAME_FLAG.RUN_IN : 0), lead, glue, column: edge ?? [row.x0, row.x1] })
@@ -1157,10 +1073,14 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
   // own switch it was compiled with)
   const design = new Map()
   {
-    const { units: copies } = layoutMarking(units, marks.marking.classes, { lines: false, switches: marks.marking.switches, inkless: marks.marking.inkless })
+    const { units: copies } = layoutMarking(units, marks.marking.classes, { lines: false, switches: marks.marking.switches, inkless: marks.marking.inkless, complete: marks.marking.complete, apart: marks.marking.apart })
     copies.forEach((c, i) => {
       for (const p of c.pieces) {
-        const m = p.t === 'ph' && /^\\axtpm[am]?\{[pn](\d+)\.(\d+)([ab])\}$/.exec(p.src ?? '')
+        // (a front matter unit's marks robust: \protect before each, marks.mjs layoutMarking)
+        const m = p.t === 'ph' && /^(?:\\protect)?\\axtpm[am]?\{[pn](\d+)\.(\d+)([ab])\}$/.exec(p.src ?? '')
+        // (backref's list: both its marks, which LAYOUT_TEX's hook sets around the list by the name the entry gives it)
+        const named = p.t === 'ph' && /^\\axtbrname\{p(\d+)\.(\d+)\}$/.exec(p.src ?? '')
+        if (named && Number(named[1]) === i) { design.set(`${i}.${named[2]}`, { open: true, close: true }); continue }
         if (!m || Number(m[1]) !== i) continue
         const key = `${i}.${m[2]}`, d = design.get(key) ?? design.set(key, { open: false, close: false }).get(key)
         if (m[3] === 'a') d.open = true; else d.close = true
@@ -1182,121 +1102,6 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     const items = []
     for (let j = 3; j < 3 + 5 * e[2]; j += 5) items.push({ page: e[j], x0: e[j + 1], y: e[j + 2], size: e[j + 3], u: typeof e[j + 4] === 'string' ? e[j + 4] : marks.chars[e[j + 4]] ?? '' })
     return items
-  }
-  /** a piece's links in our compile (the link-anchor locator's): those whose glyphs (page, baseline inside the rectangle,
-   *  origin within the first and last glyph's) are all among its own glyphs, each one's consecutive, none sharing a glyph, of
-   *  the piece's kind (a citation's `cite.<key>` of its keys, a reference's no `cite.`), in the piece's order: { mine: [{ j,
-   *  from, to }] }, or { why } */
-  const oursIn = (items, kind) => {
-    const mine = [], inLink = new Int8Array(items.length)
-    for (const p of new Set(items.map(it => it.page))) {
-      for (const j of ourOnPage.get(p) ?? []) {
-        const L = ourLinks[j], under = []
-        items.forEach((it, q) => { if (it.page === p && it.y > L[3] && it.y < L[5] && it.x0 >= L[6] - 0.01 && it.x0 <= L[7] + 0.01) under.push(q) })
-        if (!under.length) continue
-        if (under.length !== L[8] || under.at(-1) - under[0] + 1 !== under.length || under.some(q => inLink[q])) return { why: 'ours: a link not wholly the piece\'s' }
-        const cite = L[0].startsWith('cite.')
-        if (kind?.kind === 'cite' ? !cite || !kind.keys.includes(L[0].slice(5)) : cite || /^Hfootnote\./.test(L[0])) return { why: 'ours: a link of another kind' }
-        for (const q of under) inLink[q] = 1
-        mine.push({ j, from: under[0], to: under.at(-1) })
-      }
-    }
-    return { mine: mine.sort((a, b) => a.from - b.from) }
-  }
-  /** the glyphs of page ink P under a Link annotation (PDF.js's rule, layer-proto/links.mjs annotsOf: a glyph's advance centre on
-   *  its baseline strictly inside its rectangle or a quad), across; null for none, or past MAX_GLYPHS */
-  const glyphsUnder = (P, raw) => {
-    const near = band(P, raw.rect[1] - 1, raw.rect[3] + 1).filter(g => /\S/u.test(P.u[g]))
-    const { list } = annotsOf([raw], { x: near.map(g => mid(P, g)), y: near.map(g => P.y[g]), ch: near.map(g => P.u[g]), key: near })
-    const e = list[0]
-    return e && !e.unsupported && e.g.key.length ? [...e.g.key].sort((a, b) => P.x0[a] - P.x0[b] || a - b) : null
-  }
-  /**
-   * The pages of arXiv's PDF whose links the locator may read (`wanted`): made of the marks, their carrier and arXiv's ink alone
-   * (never of a pass's state: who owns or took a glyph), so that the same pages are wanted however the passes are run. A unit's
-   * pages are wanted where it has a piece that names a link (marks.mjs linkablePiece) with one of our links wholly among its
-   * own glyphs (oursIn) that the matcher would not find: one of its glyphs carried nowhere, or with no glyph of its character
-   * on arXiv's page within NEAR_X across and NEAR_Y up or down of where it is carried (our compile set other words there).
-   * Its pages: those its own marks and those pieces' points and glyphs are carried to. carrying() starts it (`pending`: each
-   * piece to be judged once the pages its glyphs are carried to are read); readPage judges as pages come (the page stream),
-   * readWanted() at the passes' start once all are (whole(), byTasks()). None where ours has no link: a paper whose references
-   * and citations stand on arXiv's page as our compile set them asks for no page's links
-   */
-  let pending = null
-  const needed = new Set()
-  /** each unit's pieces pending (judge's), and what is told of a unit all of whose pieces are judged (the page stream's) */
-  const pendingOf = new Int32Array(units.length)
-  let onJudged = null
-  function prepareWanted() {
-    wanted = new Set(); pending = []; needed.clear(); pendingOf.fill(0)
-    if (!linking) return
-    units.forEach((u, i) => wantOf(i))
-  }
-  /** unit i's pieces that name a link with one of our links among their own glyphs: pending, or its pages wanted at once (a
-   *  glyph carried nowhere); the stream's for a unit as its own marks and pieces' ink become known, prepareWanted's for each */
-  function wantOf(i) {
-    units[i].pieces.forEach((piece, k) => {
-      if (!linkablePiece(piece)) return
-      const e = ownInk.get(`p${i}.${k}a`)
-      if (!e || e[1] >= OWNED || e[1] === IN_GROUP || !(e[2] > 0)) return
-      const items = itemsOfInk(e)
-      if (!oursIn(items, linkKindOf(piece)).mine?.length) return
-      const cs = items.map(it => carrier.carry(it.page, it.x0, it.y))
-      if (cs.some(c => !c || !Number.isInteger(c.page) || c.page < 1 || c.page > pages)) { need(i); return }
-      pending.push({ i, k, items, cs, upTo: Math.max(...cs.map(c => c.page)) })
-      pendingOf[i]++
-    })
-  }
-  /** unit i's pages wanted: every page from the first to the last its own marks, and its pieces that name a link (their points
-   *  and glyphs), are carried to, so that a page of its lines between them (a unit over three pages or more, its marks on its
-   *  first and last) has its links read too: the order within the unit reads every one of its lines' pages */
-  function need(i) {
-    if (needed.has(i)) return
-    needed.add(i)
-    const [lo, hi] = rangeOf(i)
-    for (let q = lo; q <= hi; q++) wanted.add(q)
-  }
-  /** the pages need(i) would want, [first, last] ([Infinity, -Infinity]: none) */
-  function rangeOf(i) {
-    let lo = Infinity, hi = -Infinity
-    const add = (pg, x, y) => { const c = carriedPage(pg, x, y); if (c !== null) { lo = Math.min(lo, c); hi = Math.max(hi, c) } }
-    for (const end of ['s', 'e']) for (const pre of ['', 't', 'h']) { const nm = `${pre}${i}${end}`, m = dropped.has(nm) ? null : at.get(nm); if (m) add(m.page, m.x, m.y) }
-    units[i].pieces.forEach((piece, k) => {
-      if (!linkablePiece(piece)) return
-      for (const nm of [`p${i}.${k}a`, `p${i}.${k}b`]) { const m = dropped.has(nm) ? null : at.get(nm); if (m) add(m.page, m.x, m.y) }
-      const e = ownInk.get(`p${i}.${k}a`)
-      if (e && e[1] < OWNED && e[1] !== IN_GROUP) for (const it of itemsOfInk(e)) add(it.page, it.x0, it.y)
-    })
-    return [lo, hi]
-  }
-  /** the pieces pending whose glyphs' pages are all read by page `upTo`, judged: a glyph with no glyph of its character near
-   *  where it is carried on arXiv's page (whose ink is read; a dark page's piece is never placed, and wants nothing) */
-  function judge(upTo) {
-    if (!pending) return
-    const nf = s => s.normalize('NFKC').replace(/\s|\p{Variation_Selector}/gu, '')
-    const judged = []
-    pending = pending.filter(x => {
-      if (x.upTo > upTo) return true
-      pendingOf[x.i]--
-      judged.push(x.i)
-      if (needed.has(x.i)) return false
-      const missing = x.items.some((it, j) => {
-        const c = x.cs[j], P = pagesInk[c.page], u = nf(it.u)
-        if (!P || !u) return false
-        for (let g = lowest(P, c.y - NEAR_Y); g < P.n && P.y[g] <= c.y + NEAR_Y; g++) if (Math.abs(P.x0[g] - c.x) <= NEAR_X && (P.u[g] === it.u || nf(P.u[g]) === u)) return false
-        return true
-      })
-      if (missing && x.cs.every(c => pagesInk[c.page])) need(x.i)
-      return false
-    })
-    if (onJudged) for (const i of judged) onJudged(i)
-  }
-  /** every piece judged and the wanted pages' links read (whole() and byTasks(), after carrying(), every page read; the page
-   *  stream judges and reads as its pages are read) */
-  async function readWanted() {
-    judge(Infinity)
-    for (const p of [...(wanted ?? [])].sort((a, b) => a - b)) await readTheirs(p)
-    for (const p of [...heldTheirs.keys()]) dropHeld(p)
   }
   /** unit i's pieces phOf reads the own ink and marks of (a class marked, its macro not one that sets no ink, its opening
    *  mark in the marking's design): [k, its opening mark's name, its closing one's] */
@@ -1330,7 +1135,86 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     if (2 * most <= all) return MIXED_FILL
     return best === 0 || best === NO_FILL ? null : best
   }
-  /** unit i's placeholders, each found on arXiv's page (matched), LOST, EMPTY or JOINED, its rows' ink taken in */
+  /**
+   * A piece's own glyphs (stream order) and rules on the base page, as the marks read them of the same compile: each glyph the
+   * page's glyph of its character whose origin and baseline stand within OWN_TOL of its own, each rule the page's box of its
+   * edges within OWN_TOL, none taken (another piece's own), the nearest of such; taken, { glyphs, boxes } ([page, index], in the
+   * items' order), or { why } with none taken: a page with no ink (dark), or ink of the draft's that the final pass sets
+   * otherwise (a draft figure frame's file name inside the piece). No search, no carrying: the base page is the final pass of
+   * the compile the marks were read from, every mark where it was (base.mjs finalCheck). A draft image frame's outline among its
+   * rules (each inside the frame's box, framesOn: graphicx's draft, which the marks were read from) is that frame's image on the
+   * base page: the page's box of the frame's edges within OWN_TOL, once a frame (an inline \includegraphics, 2610.21924v1's
+   * `\COMPASSicon` in seven captions, LOST with no glyph or rule of the base page's own)
+   */
+  function ownedOn(items, rules) {
+    const glyphs = [], boxes = []
+    const fail = why => {
+      for (const [p, g] of glyphs) ink[p].taken[g] = 0
+      for (const [p, b] of boxes) ink[p].boxTaken[b] = 0
+      return { why }
+    }
+    for (const it of items) {
+      const P = ink[it.page]
+      if (!P) return fail('its page has no ink')
+      const u = NF(it.u)
+      let best = -1, d = Infinity
+      for (let g = lowest(P, it.y - OWN_TOL); g < P.n && P.y[g] <= it.y + OWN_TOL; g++) {
+        const dx = Math.abs(P.x0[g] - it.x0)
+        if (P.taken[g] || dx > OWN_TOL || (P.u[g] !== it.u && NF(P.u[g]) !== u)) continue
+        if (dx + Math.abs(P.y[g] - it.y) < d) { d = dx + Math.abs(P.y[g] - it.y); best = g }
+      }
+      if (best < 0) return fail('a glyph of its own not on the base page')
+      P.taken[best] = 1
+      glyphs.push([it.page, best])
+    }
+    /** the page's box of `r`'s edges within OWN_TOL, none taken, the nearest; -1 for none */
+    const boxAt = (P, r) => {
+      let best = -1, d = Infinity
+      for (let b = 0; b < P.boxes.length; b++) {
+        const B = P.boxes[b]
+        if (P.boxTaken[b]) continue
+        const dd = Math.max(Math.abs(B[0] - r.x0), Math.abs(B[1] - r.y0), Math.abs(B[2] - r.x1), Math.abs(B[3] - r.y1))
+        if (dd <= OWN_TOL && dd < d) { d = dd; best = b }
+      }
+      return best
+    }
+    const frames = []
+    for (const r of rules) {
+      const P = ink[r.page]
+      if (!P) return fail('its page has no ink')
+      // (a rule of the outline stands inside the frame's box but for half its own thickness at its ends)
+      const t = Math.min(r.x1 - r.x0, r.y1 - r.y0) / 2 + OWN_TOL
+      const F = framesOn(r.page).find(f => r.x0 >= f.x0 - t && r.x1 <= f.x1 + t && r.y0 >= f.y0 - t && r.y1 <= f.y1 + t)
+      if (F) { if (!frames.includes(F)) frames.push(F); continue }
+      const best = boxAt(P, r)
+      if (best < 0) return fail('a rule of its own not on the base page')
+      P.boxTaken[best] = 1
+      boxes.push([r.page, best])
+    }
+    for (const F of frames) {
+      const P = ink[F.page], best = boxAt(P, F)
+      if (best < 0) return fail('a picture of its own not on the base page')
+      P.boxTaken[best] = 1
+      boxes.push([F.page, best])
+    }
+    return { glyphs, boxes }
+  }
+  /** the draft image frames of page p ({ page, x0, y0, x1, y1 }: g<n>a and g<n>b on its baseline, g<n>t at its top right,
+   *  pipeline/live.mjs DRAFT), as the marks stand once the page is read; made once a page */
+  const framesOf = new Map()
+  const framesOn = p => {
+    let out = framesOf.get(p)
+    if (out) return out
+    out = []
+    for (const [n, a] of at) {
+      const g = a.page === p ? /^g(\d+)a$/.exec(n) : null
+      const b = g && at.get(`g${g[1]}b`), t = g && at.get(`g${g[1]}t`)
+      if (b && t && b.page === p && t.page === p) out.push({ page: p, x0: Math.min(a.x, b.x), y0: Math.min(a.y, b.y), x1: Math.max(a.x, b.x, t.x), y1: Math.max(a.y, b.y, t.y) })
+    }
+    framesOf.set(p, out)
+    return out
+  }
+  /** unit i's placeholders, each found on the base page (its own ink there), LOST, EMPTY or JOINED, its rows' ink taken in */
   function phOf(one) {
     const { id: i, u, a, rows } = one
     /** whether a glyph is a letter of a word of the unit's text, as the anchor paired the word: running text, never a
@@ -1418,246 +1302,6 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       for (const r of [...rows, ...wrapped.map(w => w.row)]) if (r !== prev && r.page === part.page && columnOf(r.page, r.x0, r.x1) === col && r.base > row.base - 0.5 * size && r.base < prev.base) return null
       return row
     }
-    /** the glyphs of the unit's pieces found so far, by page: exactly matched, as the words the anchor paired are */
-    const foundGs = new Set()
-    /**
-     * The link-anchor locator: a reference's or a citation's own glyphs the matcher did not all find on arXiv's page (our
-     * compile set other words: cleveref's "Appendix C" where arXiv's set "Section C"), placed by its links. Its links in our
-     * compile are those whose glyphs are all among its own; each is paired with arXiv's by its destination's name and rank
-     * (the r-th of that name on arXiv's pages up to the unit's last line's, every page before it read), else, where those
-     * pages hold none of that name (hyperref named an equation otherwise), by its family's name and rank, the partner's name
-     * none of ours. The partners' glyphs (PDF.js's rule, links.mjs annotsOf) are the anchor: all on one line of the unit, left
-     * to right, their text ours (or ours after one reference word each), exactly our characters between them and after the
-     * last; before the first, from the last exactly matched glyph on the line's baseline (a letter or digit of a word the
-     * anchor paired, a found piece's) or the line's start: the last characters of our text before the piece (the anchor need
-     * not have paired them), then the reference's word, ours or one reference word (rules/reference-words.mjs) where ours is one (never a word of our
-     * text), at most PREFIX_EM of its size wide and GAP_EM from the link, then exactly our characters. Every glyph of the
-     * run on that line's baseline and none off it inside the run, the unit's or no unit's, taken by no piece
-     * (the matcher's own partial take of this piece, `took`, set aside), no letter or digit of a paired word. Its glyphs in x order
-     * (taken by phOf once the piece is found on its line), or null (LOST, as before; `stats.links.why`): no glyph's state
-     * changed
-     */
-    /** the unit's links in our compile, in the source's order: those wholly among the own glyphs of its pieces that name a link
-     *  (oursIn), indices of ourLinks; made once, at the locator's first call on the unit */
-    let unitOurs = null
-    const oursOfUnit = () => {
-      if (unitOurs) return unitOurs
-      unitOurs = []
-      u.pieces.forEach((p, k) => {
-        if (!linkablePiece(p)) return
-        const e = ownInk.get(`p${i}.${k}a`)
-        if (e && e[1] < OWNED && e[1] !== IN_GROUP && e[2] > 0) for (const m of oursIn(itemsOfInk(e), linkKindOf(p)).mine ?? []) unitOurs.push(m.j)
-      })
-      return unitOurs
-    }
-    /** the unit's links on arXiv's page: each Link annotation of the pages of its lines whose glyphs (PDF.js's rule) stand on one
-     *  line of the unit, by line then across, with its glyphs; null where a page of its lines has no links read */
-    const theirsOfUnit = () => {
-      const out = []
-      for (const q of new Set(rows.map(r => r.page))) {
-        const P = ink[q]
-        if (!P || !Array.isArray(theirLinks[q])) return null
-        for (const a of theirLinks[q]) {
-          const gl = glyphsUnder(P, a.raw)
-          if (!gl) continue
-          let gx0 = Infinity, gx1 = -Infinity
-          for (const g of gl) { gx0 = Math.min(gx0, P.x0[g]); gx1 = Math.max(gx1, P.x1[g]) }
-          const col = columnOf(q, gx0, gx1)
-          const on = rows.flatMap((r, j) => (r.page === q && gl.every(g => Math.abs(P.y[g] - r.base) <= PART_ON * r.size) && (columnOf(q, r.x0, r.x1) === col || columnOf(q, r.x0, r.x1) === 2) ? [j] : []))
-          if (on.length === 1) out.push({ a, q, row: on[0], x: P.x0[gl[0]], gl })
-        }
-      }
-      return out.sort((x, y) => x.row - y.row || x.x - y.x)
-    }
-    /**
-     * The link-anchor locator: a reference's or a citation's own glyphs the matcher did not all find on arXiv's page (our
-     * compile set other words: cleveref's "Appendix C" where arXiv's set "Section C"), placed by its links. Its links in our
-     * compile are those whose glyphs are all among its own (oursIn); each is paired with arXiv's by its order within the unit:
-     * the r-th link of its destination among the unit's in our compile (oursOfUnit) with the r-th of that name among the
-     * links on the unit's lines on arXiv's page (theirsOfUnit), else, where those hold none of that name (hyperref named an
-     * equation otherwise), the r-th of its family's (its name before the first '.'), the partner's name none of ours. The
-     * partners' glyphs are the anchor: all on one line of the unit, left to right, their text ours (or ours after one reference
-     * word each), exactly our characters between them and after the last; before the first, from the last exactly matched
-     * glyph on the line's baseline (a letter or digit of a word the anchor paired, a found piece's) or the line's start: the
-     * last characters of our text before the piece (the anchor need not have paired them), then the reference's word, ours or
-     * one reference word (rules/reference-words.mjs) where ours is one (never a word of our text), at most PREFIX_EM of its size wide and GAP_EM from the
-     * link, then exactly our characters. Every glyph of the run on that line's baseline and none off it inside the run, the
-     * unit's or no unit's, taken by no piece (the matcher's own partial take of this piece, `took`, set aside), no letter or
-     * digit of a paired word. Its glyphs in x order (taken by phOf once the piece is found on its line), or null (LOST, as
-     * before; `stats.links.why`): no glyph's state changed. The links of the unit's pages are read before its passes run where
-     * the locator may want them (prepareWanted, judge); a page of its lines whose links were not read is no partner's
-     */
-    const linked = (k, piece, items, took) => {
-      stats.links.tried++
-      const no = why => { stats.links.why[why] = (stats.links.why[why] ?? 0) + 1; return null }
-      const norm = s => s.normalize('NFKC').replace(/\s/gu, '')
-      // ---- 1. ours: the links whose glyphs are all the piece's own, consecutive, none shared
-      const own = oursIn(items, linkKindOf(piece))
-      if (own.why) return no(own.why)
-      const mine = own.mine
-      if (!mine.length) return no('ours: no link')
-      if (mine.length > LINKS_PIECE) return no('ours: too many links')
-      const charsOfItems = (a, b) => norm(items.slice(a, b).map(it => it.u).join(''))
-      const prefix = charsOfItems(0, mine[0].from), suffix = charsOfItems(mine.at(-1).to + 1, items.length)
-      if (suffix.length > SUFFIX_MAX) return no('suffix: too long')
-      // ---- 2. each one's partner on the unit's lines on arXiv's page, by its order within the unit: of its name, else its family
-      const theirs = theirsOfUnit()
-      if (!theirs) return no('pair: a page of the unit not read')
-      const ours = oursOfUnit()
-      const partnerOf = j => {
-        const D = ourLinks[j][0], before = ours.slice(0, ours.indexOf(j))
-        const named = theirs.filter(t => t.a.dest === D)
-        if (named.length) return named[before.filter(x => ourLinks[x][0] === D).length] ?? null
-        if (D.startsWith('cite.')) return null
-        const F = familyOf(D), c = theirs.filter(t => familyOf(t.a.dest) === F)[before.filter(x => familyOf(ourLinks[x][0]) === F).length]
-        return c && !ourDests.has(c.a.dest) ? c : null
-      }
-      const partners = mine.map(m => (ours.includes(m.j) ? partnerOf(m.j) : null))
-      if (partners.some(c => !c)) return no('pair: no partner')
-      const q = partners[0].q
-      if (partners.some(c => c.row !== partners[0].row)) return no('link: not on one line of the unit')
-      const P = ink[q]
-      /** a letter or a digit of a word of the unit's text, as the anchor paired the word (inWord's, digits too) */
-      const ofWord = g => {
-        const m = mid(P, g), c = charsOf(P.u[g])
-        return /[\p{L}\p{N}]/u.test(c) && (paired.get(q) ?? []).some(t => m >= t.x && m <= t.x + t.w && Math.abs(P.y[g] - t.y) < 0.5 * t.h && t.t.includes(c))
-      }
-      // (set aside: the glyphs the matcher took of this piece)
-      const back = took.filter(([p, g]) => ink[p]?.taken[g])
-      for (const [p, g] of back) ink[p].taken[g] = 0
-      try {
-        const free = g => (P.owner[g] === -1 || P.owner[g] === i) && !P.taken[g] && !ofWord(g)
-        // ---- 3. the partners' glyphs, on one line of the unit
-        const runs = partners.map(c => c.gl)
-        const all = runs.flat()
-        const r = rows[partners[0].row]
-        if (!all.every(free)) return no('link: a glyph not free')
-        const reWord = s => { for (let n = Math.min(s.length, 16); n >= 2; n--) if (isReferenceWord(s.slice(0, n))) return s.slice(n); return null }
-        const sameText = (ours, theirs) => ours === theirs || (reWord(ours) !== null && reWord(ours) !== '' && reWord(ours) === reWord(theirs))
-        for (let m = 0; m < runs.length; m++) if (!sameText(norm(ourLinks[mine[m].j][9]), norm(runs[m].map(g => P.u[g]).join('')))) return no('link: its text not ours')
-        // ---- 4. in our order, left to right, our gaps' characters between them; the run's glyphs on the line's baseline
-        const [cx0, cx1] = sideOf(q, columnOf(q, r.x0, r.x1)), size = r.size
-        const window = band(P, r.base - SCRIPT(P.most), r.base + SCRIPT(P.most)).filter(g => Math.abs(P.y[g] - r.base) < SCRIPT(P.size[g]) && /\S/u.test(P.u[g]) && mid(P, g) >= cx0 - 1 && mid(P, g) <= cx1 + 1).sort((a, b) => P.x0[a] - P.x0[b] || a - b)
-        const onLine = window.filter(g => Math.abs(P.y[g] - r.base) <= PART_ON * size)
-        const between = (xa, xb) => onLine.filter(g => mid(P, g) > xa && mid(P, g) < xb)
-        const gaps = []
-        for (let m = 1; m < runs.length; m++) {
-          const a = runs[m - 1].at(-1), b = runs[m][0]
-          if (P.x0[b] < P.x1[a] - 0.05) return no('order: links not left to right')
-          const gs = between(mid(P, a), mid(P, b)).filter(g => !runs[m - 1].includes(g) && !runs[m].includes(g))
-          if (norm(gs.map(g => P.u[g]).join('')) !== charsOfItems(mine[m - 1].to + 1, mine[m].from)) return no('order: a gap not ours')
-          gaps.push(...gs)
-        }
-        // ---- 5. before the first link, from the last exactly matched glyph on the line (or its start): our text's last
-        // characters, then the reference's word (ours, or a reference word for ours), then exactly our characters after it
-        const first = runs[0][0]
-        const before = onLine.filter(g => mid(P, g) < mid(P, first) && !runs[0].includes(g))
-        let lx = -Infinity
-        for (const g of before) if (foundGs.has(`${q}|${g}`) || ofWord(g)) lx = Math.max(lx, P.x1[g])
-        const lead = before.filter(g => mid(P, g) > lx), chars = gs => norm(gs.map(g => P.u[g]).join(''))
-        const w = /^(\p{L}+\.?)?(.*)$/su.exec(prefix), ownWord = w[1] ?? '', rest = w[2]
-        let n = lead.length, got = ''
-        while (n > 0 && got.length < rest.length) got = norm(P.u[lead[--n]]) + got
-        if (got !== rest) return no('prefix: its rest not ours')
-        let m = n
-        if (ownWord) {
-          if (!isReferenceWord(ownWord)) return no('prefix: ours no reference word')
-          // its letters back to a word's gap (a stop after them its own), right before the rest
-          if (m > 0 && norm(P.u[lead[m - 1]]) === '.') m--
-          while (m > 0 && /^\p{L}+$/u.test(norm(P.u[lead[m - 1]])) && (m === n || P.x0[lead[m]] - P.x1[lead[m - 1]] < TEXT_SPACE * size)) m--
-        }
-        const text = lead.slice(0, m), word = lead.slice(m, n), theirs = chars(word)
-        // (our text right before the piece: its text pieces and text symbols back to the piece before them, as TeX sets them)
-        let T = ''
-        for (let j = k - 1; j >= 0; j--) {
-          const p = u.pieces[j], sym = p.t === 'ph' && classOf(p) === 'macro' ? symbolText(p.src) : null
-          if (p.t === 'text') T = shownText(p) + T
-          else if (sym !== null) T = sym + T
-          else break
-        }
-        T = norm(asSet(T))
-        if (!T.endsWith(chars(text)) || text.some(g => P.owner[g] !== -1 && P.owner[g] !== i)) return no('prefix: not our text before it')
-        if (ownWord) {
-          if (!word.length || !/^\p{L}+\.?$/u.test(theirs) || (theirs !== ownWord && !isReferenceWord(theirs))) return no('prefix: theirs no reference word')
-          // (a word of our own text before the piece is never its rendering)
-          if (T.endsWith(chars(text) + theirs)) return no('prefix: a word of our text')
-          if (P.x1[word.at(-1)] - P.x0[word[0]] > PREFIX_EM * size) return no('prefix: too wide')
-          if (P.x0[lead[n] ?? first] - P.x1[word.at(-1)] > GAP_EM * size) return no('prefix: too far from the link')
-          // a word apart from what stands before it: a letter or a digit glued to it is of its word
-          const left = text.at(-1)
-          if (left !== undefined ? /[\p{L}\p{N}]/u.test(norm(P.u[left])) && P.x0[word[0]] - P.x1[left] < TEXT_SPACE * size : Number.isFinite(lx) && P.x0[word[0]] - lx < TEXT_SPACE * size) return no('prefix: no word apart')
-        }
-        // ---- 6. after the last link: exactly our characters, glued
-        const tail = []
-        if (suffix) {
-          const lastG = runs.at(-1).at(-1)
-          let got = '', edge = P.x1[lastG]
-          for (const g of onLine) {
-            if (got.length >= suffix.length) break
-            if (mid(P, g) <= mid(P, lastG) || runs.at(-1).includes(g)) continue
-            if (P.x0[g] - edge > GAP_EM * size) break
-            got += norm(P.u[g]); tail.push(g); edge = Math.max(edge, P.x1[g])
-          }
-          if (got !== suffix) return no('suffix: not ours')
-        }
-        // ---- 7. every glyph of the run free, and none off the line's baseline inside it (a script it would crop)
-        const run = [...lead.slice(m), ...all, ...gaps, ...tail]
-        if (new Set(run).size !== run.length || !run.every(free)) return no('run: a glyph not free')
-        let rx0 = Infinity, rx1 = -Infinity
-        for (const g of run) { rx0 = Math.min(rx0, P.x0[g]); rx1 = Math.max(rx1, P.x1[g]) }
-        if (window.some(g => !run.includes(g) && mid(P, g) > rx0 && mid(P, g) < rx1)) return no('run: a glyph off the line inside it')
-        // (taken once the piece is found on its line: phOf)
-        return run.sort((a, b) => P.x0[a] - P.x0[b] || a - b).map(g => [q, g])
-      } finally {
-        for (const [p, g] of back) ink[p].taken[g] = 1
-      }
-    }
-    /**
-     * A text piece (rules/text-piece.mjs) the matcher did not find, by its own characters on the unit's lines (the tolerant
-     * match): TeX broke it over two lines in one PDF and set it on one in the other (2609.26457's \texttt{gemini 3 flash},
-     * which our compile breaks after "gemini"), so that no carry puts its glyphs where arXiv's stand. Its characters
-     * (`items`', NFKC, white space aside) are one run of arXiv's glyphs on the unit's lines, in each line's x order and
-     * from one line's end on to the next line's start at most once, every glyph no other unit's and no other piece's (the
-     * matcher's own partial take of this piece set aside, then given back), after every glyph of the unit's pieces found
-     * before it (`k`'s: in the source's order); the one such run, its glyphs (arXiv's, never one made up), or null where
-     * there is none or more than one
-     */
-    const textRunOf = (k, items, took) => {
-      const target = NF(items.map(it => it.u).join(''))
-      if (!target) return null
-      const back = took.filter(([p, g]) => ink[p]?.taken[g])
-      for (const [p, g] of back) ink[p].taken[g] = 0
-      try {
-        const seq = []
-        rows.forEach((r, line) => {
-          const P = ink[r.page]
-          for (const g of [...new Set([...r.gl, ...(r.extra ?? [])])].sort((a, b) => P.x0[a] - P.x0[b] || a - b)) {
-            seq.push({ p: r.page, g, s: NF(P.u[g]), free: (P.owner[g] === -1 || P.owner[g] === i) && !P.taken[g], line })
-          }
-        })
-        // (after the unit's pieces found before it)
-        const before = new Set()
-        for (let q = 0; q < k; q++) for (const [p, g] of matchedBy.get(`${i}.${q}`) ?? []) before.add(`${p}|${g}`)
-        let after = -1
-        seq.forEach((e, n) => { if (before.has(`${e.p}|${e.g}`)) after = n })
-        const runs = []
-        for (let from = after + 1; from < seq.length && runs.length < 2; from++) {
-          if (!seq[from].s || !target.startsWith(seq[from].s)) continue
-          let got = '', to = from, breaks = 0
-          while (to < seq.length && got.length < target.length) {
-            const e = seq[to]
-            if (!e.free || (to > from && e.line !== seq[to - 1].line && ++breaks > 1)) break
-            if (e.s && !target.startsWith(got + e.s)) break
-            got += e.s
-            to++
-          }
-          if (got === target) runs.push(seq.slice(from, to).filter(e => e.s).map(e => [e.p, e.g]))
-        }
-        return runs.length === 1 ? runs[0] : null
-      } finally {
-        for (const [p, g] of back) ink[p].taken[g] = 1
-      }
-    }
     const head = headEnd(u.pieces, 0), last = u.pieces.findLastIndex(p => p.t === 'text' && /[^ \t\r\n]/.test(p.s ?? ''))
     /** whether the last visible piece is a display found, or one JOINED to a display found (a later display of the same
      *  group, stream.mjs, may then be JOINED); text and any other piece end the group */
@@ -1665,10 +1309,14 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     const entries = ph.length
     for (let k = 0; k < u.pieces.length; k++) {
       // every visible piece has its row, found, LOST or EMPTY: no row is a piece that draws nothing (an invisible one, a
-      // group's open or close), as the layer reads the file
+      // group's open or close), as the layer reads the file. A paper's macro TeX said sets no ink (marking.inkless) is EMPTY: the
+      // layer reads a macro whose argument holds letters as a formula ('other', layer1.mjs phClass), which it draws only from a
+      // row, so with none such a unit was the original's (`\\natexlab{a}` where the class sets no label, `\\papertext{…}`: 18
+      // entries and 4 paragraphs of the release sweep's papers); EMPTY is TeX's no ink for every class alike
       const piece = u.pieces[k], cls = classOf(piece)
       if (piece.t === 'text' && /\S/.test(piece.s ?? '')) groupFound = false
-      if (!cls || (cls === 'macro' && inkless.has(piece.src))) continue
+      if (!cls) continue
+      if (cls === 'macro' && inkless.has(piece.src)) { ph.push({ row: [i, k, PH_KIND.get('macro'), PH_FLAG.EMPTY], cls, state: 'empty' }); continue }
       const wasFound = groupFound
       groupFound = false
       const kind = PH_KIND.get(cls) ?? PH_KIND.get('other')
@@ -1681,18 +1329,29 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
         if (cls === 'macro' && last >= 0 && k > last) (one.tails ??= []).push({ entry, k, src: piece.src })
       }
       // a piece the marked original gives no mark (at a unit's head, after a prefix or a control sequence's end, glued
-      // to a word): its rendering is not known
-      if (!d?.open) {
-        // a LaTeX text symbol (marks.mjs TEXT_SYMBOLS) is drawn as its character where the unit's lines show it (below)
-        const sym = cls === 'macro' ? symbolText(piece.src) : null
+      // to a word): its rendering is not known; but one the maker's reading parted from the paper's macro before it, whose
+      // text is known (stream.mjs ownedOf, marks.mjs followsOf `split`: a footnote's call after \\xspace), by its own ink
+      if (!d?.open && !ownInk.has(`${cls === 'footnote' ? 'n' : 'p'}${i}.${k}a`)) {
+        // a LaTeX text symbol (marks.mjs TEXT_SYMBOLS) is drawn as its character where the unit's lines show it (below); and so is a
+        // paper's macro TeX showed sets one mark of punctuation alone (the probe's text): apacite's \\BPBI, ".~" between two
+        // initials and glued to the first (`J\\BPBI E.`), whose entries stayed English, 39 of two papers'
+        const said = cls === 'macro' ? shown.get(piece.src) : undefined
+        const sym = cls === 'macro' ? symbolText(piece.src) ?? (typeof said === 'string' && PUNCT_TEXT.test(said) ? said : null) : null
         const entry = { row: [i, k, kind, PH_FLAG.LOST], cls, state: 'unmarked' }
         ph.push(entry)
         if (sym !== null) (one.symbols ??= []).push({ entry, sym })
-        else if (cls === 'macro' && k < head) (one.heads ??= []).push({ entry, k, src: piece.src })
-        else if (cls === 'macro' && last >= 0 && k > last) (one.tails ??= []).push({ entry, k, src: piece.src })
+        // (a head: a paper's macro, or inline code — a cell's \\texttt{max\\_tokens}, which the probe asks about too: marks.mjs
+        // leadSamples)
+        else if ((cls === 'macro' || cls === 'code') && k < head) (one.heads ??= []).push({ entry, k, src: piece.src, cls, head })
+        // (a tail: a paper's macro, or a footnote's call after the unit's last word, which TeX gave no mark — a mark around
+        // \\footnotemark moves the word after it, the space factor it reads: 2610.35877v1's abstract, `step.\\footnotemark`)
+        else if ((cls === 'macro' || (cls === 'footnote' && piece.t === 'ph')) && last >= 0 && k > last) (one.tails ??= []).push({ entry, k, src: piece.src, cls })
         continue
       }
       const prefix = cls === 'footnote' ? 'n' : 'p', name = `${prefix}${i}.${k}a`, e = ownInk.get(name)
+      // (backref's list with no point: TeX set no list there — the package not loaded, or this entry not one it prints a list
+      // after —, nothing of it on the page: EMPTY, as the entry was before it had the piece)
+      if (!e && backrefPiece(piece)) { ph.push({ row: [i, k, kind, PH_FLAG.EMPTY], cls, state: 'empty' }); continue }
       // its own ink by its points in the marked compile's content stream (layout/stream.mjs), or why none is known
       if (!e) { lost('no own ink known'); continue }
       // a later display of a display group, which TeX gives no point (the empty paragraph after a display): its ink is the
@@ -1711,26 +1370,14 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       // EMPTY only where both its points hold nothing between them: TeX set nothing there, and the piece draws nothing. One
       // whose closing point was never read (an open ownership) that holds nothing says only that nothing stands before the
       // next point or the text after it, which may be at its own glyph (2610.19159: a \textquotedbl{} whose opening point
-      // shares its glyph with another piece's, set late, the quote on arXiv's line): its ink is not known, LOST
+      // shares its glyph with another piece's, set late, the quote on the page's line): its ink is not known, LOST
       if (!items.length && !rules.length) {
         if (e[1] !== CLOSED) { lost('open, nothing owned'); continue }
         ph.push({ row: [i, k, kind, flags | PH_FLAG.EMPTY], cls, state: 'empty' })
         continue
       }
-      // every owned glyph and rule carried to arXiv's PDF and matched there, or the piece is LOST
-      let got = matcher.match(items, rules, at.get(name) ?? null, at.get(`${prefix}${i}.${k}b`) ?? null)
-      // (a reference or a citation not found by its own glyphs: by its links, the link-anchor locator, where ours has any)
-      let byLinks = false
-      if (got.why && got.took && linking && !rules.length && linkablePiece(piece)) {
-        const run = linked(k, piece, items, got.took)
-        if (run) { got = { glyphs: run, boxes: [] }; byLinks = true }
-      }
-      // (a text piece set over two lines in one PDF and on one in the other: by its characters on the unit's lines)
-      let byText = false
-      if (got.why && got.took && !rules.length && textPieceOf(piece.src)) {
-        const run = textRunOf(k, items, got.took)
-        if (run) { got = { glyphs: run, boxes: [] }; byText = true; stats.ph.textRuns++ }
-      }
+      // every owned glyph and rule the base page's at its own place (ownedOn: no matching), or the piece is LOST
+      const got = ownedOn(items, rules)
       if (got.why) { lost(got.why); continue }
       const gs = got.glyphs, bs = got.boxes
       let segs = []
@@ -1739,35 +1386,77 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
         if (!segs) { lost('more segments than a display may have'); continue }
         if (segs.numbered) flags |= PH_FLAG.NUMBERED
       } else {
-        // one segment a line of the unit: the glyphs in stream order in parts (a line's end parts them), each part on the
+        const closeName = `${prefix}${i}.${k}b`, openAt = markOf(name), closeAt = markOf(closeName)
+        const on = (M, j) => !!M && M.page === rows[j].page && Math.abs(M.y - rows[j].base) < 0.5 * rows[j].size
+        // both its marks on one line of the unit: TeX broke no line between them, so the whole piece is in that line's box, one
+        // segment of it whatever its glyphs' baselines (a fraction's numerator and denominator, a limit, a binomial's or a big
+        // delimiter's origin far off the baseline, the rows of an inline `cases`). The base page is the final pass of the compile
+        // the marks were read from, every mark where it was (OWN_TOL), so no other line holds any of it. That line is the unit's
+        // row on both marks' baseline that holds them across (a line of the other column on the same baseline, where a unit runs
+        // through both, is none), where it is the only row there that it meets across. Two rows on one baseline that meet are one
+        // line of TeX's the anchor gave as two rectangles (a formula's scripts out of the text layer's order: 2610.10492v1's
+        // captions), the maker taking one as the line and holding the other; there the piece keeps the reading below, so that no
+        // such pair is laid otherwise. Before, the glyphs were always parted where they ran back left and down as at a line's
+        // end (BREAK_X, BREAK_Y), a fraction's denominator under a numerator wider than BREAK_X among them, each part on the line
+        // its largest glyphs' baselines stand on (rowOfPart), and a part whose largest glyph is a big delimiter, its origin 14 pt
+        // over the baseline, stood on none (2610.21026v1's `$\O\left(\frac{…}{…}\right)$`: six units of two papers English), or
+        // on the line above (2610.17024v1's `$\sum_{r\le2p-m_e}\binom{m_i+2p}{r}$`, its paragraph's first line drawn short)
+        const holds = (M, r) => M.x >= r.x0 - r.size && M.x <= r.x1 + r.size
+        const meets = (r, s) => r.x0 <= s.x1 + s.size && r.x1 >= s.x0 - s.size
+        const line = openAt && closeAt ? rows.findIndex((r, j) => on(openAt, j) && on(closeAt, j) && holds(openAt, r) && holds(closeAt, r)) : -1
+        const oneLine = line >= 0 && !rows.some((r, j) => j !== line && on(openAt, j) && meets(r, rows[line])) && gs.every(([p]) => p === rows[line].page) && bs.every(([p]) => p === rows[line].page)
+        // (else: a part the part rule puts on no line goes to the line both its marks stand on where its glyphs stand within the
+        // line's size of its baseline)
+        const both = openAt && closeAt ? rows.findIndex((_, j) => on(openAt, j) && on(closeAt, j)) : -1
+        const onLine = part => both >= 0 && part.page === rows[both].page && part.gs.every(g => Math.abs(ink[part.page].y[g] - rows[both].base) <= rows[both].size)
+        // else one segment a line of the unit: the glyphs in stream order in parts (a line's end parts them), each part on the
         // line its baseline stands on, each rule with the part of the glyph nearest it
         const parts = []
-        for (const [p, g] of gs) {
-          const cur = parts.at(-1), P = ink[p], last = cur?.gs.at(-1)
-          const dx = cur ? P.x0[g] - P.x0[last] : 0, dy = cur ? P.y[g] - P.y[last] : 0
-          if (!cur || cur.page !== p || (dx < -BREAK_X && dy < -BREAK_Y) || dy > BREAK_UP * Math.max(P.size[g], P.size[last]) || Math.abs(dx) > BREAK_FAR) parts.push({ page: p, gs: [g] })
-          else cur.gs.push(g)
+        if (oneLine) { if (gs.length) parts.push({ page: rows[line].page, gs: gs.map(([, g]) => g) }) }
+        else {
+          for (const [p, g] of gs) {
+            const cur = parts.at(-1), P = ink[p], last = cur?.gs.at(-1)
+            const dx = cur ? P.x0[g] - P.x0[last] : 0, dy = cur ? P.y[g] - P.y[last] : 0
+            if (!cur || cur.page !== p || (dx < -BREAK_X && dy < -BREAK_Y) || dy > BREAK_UP * Math.max(P.size[g], P.size[last]) || Math.abs(dx) > BREAK_FAR) parts.push({ page: p, gs: [g] })
+            else cur.gs.push(g)
+          }
         }
         // (each part's line by the line itself, not its index: a line the piece's run wraps onto enters the unit's lines
         // once the piece is found, after the line before it)
         const byRow = new Map(), partRow = [], wrapped = []
         let off = false
-        const closeName = `${prefix}${i}.${k}b`, openAt = markOf(name), closeAt = markOf(closeName)
-        // both its marks on one line of the unit: TeX broke no line between them, so the whole piece is in that line's box
-        // (a fraction's numerator and denominator, a limit, whatever their baselines). A part the part rule puts on no
-        // line goes there where its glyphs stand within the line's size of its baseline on arXiv's page; where arXiv's
-        // page broke the line elsewhere (another TeX's compile), the part rule's own line stands
-        const on = (M, j) => !!M && M.page === rows[j].page && Math.abs(M.y - rows[j].base) < 0.5 * rows[j].size
-        const both = openAt && closeAt ? rows.findIndex((_, j) => on(openAt, j) && on(closeAt, j)) : -1
-        const onLine = part => both >= 0 && part.page === rows[both].page && part.gs.every(g => Math.abs(ink[part.page].y[g] - rows[both].base) <= rows[both].size)
         // its two points on two lines of the marked compile: TeX broke the piece over lines (wrapOf)
         const pa = dropped.has(name) ? null : at.get(name), pb = dropped.has(closeName) ? null : at.get(closeName)
-        const broken = !!pa && !!pb && (pa.page !== pb.page || Math.abs(pa.y - pb.y) > 0.5)
+        // (a piece alone at its unit's end with its opening point alone, its ink to its unit's next mark and its lines up to TeX's
+        // skip before another block (stream.mjs ownedOf): the lines it runs onto after its opening point's are TeX's breaking it
+        // over them, as two points on two lines say. A bibliography's entry ends its text before its numbers and its address,
+        // its end mark there: AAS's `\\dodoi{…}`, llncs' `\\doi{…}` after it ran onto a line of no unit's and were LOST, 33 of
+        // 2608.12606v1's entries English)
+        const tail = !pb && k > last && e[1] === OWNED_HOW.indexOf("open, to its unit's next mark")
+        const broken = (!!pa && !!pb && (pa.page !== pb.page || Math.abs(pa.y - pb.y) > 0.5)) || (!!pa && tail)
         // (the line its opening point stands on, where TeX broke the line right after it: its first part's line before)
         const openRow = broken && openAt ? (rows.find((_, j) => on(openAt, j)) ?? null) : null
+        // (else, TeX broke the piece over lines: its first part is set after its opening point, on that point's line, and its
+        // last before its closing point, on that one's. A part the part rule puts on no line goes to the line its own point
+        // stands on, where its ink is centred in that line's band (lineOf's) on the point's side: a part whose largest glyphs
+        // are big delimiters, their origins over a line's height above its baseline. 2610.21376v1's u117, `$\binom{m+n}{m}$`
+        // set whole at page 14's head after its opening point at page 13's last line's end, was LOST)
+        const atPoint = (part, q) => {
+          const P = ink[part.page]
+          for (const M of [q === 0 ? openAt : null, q === parts.length - 1 ? closeAt : null]) {
+            if (!M || M.page !== part.page) continue
+            const j = rows.findIndex((_, n) => on(M, n))
+            if (j < 0) continue
+            const r = rows[j], after = M === openAt
+            const inBand = g => { const c = (P.top[g] + P.bottom[g]) / 2; return c >= r.base - BAND_DOWN * r.size && c <= r.base + BAND_UP * r.size }
+            if (part.gs.every(g => inBand(g) && (after ? mid(P, g) >= M.x - 0.05 : mid(P, g) <= M.x + 0.05))) return j
+          }
+          return -1
+        }
         for (const [q, part] of parts.entries()) {
-          let j = rowOfPart(part, q === 0 ? openAt : q === parts.length - 1 ? closeAt : null)
+          let j = oneLine ? line : rowOfPart(part, q === 0 ? openAt : q === parts.length - 1 ? closeAt : null)
           if (j < 0 && onLine(part)) j = both
+          if (j < 0 && broken) j = atPoint(part, q)
           const prev = q > 0 ? partRow[q - 1] : openRow
           const r = j >= 0 ? rows[j] : broken && prev ? wrapOf(part, prev, wrapped) : null
           if (!r) { off = true; break }
@@ -1777,8 +1466,8 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
         }
         for (const [p, b] of off ? [] : bs) {
           const B = ink[p].boxes[b], cx = (B[0] + B[2]) / 2, cy = (B[1] + B[3]) / 2
-          let r = null, d = Infinity
-          parts.forEach((part, q) => { if (part.page !== p) return; const P = ink[p]; for (const g of part.gs) { const dd = Math.hypot(mid(P, g) - cx, P.y[g] - cy); if (dd < d) { d = dd; r = partRow[q] } } })
+          let r = oneLine ? rows[line] : null, d = Infinity
+          if (!oneLine) parts.forEach((part, q) => { if (part.page !== p) return; const P = ink[p]; for (const g of part.gs) { const dd = Math.hypot(mid(P, g) - cx, P.y[g] - cy); if (dd < d) { d = dd; r = partRow[q] } } })
           if (!r) { const j = rowFor(p, B[0], B[2], cy); if (j >= 0) r = rows[j] }
           if (!r) { off = true; break }
           ;(byRow.get(r) ?? byRow.set(r, { gs: [], boxes: [] }).get(r)).boxes.push(B)
@@ -1812,7 +1501,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
         }
         one.boxes = (one.boxes ?? []).concat(segs.flatMap(sg => sg.boxes.map(b => [sg.row, b])))
       }
-      for (const [p, g] of gs) { ink[p].owner[g] = i; if (byLinks || byText) ink[p].taken[g] = 1; if (cls !== 'display' && inWord(p, g)) stats.ph.textTaken++ }
+      for (const [p, g] of gs) { ink[p].owner[g] = i; if (cls !== 'display' && inWord(p, g)) stats.ph.textTaken++ }
       const row = [i, k, kind, flags]
       for (const s of segs) {
         const [x0, bottom, x1, top] = solid(viewAt(s.page), s.x0, s.bottom, s.x1, s.top)
@@ -1824,14 +1513,8 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       if (fill !== null) row.push(fill)
       const key = `${i}.${k}`
       matchedBy.set(key, gs)
-      for (const [p, g] of gs) foundGs.add(`${p}|${g}`)
-      // (the bars of the own ink are the matcher's: a piece placed by its links is counted there alone)
-      if (byLinks) { const w = stats.links.placed.findIndex(([a, b]) => a > i || (a === i && b > k)); stats.links.placed.splice(w < 0 ? stats.links.placed.length : w, 0, [i, k]) }
-      // (and one found by its characters is counted in textRuns alone: the matcher's bars stay its own)
-      else if (!byText) {
-        stats.ph.owned += items.length + rules.length
-        stats.ph.matched += gs.length + bs.length
-      }
+      stats.ph.owned += items.length + rules.length
+      stats.ph.matched += gs.length + bs.length
       ph.push({ row, cls, state: 'found', inferred: e[1] !== 0, text: PAGE_TEXT.has(cls) ? pageTextOf(gs) : null })
       if (cls === 'display') groupFound = true
     }
@@ -1843,8 +1526,8 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     one.head = head
     one.last = last
   }
-  // the bars: an arXiv glyph matched by two found pieces, an owned glyph of a found piece not matched (none, both; each
-  // true by the matcher's own rule); and what the layer draws: an arXiv glyph inside a found inline piece's segments
+  // the bars: a glyph of the base page that two found pieces own, an owned glyph of a found piece not on the page (none, both:
+  // ownedOn takes each once, and finds each or none); and what the layer draws: a glyph inside a found inline piece's segments
   // (its crop) that is not its own (`foreign`), and one inside two found pieces' segments (`shared`), by its own ink,
   // half of it or more inside (none, both: the 6b review's I2)
   function bars() {
@@ -1904,20 +1587,23 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
   }
 
   /**
-   * A unit's head and tail pieces: the paper's macros it opens with, before its start mark, and those after its end mark,
-   * past its last words, where no mark goes (marks.mjs headEnd and passedOver; patch's end mark after the last word:
-   * 1810's \bert, "BERT", opening three paragraphs; a table row's \specialrule in 1706; a figure's \includegraphics
-   * before the text under it in 2307, and in 1706 after a forced break after its panel's title), where the mark stands
-   * on the unit's first line (its last). TeX set their ink before the start mark: on that line left of it, or on a line
-   * before it (after the end mark: right of it, or on a line after it), never on the unit's own lines, which begin at
-   * the one mark and end at the other. So, the piece nearest the mark first:
+   * A unit's head and tail pieces: the paper's macros it opens with (and its inline code, a head's), before its start
+   * mark, and those after its end mark, past its last words, where no mark goes (marks.mjs headEnd and passedOver; patch's
+   * end mark after the last word: 1810's \bert, "BERT", opening three paragraphs; a table row's \specialrule in 1706; a
+   * figure's \includegraphics before the text under it in 2307, and in 1706 after a forced break after its panel's title;
+   * 2610.21098's cell led by \texttt{max\_tokens}), where the mark stands on the unit's first line (its last). TeX set their
+   * ink before the start mark: on that line left of it, or on a line before it (after the end mark: right of it, or on a
+   * line after it), never on the unit's own lines, which begin at the one mark and end at the other. So, the piece nearest
+   * the mark first:
    * - a head: the glyphs right before the mark on its line, as a label's run takes them (each within LABEL_EM of the
-   *   next), those of no unit's, whose characters are the text the probe showed the macro sets (marks.mjs readInkTexts):
-   *   the piece is found there, a segment of the first line, which takes them in and erases them, and the layer draws
-   *   them where the translation puts the piece;
-   * - no glyph of no unit's within LABEL_EM beside the mark (or beside the head found next to it): the piece set nothing
-   *   on the line beside the mark, and is EMPTY: the translation draws nothing for it, and its ink, wherever TeX set it,
-   *   stays the original's, as the unit's lines never take it;
+   *   next), those of no unit's, which spell the text the probe showed the piece sets (marks.mjs readInkTexts: "1,024",
+   *   "max_tokens"; a formula's glyph it spells no character of, INK_ANY, any one glyph, where nothing but the heads found
+   *   and pieces of no ink stand between the piece and the mark — 2610.21176's \dprime{}, $d'$ —, leadStep): the piece is
+   *   found there, a segment of the first line, which takes them in and erases them, and the layer draws them where the
+   *   translation puts the piece;
+   * - no glyph of no unit's within LABEL_EM beside the mark (or beside the head found next to it): a macro set nothing on the
+   *   line beside the mark, and is EMPTY: the translation draws nothing for it, and its ink, wherever TeX set it, stays the
+   *   original's, as the unit's lines never take it (inline code sets ink: LOST);
    * - else it stays LOST, and those beyond it: what the line shows there is not known as the piece's (a label, perhaps).
    * A tail is looked at only where the last line took nothing past the end mark (its closing punctuation)
    */
@@ -1925,9 +1611,12 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     const { id: i, rows } = one, M = tail ? one.E : one.S, r = tail ? rows[rows.length - 1] : rows[0]
     if (!M || M.page !== r.page || Math.abs(M.y - r.base) >= 0.5 * r.size) return
     const P = ink[M.page], [cx0, cx1] = sideOf(M.page, columnOf(M.page, M.x, M.x))
-    if (tail && [...r.gl, ...(r.extra ?? [])].some(g => mid(P, g) > M.x + 0.05)) return
+    // (what the last line took past the end mark: its closing punctuation, which ends the look; or, where the tails are footnote
+    // calls alone, their raised marks, which TeX set on the line after the last word, and which they take from it)
+    const past = tail ? new Set([...r.gl, ...(r.extra ?? [])].filter(g => mid(P, g) > M.x + 0.05)) : new Set()
+    if (past.size && !one.tails.every(t => t.cls === 'footnote')) return
     const beside = g => (tail ? P.x0[g] >= M.x - 0.05 && P.x1[g] <= cx1 + 1 : P.x1[g] <= M.x + 0.05 && P.x0[g] >= cx0 - 1)
-    const cand = band(P, M.y - 0.35 * P.most, M.y + 0.75 * Math.max(P.most, 6)).filter(g => P.y[g] > M.y - 0.35 * P.size[g] && P.y[g] < M.y + 0.75 * Math.max(P.size[g], 6) && beside(g) && P.owner[g] === -1 && !P.taken[g]).sort((a, b) => (tail ? P.x0[a] - P.x0[b] : P.x1[b] - P.x1[a]) || a - b)
+    const cand = band(P, M.y - 0.35 * P.most, M.y + 0.75 * Math.max(P.most, 6)).filter(g => P.y[g] > M.y - 0.35 * P.size[g] && P.y[g] < M.y + 0.75 * Math.max(P.size[g], 6) && beside(g) && (P.owner[g] === -1 || past.has(g)) && !P.taken[g]).sort((a, b) => (tail ? P.x0[a] - P.x0[b] : P.x1[b] - P.x1[a]) || a - b)
     // the run outwards from the mark, nearest first
     const run = []
     let edge = M.x
@@ -1936,21 +1625,40 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       run.push(g)
       edge = tail ? Math.max(edge, P.x1[g]) : Math.min(edge, P.x0[g])
     }
+    const found = new Set()
     for (const h of [...(tail ? one.tails : one.heads)].sort((x, y) => (tail ? x.k - y.k : y.k - x.k))) {
       const { entry } = h, kind = entry.row[2]
-      if (!run.length) { entry.row = [i, h.k, kind, PH_FLAG.EMPTY]; entry.state = 'empty'; entry.head = true; continue }
-      const text = tail ? null : shown.get(h.src)
-      if (!text) return
-      let got = '', n = 0
-      while (n < run.length && got.length < text.length) { got = charsOf(P.u[run[n]]).replace(/\s+/g, '') + got; n++ }
-      if (got !== text.toLowerCase()) return
+      // (inline code always sets ink, and a footnote's call its mark: none beside the mark is ink not known, never a piece that set
+      // nothing)
+      if (!run.length) { if (h.cls === 'code' || h.cls === 'footnote') return; entry.row = [i, h.k, kind, PH_FLAG.EMPTY]; entry.state = 'empty'; entry.head = true; continue }
+      let n = 0
+      if (tail && h.cls === 'footnote') {
+        // (a footnote's call after the last word: its mark, which \\@makefnmark sets raised, the raised glyphs right after the end
+        // mark; none raised there, not known)
+        while (n < run.length && P.y[run[n]] - r.base >= SHIFT * r.size) n++
+        // (every glyph the line took past the end mark this call's mark, else the line's own: not known)
+        if (!n || [...past].some(g => !run.slice(0, n).includes(g))) return
+      } else {
+        const text = tail ? null : shown.get(h.src)
+        if (!text) return
+        // (a formula's glyph of no character spelled, INK_ANY, is any glyph's: read only where nothing but heads found nearer and
+        // pieces of no ink stand between this one and the mark, whose ink would stand nearer — a \\footnotemark's)
+        if (text.includes(INK_ANY) && !one.u.pieces.slice(h.k + 1, h.head).every((p, j) => found.has(h.k + 1 + j) || !classOf(p) || (classOf(p) === 'macro' && inkless.has(p.src)))) return
+        // (each glyph against the text from its end, nearest the mark first: marks.mjs leadStep)
+        const want = text.toLowerCase()
+        let end = want.length
+        while (n < run.length && end > 0) { end = leadStep(want, end, charsOf(P.u[run[n]]).replace(/\s+/g, '')); if (end < 0) return; n++ }
+        if (end !== 0) return
+      }
+      found.add(h.k)
       const gs = run.splice(0, n)
       let x0 = Infinity, x1 = -Infinity, top = -Infinity, bottom = Infinity
       for (const g of gs) { x0 = Math.min(x0, P.ix0[g]); x1 = Math.max(x1, P.ix1[g]); top = Math.max(top, P.top[g]); bottom = Math.min(bottom, P.bottom[g]) }
       const inkBase = baselineOf(P, bodyOf(P, gs, r.size), r.base)
       const flags = inkBase - r.base >= SHIFT * r.size ? PH_FLAG.RAISED : r.base - inkBase >= SHIFT * r.size ? PH_FLAG.LOWERED : 0
-      // the unit's own ink, which its first line takes in and erasing covers
+      // the unit's own ink, which its first line takes in and erasing covers (a tail's taken from the line's words, `past`)
       for (const g of gs) P.owner[g] = i
+      if (past.size) { r.gl = r.gl.filter(g => !gs.includes(g)); r.extra = (r.extra ?? []).filter(g => !gs.includes(g)) }
       r.extra = (r.extra ?? []).concat(gs)
       r.x0 = Math.min(r.x0, x0); r.x1 = Math.max(r.x1, x1); r.top = Math.max(r.top, top); r.bottom = Math.min(r.bottom, bottom)
       const view = viewAt(M.page), [sx0, sb, sx1, st] = solid(view, x0, bottom, x1, top)
@@ -1997,7 +1705,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
 
   /**
    * A unit's text symbols the marking gave no mark (glued to the word before, at the unit's head), each drawn as its
-   * character (PH_FLAG.TEXT, its text the file's pageText) where the unit's own lines on arXiv's page hold that
+   * character (PH_FLAG.TEXT, its text the file's pageText) where the unit's own lines on the base page hold that
    * character's ink: its glyphs there, those of no found placeholder of the unit, as many at least as the unit has such
    * symbols and its text pieces that character. The unit's erase takes the line's glyphs, so the character drawn as text
    * replaces the original's, once. LaTeX's \_ in OT1 is a rule, not a glyph: an unowned rule on the line's baseline, as
@@ -2059,7 +1767,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
   }
 
   /** a page-text placeholder's text (a citation's, a reference's, as the layer may draw it in the page's face): its
-   *  matched glyphs' characters in stream order, a space where arXiv's glyphs stand apart (PDF.js's text layer's own
+   *  own glyphs' characters in stream order, a space where the page's glyphs stand apart (PDF.js's text layer's own
    *  rule: a gap of TEXT_SPACE of the size) or on another line; null where it is no page text (file.mjs isPageText: a
    *  control or bidi character, a lone surrogate, longer than TEXT_MAX) */
   function pageTextOf(gs) {
@@ -2163,7 +1871,10 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       }
       return { n, hits }
     }
-    const free = r => { const P = ink[r.page]; for (const g of r.gl) if (P.owner[g] === i) P.owner[g] = -1 }
+    // (a glyph of a piece of the unit's found stays its: a display it opens with, found by its unit's start mark, stream.mjs headInk)
+    const pieceGlyphs = new Set()
+    for (const [key, gs] of matchedBy) if (key.startsWith(`${i}.`)) for (const [p, g] of gs) pieceGlyphs.add(`${p}|${g}`)
+    const free = r => { const P = ink[r.page]; for (const g of r.gl) if (P.owner[g] === i && !pieceGlyphs.has(`${r.page}|${g}`)) P.owner[g] = -1 }
     // at the unit's head: the rows before its start mark's line (a display that opens it, before patch's start mark at
     // its first text) that carry none of its source's words and no ink of its found pieces are no line of the unit's
     // either, as the held rows at its end; then its start mark stands on its first line, which is cut at it as a first
@@ -2234,6 +1945,20 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     const head = r0.gl.filter(g => P.x1[g] <= first + 0.05).sort((x, y) => P.x0[x] - P.x0[y] || x - y)
     if (!head.length || head.length > 4 || head.some(g => theirs.has(g) || one.headSymbols?.has(g))) return null
     if (!LABEL.test(head.map(g => P.u[g]).join('').normalize('NFKC').replace(/\s+/g, ''))) return null
+    // (no label where the unit's own text begins there: the line read from the head's first glyph spells more of the unit's
+    // text, past the head, than the line read from after the head, its case and its compatibility forms aside. A label is what
+    // the class sets before the text: a text that opens with what reads as one is the text. 2610.21377v1's
+    // "49\textsc{k}20 (primary)": the source's words parted at the small capital (49, k, 20), its first token no word of them, the
+    // text's start fell to its first letter, the "k", and "49" was read as an item's number, kept as the original's before the
+    // line, which then began at the "k" and was laid after it, "49 49k20". Read from "49" the line spells the text to its end,
+    // from the "k" not a character of it. A label "1" before "10 apples" reads "110apples": one character of the text from the
+    // label, all of it from after the label, a label; before "11 apples", "111apples", two against all: a label too, where a
+    // read one character past the head took the label's "1" and the text's for the text's "11")
+    const fold = t => t.normalize('NFKC').replace(/\s+/g, '').toLowerCase()
+    const said = fold(head.map(g => P.u[g]).join('')), line = fold([...r0.gl].sort((x, y) => P.x0[x] - P.x0[y] || x - y).map(g => P.u[g]).join('')), own = fold(texts[i].text)
+    const common = (a, b) => { let k = 0; while (k < a.length && k < b.length && a[k] === b[k]) k++; return k }
+    const whole = common(line, own)
+    if (whole > said.length && whole > common(line.slice(said.length), own)) return null
     const out = new Set(head)
     r0.gl = r0.gl.filter(g => !out.has(g))
     if (!r0.gl.length) { r0.gl = [...out]; return null }
@@ -2248,6 +1973,30 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
   }
   const labels = [], labelAt = new Map(), labelRows = new Map()
   const owned = (p, g, unit) => ink[p].owner[g] !== -1 && ink[p].owner[g] !== unit
+  /**
+   * How many of `run`'s first glyphs (page p, left to right, before unit i's start) are the closing punctuation a head sets
+   * after the unit before i (own.mjs MR 5): each of HEAD_PUNCT, the first within HEAD_ABUT of an em right of a glyph of another
+   * unit's on its baseline, each next within it of the one before. They are given to that unit's line there (its glyphs, its
+   * box): none where it has no line holding that glyph
+   */
+  function headTail(p, i, run) {
+    const P = ink[p]
+    if (!run.length) return 0
+    const f = run[0], near = (a, b) => Math.abs(P.y[a] - P.y[b]) < 0.5 * Math.max(P.size[a], P.size[b])
+    let left = -1
+    for (const g of band(P, P.y[f] - 0.5 * P.size[f], P.y[f] + 0.5 * P.size[f])) if (P.owner[g] >= 0 && P.owner[g] !== i && P.x1[g] <= P.x0[f] + 0.05 && near(g, f) && (left < 0 || P.x1[g] > P.x1[left])) left = g
+    if (left < 0) return 0
+    let n = 0
+    for (let prev = left; n < run.length; prev = run[n++]) {
+      const g = run[n]
+      if (!HEAD_PUNCT.test((P.u[g] ?? '').normalize('NFKC')) || P.x0[g] - P.x1[prev] >= HEAD_ABUT * Math.max(P.size[g], P.size[prev]) || !near(g, prev)) break
+    }
+    if (!n) return 0
+    const row = placedById.get(P.owner[left])?.rows.find(r => r.page === p && Math.abs(r.base - P.y[left]) < 0.5 * Math.max(r.size, P.size[left]) && r.x0 <= P.x0[left] + 0.05 && P.x1[left] <= r.x1 + 0.05)
+    if (!row) return 0
+    for (const g of run.slice(0, n)) { row.gl.push(g); P.owner[g] = P.owner[left]; row.x1 = Math.max(row.x1, P.x1[g]); row.top = Math.max(row.top, P.top[g]); row.bottom = Math.min(row.bottom, P.bottom[g]) }
+    return n
+  }
   function labelOf(one) {
     const { id: i, u, rows, S } = one
     const r0 = rows[0]
@@ -2262,6 +2011,12 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     const run = []
     let edge = S.x
     for (let q = cand.length - 1; q >= 0; q--) { const g = cand[q]; if (edge - P.x1[g] > LABEL_EM * P.size[g]) break; run.unshift(g); edge = Math.min(edge, P.x0[g]) }
+    // the closing punctuation a head sets right after the unit before this one is that unit's, as the wrap reads it (own.mjs
+    // MR 5: HEAD_PUNCT, each within HEAD_ABUT of an em of the glyph before it, the first of that unit's own): its line takes it,
+    // so that the reader draws it after that unit's translation (layer2.mjs tailOf) and its group's ink is that line's, never
+    // this unit's label, which the reader would show again from the original over the unit before's drawing (amsthm's ")."
+    // after a note that ends in a citation, 2610.18513v1 p35: u315's label row was u314's ").", shown where it stood)
+    run.splice(0, headTail(S.page, i, run))
     // wholly left of the unit's first line
     const mine = run.filter(g => P.x1[g] <= r0.x0 + 0.01)
     // or the class's own mark that the first line begins with, the unit's start mark set before it
@@ -2317,7 +2072,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       }
       for (const e of merged) erase.push(j, ...solid(view, e[0], e[1], e[2], e[3]))
     })
-    if (refuse) return
+    if (refuse) return notLaid(i, 'erase')
     // lines (each its font's id; the file's index is admit's)
     const lines = []
     for (const r of rows) {
@@ -2355,12 +2110,12 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       const below = Math.min(H, Math.max(0, r2(lastRow.bottom - (Number.isFinite(next) ? next : view[1] + FOOT))))
       frames.push(f.page, f.col, f.first, f.n, q === 0 ? -1 : share, below)
     }
-    // flags: centred as TeX set the unit's paragraph, where the marked original's log tells it (marks.mjs readAlign: its
-    // \leftskip, \rightskip and \parfillskip when it ended; the author's own alignment). Where it does not (a caption
-    // \@makecaption centres in an \hbox on one line, the title and front matter, which carry no marks, a cell): centred where
-    // every line's centre is its column's and one line at least is short of it by an em; the first line from its label on
-    // (a caption's "Figure 1." centred with its text), a line across both columns of a page of two by the text block
-    // (blockEdges: the pool of such lines is a few, and 1810.04805's title read 8.7 pt off by its own). A justified one-line
+    // flags: centred, flush left or flush right as TeX set the unit's paragraph, where the marked original's log tells it
+    // (marks.mjs readAlign: its \leftskip, \rightskip and \parfillskip when it ended; the author's own alignment). Where it
+    // does not (a caption \@makecaption centres in an \hbox on one line, the title and front matter, which carry no marks, a
+    // cell): centred where every line's centre is its column's and one line at least is short of it by an em; the first line
+    // from its label on (a caption's "Figure 1." centred with its text), a line across both columns of a page of two by the
+    // text block (blockEdges: the pool of such lines is a few, and 1810.04805's title read 8.7 pt off by its own). A justified one-line
     // paragraph centred by its own glue (\noindent\hfill X\hfill\null, whose skips are the paper's) is centred where its
     // line is on its column's middle and stands off both edges by more than INSET ems
     const told = alignTeX.get(i)
@@ -2374,19 +2129,31 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       if (!(x0 - e[0] > INSET * em && e[1] - r.x1 > INSET * em)) inset = false
     })
     const isCentred = told === undefined ? centred && short : told === 'c' || (told === 'j' && centred && inset)
-    const flags = (u.title ? UNIT_FLAG.TITLE : 0) | (u.front ? UNIT_FLAG.FRONT : 0) | (isCentred ? UNIT_FLAG.CENTRED : 0)
+    // (flush left or flush right only as TeX told it, never read off arXiv's lines: a ragged paragraph's lines can all reach
+    // near its edge, and a justified one's can stop short of it; a unit TeX does not tell keeps neither. Every other unit not
+    // centred is JUSTIFIED, TeX's word or this reading's, so that the reader never reads a source unit's lines itself)
+    const flags = (u.title ? UNIT_FLAG.TITLE : 0) | (u.front ? UNIT_FLAG.FRONT : 0) | (isCentred ? UNIT_FLAG.CENTRED : told === 'l' ? UNIT_FLAG.FLUSH_LEFT : told === 'r' ? UNIT_FLAG.FLUSH_RIGHT : UNIT_FLAG.JUSTIFIED)
     const depth = Number.isInteger(u.depth) && u.depth >= -1 && u.depth <= 5 ? u.depth : 9
     one.out = { unit: [i, KIND.get(u.kind), depth, flags, u.pieces.length], lines, frames, erase, splits: fs.length > 1 }
   }
 
   /**
+   * Whether unit `one` may be drawn (the line check's, `lineCheck`): every page its rows are on is drawable (carry.mjs
+   * lineCheckOf `undrawable`: the page's words arXiv's page's, none of its lines on another page of arXiv's). A unit on several
+   * pages is drawn only where every one of them is. True where no line check is given
+   */
+  const drawable = one => !lineCheck || one.rows.every(r => !undrawablePages.has(r.page))
+  /**
    * Unit i's rows into the file, in the file's order of units (rowsOf's, where it made them): its lines' fonts given the
-   * file's index of each; a unit whose faces would take the file past FONTS_MAX names stays the original's (a count never
-   * gets it refused)
+   * file's index of each; a unit on a page that is not drawable (drawable), or whose faces would take the file past FONTS_MAX
+   * names, stays the original's (a count never gets it refused)
    */
   function admit(one) {
     const { id: i, u, rows, S, E, out } = one
-    if (!out || fonts.length + new Set(rows.map(r => r.font).filter(f => !fontIndex.has(f))).size > FONTS_MAX) return false
+    // (no rows: rowsOf said why)
+    if (!out) return false
+    if (!drawable(one)) { stats.units.undrawn++; notLaid(i, 'undrawn'); return false }
+    if (fonts.length + new Set(rows.map(r => r.font).filter(f => !fontIndex.has(f))).size > FONTS_MAX) { notLaid(i, 'fonts'); return false }
     const { lines, frames, erase } = out
     for (let j = 7; j < lines.length; j += 8) lines[j] = fontOf(lines[j])
     outUnits.push(out.unit)
@@ -2429,12 +2196,12 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       if (!fontIndex.has(r.font) && fonts.length >= FONTS_MAX) { nameWhy('past the fonts a file may name'); continue }
       const view = viewAt(r.page), [x0, bottom, x1, top] = solid(view, r.x0, r.bottom, r.x1, r.top)
       const cx0 = Math.max(view[0] - 1, r2(nm.column[0])), cx1 = Math.min(view[2] + 1, r2(nm.column[1]))
-      outNames.push([nm.occurrence, nm.key, r.page, x0, Math.min(top, Math.max(bottom, r2(r.base))), x1, top, bottom, r2(Math.min(SIZE_MAX, r.size)), fontOf(r.font), nm.flags, nm.lead, r2(nm.glue), cx0, cx1])
+      outNames.push([nm.occurrence, nm.key, r.page, x0, Math.min(top, Math.max(bottom, r2(r.base))), x1, top, bottom, r2(Math.min(SIZE_MAX, r.size)), fontOf(r.font), nm.flags, nm.lead, slot12(nm, x0, x1), cx0, cx1])
       stats.names.located++
       if (nm.lead >= 0) stats.names.runIn++
     }
     const file = {
-      schema: LAYOUT_SCHEMA, layout: LAYOUT, pdfjs, paper: { id: paper.id, version: paper.version, pages }, left, views, fonts,
+      schema: LAYOUT_SCHEMA, layout: LAYOUT, pdfjs, paper: { id: paper.id, version: paper.version, pages }, left: LEFT, views, fonts,
       units: outUnits, lines: outLines, frames: outFrames, erase: outErase,
       ph: phs.filter(p => kept1.has(p.row[0])).map(p => p.row), labels: labeled.filter(r => kept1.has(r[0])), headings: outHeadings,
       pageText: phs.filter(p => kept1.has(p.row[0]) && p.text).map(p => [p.row[0], p.row[1], p.text]),
@@ -2446,9 +2213,14 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     // each colour piece's run's fill (marks.mjs readColours), of the units it holds: a key only where one has a row
     const outColours = outUnits.flatMap(r => coloursBy.get(r[0]) ?? [])
     if (outColours.length) file.colours = outColours
+    // why each unit it does not hold is the original's: a key only where one is not laid
+    const outUnlaid = unlaidOf(units.map((_, i) => i), i => kept1.has(i))
+    if (outUnlaid.length) file.unlaid = outUnlaid
+    // each region TeX set (schema 6): a key only where a page holds one
+    const outRegions = regionsHeld()
+    if (outRegions.length) file.regions = outRegions
     for (const r of outUnits) countColours(r[0])
     stats.ph.texts = file.pageText.length
-    Object.assign(stats.match, matcher.stats)
     // the placeholders and labels counted as the file holds them
     for (const p of ph) {
       if (!kept1.has(p.row[0])) continue
@@ -2478,31 +2250,28 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       return { refused: 'bounds', stats }
     }
     stats.bytes.gzip = await gzipSize(bytes)
-    const made = parts ? { file: parsed, stats, lines: carrier.pageLines } : { file: parsed, stats }
-    if (!wantPlans) return made
-    // ---------------------------------------------------------------- the add-on's plans, of the ink read above
-    // (each page's as addon.mjs pagePlansOf makes it of the page's operator list read again: the same ink, the same facts)
-    // (the plans failing are the add-on's alone, never the file's: `plans` null, why in `plansFailed`; a failed allocation the
+    const made = parts ? { file: parsed, stats, lines: lineCheck?.pageLines ?? new Map() } : { file: parsed, stats }
+    if (!wantRules) return made
+    // ---------------------------------------------------------------- the cell rules, of the ink read above
+    // (the rules failing are the reader's loss alone, never the file's: `cellRules` null, why in `rulesFailed`; a failed allocation the
     // paper's)
     try {
-      const index = indexLayout(parsed), plans = new Map()
+      const index = indexLayout(parsed), cellRules = new Map()
       for (let p = 1; p <= pages; p++) {
         if (!ink[p]?.plan) continue
-        const plan = pagePlanOf(index, p, planInkOf(ink[p]), () => unpackFacts(facts[p]))
-        if (plan) plans.set(p, plan)
+        const rules = cellRulesOf(index, p, planInkOf(ink[p]))
+        if (rules) cellRules.set(p, rules)
       }
-      return { ...made, plans }
+      return { ...made, cellRules }
     } catch (e) {
       if (isMemoryError(e)) throw e
-      return { ...made, plans: null, plansFailed: String(e?.message ?? e).slice(0, 200) }
+      return { ...made, cellRules: null, rulesFailed: String(e?.message ?? e).slice(0, 200) }
     }
   }
 
   /** the paper's file: every pass in its order over every unit (makeLayout's) */
   async function whole() {
-    const refused = carrying()
-    if (refused) return { refused, stats }
-    await readWanted()
+    carrying()
     anchoring()
     const t = now()
     for (let i = 0; i < units.length; i++) place(i)
@@ -2515,15 +2284,16 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     for (const one of placed) labelOf(one)
     for (const one of placed) { rowsOf(one); admit(one) }
     stats.ms.rows = now() - t
-    return assemble()
+    const refused = noneLaid()
+    return refused ? { refused, stats } : assemble()
   }
 
   // ---------------------------------------------------------------- the passes as tasks, in any order the whole order allows
-  /** a carried position's page where the carrier puts it, whatever that page's ink (a superset of carry's) */
-  const carriedPage = (page, x, y) => { const c = carrier.carry(page, x, y); return c && Number.isInteger(c.page) && c.page >= 1 && c.page <= pages ? c.page : null }
+  /** a position's page, whatever that page's ink (a superset of carry's): its own, where it is one of the paper's */
+  const carriedPage = page => (Number.isInteger(page) && page >= 1 && page <= pages ? page : null)
   /**
-   * The pages unit i's passes read and write, rising: its anchor's, its own marks' carried pages, and every page its pieces'
-   * own glyphs, rules and marks are carried to (the matcher's every start: carriedPage's, a superset of where it looks);
+   * The pages unit i's passes read and write, rising: its anchor's, its own marks' pages, and every page its pieces' own glyphs,
+   * rules and marks stand on (where ownedOn looks);
    * `carried` carriedPagesOf(i), where a caller made it already
    */
   function unitPages(i, carried = null) {
@@ -2534,23 +2304,22 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     for (const end of ['s', 'e']) { const m = carriedUnit.get(`${i}${end}`); if (m) set.add(m.page) }
     return [...set].sort((x, y) => x - y)
   }
-  /** the pages unit i's own marks and its pieces' own glyphs, rules and marks are carried to (carriedPage's), rising: those
-   *  it may touch whatever its anchor (of the pieces phOf matches: designedOf's) */
+  /** the pages unit i's own marks and its pieces' own glyphs, rules and marks stand on (carriedPage's), rising: those it may
+   *  touch whatever its anchor (of the pieces phOf reads: designedOf's) */
   function carriedPagesOf(i) {
     const set = new Set()
     const add = v => { if (v !== null) set.add(v) }
-    for (const end of ['s', 'e']) { const name = nameOf.get(`${i}${end}`), m = name === undefined || dropped.has(name) ? null : at.get(name); if (m) add(carriedPage(m.page, m.x, m.y)) }
+    for (const end of ['s', 'e']) { const name = nameOf.get(`${i}${end}`), m = name === undefined || dropped.has(name) ? null : at.get(name); if (m) add(carriedPage(m.page)) }
     for (const [, a, b] of designedOf(i)) {
       const A = at.get(a) ?? null, B = at.get(b) ?? null
-      for (const M of [A, B]) if (M) add(carriedPage(M.page, M.x, M.y))
+      for (const M of [A, B]) if (M) add(carriedPage(M.page))
       const e = ownInk.get(a)
       if (!e) continue
       const n = e[2]
       for (let j = 3; j < 3 + 5 * n; j += 5) {
-        add(carriedPage(e[j], e[j + 1], e[j + 2]))
-        for (const M of [A, B]) if (M && M.page === e[j]) add(carriedPage(e[j], e[j + 1], M.y))
+        add(carriedPage(e[j]))
       }
-      for (let j = 3 + 5 * n; j + 4 < e.length; j += 5) add(carriedPage(e[j], e[j + 1], e[j + 2]))
+      for (let j = 3 + 5 * n; j + 4 < e.length; j += 5) add(carriedPage(e[j]))
     }
     return [...set].sort((x, y) => x - y)
   }
@@ -2586,21 +2355,20 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
   /** the paper's file, its passes run as tasks in the order `pick` makes of those the whole order allows (runInOrder): the
    *  file whole() makes, the same bytes, where no bound of the paper's (FONTS_MAX) binds */
   async function byTasks(pick) {
-    const refused = carrying()
-    if (refused) return { refused, stats }
-    await readWanted()
+    carrying()
     anchoring()
     const t = now()
     runInOrder(tasks().map(x => ({ ...x, run: confined(x) })), pick)
     stats.ph.unmatched = stats.ph.owned - stats.ph.matched
     for (const one of [...placed].sort((x, y) => x.id - y.id)) admit(one)
     stats.ms.rows = now() - t
-    return assemble()
+    const refused = noneLaid()
+    return refused ? { refused, stats } : assemble()
   }
 
   // ---------------------------------------------------------------- the page stream (E2b; stage 2: the marked original too)
   /**
-   * The maker a page at a time, the columns' edges given. arXiv's pages are read in order (`readPage(p)`, then `pageRead(p)`);
+   * The maker a page at a time, the columns' edges given. The base page's pages are read in order (`readPage(p)`, then `pageRead(p)`);
    * the marked original whole (carrying() first), or a page at a time as well (`marked`: markedPages' head; then each of its
    * pages in order, `markedPage(page)`, and its end, `markedEnd(end)`): each name's mark as its page is read (within that
    * page's view, as the marks file keeps it), the page's tokens drawn and carried (carry.mjs carrier, a page at a time), the
@@ -2611,11 +2379,12 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
    * read) has them carried (anchoring()'s, a unit at a time); the units are anchored by ranges of a page (pipeline/left-part.mjs
    * rangedAnchors, under `frame`); each anchored unit whose pieces' own ink is known has its passes run as tasks (byTasks'), a
    * task once its pages are decided (no unit or babel name that may touch them is still to be anchored or known) and read and
-   * every task before it in the whole order on them has run; a page is let go (its ink and facts dropped) once its tasks have
-   * run, its names are taken in and its plan is made (`plans`). A unit's rows are the file's (`layout()`, a unit's as the whole
+   * every task before it in the whole order on them has run; a page is let go (its ink dropped) once its tasks have
+   * run, its names are taken in and its cell rules are made (`cellRules`). A unit's rows are the file's (`layout()`, a unit's as the whole
    * file's parse holds them) once they are made. `finish()` after the last page of each. `released()` the pages from 1 let go;
-   * `settled(i)` whether unit i's rows are made or it has none (never anchored, or not placed). With `marked`, the carry's
-   * refusal is known at the marked original's end, or for parts once any line is carried (`carryKnown()`, `refused()`); a piece
+   * `settled(i)` whether unit i's rows are made or it has none (never anchored, or not placed); `laid()` the units the file holds
+   * so far. The line check's refusal ('carry', no unit laid: no page drawable with a unit on it) is known once finished (`carryRefusal()`:
+   * the file's, never a part's); with `marked`, a piece
    * found after its unit's own ink was taken, or a point read twice after its unit's placeholders were matched, is too late
    * (`stats.late`, rows and vetoes: the whole run's file but there)
    */
@@ -2632,26 +2401,26 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     if (!frame) throw new TypeError('the page stream needs the whole document\'s frame rule given (`frame`)')
     // (its ranges are placed from their own units: pageFrame over them is not the whole paper's frame, so none is assumed)
     if (!frame) throw new TypeError('the page stream needs the whole document\'s frame rule given (`frame`)')
-    // (the links the locator may want are read as their pages are, after carrying(): none of those pages read before)
-    for (const p of wanted ?? []) if (readSoFar.has(p) && theirLinks[p] === undefined) throw new TypeError('the page stream reads arXiv\'s pages after carrying(): a wanted page was read before')
     const floating = id => FLOATING.has(units[id]?.kind ?? '')
     const n = units.length
     // ---- the marked original: whole (carrying() done), or as its pages come, its names first (the head's)
     const M = mh ? mh.pages : 0
-    let markedTo = mh ? 0 : Infinity, ended = !mh, refusal = null, foundTo = 1
+    let markedTo = mh ? 0 : Infinity, ended = !mh, finished = false, foundTo = 1
     const mViews = [], mWords = [], twiceSeen = new Set()
-    const follows = mh ? followsOf(units, mh.set) : null
-    if (mh) { at = new Map(); ours = []; carrier = carrierFor(ours, doc); carryOver() }
+    const follows = mh ? followsOf(units, mh.set, mh.marking?.texts, mh.marking?.inkless) : null
+    // (the displays units open with, found by their units' start marks: marks.mjs headsOf)
+    const heads = mh ? headsOf(units, mh.set) : null
+    // (the marks read a page at a time: none yet)
+    if (mh) { at = new Map(); ours = []; carryOver(); noteLines() }
     let X = 0
-    /** the last page from 1 read on both sides: arXiv's, and the marked original's that tells its darkness (carry.mjs `over`;
-     *  a page past the marked original's last has none of it) */
+    /** the last page from 1 read on both sides: the base page's, and the marked original's that tells its marks (a page past
+     *  the marked original's last has none of it) */
     const readyTo = () => (markedTo >= M ? X : Math.min(X, markedTo))
     // ---- the names in their order (the marks file's): each page's, each unit key's ([th]?<id>[se]), the babel names', the
     // draft frames'
     unitMarks = new Map(); nameOf = new Map(); startsOn = new Map()
     carriedUnit = new Map(); unplaced = new Set(); linesTeX = new Map(marks.lines); alignTeX = new Map(marks.align ?? []); coloursBy = coloursOf(marks.colours); anchors = new Map()
-    const byPage = pageIndex(doc), withWords = new Map(), oursOn = mh ? new Map() : pageIndex(ours)
-    oursByPage = oursOn
+    const byPage = pageIndex(doc), withWords = new Map(), oursOn = mh ? new Map() : pageIndex(ours), reach = reachIn(byPage), reachBack = reachBackIn(byPage)
     const byName = (a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)
     const listed = mh ? mh.named.filter(([, page]) => Number.isInteger(page) && page >= 1 && page <= M).sort(byName) : [...at].map(([nm, m]) => [nm, m.page, m.x, m.y])
     const pageOfName = new Map(), namesOn = new Map(), gOn = new Map(), keyNames = new Map(), keysOn = new Map(), nameList = []
@@ -2670,7 +2439,8 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       if (NAME_START.test(nm)) nameList.push(nm)
     })
     // ---- each unit: its keys (final once every name of them is read), its pieces' own ink and marks (known once found)
-    const R = rangedAnchors(doc, texts, { floating, floatMatch, frame, forward })
+    // (where each unit is searched, known from the head: the pages of its own marks' names, anchors.mjs searchHead's rule)
+    const R = rangedAnchors(doc, anchorTexts, { own: ownOfNames(listed.map(([nm, page]) => [nm, page]), n), floating, floatMatch, frame, forward })
     const keyLeft = new Map([...keyNames].map(([k, list]) => [k, mh ? list.length : 0]))
     const keysLeft = new Int32Array(n), rowsLeft = new Int32Array(n), known = new Uint8Array(n), wantDecide = new Uint8Array(n), phRan = new Uint8Array(n)
     for (const k of keyNames.keys()) keysLeft[Number(k.slice(0, -1))]++
@@ -2687,7 +2457,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     }
     // ---- the pages each unit or babel name may touch before it is decided, as a count of the least: an undecided unit's
     // carried pages once it is known (rawLow, its own marks' and pieces'), before, its names' pages but one (a mark of a
-    // marked page is carried to arXiv's page of its number or one beside it, carry.mjs); a unit anchored but not known, its
+    // marked page stands on the base page of its number, one beside it kept as slack); a unit anchored but not known, its
     // anchor's first page too
     const lowCount = new Int32Array(pages + 2), lowOf = new Int32Array(n), counted = new Uint8Array(n)
     let lowAt = 1, decidedTo = 0
@@ -2702,44 +2472,9 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     // (each known unit's carried pages, as becomeKnown made them: what they read is final once it is known — its marks' and
     // pieces' pages read and carried, a late row dropped — but where a point read twice takes a piece's ink (veto))
     const carriedKnown = new Map()
-    // ---- the link-anchor locator's pages (`wanted`, whose links phOf may read: theirsOfUnit): the whole run's, a page's final once
-    // no unit that may still want it is unsettled — known, and each of its pieces that name a link judged (judge) — counted by
-    // the least page each unsettled unit may want (the pages its marks and pieces are carried to, or before it is known its
-    // names' pages but one, as countLow's); a unit's placeholders (phOf) run once every page of theirs is final and its links,
-    // where wanted, read (readPage, readLinks)
-    const linkLow = new Int32Array(pages + 2), linkLowOf = new Int32Array(n), linkCounted = new Uint8Array(n)
-    let linkAt = 1, linkRanTo = 0
-    const setLinkLow = (i, v) => {
-      v = Math.min(Math.max(1, v), pages + 1)
-      if (linkCounted[i]) linkLow[linkLowOf[i]]--
-      linkLowOf[i] = v; linkLow[v]++; linkCounted[i] = 1
-      if (v <= linkRanTo) throw new Error(`unit ${i} may want page ${v}'s links, its placeholders' passes run already`)
-      if (v < linkAt) linkAt = v
-    }
-    const settleLink = i => { if (linkCounted[i]) { linkLow[linkLowOf[i]]--; linkCounted[i] = 0 } }
-    const linkFinal = () => { while (linkAt <= pages && linkLow[linkAt] === 0) linkAt++; return linkAt }
-    /** whether a task may read the links of its pages: each final, and read where wanted */
-    const linksReady = t => { const w = linkFinal(); return t.pages.every(q => q < w && (!wanted.has(q) || theirLinks[q] !== undefined)) }
-    if (linking) {
-      if (mh) { wanted = new Set(); pending = []; needed.clear(); pendingOf.fill(0) }
-      // (a unit whose pieces wait to be judged: the least page it may want, its range's; the marks given, every unit is known)
-      else for (let i = 0; i < n; i++) if (pendingOf[i] > 0) { const [lo] = rangeOf(i); if (lo !== Infinity) setLinkLow(i, lo) }
-      onJudged = i => { if (known[i] && pendingOf[i] === 0) settleLink(i) }
-    }
-    /** unit i's pieces that name a link, made pending or wanted as its own marks and ink become known (the marked original read
-     *  a page at a time), those whose pages are read judged */
-    const linkKnown = i => {
-      if (!linking || !mh || !units[i].pieces.some(linkablePiece)) return
-      wantOf(i)
-      judge(X)
-      const [lo] = rangeOf(i)
-      if (pendingOf[i] === 0 || lo === Infinity) settleLink(i)
-      else setLinkLow(i, Math.max(lo, linkCounted[i] ? linkLowOf[i] : 1))
-    }
     const becomeKnown = i => {
       if (known[i]) return
       known[i] = 1
-      linkKnown(i)
       if (decided[i]) return
       const pg = carriedPagesOf(i)
       carriedKnown.set(i, pg)
@@ -2754,28 +2489,21 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       if (R.isMarked(i)) return
       const ks = [`${i}s`, `${i}e`].filter(k => withWords.has(k)), raw = new Map()
       for (const k of ks) raw.set(k, anchorMarkOf(nameOf.get(k)))
-      for (const k of ks) {
-        if (raw.get(k)) continue
-        const other = `${i}${k.endsWith('s') ? 'e' : 's'}`
-        if (nameOf.has(other)) raw.set(k, besideOf(nameOf.get(other), raw.get(other), nameOf.get(k)))
-      }
-      tolerate(ks, raw)
       for (const k of ks) { const c = raw.get(k); if (c) carriedUnit.set(k, { page: c.page, x: c.x, y: c.y, t: sameWord(doc, byPage, c, k.endsWith('s'), withWords.get(k).t) }) }
-      const b = boundsFromMarks(doc, new Map(ks.filter(k => carriedUnit.has(k)).map(k => [k, carriedUnit.get(k)])), byPage).get(String(i))
+      const b = withPoints(doc, boundsFromMarks(doc, new Map(ks.filter(k => carriedUnit.has(k)).map(k => [k, carriedUnit.get(k)])), byPage, reach, reachBack, true), pointsOfUnits(i), byPage).get(String(i))
       const own = [`${i}s`, `${i}e`].filter(k => unitMarks.has(k))
       if (own.length && (own.some(k => !carriedUnit.has(k)) || (own.length === 2 && !b))) unplaced.add(i)
       R.mark(i, b ?? null)
     }
-    /** unit i's own marks known: the pages they are carried to (where its bounds would begin and end), carried once read */
+    /** unit i's own marks known: the last page they are carried to, carried once it is read */
     const marksKnown = i => {
-      let w = 0, lo = 0
+      let w = 0
       for (const end of ['s', 'e']) {
         const k = `${i}${end}`
         if (!withWords.has(k)) continue
-        const name = nameOf.get(k), m = dropped.has(name) ? null : at.get(name), c = m ? carriedPage(m.page, m.x, m.y) : null
-        if (c !== null) { w = Math.max(w, c); lo = lo ? Math.min(lo, c) : c }
+        const name = nameOf.get(k), m = dropped.has(name) ? null : at.get(name), c = m ? carriedPage(m.page) : null
+        if (c !== null) w = Math.max(w, c)
       }
-      R.own(i, lo, w)
       if (w <= wokeTo) markUnit(i)
       else waits[w].push(i)
       if (!rowsLeft[i]) becomeKnown(i)
@@ -2815,8 +2543,8 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     let decidedCount = 0, releasedTo = 0
     const settledU = new Uint8Array(n), released = new Uint8Array(pages + 2)
     const inFile = new Set(), unitRows = new Map(), nameRows = new Map(), namedOn = new Map()
-    const plans = wantPlans ? new Map() : null
-    let plansFailed = null
+    const cellRules = wantRules ? new Map() : null
+    let rulesFailed = null
     /** unit i's rows as the whole file's parse holds them (encodeLayout's numbers, parseLayout's zeroes): the file's
      *  index of its lines' fonts the one `fonts` holds the names of */
     const fileRowsOf = one => {
@@ -2837,17 +2565,6 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       anchors.delete(one.id)
       one.rows = null; one.a = null; one.boxes = null; one.out = null; one.heads = null; one.tails = null; one.symbols = null; one.headSymbols = null
     }
-    /** the rows K reads of a unit told (layer-proto/cut.mjs entriesOf: its unit row, its lines' pages, its placeholders'
-     *  segments' pages and its labels' pages), one row a page: what the cut of the parts after its own reads of it */
-    const stubOf = (i, r) => {
-      // (whole strides alone, as cut.mjs pagesAt reads them: a placeholder row's fill, last, is no segment's page)
-      const pagesIn = (rows, at, stride) => { const set = new Set(); for (const v of rows) for (let j = at; j + stride <= v.length; j += stride) set.add(v[j]); return [...set] }
-      const lines = pagesIn(r.lines.map(e => e[1]), 0, 8), segs = pagesIn(r.ph, 4, 6), labels = [...new Set(r.labels.map(l => l[2]))]
-      return {
-        units: r.units, lines: lines.length ? [[i, lines.flatMap(p => [p, 0, 0, 0, 0, 0, 0, 0])]] : [], ph: segs.length ? [[i, 0, 0, 0, ...segs.flatMap(p => [p, 0, 0, 0, 0, 0])]] : [],
-        labels: labels.map(p => [i, 0, p, 0, 0, 0, 0, 0]), frames: [], erase: [], headings: [], pageText: [], held: [],
-      }
-    }
     /** unit i's anchor final: its passes as tasks on its pages (unitPages'), once its pieces' own ink is known; till then its
      *  anchor's first page kept from deciding */
     const decide = i => {
@@ -2865,7 +2582,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       decided[i] = 1
       decidedCount++
       if (counted[i]) { lowCount[lowOf[i]]--; counted[i] = 0 }
-      if (!a) { settledU[i] = 1; return }
+      if (!a) { unanchored(i); settledU[i] = 1; return }
       const pg = unitPages(i, carriedKnown.get(i))
       carriedKnown.delete(i)
       for (const q of pg) (touching.get(q) ?? touching.set(q, []).get(q)).push(i)
@@ -2913,24 +2630,23 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       decidedTo = Math.max(decidedTo, to)
     }
     const open = q => q <= decidedTo && q <= readyTo()
-    /** a page let go: its names taken into the file, its plan made, its ink and facts dropped */
+    /** a page let go: its names taken into the file, its cell rules made, its ink dropped */
     const release = q => {
       if (released[q] || !open(q)) return
       const Q = queue.get(q)
       if (Q && Q.head < Q.list.length) return
       for (const nm of namedOn.get(q) ?? []) nameRowOf(nm)
-      if (plans && pagesInk[q]?.plan) {
+      if (cellRules && pagesInk[q]?.plan) {
         try {
           const ids = (touching.get(q) ?? []).filter(i => unitRows.has(i)).sort((x, y) => x - y)
-          const plan = pagePlanOf(indexLayout(partOf(ids, [...(namedOn.get(q) ?? [])].map(nm => nameRows.get(nm.occurrence)).filter(Boolean))), q, planInkOf(pagesInk[q]), () => unpackFacts(facts[q]))
-          if (plan) plans.set(q, plan)
+          const rules = cellRulesOf(indexLayout(partOf(ids, [...(namedOn.get(q) ?? [])].map(nm => nameRows.get(nm.occurrence)).filter(Boolean))), q, planInkOf(pagesInk[q]))
+          if (rules) cellRules.set(q, rules)
         } catch (e) {
           if (isMemoryError(e)) throw e
-          plansFailed ??= String(e?.message ?? e).slice(0, 200)
+          rulesFailed ??= String(e?.message ?? e).slice(0, 200)
         }
       }
       pagesInk[q] = null
-      facts[q] = null
       // (and what its tasks held: every one of them ran)
       queue.delete(q); touching.delete(q); namedOn.delete(q); kept.delete(q)
       released[q] = 1
@@ -2946,8 +2662,6 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
         // (rule 3's edges a page at a time in page order; a cover page's passes after them held)
         if (t.edgesOf !== undefined && t.edgesOf !== edgesTo + 1) continue
         if (held.size && t.key[0] >= 1 && t.pages.some(p => held.has(p))) continue
-        // (a unit's placeholders once the links of its pages are final and read: the link-anchor locator's)
-        if (t.key[0] === 2 && linking) { if (!linksReady(t)) continue; for (const p of t.pages) if (p > linkRanTo) linkRanTo = p }
         allowed = new Set(t.pages)
         try { t.run() } finally { allowed = null }
         for (const p of t.pages) { queue.get(p).head++; work.push(p) }
@@ -2961,20 +2675,27 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       if (!fontIndex.has(r.font) && fonts.length >= FONTS_MAX) { nameWhy('past the fonts a file may name'); return }
       const view = viewAt(r.page), [x0, bottom, x1, top] = solid(view, r.x0, r.bottom, r.x1, r.top)
       const cx0 = Math.max(view[0] - 1, r2(nm.column[0])), cx1 = Math.min(view[2] + 1, r2(nm.column[1]))
-      const row = [nm.occurrence, nm.key, r.page, x0, Math.min(top, Math.max(bottom, r2(r.base))), x1, top, bottom, r2(Math.min(SIZE_MAX, r.size)), fontOf(r.font), nm.flags, nm.lead, r2(nm.glue), cx0, cx1]
+      const row = [nm.occurrence, nm.key, r.page, x0, Math.min(top, Math.max(bottom, r2(r.base))), x1, top, bottom, r2(Math.min(SIZE_MAX, r.size)), fontOf(r.font), nm.flags, nm.lead, slot12(nm, x0, x1), cx0, cx1]
       nameRows.set(nm.occurrence, JSON.parse(JSON.stringify(layoutPartRows({ fonts: [], units: [], lines: [], frames: [], erase: [], ph: [], labels: [], headings: [], pageText: [], held: [], names: [row] }).names[0])))
       stats.names.located++
       if (nm.lead >= 0) stats.names.runIn++
     }
-    /** the rows of units `ids` (rising) and names `rows`, as a layout file holds them (its views and pages the paper's) */
+    /** the rows of units `ids` (rising) and names `rows`, as a layout file holds them (its views and pages the paper's), and
+     *  why each of `ids` the file does not lay is the original's (`unlaid`, units settled alone) */
     const partOf = (ids, rows) => {
-      const out = { schema: LAYOUT_SCHEMA, layout: LAYOUT, pdfjs, paper: { id: paper.id, version: paper.version, pages }, left, views, fonts: fonts.slice(), lineskip: marks.marking.lineskip ?? null }
+      const unlaid = unlaidOf(ids.filter(i => settledU[i]), i => unitRows.has(i))
+      ids = ids.filter(i => unitRows.has(i))
+      const out = { schema: LAYOUT_SCHEMA, layout: LAYOUT, pdfjs, paper: { id: paper.id, version: paper.version, pages }, left: LEFT, views, fonts: fonts.slice(), lineskip: marks.marking.lineskip ?? null }
       for (const key of ['units', 'lines', 'frames', 'erase', 'ph', 'labels', 'headings', 'pageText', 'held']) out[key] = []
       for (const i of ids) { const r = unitRows.get(i); for (const key of ['units', 'lines', 'frames', 'erase', 'ph', 'labels', 'headings', 'pageText', 'held']) out[key].push(...r[key]) }
       out.names = rows
       // (each colour piece's run's fill: a key only where a unit of the part has one)
       const colours = ids.flatMap(i => unitRows.get(i).colours ?? [])
       if (colours.length) out.colours = colours
+      if (unlaid.length) out.unlaid = unlaid
+      // (the regions of the pages read and not yet told: a part takes its pages' (layer-proto/cut.mjs))
+      const regions = regionsHeld()
+      if (regions.length) out.regions = regions
       return out
     }
     // ---- the babel names, each a task on the pages its marks are carried to and those of the unit it would lead (nameAt
@@ -2995,10 +2716,10 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       if (!at.has(nm)) return
       const a = at.get(nm), x = NAME_START.exec(nm)
       const set = new Set(), e = `n${x[1]}.${x[2]}.e`, b = dropped.has(e) ? null : at.get(e)
-      for (const m of [nm, e]) { const p = dropped.has(m) ? null : at.get(m), c = p ? carriedPage(p.page, p.x, p.y) : null; if (c !== null) set.add(c) }
+      for (const m of [nm, e]) { const p = dropped.has(m) ? null : at.get(m), c = p ? carriedPage(p.page) : null; if (c !== null) set.add(c) }
       if (b) {
         const lead = leadAt(b)
-        if (lead >= 0) for (const end of ['s', 'e']) { const name = nameOf.get(`${lead}${end}`), m = name === undefined || dropped.has(name) ? null : at.get(name), c = m ? carriedPage(m.page, m.x, m.y) : null; if (c !== null) set.add(c) }
+        if (lead >= 0) for (const end of ['s', 'e']) { const name = nameOf.get(`${lead}${end}`), m = name === undefined || dropped.has(name) ? null : at.get(name), c = m ? carriedPage(m.page) : null; if (c !== null) set.add(c) }
       }
       const t = {
         key: [1, rank], pages: [...set].sort((p, q) => p - q),
@@ -3030,19 +2751,8 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
         if (!keysLeft[i] && !rowsLeft[i]) continue
         let least = Infinity, most = -Infinity
         for (const k of [`${i}s`, `${i}e`]) for (const [, pg] of keyNames.get(k) ?? []) { least = Math.min(least, pg); most = Math.max(most, pg) }
-        // (where its bounds may be, before its own marks are known: their pages and one beside)
-        if (keysLeft[i] && R.lastPage) R.own(i, Math.min(Math.max(1, least - 1), R.lastPage), Math.min(most + 1, R.lastPage))
         least = Math.min(least, rowLeast[i])
         countLow(i, least === Infinity ? pages + 1 : least - 1)
-      }
-      // (the least page a unit with a piece that names a link may want, before it is known: its own marks' and those pieces'
-      // points' pages but one, as countLow's; a piece's own glyphs stand between its points)
-      if (linking) for (let i = 0; i < n; i++) {
-        if (!units[i].pieces.some(linkablePiece)) continue
-        let least = Infinity
-        for (const k of [`${i}s`, `${i}e`]) for (const [, pg] of keyNames.get(k) ?? []) least = Math.min(least, pg)
-        units[i].pieces.forEach((piece, k) => { if (linkablePiece(piece)) for (const nm of [`p${i}.${k}a`, `p${i}.${k}b`]) { const pg = pageOfName.get(nm); if (pg !== undefined) least = Math.min(least, pg) } })
-        if (least !== Infinity) setLinkLow(i, least - 1)
       }
     }
     for (let i = 0; i < n; i++) if (!keysLeft[i]) marksKnown(i)
@@ -3063,24 +2773,16 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     wake()
 
     /** what is ready run: the units whose marks' pages are read carried, the ranges anchored, the pages decided, their tasks;
-     *  `anchor` false, the ranges left to the step of arXiv's page read next (a marked page's, read before it: what the two
+     *  `anchor` false, the ranges left to the step of the base page read next (a marked page's, read before it: what the two
      *  steps anchor is the same, the second's at once) */
     const step = (anchor = true) => {
-      if (refusal) return
       wake()
       if (anchor) R.run(onAnchor, decide)
       advance()
       for (let q = Math.max(1, releasedTo + 1); q <= Math.min(readyTo(), decidedTo); q++) work.push(q)
       pump()
-      dropUnwanted()
     }
-    /** the held links of the pages no unit may want now (each before the link frontier, and not wanted) let go */
-    const dropUnwanted = () => {
-      if (!heldTheirs.size) return
-      const w = linking ? linkFinal() : Infinity
-      for (const q of [...heldTheirs.keys()]) if (q < w && !wanted?.has(q)) dropHeld(q)
-    }
-    /** arXiv's page p read (after readPage(p), pages in order) */
+    /** the base page p read (after readPage(p), pages in order) */
     function pageRead(p) {
       X = p
       step()
@@ -3098,13 +2800,15 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     const veto = names => {
       for (const r of names) {
         twiceSeen.add(r)
-        const o = /^[pn]\d+\.\d+b$/.test(r) ? `${r.slice(0, -1)}a` : r, m = OPENING_ROW.exec(o), i = m ? Number(m[1]) : -1
+        // (a start mark set twice takes the ink of the display its unit opens with: marks.mjs headsOf)
+        const h = /^\d+s$/.test(r) ? heads(r) : null
+        const o = h ? h.name : /^[pn]\d+\.\d+b$/.test(r) ? `${r.slice(0, -1)}a` : r, m = OPENING_ROW.exec(o), i = m ? Number(m[1]) : -1
         if (i >= 0 && i < n && phRan[i]) stats.late.vetoes++
         // (the carried pages of its unit and of its group's displays' made again: their ink taken)
         if (i >= 0) carriedKnown.delete(i)
         for (const g of follows(o)?.group ?? []) { const x = OPENING_ROW.exec(g); if (x) carriedKnown.delete(Number(x[1])) }
       }
-      vetoTwice(ownInk, twiceSeen, follows)
+      vetoTwice(ownInk, twiceSeen, follows, heads)
     }
     /** the marked original's page p (markedPages' page, pages in order) */
     function markedPage(page) {
@@ -3115,31 +2819,28 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       for (const v of page.view) mViews.push(v)
       for (const w of page.words) mWords.push(w)
       // its marks, in the names' order, each on its page's view (the marks file's)
-      for (const [nm, x, y] of namesOn.get(p) ?? []) if (markAt(mViews, M, p, x, y)) { at.set(nm, { page: p, x: r2z(x), y: r2z(y) }); noteMark(nm) }
-      // its draft frames, its tokens drawn, carried
+      for (const [nm, x, y] of namesOn.get(p) ?? []) if (markAt(mViews, M, p, x, y)) { at.set(nm, { page: p, x: r2z(x), y: r2z(y) }) }
+      // its draft frames, its tokens drawn
       const frames = []
       for (const nm of gOn.get(p) ?? []) { const a = at.get(nm), f = a ? frameAt(nm, a) : null; if (f) frames.push(f) }
-      const drawn = drawnOf(frames), from = ours.length, over = carrier.over.length
+      const drawn = drawnOf(frames)
       for (const tk of tokensOfMarks({ tokens: page.tokens, words: mWords })) if (drawn(tk)) { push(oursOn, tk.page, ours.length); ours.push(tk) }
-      carrier.add(from, ours.length)
-      overFrom(over)
       markedTo = p
-      // its links (the paper's where it has any: the head's verdict), the pieces found once it was read, and the points read again
-      if (linking) takeLinks(page.links)
+      // the pieces found once it was read, and the points read again
       for (const [name, row] of page.owned) takeRow(name, row)
       if (page.repeats.length) veto(page.repeats)
-      else if (twiceSeen.size && page.owned.length) vetoTwice(ownInk, twiceSeen, follows)
+      else if (twiceSeen.size && page.owned.length) vetoTwice(ownInk, twiceSeen, follows, heads)
       // what is known now: each key whose names are all read, the pieces' marks on it, the pieces before `found`
       for (const [k, c] of keysOn.get(p) ?? []) { const left = keyLeft.get(k) - c; keyLeft.set(k, left); if (left === 0) finalKey(k) }
       for (const i of abAt.get(p) ?? []) rowDone(i)
       for (; foundTo < page.found; foundTo++) for (const i of rowsAt.get(foundTo) ?? []) rowDone(i)
       resolveNames()
       stats.ms.carry += now() - t
-      // (arXiv's page X + 1 is read next, while one is left: its step anchors)
+      // (the base page X + 1 is read next, while one is left: its step anchors)
       step(X >= pages)
     }
     /** the marked original's end (markedPages' end, after its last page): the pieces found at its end, its points read twice,
-     *  every piece known; the carry's share */
+     *  every piece known */
     function markedEnd(end) {
       if (!mh || ended) throw new Error('the marked original is not read a page at a time here, or its end was given')
       if (markedTo !== M) throw new RangeError(`the marked original's end after page ${markedTo} of ${M}`)
@@ -3148,26 +2849,22 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       for (const [name, row] of end.owned) takeRow(name, row)
       const more = [...end.twice].filter(r => !twiceSeen.has(r))
       if (more.length) veto(more)
-      else if (twiceSeen.size && end.owned.length) vetoTwice(ownInk, twiceSeen, follows)
+      else if (twiceSeen.size && end.owned.length) vetoTwice(ownInk, twiceSeen, follows, heads)
       for (; foundTo <= M; foundTo++) for (const i of rowsAt.get(foundTo) ?? []) rowDone(i)
       resolveNames()
-      refusal = shareOf()
       stats.ms.carry += now() - t
       step()
     }
     /** every page read (and the marked original's end): the rest anchored, every task run, every page let go */
     function finish() {
       if (!ended) throw new Error('the marked original\'s end was not given')
-      if (refusal) throw new Error(`the layout is refused: ${refusal}`)
       X = pages
-      if (linking && pending?.length) throw new Error('a piece that names a link was never judged: every page is read')
       for (let i = 0; i < n; i++) if (!R.isMarked(i)) markUnit(i)
       R.run(onAnchor, decide)
       for (let u = 0; u < n; u++) decide(u)
       advance()
       for (let q = 1; q <= pages; q++) work.push(q)
       pump()
-      for (const q of [...heldTheirs.keys()]) dropHeld(q)
       for (const [q, Q] of queue) if (Q.head < Q.list.length) throw new Error(`page ${q}'s tasks did not all run`)
       for (let q = 1; q <= pages; q++) if (!released[q]) throw new Error(`page ${q} was not let go`)
       stats.ph.unmatched = stats.ph.owned - stats.ph.matched
@@ -3193,27 +2890,26 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       }
       stats.ph.texts = [...unitRows.values()].reduce((m, r) => m + r.pageText.length, 0)
       for (const i of inFile) countColours(i)
-      Object.assign(stats.match, matcher.stats)
+      finished = true
     }
     return {
-      pageRead, markedPage, markedEnd, finish, plans, plansFailed: () => plansFailed,
-      /** the wanted pages' links read up to arXiv's page read last (readPage reads them as it reads a page): where no readPage
-       *  follows a marked page, and before finish() */
-      readLinks: async () => { for (const q of [...(wanted ?? [])].sort((a, b) => a - b)) if (q <= X) await readTheirs(q) },
-      /** whether the carry's refusal is known: the marked original read whole, or to its end, or (for parts) a line carried */
-      carryKnown: () => ended || (parts && carrier.lines.total > 0),
-      /** the carry's refusal ('carry'), once the marked original's end is given; null else */
-      carryRefusal: () => refusal,
-      /** the file's rows of the units settled so far (`ids`, rising: those of them it holds) and the names taken in */
-      layout: (ids = [...unitRows.keys()].sort((x, y) => x - y)) => partOf(ids.filter(i => unitRows.has(i)), [...nameRows.keys()].sort((x, y) => x - y).map(k => nameRows.get(k))),
+      pageRead, markedPage, markedEnd, finish, cellRules, rulesFailed: () => rulesFailed,
+      /** the line check's refusal ('carry': no unit laid), once finished; null else */
+      carryRefusal: () => (finished ? noneLaid() : null),
+      /** the units the file holds so far */
+      laid: () => stats.units.located,
+      /** the file's rows of the units settled so far (`ids`, rising: those of them it holds, and why each other is the
+       *  original's) and the names taken in */
+      layout: (ids = Array.from({ length: n }, (_, i) => i).filter(i => settledU[i])) => partOf(ids, [...nameRows.keys()].sort((x, y) => x - y).map(k => nameRows.get(k))),
       released: () => releasedTo,
       settled: i => settledU[i] === 1,
       /** units `ids` told by the parts through page `through`: their rows the stubs K reads (stubOf), the names on those pages
-       *  and their plans let go */
+       *  and their cell rules let go */
       tell: (ids, through) => {
         for (const i of ids) { const r = unitRows.get(i); if (r && !r.stub) unitRows.set(i, { ...stubOf(i, r), stub: true }) }
         for (const [k, row] of nameRows) if (row[2] <= through) nameRows.delete(k)
-        if (plans) for (const p of plans.keys()) if (p <= through) plans.delete(p)
+        for (const q of [...regionRows.keys()]) if (q <= through) regionRows.delete(q)
+        if (cellRules) for (const p of cellRules.keys()) if (p <= through) cellRules.delete(p)
       },
       /** where the stream stands: the page read last (and the marked original's), the pages anchored, decided and let go */
       progress: () => {
@@ -3226,13 +2922,10 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
   /**
    * The paper's rows made a page at a time (stream's), every page read here: the stream, finished, or the carry's refusal.
    * `marked` { head, events }: the marked original read a page at a time as well (markedPages' head, and its events after it:
-   * each page, then the end), its page p read before arXiv's page p; else it was read whole (the marks given), carried first
+   * each page, then the end), its page p read before the base page p; else it was read whole (the marks given), carried first
    */
   async function byStream(marked = null) {
-    if (!marked) {
-      const refused = carrying()
-      if (refused) return { refused, stats }
-    }
+    if (!marked) carrying()
     const t = now()
     const st = stream(marked ? { marked: marked.head } : {})
     st.trace = []
@@ -3240,21 +2933,20 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     const M = marked ? marked.head.pages : 0
     for (let p = 1; p <= Math.max(M, pages); p++) {
       if (p <= M) { const x = await it.next(); if (x.done || !x.value.page) throw new Error(`the marked original gave no page ${p}`); st.markedPage(x.value.page) }
-      if (p <= pages) { await readPage(p); st.pageRead(p) } else await st.readLinks()
+      if (p <= pages) { await readPage(p); st.pageRead(p) }
       st.trace.push(st.progress())
     }
     if (marked) {
       const x = await it.next()
       if (x.done || !x.value.end) throw new Error('the marked original gave no end')
       st.markedEnd(x.value.end)
-      if (st.carryRefusal()) return { refused: st.carryRefusal(), stats }
     }
-    await st.readLinks()
     st.finish()
     stats.ms.rows = now() - t
-    return st
+    const refused = st.carryRefusal()
+    return refused ? { refused, stats } : st
   }
-  return { pages, stats, readPage, whole, byTasks, stream, byStream, carrying, edges: () => edges, pageLines: () => carrier?.pageLines ?? new Map(), drawOf, drawJsonOf, drawStats, draw: wantDraw }
+  return { pages, stats, readPage, whole, byTasks, stream, byStream, carrying, edges: () => edges, pageLines: () => lineCheck?.pageLines ?? new Map(), drawOf, drawJsonOf, drawStats, draw: wantDraw }
 }
 
 /**

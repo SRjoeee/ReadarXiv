@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { O, S, setLocale } from '@/ui/strings'
+import { O, S, setLocale } from '@readarxiv/ui'
 import { POPUP_FIXTURES } from '@/entrypoints/popup/fixtures'
 import { MANAGE_PROMPTS, MANAGE_SERVICES, MANAGE_STYLES, derivePopupView, runnable } from '@/entrypoints/popup/view-model'
 import { searchUrl } from '@/entrypoints/popup/find'
@@ -139,7 +139,7 @@ describe('derivePopupView (UI.md §4)', () => {
     expect(m.items.length).toBeGreaterThan(150)
     const cmn = m.items.find(i => i.id === 'cmn')!
     expect(cmn.checked).toBe(true)
-    expect(cmn.keywords).toMatch(/Mandarin/)
+    expect(cmn.keywords).toMatch(/Simplified Chinese/)
     expect(cmn.keywords).toMatch(/cmn/)
   })
   it('P4 translating: the button says it and keeps the shortcut, the rows stay open, no counts anywhere', () => {
@@ -157,6 +157,16 @@ describe('derivePopupView (UI.md §4)', () => {
     expect(v.service).toEqual({ value: 'Google 翻译', replaced: 'deepseek-v4-flash' })
     expect(v.note).toEqual({ text: 'deepseek-v4-flash：API Key 无效或已过期。本页已改用 Google 翻译', tone: 'info', settings: true })
     expect(v.primary.action).toBe('restore')
+  })
+  it('a built-in service refused (a web translator\'s 401 or 403) or stopped on is never worded as an API key: no key was sent (#88 E5)', () => {
+    // Microsoft chosen, refused, Google taking over: the note names the refusal, not a key
+    const ms = { id: 'microsoft', kind: 'auth' as const, message: '401' }
+    const handed = { ...input('P6'), config: { ...input('P6').config!, provider: 'microsoft', services: [] }, page: { ...input('P6').page!, running: { provider: 'microsoft', target: 'cmn', engine: 'google-web', revision: 'r1' } }, rejected: [], saved: input('P6').saved, session: { ...input('P6').session!, providerId: 'microsoft', chosen: 'microsoft', engine: { id: 'google-web', demoted: ms }, demotions: [{ id: 'microsoft', kind: 'auth' as const, status: 401 }] } }
+    expect(derivePopupView(handed).note).toEqual({ text: 'Microsoft 翻译：翻译服务拒绝访问。本页已改用 Google 翻译', tone: 'info', settings: true })
+    // a page stopped on a refusal while a built-in is its service: the same words
+    const stopped = { ...input('P9'), config: { ...input('P9').config!, provider: 'google-web', services: [] }, page: { ...input('P9').page!, running: { provider: 'google-web', target: 'cmn', engine: 'google-web', revision: 'r1' } } }
+    expect(derivePopupView(stopped).note?.text).toBe('翻译服务拒绝访问。请检查设置后重新翻译')
+    expect(words(derivePopupView(handed)) + words(derivePopupView(stopped))).not.toMatch(/API Key/)
   })
   it('P7 LLM without a key, another service takes over: note says which, translate stays enabled', () => {
     const v = view('P7')
@@ -270,9 +280,9 @@ describe('actionErrorText (S-P-90)', () => {
   it('names a missing active tab in the interface language and passes any other error through as thrown', async () => {
     const { actionErrorText } = await import('@/entrypoints/popup/view-model')
     const { NoActiveTabError } = await import('@/shared/messages')
-    const strings = await import('@/ui/strings')
+    const ui = await import('@readarxiv/ui')
     setLocale('zh-CN')
-    expect(actionErrorText(new NoActiveTabError())).toBe(strings.S.noActiveTab)
+    expect(actionErrorText(new NoActiveTabError())).toBe(ui.S.noActiveTab)
     expect(actionErrorText(new NoActiveTabError())).toMatch(/标签页/)
     setLocale('en')
     expect(actionErrorText(new NoActiveTabError())).toBe('No active tab')
@@ -281,18 +291,36 @@ describe('actionErrorText (S-P-90)', () => {
     expect(actionErrorText('plain')).toBe('plain')
   })
 
+  it('a queue timeout, thrown here or carried back as a failure reply, is the pack\'s timeout sentence, with no task id and no milliseconds', async () => {
+    const { actionErrorText, startRefusalText } = await import('@/entrypoints/popup/view-model')
+    const { decodeReply, failure } = await import('@/shared/messages')
+    const { REQUEST_TIMEOUT_ERROR_NAME } = await import('@/providers/types')
+    const strings = await import('@/ui/strings')
+    const timeout = Object.assign(new Error('Task t-12 timed out after 5000ms'), { name: REQUEST_TIMEOUT_ERROR_NAME })
+    let carried: unknown
+    try { decodeReply(failure(timeout)) } catch (e) { carried = e }
+    for (const code of ['en', 'zh-CN'] as const) {
+      setLocale(code)
+      for (const text of [actionErrorText(timeout), actionErrorText(carried), startRefusalText({ started: false, reason: 'backend-timeout' })]) {
+        expect(text).toBe(strings.reasonText('timeout'))
+        expect(text).not.toMatch(/\d+\s*ms|Task/)
+      }
+    }
+    setLocale('zh-CN')
+  })
+
   it('a save the store refused has a sentence of its own, thrown here or carried back from the page as a failure reply', async () => {
     const { actionErrorText } = await import('@/entrypoints/popup/view-model')
     const { ConfigUnreadableError } = await import('@/config/storage')
     const { decodeReply, failure } = await import('@/shared/messages')
-    const strings = await import('@/ui/strings')
+    const ui = await import('@readarxiv/ui')
     const refused = new ConfigUnreadableError({ kind: 'tooNew', stored: 99, supported: 15 })
     setLocale('en')
-    expect(actionErrorText(refused)).toBe(strings.S.settingsUnreadable)
+    expect(actionErrorText(refused)).toBe(ui.S.settingsUnreadable)
     expect(actionErrorText(refused)).toMatch(/not saved/)
     let carried: unknown
     try { decodeReply(failure(refused)) } catch (e) { carried = e }
-    expect(actionErrorText(carried)).toBe(strings.S.settingsUnreadable)
+    expect(actionErrorText(carried)).toBe(ui.S.settingsUnreadable)
     setLocale('zh-CN')
   })
 })
@@ -300,11 +328,11 @@ describe('actionErrorText (S-P-90)', () => {
 describe('startRefusalText', () => {
   it('turns every refusal code the session can answer into the sentence of the interface language', async () => {
     const { startRefusalText } = await import('@/entrypoints/popup/view-model')
-    const strings = await import('@/ui/strings')
+    const ui = await import('@readarxiv/ui')
     setLocale('zh-CN')
-    expect(startRefusalText({ started: false, reason: 'already-on' })).toBe(strings.S.page.alreadyOn)
-    expect(startRefusalText({ started: false, reason: 'not-paper' })).toBe(strings.S.page.notPaper)
-    expect(startRefusalText({ started: false, reason: 'backend-silent', detail: 'gone' })).toBe(strings.S.page.backendSilentWith('gone'))
+    expect(startRefusalText({ started: false, reason: 'already-on' })).toBe(ui.S.page.alreadyOn)
+    expect(startRefusalText({ started: false, reason: 'not-paper' })).toBe(ui.S.page.notPaper)
+    expect(startRefusalText({ started: false, reason: 'backend-silent', detail: 'gone' })).toBe(ui.S.page.backendSilentWith('gone'))
     setLocale('en')
     expect(startRefusalText({ started: false, reason: 'no-service' })).toBe('No API key yet. Add one in the settings')
     setLocale('zh-CN')
@@ -315,11 +343,12 @@ describe('the core strings seam (DESIGN §4.2)', () => {
   it('setLocale hands the core the retry label and the failure sentences of that locale', async () => {
     const { coreStrings } = await import('@/core/strings')
     const strings = await import('@/ui/strings')
+    const ui = await import('@readarxiv/ui')
     setLocale('en')
     expect(coreStrings().retry).toBe('Retry')
     expect(coreStrings().failureTitle('auth')).toBe(strings.reasonText('auth'))
     setLocale('zh-CN')
-    expect(coreStrings().retry).toBe(strings.S.page.retry)
+    expect(coreStrings().retry).toBe(ui.S.page.retry)
     expect(coreStrings().failureTitle('no-key')).toBe(strings.reasonText('no-key'))
   })
 
@@ -327,9 +356,9 @@ describe('the core strings seam (DESIGN §4.2)', () => {
     const reader = (config = input('P17').config!, over = {}) => derivePopupView({ ...input('P17'), config, entry: { ...input('P17').entry!, kind: 'pdf', readerOpen: true }, ...over })
     const withConfig = (patch: Record<string, unknown>) => ({ ...input('P17').config!, ...patch }) as NonNullable<ReturnType<typeof input>['config']>
 
-    it('lists the nine languages the reader typesets, alone', () => {
+    it('lists the languages the reader typesets, alone', () => {
       const v = reader(undefined, { menu: 'language' })
-      expect(v.menus?.language.items.map(i => i.id)).toEqual(['jpn', 'cmn', 'cmn-Hant', 'kor', 'deu', 'spa', 'fra', 'por', 'rus'])
+      expect(v.menus?.language.items.map(i => i.id)).toEqual(['jpn', 'cmn', 'cmn-Hant', 'kor', 'ind', 'zsm', 'ces', 'deu', 'spa', 'fra', 'ita', 'nld', 'pol', 'por', 'swe', 'tur', 'bul', 'rus', 'ukr'])
     })
 
     it('greys stacked with its reason, and shows a stored stacked as side by side, what the reader shows', () => {
@@ -343,11 +372,17 @@ describe('the core strings seam (DESIGN §4.2)', () => {
       expect(reader(withConfig({ pdfReader: { ...cfg.pdfReader, original: false } })).primary).toMatchObject({ label: '显示原文', action: 'readerOriginal' })
     })
 
-    it('has no style to choose (the foot greys its button) and no entries; the service, the highlight and the images are as elsewhere', () => {
+    it('has no style to choose (the foot greys its button) and no entries; the service and the highlight are as elsewhere', () => {
       const v = reader()
       expect([v.style, v.entries]).toEqual([null, null])
       expect(v.service.value).toBe(view('P17').service.value)
-      expect([v.highlight, v.images]).toEqual([view('P17').highlight, view('P17').images])
+      expect(v.highlight).toBe(view('P17').highlight)
+    })
+
+    it('greys the image switch, the HTML page\'s, which changes nothing in the reader: its figure text is the reader\'s own "What to translate" (S-R-27)', () => {
+      const v = reader()
+      expect([v.images, v.imagesGreyed]).toEqual([view('P17').images, true])
+      expect([view('P1').imagesGreyed, view('P17').imagesGreyed]).toEqual([false, false])
     })
   })
 })

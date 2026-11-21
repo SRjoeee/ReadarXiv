@@ -2,7 +2,7 @@
 // The reader's door (the layer-only plan of 2026-10-08, §7, A2's E4; BUNDLE 4's parts, the door design of 2026-10-15). On
 // 2026-10-08 the instant layer became the only reading view, for the web reader and the extension alike; both take every
 // engine value they use from this module, and both draw a paper through openLayer: the one place v0's host is written
-// (run.mjs openProto's options: the geometry, the hybrid's choices, the add-on, the labels, the scale), so that neither
+// (run.mjs openProto's options: the geometry, the layout file's choices, the add-on, the labels, the scale), so that neither
 // reader decides how a page is drawn and both draw it as the layer gate measured it. The rest is what a host needs around
 // it: the bundle and its bounded reader, the rows, the layout file's and the add-on manifest's readers, the role table's
 // faces and the face to ask for first, and the translation loop the extension runs itself. It reaches none of the server's
@@ -13,24 +13,24 @@ import { indexLayout } from '../layout/file.mjs'
 import { BundleRefusal } from './bundle.mjs'
 import { layoutFacade } from './facade.mjs'
 import { OPEN_FAMILY } from './fonts.mjs'
-import { readLeftPart } from './format.mjs'
-import { sourceUnitsOf, toTranslate, unitOf } from './rows.mjs'
-import { openProto } from './run.mjs'
+import { layerDraws, readLeftPart } from './format.mjs'
+import { echoRows, layerIds, sourceUnitsOf, unitOf } from './rows.mjs'
+import { classesOn, shownTranslated, TOGGLE_DEFAULTS, unitClass } from '../rules/content-classes.mjs'
+import { LIVE_FILLS_MS, openProto } from './run.mjs'
+import { NAME_KIND } from './units.mjs'
 import { BUILTIN_RULES, resolveRules } from '../rules/layout.mjs'
 
-export { PDF_OPTIONS } from './run.mjs'
+export { PDF_OPTIONS, SKIP_CODES } from './run.mjs'
 export { BUNDLE, BUNDLE_CAP, BUNDLE_VALUES, BundleRefusal, bundleKey, CTAG, readBundle, VTAG } from './bundle.mjs'
 export { batchesOf, layerRows, rowOf, runRows, toTranslate, unitOf } from './rows.mjs'
-export { ADDON_CAP, ADDON_MANIFEST_CAP, ADDON_MANIFEST_VALUES, parseAddonManifest } from '../layout/addon-manifest.mjs'
 export { indexLayout, LAYOUT, LAYOUT_CAP, LAYOUT_VALUES, LayoutRefusal, parseLayout } from '../layout/file.mjs'
 export { trPiecesOf } from '../layer/pieces.mjs'
 export { FACES } from '../rules/font-roles.mjs'
 export { translateUnits } from '../translate/mt.mjs'
 
-/** the hybrid's choices, the layer gate's (--proto-tex=lines): each unit the layout file locates whole drawn by the file's
- *  lines, label and placeholders, the units only the file holds drawn too (but table cells), no symbol drawn as text
- *  asked to be found, each line's erase extent v0's own */
-const HYBRID = Object.freeze({ use: 'lines', texOnly: true, symbols: 'text', extents: 'v0' })
+/** how the layout file is taken, the layer gate's (--proto-tex=lines): no symbol drawn as text asked to be found, each
+ *  line's erase extent v0's own */
+const FILE = Object.freeze({ symbols: 'text', extents: 'v0' })
 /** v0's resolution, one on every device: 2.5 CSS px a PDF unit at a device pixel ratio of 1, the gate's 2.5 device pixels a
  *  unit (a view draws the page at its own, copyOf) */
 const SCALE = 2.5
@@ -58,8 +58,8 @@ function checkRules(rules) {
 let opened = null
 
 /**
- * The face a host asks for first, at the open, before the paper's English family is known: the target's CJK body face,
- * light where the layout rules say so beside the family v0 opens with (OPEN_FAMILY), else null. It is the face
+ * The face a host asks for first, at the open, before the paper's English family is known: the target's CJK body face (its
+ * Regular, beside every family), else null. It is the face
  * openLayer's run warms at its open, asked through the rules (the set a host passes to openLayer, the built-in one if
  * none) rather than the role table, so that no host decides a face.
  */
@@ -77,42 +77,54 @@ function addShapes(by, units) {
 }
 
 /**
- * The layer of one paper and target, as either reader shows it: v0 opened over the composed document `doc` (arXiv's PDF
- * followed by the paper's removed pages, opened once by PDF.js with PDF_OPTIONS), its left as its geometry, its layout file
- * as the hybrid's (none where the maker refused, or the bundle or a part dropped it: every rendering is still proven, by
- * nothing then, so that a unit with a placeholder other than TeX's own nothing, a space or a text symbol stays the original's;
- * run.mjs openProto's `proof`), its add-on's manifest as the text removal's, the units to come the target's (toTranslate), each table
+ * The layer of one paper and target, as either reader shows it: v0 opened over the composed document `doc` (our wrapped page,
+ * whole or as a delta over arXiv's PDF, opened once by PDF.js with PDF_OPTIONS: each unit's ink in its own groups, which the copy
+ * hides where the unit is drawn, visibility.mjs), its left as its geometry, its layout file
+ * as the only source of a unit it draws (route step 2: a unit the file does not hold, or one with a visible piece it has no
+ * position for, is the original's; where the maker refused, or the bundle or a part dropped the layout, the paper or the
+ * part draws nothing: the host shows the original), what the file says it could not hide (`hiding`, by unit and page), the units to come the target's (toTranslate), each table
  * cell's group from the cells, the target's caption names on every float (L7), the host's served faces (`faceSources`) and
  * hyphenation patterns (`hyphUrl`), at scale 2.5 and a device pixel ratio of 1, no copy kept at v0's own resolution: one set
  * of choices on every device. Each choice made for the target is the layout rules' (`rules`; the built-in set where none),
  * none a host's own. One layer is open a page (a realm) at a time: v0's faces are the page's.
  *
  * Two opens. BUNDLE 4 (`index`: indexOf's, the head and every unit; `parts`: those told at the open, in order, over the
- * document through the last one's tail; `leftPart(page, ref)`: the host's transport for the left parts; `onRetired(doc)`:
+ * composed document; `leftPart(page, ref)`: the host's transport for the left parts; `onRetired(doc)`:
  * a document the layer no longer reads, the host's to destroy): the parts come over time (addPart, endParts), and a page is
  * `waiting` until the parts covering it and its closure are in and the rows it reads are taken (or ended), `laying` once
  * asked or in an asked page's way, `ready` once laid, `failed` where it cannot be. BUNDLE 3 (`bundle`, readBundle's) until
  * the pin move: the same layer over the whole paper, every page covered, no part to come.
  *
  *   take(rows), end()    the rows as v0's units (rows.mjs unitOf); a row that is no unit of the paper's is skipped and counted
- *   addPart(part, { doc })  the next part (readPart's), with the composed document through its tail where it has one
+ *   addPart(part)        the next part (readPart's)
  *   endParts()           no more parts: every page no part covers fails
  *   pageState(page), onPage(listener)  each page's state, and each change told once: laying, then ready or failed
  *   pageOf(page, { lang, signal })  the page laid, a new LaidPage each call (its SVG made anew of the page's kept markup, lang
  *                        set; words a copy of the page's word table, links empty until the engine's 3a); it waits for what the page needs, and
  *                        rejects where the page fails, the layer is let go or the signal aborts
  *   leftPageOf(page, { signal })  the page's left part, fetched once through leftPart and read, once a part covers it
- *   copyOf(page, source, k)  a ready page's copy at a view's resolution, over `source` (the page as PDF.js drew it at k)
+ *   copyOf(page, { k, width, height, context, annotationMode })  a ready page's copy at a view's resolution: the composed
+ *                        page drawn at k with the groups of its drawn units hidden, its crops and pastes (run.drawCopy)
+ *   textOf(page)         a ready page's text layer, plain data (textlayer.mjs): the page's text the drawing keeps, the text it
+ *                        moves with a crop, and each drawn line of the translation, in reading order; made anew on every call
+ *   hold(promise)        the drive turns to no other page while `promise` is pending, HOLD_MS at most: a host's commit of a page
+ *                        it was answered, asked in the answer's reaction, so that the next page is laid once that one is in place
  *   unitAt(page, x, y)   the unit of the left whose shape holds the point (PDF units), the smallest; null where none
  *   stats(), dispose()   what it has done; the run let go, every ask rejected, its documents told to onRetired once read by
- *                        nothing. After dispose pageOf, leftPageOf, copyOf and pageState throw; stats and unitAt answer
+ *                        nothing. After dispose pageOf, leftPageOf, copyOf and pageState throw; stats and unitAt answer; textOf throws as copyOf does
  */
+/** the dropped rows the door names at most (stats `droppedRows`): past it they are counted alone (`dropped`) */
+export const DROPPED_ROWS = 1000
 /** the draws of left parts the door holds for the run at most (their left parts' bytes): past it the oldest go, and the run reads
  *  those pages itself (drawOf null) */
 export const DRAWS_HELD = 16 * 2 ** 20
+/** the longest a host's hold keeps the drive from the next page, ms (hold): a commit's copy is drawn in tenths of a second, and its
+ *  wait for the left's page is 1.5 s at most (the side's LEFT_WAIT_MS); past it the hold is a promise gone astray, and the pages after
+ *  it are laid as with none */
+const HOLD_MS = 2000
 
 export async function openLayer(o = {}) {
-  const { bundle, index, doc, parts, target, faceSources, hyphUrl, leftPart, onRetired, rules = BUILTIN_RULES, drawsHeld = DRAWS_HELD, OPS = null } = o ?? {}
+  const { bundle, index, doc, parts, target, faceSources, hyphUrl, leftPart, onRetired, rules = BUILTIN_RULES, drawsHeld = DRAWS_HELD, OPS = null, classes = null, fillsMs = LIVE_FILLS_MS } = o ?? {}
   const four = bundle === undefined
   if (four) {
     if (index === null || typeof index !== 'object' || index.kind !== 'index' || !Array.isArray(index.units) || !index.head) throw new TypeError(`index: a layer index (indexOf's), not ${kindOf(index)}`)
@@ -131,24 +143,25 @@ export async function openLayer(o = {}) {
   if (typeof hyphUrl !== 'function') throw new TypeError(`hyphUrl: a function, not ${kindOf(hyphUrl)}`)
   if (OPS !== null && typeof OPS !== 'object') throw new TypeError(`OPS: PDF.js's operator codes or null, not ${kindOf(OPS)}`)
   checkRules(rules)
-  // (the parts told at the open stand as a chain, over a document through the last one's tail, before anything is opened)
+  if (classes !== null && (typeof classes !== 'object' || Object.entries(classes).some(([k, v]) => !Object.hasOwn(TOGGLE_DEFAULTS, k) || typeof v !== 'boolean'))) throw new TypeError(`classes: the reader's toggles, { ${Object.keys(TOGGLE_DEFAULTS).join(', ')} } booleans, not ${kindOf(classes)}`)
+  // (the parts told at the open stand as a chain over the composed document, before anything is opened)
   if (four) {
-    let ch = { through: 0, last: null, r: 0 }
+    let ch = { through: 0, last: null }
     const told = new Set()
     for (const part of parts ?? []) {
       if (part?.sha256 !== undefined && told.has(part.sha256)) continue
       checkPart(part, index, ch)
       told.add(part.sha256)
-      ch = { through: part.pages[1], last: part.sha256, r: part.chain.r }
+      ch = { through: part.pages[1], last: part.sha256 }
     }
     const N = index.head.paper.pages
-    if (doc.numPages !== N + ch.r) throw new BundleRefusal(`the document has ${doc.numPages} pages, not ${N + ch.r}`, { kind: 'part', path: 'doc' })
+    if (doc.numPages !== N) throw new BundleRefusal(`the document has ${doc.numPages} pages, not ${N}`, { kind: 'part', path: 'doc' })
   }
   if (opened) throw new Error('openLayer: one open layer a page; dispose the open one first')
   // (taken before the open's first await: two opens at once are refused alike)
   const token = {}
   opened = token
-  try { return await openOne({ four, bundle, index, doc, parts: parts ?? [], target, faceSources, hyphUrl, leftPart, onRetired, rules, drawsHeld, OPS }, token) } catch (e) { if (opened === token) opened = null; throw e }
+  try { return await openOne({ four, bundle, index, doc, parts: parts ?? [], target, faceSources, hyphUrl, leftPart, onRetired, rules, drawsHeld, OPS, classes, fillsMs }, token) } catch (e) { if (opened === token) opened = null; throw e }
 }
 
 /** a part told to the door, against the index and the chain so far (`ch`: through, last): a ReadPart of the index's head that
@@ -160,15 +173,28 @@ function checkPart(part, index, ch) {
   if (part.prev !== ch.last) throw new BundleRefusal('not following the digest of the last part', { kind: 'part', path: 'prev' })
 }
 
-async function openOne({ four, bundle, index, doc, parts, target, faceSources, hyphUrl, leftPart, onRetired, rules, drawsHeld, OPS }, token) {
+async function openOne({ four, bundle, index, doc, parts, target, faceSources, hyphUrl, leftPart, onRetired, rules, drawsHeld, OPS, classes, fillsMs }, token) {
   const source = four ? index : bundle
-  const expect = toTranslate(source, target)
+  // the reader's toggles (rules/content-classes.mjs, docs/route/orphan-text.md §8): a unit whose class they do not show is the
+  // original's, its row never taken, and awaited by no page; every class is translated on the server whatever they are, and a
+  // change of them opens the layer again, as a change of language does
+  const on = classesOn(classes)
+  const kinds = sourceUnitsOf(source).map(u => (u ? unitClass(u) : null))
+  const shown = id => kinds[id] !== null && kinds[id] !== undefined && shownTranslated(kinds[id], on)
+  // (a unit of the paper's whose class is not shown: its row is not taken; a row of no unit is the take's to count)
+  const hidden = id => kinds[id] !== null && kinds[id] !== undefined && !shownTranslated(kinds[id], on)
+  // (a structural name's unit, kind `name`, is no page's: awaited by none, its row the run's word for that name, PDF-READER §19.14)
+  const named = new Set(sourceUnitsOf(source).flatMap((u, id) => (u?.kind === NAME_KIND ? [id] : [])))
+  const expect = layerIds(source, target).filter(id => shown(id) && !named.has(id))
   // (each cell's group as the units' cells give it: a group is read once its own cells' rows are in)
   const groups = new Map()
   sourceUnitsOf(source).forEach((u, id) => { const g = u ? groupOf(u) : null; if (g) groups.set(id, g) })
   const facade = four ? layoutFacade(index.head) : null
   // (dead: the error a run could not go on from, which leaves the layer terminal)
   let run = null, disposed = false, dropped = 0, told = null, dead = null
+  // (the rows dropped as no unit of the paper's, by the unit they name: [id, 'rowUnfit'] (run.mjs SKIP_CODES), each id once, at
+  // most DROPPED_ROWS; a row naming no id is counted alone)
+  const droppedRows = new Map()
   // the door's state: each page's asks, the listeners, the left's shapes, streams and refs, the left pages fetched or awaited,
   // the chain told
   const asks = new Map(), listeners = new Set(), shapes = new Map()
@@ -188,28 +214,41 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
     for (const [p] of draws) { if (drawsBytes <= drawsHeld) break; dropDraw(p) }
   }
   const dropDraws = () => { draws.clear(); drawsBytes = 0 }
-  const chain = { through: 0, last: null, r: 0 }, toldParts = new Set()
+  const chain = { through: 0, last: null }, toldParts = new Set()
   let goneNow = () => {}
   const gone = new Promise((_, no) => { goneNow = no })
   gone.catch(() => {})
   const letGoError = () => new Error('openLayer: the layer was let go (dispose)')
-  // (proof: a unit read with no layout file (none for the paper, or a part's `layout: null`) is still under the proof, which
-  // nothing then proves but TeX's own nothing, a space and a text symbol, so no unproven crop or source text is drawn)
   // (the memory contract, the 1b design §3: each page's analysis state let go once it is laid and read by nothing more, each
   // unit's once it is painted; the units' records and the audit, the gate's, not kept: their counts alone)
-  const common = { units: [], expect, groups, target, scale: SCALE, dpr: 1, copy: false, free: true, records: false, proof: true, labels: { captions: CAPTIONS }, rules, faceSources, hyphUrl, OPS, onStep: () => evaluate() }
+  // what the wrap could not hide (the head's base: `unhidden`, by unit, and `labelKept`), and each page's cell rules as the parts
+  // tell them: the run reads them as it lays
+  const base = four ? index.head.base : bundle.base
+  const unhidden = new Map(base?.unhidden ?? []), labelKept = new Set(base?.labelKept ?? []), rulesByPage = new Map(), figuresByPage = new Map()
+  // (and each page's figure units, BUNDLE 10's: figure-rows.mjs, the run draws them where the reader's toggles show the class
+  // `figures`; else each is the original's, its row not taken, as any unit's of a class not shown)
+  const hear = x => {
+    for (const [pg, r] of Object.entries(x?.rules ?? {})) rulesByPage.set(Number(pg), r)
+    for (const f of x?.figures ?? []) (figuresByPage.get(f.page) ?? figuresByPage.set(f.page, []).get(f.page)).push(f)
+  }
+  if (!four) hear(bundle)
+  // (a bundle of 3 names no lists: its base is arXiv's PDF, which holds none of our groups, so no unit is hidden over it)
+  const hiding = { unhidden: id => unhidden.get(id) ?? null, labelKept: id => labelKept.has(id), rules: pg => rulesByPage.get(pg), figures: pg => figuresByPage.get(pg) ?? [], figuresShown: shownTranslated('figures', on) }
+  const common = { units: [], expect, classes: { ...TOGGLE_DEFAULTS, ...(classes ?? {}) }, groups, target, scale: SCALE, dpr: 1, copy: false, free: true, records: false, labels: { captions: CAPTIONS }, rules, faceSources, hyphUrl, OPS, fillsMs, onStep: () => evaluate() }
   run = await openProto(four
     ? {
         ...common, parts: true, doc, pages: index.head.paper.pages, onRetired, drawOf: page => drawOfPage(page), drawsComing: index.head.draw === 1,
         geometry: { schema: 1, kinds: index.kinds.map(k => k ?? ''), left: { pages: [], units: [] } },
-        tex: { ...HYBRID, index: facade.index, pieces: new Map() },
-        removal: { mode: 'draw', doc, manifest: { schema: 1, removal: index.head.versions.removal, pages: index.head.paper.pages, sets: {}, page: {} } },
+        tex: { ...FILE, index: facade.index, pieces: new Map() },
+        hiding,
       }
     : {
         ...common, doc, pages: Number.POSITIVE_INFINITY, onRetired: onRetired ?? null,
         geometry: { schema: 1, kinds: bundle.left.kinds, left: { pages: bundle.left.pages, units: bundle.left.units } },
-        tex: bundle.layout ? { ...HYBRID, index: indexLayout(bundle.layout), pieces: new Map() } : null,
-        removal: bundle.addon ? { mode: 'draw', doc, manifest: bundle.addon.manifest } : null,
+        // (a bundle with no layout, or one over arXiv's page: a file of no unit, so that every unit is the original's. A whole bundle that
+        // tells no `source` is its caller's own file, the harness's, and is read as ours; one merged from a head tells it: mergeParts)
+        tex: { ...FILE, index: bundle.layout && layerDraws({ source: bundle.base?.source ?? 'ours' }) ? indexLayout(bundle.layout) : layoutFacade({ ...bundle, lineskip: null }).index, pieces: new Map() },
+        hiding,
       })
   const N = run.N
   told = new Uint8Array(N + 1)
@@ -226,9 +265,22 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
     const r = run.rows[page - 1]
     const svg = run.svgOf(page)
     svg.setAttribute('lang', lang)
-    return { svg, w: r.w, h: r.h, words: run.wordsOf(page), links: run.linksOf(page) }
+    return { svg, w: r.w, h: r.h, words: run.wordsOf(page), links: run.linksOf(page), hides: run.hides(page) }
   }
   const off = a => { if (a.signal && a.onAbort) a.signal.removeEventListener('abort', a.onAbort) }
+
+  // ---- the holds (hold): a host's commit of a page answered, under way; while one is, the drive turns to no other page
+  const holds = new Set()
+  const unheldWaiters = []
+  /** a hold ended (its promise settled, HOLD_MS passed, or dispose): the drive waiting on the last one goes on */
+  const endHold = h => {
+    if (!holds.delete(h)) return
+    clearTimeout(h.timer)
+    if (!holds.size) for (const ok of unheldWaiters.splice(0)) ok()
+  }
+  const endHolds = () => { for (const h of [...holds]) endHold(h) }
+  /** resolves once no hold is left */
+  const unheld = () => (holds.size ? new Promise(ok => { unheldWaiters.push(ok) }) : Promise.resolve())
 
   // ---- readiness: one pass over the pages, after each event (the door design §3), and the drive: one target at a time, laid
   // by its closure alone (run.layFor; the 1b-D design §2.2)
@@ -303,6 +355,7 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
     if (dead || disposed) return
     dead = e
     dropDraws()
+    endHolds()
     for (const [, list] of asks) for (const a of list) { off(a); a.reject(e) }
     asks.clear()
     askedAt.clear()
@@ -322,9 +375,10 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
       do {
         again = false
         step()
-        // (the drive's page taken where it is the drive's already, or the drive is idle and turns to it now)
+        // (the drive's page taken where it is the drive's already, or the drive is idle and turns to it now: not while a host
+        // holds it, when it turns to the page then asked newest)
         const t = pick()
-        if (t?.take && (current === null || current === t.page)) take(t.page)
+        if (t?.take && (current === t.page || (current === null && !holds.size))) take(t.page)
       } while (again && !disposed)
     } finally { evaluating = false }
     // (a drive waiting in another page's closure looks again at what it lays)
@@ -339,12 +393,17 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
     void (async () => {
       try {
         for (let t = pick(); t && !disposed; t = pick()) {
+          // (a host's commit of a page answered, under way: no other page laid until it is in place, or HOLD_MS)
+          if (holds.size) { await unheld(); continue }
           if (t.take) take(t.page)
           current = t.page
           await run.layFor(t.page, () => !disposed && pick()?.page === t.page)
           current = null
           if (disposed) return
           evaluate()
+          // (the pages it answered reach their askers first, in a microtask: a host that holds the drive for a page's commit, in
+          // that reaction, holds it before the next page is taken)
+          await Promise.resolve()
         }
       } catch (e) { die(e) } finally { driving = false; current = null }
     })()
@@ -417,13 +476,13 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
   // ---- the parts
   const tell = part => {
     facade.add(part)
+    hear(part)
     run.grow(part)
     for (const [id, stream] of part.left) streamOf.set(id, stream)
     addShapes(shapes, part.left)
     for (const ref of part.leftParts) leftRefs.set(ref.page, ref)
     chain.through = part.pages[1]
     chain.last = part.sha256
-    chain.r = part.chain.r
     toldParts.add(part.sha256)
     for (const [page, list] of [...leftWaiters]) if (page <= chain.through) { leftWaiters.delete(page); for (const w of list) w.go() }
   }
@@ -435,28 +494,35 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
     take(rows) {
       if (disposed) return { complete: [] }
       const got = new Map()
-      for (const row of rows) {
+      // (each row, and the rows of the ink units that echo its unit; a unit whose class is not shown none)
+      const all = [...rows]
+      all.push(...echoRows(source, all))
+      for (const row of all) {
+        if (Array.isArray(row) && Number.isSafeInteger(row[0]) && hidden(row[0])) continue
         const u = unitOf(source, row)
-        if (u) got.set(row[0], u)
-        else dropped++
+        if (u) { got.set(row[0], u); droppedRows.delete(row[0]); continue }
+        dropped++
+        const id = Array.isArray(row) ? row[0] : null
+        if (Number.isSafeInteger(id) && id >= 0 && (droppedRows.has(id) || droppedRows.size < DROPPED_ROWS)) droppedRows.set(id, 'rowUnfit')
       }
       const out = run.take(got)
       evaluate()
       return out
     },
     end() { if (!disposed) { run.end(); evaluate() } },
-    addPart(part, o = {}) {
+    hold(promise) {
+      if (disposed || dead) return
+      const h = { timer: 0 }
+      holds.add(h)
+      h.timer = setTimeout(() => endHold(h), HOLD_MS)
+      Promise.resolve(promise).then(() => endHold(h), () => endHold(h))
+    },
+    addPart(part) {
       if (disposed || dead) return
       if (part !== null && typeof part === 'object' && toldParts.has(part.sha256)) return
       if (run.partsEnded) throw new BundleRefusal('the parts have ended', { kind: 'part', path: '' })
       checkPart(part, index, chain)
-      const doc = o?.doc
-      if (part.addon?.tail) {
-        if (!isDocument(doc)) throw new TypeError(`doc: a part with a tail needs the composed document through it, not ${kindOf(doc)}`)
-        if (doc.numPages !== N + part.chain.r) throw new BundleRefusal(`the document has ${doc.numPages} pages, not ${N + part.chain.r}`, { kind: 'part', path: 'doc' })
-      } else if (doc !== undefined) throw new TypeError('doc: a document with a part that has no tail')
       tell(part)
-      if (part.addon?.tail) run.swap(doc)
       evaluate()
     },
     endParts() {
@@ -518,23 +584,32 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
       if (!four) return Promise.reject(new Error('leftPageOf: a bundle 3 layer has no left parts'))
       return awaitLeft(page, signal)
     },
-    copyOf(page, source, k) {
+    copyOf(page, { k, width, height, context = null, annotationMode, signal = null } = {}) {
       live()
       pageIn(page)
       if (!(typeof k === 'number' && Number.isFinite(k) && k > 0)) return Promise.reject(new RangeError(`k: device pixels a PDF unit, not ${typeof k === 'number' ? k : kindOf(k)}`))
-      const w = source?.width, h = source?.height
-      if (!Number.isSafeInteger(w) || !Number.isSafeInteger(h) || w < 1 || h < 1) return Promise.reject(new TypeError(`source: a page drawn on a canvas, not ${kindOf(source)}`))
+      if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) || width < 1 || height < 1) return Promise.reject(new TypeError(`width, height: the copy's size in device pixels, not ${kindOf(width)}, ${kindOf(height)}`))
       if (told[page] !== READY) return Promise.reject(new Error(`copyOf: page ${page} is not laid (${STATES[told[page]]})`))
       return (async () => {
         const canvas = document.createElement('canvas')
-        canvas.width = w
-        canvas.height = h
-        await run.drawCopy(page, canvas.getContext('2d'), source, k)
-        // (let go while it was drawn: no canvas after dispose, as no page)
+        canvas.width = width
+        canvas.height = height
+        // (the context PDF.js draws render A on: the host's options where it gives them, opaque and read back as its page views')
+        const ctx = canvas.getContext('2d', context ?? undefined)
+        try { await run.drawCopy(page, ctx, k, { annotationMode, signal }) } catch (e) { canvas.width = 0; canvas.height = 0; throw e }
+        // (let go while it was drawn: no canvas after dispose, as no page; aborted, none either)
         if (disposed) { canvas.width = 0; canvas.height = 0 }
+        if (signal?.aborted) { canvas.width = 0; canvas.height = 0; throw signal.reason ?? abortError() }
         live()
         return canvas
       })()
+    },
+    textOf(page) {
+      live()
+      pageIn(page)
+      if (told[page] !== READY) return Promise.reject(new Error(`textOf: page ${page} is not laid (${STATES[told[page]]})`))
+      // (answered in a microtask, as a ready page's pageOf: a dispose in between rejects it)
+      return Promise.resolve().then(() => { live(); return run.textOf(page) })
     },
     unitAt(page, x, y) {
       if (!Number.isSafeInteger(page) || page > chain.through || !Number.isFinite(x) || !Number.isFinite(y)) return null
@@ -554,7 +629,7 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
       }
       let slowestTaskMs = 0
       for (const ms of run.ms.values()) if (ms > slowestTaskMs) slowestTaskMs = ms
-      return { units: expect.length, drawn: run.drawn, pages, slowestTaskMs, pageMs, dropped, links: run.linkStats, rules: { schema: run.rules.schema, version: run.rules.version }, parts: { through: chain.through, told: toldParts.size }, draws: { held: draws.size, bytes: drawsBytes } }
+      return { units: expect.length, drawn: run.drawn, pages, slowestTaskMs, pageMs, dropped, droppedRows: [...droppedRows].sort((a, b) => a[0] - b[0]), links: run.linkStats, rules: { schema: run.rules.schema, version: run.rules.version }, parts: { through: chain.through, told: toldParts.size }, draws: { held: draws.size, bytes: drawsBytes } }
     },
     dispose() {
       if (disposed) return
@@ -567,6 +642,7 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
       for (const [, list] of leftWaiters) for (const w of list) w.no(e)
       leftWaiters.clear()
       dropDraws()
+      endHolds()
       goneNow(e)
       listeners.clear()
       run.dispose()

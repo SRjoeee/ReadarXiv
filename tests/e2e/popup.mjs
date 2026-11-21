@@ -184,7 +184,7 @@ await sleep(1500)
 }
 {
   const popup = await popupOver(paper, 2500)
-  await popup.getByRole('button', { name: /目标语言/ }).click()
+  await popup.getByRole('button', { name: /译为/ }).click()
   await sleep(500)
   await popup.keyboard.press('Escape')
   await sleep(400)
@@ -214,7 +214,7 @@ await sleep(1500)
   await sleep(400)
   check('a click on a switch\'s words flips it', before !== after, `${before} → ${after}`)
 }
-await patchConfig({ services: [SVC], provider: SVC.id })
+await patchConfig({ services: [SVC], provider: SVC.id, providerChosen: true })
 {
   const popup = await popupOver(paper, 2500)
   await popup.getByRole('button', { name: /提示词/ }).click()
@@ -222,7 +222,7 @@ await patchConfig({ services: [SVC], provider: SVC.id })
   const prompts = await nextTab(() => popup.getByRole('option', { name: /管理提示词…/ }).click())
   check('with an LLM service, the prompt menu ends with Manage prompts…, which opens the settings page at the prompts', prompts === `chrome-extension://${extId}/options.html#translate/prompts`, prompts ?? 'no tab')
 }
-await patchConfig({ services: [], provider: 'microsoft' })
+await patchConfig({ services: [], provider: 'microsoft', providerChosen: false })
 
 // ── P17: an abstract page, and the panel on it (§5.5; the floating button's panel, embedded.ts) ────────────────────
 const abs = await context.newPage()

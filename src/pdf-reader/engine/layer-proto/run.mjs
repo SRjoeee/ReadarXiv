@@ -9,6 +9,8 @@
 // covers and no painted unit accounts for put back), and an SVG over the copy holding each unit's translation as text
 // (svgOfUnit). The units are the made output's: their rectangles on the original (the geometry's left side, schema 1:
 // the anchors' lines) and their translations (the units file).
+// (The erasing is gone since REMOVAL 8: a unit's ink is hidden by its optional-content groups on our wrapped page, hide.mjs and
+// visibility.mjs, docs/PDF-READER.md §11.8; the crops and the SVG are as they were.)
 //
 // What changed from main.js, and why:
 // - main.js streamed the units a batch at a time while its pages were still being drawn, each unit laid and painted
@@ -47,26 +49,32 @@
 //   The paper's family is read from its first page's fonts as the engine reads a layout file's (font-roles.mjs
 //   familyOfFonts). faces: 'prototype' draws in the prototype's own system faces and Latin Modern, as the approved
 //   prototype did (its floor's numbers).
-import { checkAll } from './check.mjs'
+import { cellSpans } from './cells.mjs'
 import { familyOfFonts } from '../rules/font-roles.mjs'
 import { bodyFaceId, classifyFont, faceOf, fontString, loadWebFaces, OPEN_FAMILY, roleFaceSet, runsOfTokens, styleKey, setRoleFaces } from './fonts.mjs'
 import { loadHyphenation } from './hyph.mjs'
 import { blocksOf, median, norm, wordsOf } from './layer1.mjs'
 import * as L2 from './layer2.mjs'
-import { fileSwap, protection } from './removal.mjs'
-import { SWAP_PAD, swapRects } from '../layer/swap.mjs'
+import { unitHiding } from './hide.mjs'
+import { cropSourceOff, labelGroup, nameGroup, textGroup, visibilityOf } from './visibility.mjs'
 import * as LK from './links.mjs'
-import { colourOf, fillOf, kOfPieces, locatedWhole, proofOf, shortSkipsOf, texParts, texRects } from './tex.mjs'
-import { trPiecesOf } from '../layer/pieces.mjs'
-import { addUnitWords, copyWords, freezeWords, newWords, pieceOffsets, plainOfPieces, tokenBand, wordIndexer } from './words.mjs'
-import { closureOf, rowLeadOf } from './need.mjs'
+import * as TL from './textlayer.mjs'
+import { labelBoxChars, locatedWhole, shortSkipsOf, texParts, texRects } from './tex.mjs'
+import { shown as shownPiece, trPiecesOf } from '../layer/pieces.mjs'
+import { fitFigureSet, sameAsSource } from './figure-fit.mjs'
+import { levelRun } from './figure-rows.mjs'
+import { FIGURE_KIND } from '../rules/content-classes.mjs'
+import { displayIdsOf, NAME_KIND, nameOccurrenceId } from './units.mjs'
+import { addBoxWords, addSegWords, addUnitWords, copyWords, freezeWords, newWords, pieceOffsets, plainOfPieces, tokenBand, wordIndexer } from './words.mjs'
+import { closureOf, leftStreams, lineAfterOf, lineReader, rowLeadOf } from './need.mjs'
 import { markWork, newWork, work, WORK_KEYS } from './work.mjs'
 import { drawInputsOf } from './draw.mjs'
-import { isMemoryError } from '../pipeline/memory.mjs'
+import { isMemoryError } from '@readarxiv/engine'
 import { itemFills } from '../layout/fills.mjs'
-import { GLYPHS_PAGE, pageInk } from '../layout/ink.mjs'
+import { GLYPHS_PAGE, pageInk } from '@readarxiv/engine'
 import { listWithin } from '../layout/oplist.mjs'
 import { BUILTIN_RULES, resolveRules, RULES_SCHEMA } from '../rules/layout.mjs'
+import { classesOn, unitShown } from '../rules/content-classes.mjs'
 
 /** the prototype's getDocument options beside the host's asset URLs (main.js ASSETS): its canvases on the GPU, the whole
  *  file read at once; and each font's own ToUnicode map exported with it (fontExtraProperties: what the text layer reads a
@@ -74,6 +82,28 @@ import { BUILTIN_RULES, resolveRules, RULES_SCHEMA } from '../rules/layout.mjs'
  *  opened without it is refused as the run reads a page's fonts (layer2.mjs fontMappedOf), never read as one whose fonts
  *  have no map */
 export const PDF_OPTIONS = { cMapPacked: true, enableHWA: true, disableStream: true, fontExtraProperties: true }
+/**
+ * Why the layer left a unit the original's (each `skipped` record's `code`, beside its `why`), a closed set, for a reader to
+ * tell and a sweep to count, never to draw by. The file not holding it whole (tex.mjs locatedWhole): `unlocated` (the file
+ * holds no row of it: the maker's own reason beside it, `unlaid`, the file's UNLAID code, null where the file says none),
+ * `pieces` (its row's pieces not the unit's), `noRow` (a visible piece the file has no row for), `lost` (a visible piece the
+ * file holds no ink of: LOST); `offPages` (none of its lines on the pages shown); `author` (the front matter's names, kept
+ * by design until the reader's toggles: no run gives it now); `refused` (its row not of this unit: another kind, another group, a k past its source's); `group` (a table
+ * cell of a group not drawn whole); the drawing's: `unfit` (no step fits it), `unproven` (a piece's ink not proven),
+ * `served` and `face` (a character no served slice holds, a slice that did not load), `error` (its lay threw), `page` (on a
+ * page that failed); the door's `rowUnfit` (its translated row names no unit or piece of the paper's: reader.mjs, a row
+ * dropped before the run sees it); `unhidden` (the file could not wrap its ink in its groups: `hiding.unhidden`'s reason, or
+ * no group of it in the document, docs/route/ocg-erasure.md §6); and `hidden` (its class one the reader's toggles hide, openProto
+ * `classes`: rules/content-classes.mjs)
+ */
+export const SKIP_CODES = Object.freeze(['unlocated', 'pieces', 'noRow', 'lost', 'offPages', 'author', 'refused', 'group', 'unfit', 'unproven', 'served', 'face', 'error', 'page', 'rowUnfit', 'unhidden', 'hidden'])
+/** `code` where it is one of SKIP_CODES; a TypeError for any other, a defect of the caller's: no record carries a code outside the set */
+export function skipCode(code) {
+  if (!SKIP_CODES.includes(code)) throw new TypeError(`not a code of SKIP_CODES: ${typeof code === 'string' ? JSON.stringify(code.slice(0, 40)) : typeof code}`)
+  return code
+}
+/** locatedWhole's why (tex.mjs) as the skip's code */
+const JUDGED = Object.freeze({ unlocated: 'unlocated', pieces: 'pieces', 'no row': 'noRow', lost: 'lost' })
 
 /** what an ink read of a page drawn from its draw geometry (openProto `drawOf`) throws while the page's pixels are not read:
  *  `page`, and `why`, the step that reads them. Its catcher reads them and does its step again; no step reads such a page as one
@@ -89,8 +119,9 @@ export class NeedPixels extends Error {
  * as PDF.js's commonObjs holds them, by loaded name, with its text content's styles; a font the document exported with no map
  * refuses the document (fontMappedOf's throw, `refusesDocument`). `draw(draw)`: a draw's (draw.mjs, checked), its text content
  * and Link annotations in PDF.js's shapes (drawInputsOf: `tc`, `raw`), its fonts by their content keys, a namespace of their own
- * (never a loaded name); a key read before with another row refuses the draw (a RangeError, nothing of it kept: the caller reads
- * the page live). Each gives `fontOf(name)` and `mapOf(name)`, pageChars2's readers
+ * (never a loaded name), and each item's unmapped characters (`nus`: the prepare's, read of the same fonts, BUNDLE5 15); a key read
+ * before with another row refuses the draw (a RangeError, nothing of it kept: the caller reads the page live). Each gives
+ * `fontOf(name)` and `mapOf(name)` (none for a draw, whose `nus` say it), pageChars2's readers
  */
 export function fontReaders() {
   const fontClass = new Map(), fontMapped = new Map(), rowOfKey = new Map()
@@ -134,10 +165,8 @@ export function fontReaders() {
           }
           return c
         },
-        mapOf: key => {
-          if (!fontMapped.has(key)) fontMapped.set(key, x.fonts.get(key)?.mapped ?? null)
-          return fontMapped.get(key)
-        },
+        mapOf: () => null,
+        nus: x.nus,
       }
     },
   }
@@ -147,8 +176,8 @@ export function fontReaders() {
  *  null where they could not be read), from its text content, its fonts' readers (fontReaders'), its annotations and its items'
  *  fills (the draw's, or liveFillsOf's): the calls the run makes of a page's reading, live or from its draw (drawPageOn), for a
  *  gate that compares the two */
-export function pageReadOf(tc, fontOf, mapOf, raw, fills = null) {
-  const chars = L2.pageChars2(tc, fontOf, mapOf, fills)
+export function pageReadOf(tc, fontOf, mapOf, raw, fills = null, nus = null) {
+  const chars = L2.pageChars2(tc, fontOf, mapOf, fills, nus)
   return { chars, read: raw === null ? null : LK.annotsOf(raw, LK.pointsOf(tc.items), LK.charPoints(chars)) }
 }
 /** the operator list PDF.js drew a page by, where its drawing is whole (the view's drawnList, view/layer-side.mjs): the page read
@@ -160,22 +189,24 @@ const renderedList = page => {
 /** what a bounded operator list read of the live fills warns as, once a run */
 const LIVE_LIST = { who: 'the reader\'s live fills' }
 /** the longest the live fills' glyph walk runs on the main thread, ms: past it the page tells none (its fallback colours), never a
- *  part of them. The heavy-tier speed run on 31f36701 measured the whole walk at 5.0 ms a page p50, 13.8 ms at most */
+ *  part of them. The heavy-tier speed run on 31f36701 measured the whole walk at 5.0 ms a page p50, 13.8 ms at most. The reader's
+ *  budget: a clock, so that on a loaded or slow machine a page may tell none where it tells them on another. The lab's gates ask
+ *  the walk with none (openProto `fillsMs`), so that their runs draw and count alike at any load */
 export const LIVE_FILLS_MS = 16
 /**
  * The fills of a page read live, as its draw tells them (layout/fills.mjs itemFills over pipeline/draw-data.mjs's glyphs): its ink
  * read off the list PDF.js drew it by (`list`, held from the page's early pixel read, or renderedList), else off its own operator
  * list waited for DRAW_WAIT_MS at most (a page whose drawing kept none: no second parse in the reader's flows), with PDF.js's
- * `OPS`; null (none told) for no OPS, a page whose ink is not whole (past a cap, past the walk's backstop, turned) or a list that
- * cannot be read in time. Asked only of a page with no usable draw, once its pixels are drawn
+ * `OPS`; null (none told) for no OPS, a page whose ink is not whole (past a cap, past the walk's budget `ms`, LIVE_FILLS_MS by
+ * default, turned) or a list that cannot be read in time. Asked only of a page with no usable draw, once its pixels are drawn
  */
-export async function liveFillsOf(OPS, page, items, counted = null, list = null) {
+export async function liveFillsOf(OPS, page, items, counted = null, list = null, ms = LIVE_FILLS_MS) {
   if (!Number.isInteger(OPS?.showText)) return null
   try {
     const ops = list ?? renderedList(page) ?? (await listWithin(page, LIVE_LIST, DRAW_WAIT_MS))
     if (!ops) return null
     // (the glyphs alone: no box, path, image or outline of the page's, which the fills do not read)
-    const ink = pageInk(OPS, ops, page.commonObjs, { rotate: page.rotate ?? 0, glyphsMax: GLYPHS_PAGE, glyphsOnly: true, msMax: LIVE_FILLS_MS })
+    const ink = pageInk(OPS, ops, page.commonObjs, { rotate: page.rotate ?? 0, glyphsMax: GLYPHS_PAGE, glyphsOnly: true, msMax: ms })
     // (its work: the list's operations walked, the glyphs read, the items told)
     if (counted) counted.fills += (ops.fnArray?.length ?? 0) + ink.glyphs.length + items.length
     return ink.capped || ink.timedOut || ink.rotated ? null : itemFills(items, ink.glyphs)
@@ -201,14 +232,21 @@ function rowsOf(chars) {
 const NO_ROWS = rowsOf([])
 /** the first index of an ascending list at or over y (its length where none is) */
 const firstAtOrOver = (a, y) => { let lo = 0, hi = a.length; while (lo < hi) { const m = (lo + hi) >> 1; if (a[m] < y) lo = m + 1; else hi = m } return lo }
-/** the page's body units that the even pass sets alike (a unit on two pages keeps its own fit) */
-const EVEN_KINDS = new Set(['para', 'abstract', 'list', 'item'])
+/** the page's body units: those its fill's target reads first and its one size grows (fillPage) */
+const BODY_KINDS = new Set(['para', 'abstract', 'list', 'item'])
+/** the ink units' kinds (layout/ink-units.mjs INK_KIND, a test holds the two the same): units made of our own glyphs, every glyph
+ *  of their lines their text's, a label they read apart from their text too (PIPELINE 74), so that it is hidden with their text */
+export const INK_UNIT_KINDS = Object.freeze(['inkheads', 'inkcontents', 'inknotes', 'inkorphan', 'inknames', 'inkreferences'])
+const INK_UNITS = new Set(INK_UNIT_KINDS)
 /** the SVG's own rules (the prototype's index.html): its text set as laid, in the layer's ink, in the faces it was
  *  measured in and no style made up of a face that has none (a bold or an oblique the family lacks stays regular) */
 const SVG_RULES = ['.tl{position:absolute;left:0;top:0;overflow:visible;font-synthesis:none}', '.tl text{white-space:pre;fill:#141414}']
 const r1 = x => Math.round(x * 100) / 100
 /** a run's `still` that never stops it */
 const ALWAYS = () => true
+/** the pages whose rendering state (operator list, decoded images) the document keeps for the renders after them: every read of a
+ *  page, by any run over the document, one parse of it while it is warm (visibility.mjs) */
+export { WARM_PAGES } from './visibility.mjs'
 const yieldNow = () => (globalThis.scheduler?.yield ? globalThis.scheduler.yield() : new Promise(ok => setTimeout(ok, 0)))
 /** the most of its own work v0 runs in one task, ms: units are laid back to back while their work since the last yield is
  *  under it, then it gives way, so that no task of the engine's approaches a long task (50 ms, the web's budget) but by one
@@ -260,8 +298,8 @@ export const layOrder = (placed, batch = 8) => layGroups(placed, batch).flatMap(
 
 /**
  * A unit's layout made final: a CJK cell's lines moved into their bands between the rules over and under them
- * (layer2.mjs cellBands, clearLines) at the size it is drawn at. Every step that lays a unit anew (its fit, the page's
- * even pass, adaptiveFill's) ends here, before the unit is recorded or painted, or before anything is read of a layout it may
+ * (layer2.mjs cellBands, clearLines) at the size it is drawn at. Every step that lays a unit anew (its fit, adaptiveFill's)
+ * ends here, before the unit is recorded or painted, or before anything is read of a layout it may
  * take (`layout`, the unit's own by default: adaptiveFill's tries, fillPage).
  */
 export function settleLayout(p, layout = p.layout) {
@@ -278,16 +316,26 @@ export function settleLayout(p, layout = p.layout) {
  * is the same however the paper is opened. Null where no unit begun on the page tells a fill leading; `target` null where
  * only a continuation tells one. `body`: the page's body units told its own.
  */
+/**
+ * What a page's fill pass hands fillPage (fillPass): the units begun on the page, a unit laid in runs as its runs (`units`, each
+ * filled as a unit of the page's); and the units its target reads (`voters`, `continuing`), each unit once, as one, at its fit
+ * as one (`whole`): a unit's runs do not each vote, so that its neighbours keep the rhythm they had before it was laid in runs,
+ * and a run drawn on a page before is no unit of the next page's anchor
+ */
+export function fillUnitsOf(begun, continuing) {
+  return { units: begun.flatMap(p => p.runs ?? [p]), voters: begun, continuing }
+}
+
 export function pageTarget(units, continuing, band) {
   const r3 = x => Math.round(x * 1000) / 1000
   const tells = p => typeof p.fillLead === 'number'
   const withLead = units.filter(p => !p.refused && tells(p))
   const telling = withLead.filter(p => p.fitLines >= 2)
-  const body = telling.filter(p => EVEN_KINDS.has(p.unit.kind))
-  // (a unit running on from a page before is read at its fit's (`fit`, kept where the even pass lays a unit anew on its first
-  // page: set at fit, so that it does not depend on whether that page's pass has run))
-  const anchorOf = [...units, ...continuing.map(p => { const f = p.fit ?? p; return { unit: p.unit, refused: p.refused, fillLead: f.fillLead, fitLines: f.fitLines } })]
-  const anchorLeads = anchorOf.filter(p => EVEN_KINDS.has(p.unit.kind) && !p.refused && tells(p) && p.fitLines >= 2).map(p => p.fillLead)
+  const body = telling.filter(p => BODY_KINDS.has(p.unit.kind))
+  // (a unit running on from a page before is read at its fit's, set as it is laid, so that it does not depend on whether that
+  // page's pass has run)
+  const anchorOf = [...units, ...continuing.map(p => ({ unit: p.unit, refused: p.refused, fillLead: p.fillLead, fitLines: p.fitLines }))]
+  const anchorLeads = anchorOf.filter(p => BODY_KINDS.has(p.unit.kind) && !p.refused && tells(p) && p.fitLines >= 2).map(p => p.fillLead)
   const anchor = anchorLeads.length ? r3(median(anchorLeads)) : null
   const leads = (body.length ? body : telling.length ? telling : withLead).map(p => p.fillLead)
   if (!leads.length) return anchor === null ? null : { target: null, own: null, anchor, body: false }
@@ -314,7 +362,7 @@ export function pageTarget(units, continuing, band) {
  * kept), then `onFilled(p, target)`. Returns pageTarget's answer: the page's target, its own (before it is held), the anchor
  * and whether its body units told it; `target` null where only a continuation tells, and null where nothing tells.
  */
-export function fillPage(units, P, onFilled = () => {}, { continuing = [] } = {}) {
+export function fillPage(units, P, onFilled = () => {}, { continuing = [], voters = null } = {}) {
   const { band, track, size } = P.adaptiveFill
   const r3 = x => Math.round(x * 1000) / 1000
   // (a unit whose last row the next unit's first continues on a shared line, laid from where its fit ended there (`share`,
@@ -324,11 +372,15 @@ export function fillPage(units, P, onFilled = () => {}, { continuing = [] } = {}
   // reads (fillLeadsOf); the page's one size is chosen as before, and a unit it would move there keeps its own. Each try is
   // settled (settleLayout: a cell's lines in their bands) before anything is read of it, as the fit's share was: the row is
   // kept as it is drawn)
-  const free = (p, st) => { const l = L2.layoutAt(p.tokens, p.blocks, p.s, p.P, st); if (l.clipped) return null; settleLayout(p, l); return l }
-  const at = (p, st) => { const l = free(p, st); return l && L2.keepsShare(p.share, l.lines) ? l : null }
+  const free = (p, st) => { const l = L2.layoutAt(p.tokens, p.blocks, p.s, p.P, st); if (l.clipped || (p.parent && !L2.keepsPages(p.layout.lines, l.lines, p.tokens))) return null; settleLayout(p, l); return l }
+  const at = (p, st) => { const l = free(p, st); return l && L2.keepsShare(p.share, l) ? l : null }
+  // (a layout laid already at a state, by fillLeadsOf's `at`, which held it whole and to its pages: settled and held to its row)
+  const settledAt = (p, l) => { settleLayout(p, l); return L2.keepsShare(p.share, l) ? l : null }
   // (a unit's fill leading is its fit's (fillLeadsOf), set as it is laid: computed here only for a unit given without it)
   for (const p of units) if (p.fillLead === undefined) fillLeadsOf(p, P)
-  const told = pageTarget(units, continuing, band)
+  // (`voters`: the units the page's target reads, where they are not the units filled: a unit laid in runs is filled a run at
+  // a time and read once, as one (fillPass))
+  const told = pageTarget(voters ?? units, continuing, band)
   if (!told || told.target === null) return told
   const { target } = told
   // (each unit's leading as the pass lays it, its fill leading under the band over the target; and the next paragraph's: the
@@ -360,7 +412,11 @@ export function fillPage(units, P, onFilled = () => {}, { continuing = [] } = {}
     // leading gave)
     const lead = leadOf(p), next = nextOf(p)
     let st = { ...p.layout.state, box: true, lead, ...(next > lead + 1e-9 ? { next } : {}) }
-    let l = at(p, st), closer = false
+    // (at its fill leading, its state the one fillLeadsOf laid it at: that layout, settled and held to its row as any try is)
+    const kept = fillLaid.get(p)
+    fillLaid.delete(p)
+    const same = kept && !st.next && kept.state === p.layout.state && kept.lead === lead
+    let l = same ? settledAt(p, kept.l) : at(p, st), closer = false
     if (!l && st.next) {
       // (its leading leaves the gap under it tighter than the next paragraph's lines: the loosest closer one that sets it,
       // down to the original's pitch; the floor is the next one's leading's, the same at every closer leading)
@@ -377,7 +433,8 @@ export function fillPage(units, P, onFilled = () => {}, { continuing = [] } = {}
     // short of its fill at the band's edge or at its fill leading's top: tracking, the most that still sets it, then the
     // page's size (not one the next paragraph's gap set closer: it is spread to its floor)
     const short = !closer && (p.fillLead > target + band + 1e-9 || p.fillLead >= p.fillTop - 1e-9)
-    let full = !short
+    let full = !short, tracked = 0
+    const untracked = { st, l }
     if (short && P.cjk) {
       // (the most tracking that still sets it: halving, as a wider tracking holds no more on a line)
       const K = Math.round(track / 0.01), st2 = k => ({ ...st, track: r3(st.track + k * 0.01) })
@@ -385,21 +442,40 @@ export function fillPage(units, P, onFilled = () => {}, { continuing = [] } = {}
       while (no - ok > 1) { const k = (ok + no) >> 1, l2 = at(p, st2(k)); if (l2) { ok = k; lk = l2 } else no = k }
       if (ok) { st = st2(ok); l = lk }
       full = ok < K
+      tracked = ok
     }
-    filled.push({ p, st, l, full })
+    filled.push({ p, st, l, full, tracked, untracked })
+  }
+  // (the runs of a unit split by its displays (`parent`, run.mjs layoutRuns) keep one tracking, as their fit does
+  // (layer2.mjs layoutRuns): each the least any of its unit's runs on the page takes, a run the pass does not track taking
+  // none; its leading still its own)
+  const least = new Map()
+  for (const q of units) if (q.parent) least.set(q.parent, Math.min(least.get(q.parent) ?? Infinity, filled.find(f => f.p === q)?.tracked ?? 0))
+  for (const f of filled) {
+    const k = f.p.parent ? least.get(f.p.parent) : f.tracked
+    if (k >= f.tracked) continue
+    const l = k ? at(f.p, { ...f.untracked.st, track: r3(f.untracked.st.track + k * 0.01) }) : null
+    f.st = l ? { ...f.untracked.st, track: r3(f.untracked.st.track + k * 0.01) } : f.untracked.st
+    f.l = l ?? f.untracked.l
   }
   // the page's one size where it grows: every body unit's, where none is full yet; the largest at which every one is still
   // set whole, by halving (a larger size sets no more), a unit that fails ending the try. A unit the fit had to shrink
   // keeps its own largest fitting size: setting the page's other body units at it (PR #335's reviews) left the alphabets'
   // and Japanese's units short of their frames, the alphabets unable to spread past the original's pitch (paraGap 1.255
   // -> 1.708, as before D6; full size 0.25 -> 0; Japanese 1.011 -> 1.289), the coordinator's ruling of 2026-10-09
-  const grown = filled.filter(f => EVEN_KINDS.has(f.p.unit.kind))
+  const grown = filled.filter(f => BODY_KINDS.has(f.p.unit.kind))
   if (size > 1 && grown.length && grown.every(f => !f.full)) {
     const scaleOf = k => r3(1 + k * P.step)
-    const all = k => { const ls = []; for (const f of grown) { const l = free(f.p, { ...f.st, scale: scaleOf(k), knob: 'grow' }); if (!l) return null; ls.push(l) } return ls }
+    // (a unit of one line keeps its own size in the scripts that spread to fillLeadRel: it has no frame to spread over, so a
+    // larger size only carries its ink past the original's line, over a rule or a neighbour's text that the size step cannot
+    // see, which the grid's last step above exposes (it makes more pages grow): 2610.21924's note of one line under a table's
+    // rule, whose formulas touched it at x1.1. The other scripts' page fill is as it was until it is measured on theirs)
+    // (a run reads its unit's line count: a unit's runs grow together, or none of them)
+    const steps = f => !(P.fillLeadRel && (f.p.parent ?? f.p).fitLines < 2)
+    const all = k => { const ls = []; for (const f of grown) { if (!steps(f)) { ls.push(null); continue } const l = free(f.p, { ...f.st, scale: scaleOf(k), knob: 'grow' }); if (!l) return null; ls.push(l) } return ls }
     let ok = 0, no = Math.round((size - 1) / P.step) + 1, best = null
     while (no - ok > 1) { const k = (ok + no) >> 1, ls = all(k); if (ls) { ok = k; best = ls } else no = k }
-    if (ok) grown.forEach((f, i) => { if (!L2.keepsShare(f.p.share, best[i].lines)) return; f.st = { ...f.st, scale: scaleOf(ok), knob: 'grow' }; f.l = best[i] })
+    if (ok) grown.forEach((f, i) => { if (!best[i] || !L2.keepsShare(f.p.share, best[i])) return; f.st = { ...f.st, scale: scaleOf(ok), knob: 'grow' }; f.l = best[i] })
   }
   for (const { p, st, l } of filled) {
     const keep = p.layout.extents
@@ -417,7 +493,8 @@ export function fillPage(units, P, onFilled = () => {}, { continuing = [] } = {}
 
 /**
  * A unit's fill leading (fillPage's) and its top, read from its fit alone: `fillTop`, the loosest leading P.fillLead allows
- * it at the size it is set at, × its original's pitch (1: the original's own pitch, P.fillLead null); `fillLead`, the
+ * it at the size it is set at, × its original's pitch (1: the original's own pitch, P.fillLead null; the looser of that and
+ * P.fillLeadRel × the original's pitch scaled by the fit's size, where the script has one); `fillLead`, the
  * loosest leading from its fitted one up to the top at which its fitted state still sets it whole as the page fill lays it
  * (its last line no lower than a leading over the next line of its column, layer2.mjs footFloorAt: its last baseline on its
  * frame's last but where that would leave the gap under it tighter than its lines); where its fitted one does not, the
@@ -426,14 +503,24 @@ export function fillPage(units, P, onFilled = () => {}, { continuing = [] } = {}
  * yet the rest of the pass's reads: its line count, read live (after its first page's fill), and the targets the page is
  * held to (`held`, through every page passed before) are S3's, 1b-C's
  */
+/** each unit's layout at its fill leading as fillLeadsOf found it: { state, the fitted state it was laid from; lead; l, the
+ *  layout, not yet settled }, taken once by fillPage where it lays the unit at that state, its fitted state unchanged */
+const fillLaid = new WeakMap()
+/** unit p's layouts at its fill leadings let go, its runs' with it: where no page fill will lay it at that state (its page's
+ *  pass done, or the unit as one, which the fill lays by its runs), a layout a unit the unit would hold as long as it lives */
+const dropFillLaid = p => { fillLaid.delete(p); for (const q of p.runs ?? []) fillLaid.delete(q) }
 function fillLeadsOf(p, P) {
   const r3 = x => Math.round(x * 1000) / 1000
-  const at = (q, st) => { const l = L2.layoutAt(q.tokens, q.blocks, q.s, q.P, st); return l.clipped ? null : l }
+  const at = (q, st) => { const l = L2.layoutAt(q.tokens, q.blocks, q.s, q.P, st); return l.clipped || (q.parent && !L2.keepsPages(q.layout.lines, l.lines, q.tokens)) ? null : l }
   if (P.fillLead === null) p.fillTop = 1
   else {
     const pitches = p.blocks.map(b => b.pitch0).filter(v => v > 0).sort((a, b) => a - b)
     const p0 = pitches.length ? pitches[pitches.length >> 1] : 1.2 * p.s
-    p.fillTop = r3((P.fillLead * p.s * p.layout.state.scale) / p0)
+    const emTop = r3((P.fillLead * p.s * p.layout.state.scale) / p0)
+    // (fillLeadRel: a loose original's pitch can be as wide as the em top or wider, which would pin its translation to the
+    // original's own pitch and end its paragraph early; the top is then fillLeadRel × the original's pitch scaled by the fit's
+    // size, where that is the looser. Never tighter than the em top, so a single-spaced original is unchanged)
+    p.fillTop = P.fillLeadRel ? Math.max(emTop, r3(P.fillLeadRel * p.layout.state.scale)) : emTop
   }
   // (a looser leading holds no more lines than a closer one: the loosest that sets the unit is found by halving, a few
   // layouts a unit where trying each hundredth from the top took up to forty. Monotone in practice, not by construction:
@@ -445,11 +532,20 @@ function fillLeadsOf(p, P) {
   // A state that sets it so sets it without the floor too, which only takes slots off its last frame's foot: the fitted state
   // is laid again only where that one does not set it)
   const lo = st.lead, bx = { ...st, box: true }
-  if (at(p, bx)) {
+  fillLaid.delete(p)
+  let laid = at(p, bx)
+  if (laid) {
     const hi = p.fillTop, L = k => Math.min(hi, r3(lo + k * 0.01))
-    let ok = 0, no = Math.round((hi - lo) / 0.01) + 1
-    while (no - ok > 1) { const k = (ok + no) >> 1; if (at(p, { ...bx, lead: L(k) })) ok = k; else no = k }
+    // (the grid's last step is the top itself, which `short` (fillPage) reads. Rounding the step count down left it untried
+    // where the fraction was under a half, and the unit then took neither tracking nor the page's size; fillLeadRel's scripts
+    // count it up, the others' fill as it was until it is measured on theirs)
+    const steps = (hi - lo) / 0.01
+    let ok = 0, no = (P.fillLeadRel ? Math.ceil(steps - 1e-9) : Math.round(steps)) + 1
+    while (no - ok > 1) { const k = (ok + no) >> 1, l = at(p, { ...bx, lead: L(k) }); if (l) { ok = k; laid = l } else no = k }
     p.fillLead = ok ? L(ok) : lo
+    // (the layout found there kept for the page's fill, which lays the unit at that very state wherever the band leaves it its
+    // fill leading: fillPage `at`)
+    fillLaid.set(p, { state: st, lead: p.fillLead, l: laid })
     return
   }
   if (!at(p, st)) { p.fillLead = null; return }
@@ -499,106 +595,6 @@ function guessCloser(p, K, L, floorAt) {
 }
 
 /**
- * The ink of a page that stays visible where a unit's lines would move to (E3 for the leftover packed, packPage): the
- * page's ink map (layer2.mjs inkMapOf, of the original page as PDF.js draws it: text, rules, images and vector paths
- * alike), less the glyphs the drawing takes away (`accounted`: the boxes of the characters the page's painted units
- * account for, erased with them or removed by the add-on, each grown by a map cell, as the map holds a cell any of whose
- * pixels is inked), and the add-on's `dirty` boxes (kept ink under the units' rectangles, where the removed page is swapped
- * in). Boxes are [x0, y0, x1, y1] in PDF units; `toDev` and `toPdf` map between them and the map's canvas. Returns
- * foot(x0, x1, y0, y1): the PDF y of the lowest staying ink's foot in that box, or null where it holds none.
- */
-export function stayingInk({ map, toDev, toPdf, accounted = [], dirty = [] }) {
-  const { w, h, factor: f } = map
-  const cells = (x0, y0, x1, y1, pad) => {
-    const [ax, ay] = toDev(x0, y1), [bx, by] = toDev(x1, y0)
-    return [Math.max(0, Math.floor(Math.min(ax, bx) / f) - pad), Math.max(0, Math.floor(Math.min(ay, by) / f) - pad), Math.min(w - 1, Math.floor(Math.max(ax, bx) / f) + pad), Math.min(h - 1, Math.floor(Math.max(ay, by) / f) + pad)]
-  }
-  const stay = map.ink.slice()
-  const fill = (b, pad, v) => { const [c0, r0, c1, r1] = cells(b[0], b[1], b[2], b[3], pad); for (let r = r0; r <= r1; r++) stay.fill(v, r * w + c0, r * w + c1 + 1) }
-  for (const b of accounted) fill(b, 1, 0)
-  for (const b of dirty) fill(b, 0, 1)
-  return (x0, x1, y0, y1) => {
-    if (!(y1 > y0) || !(x1 > x0)) return null
-    const [c0, r0, c1, r1] = cells(x0, y0, x1, y1, 0)
-    for (let r = r1; r >= r0; r--) for (let c = c0; c <= c1; c++) if (stay[r * w + c]) return toPdf((c + 0.5) * f, (r + 1) * f)[1]
-    return null
-  }
-}
-
-/**
- * The leftover packed (P.leftover 'pack', D6's F6c, the maintainer's experiment of 2026-10-08; 'foot' keeps it at each
- * unit's foot): a page's body units (`units`, laid and filled: blocks, layout, s) moved up so that each paragraph keeps
- * the original's gap to the one above it, and what its fill leaves over gathers at the end of the run of paragraphs, before
- * the next fixed thing. A unit moves where it is a body unit of one block, on this page alone, below another body unit of
- * the page in its column with nothing between them: no other unit's line (`rects`, every unit's rectangles on the page:
- * [id, [page, x0, y0, x1, y1]]), no character of the page (`chars`: a display, a label), and no more than three of the
- * upper's pitches of the original's (a figure's room); and its first line its own (no other unit's line on it, no
- * character before its start: a run-in heading stays with its text). A heading, a display, a float, a unit drawn on two
- * pages or one left the original's is fixed: a run ends at it. Its first line is then set as far under the upper's last drawn line as
- * the original's are apart, never lower than it was, its lines moved together; the units are taken from the top, so that
- * a run's moves add up. The cost: a paragraph's top leaves its original's line.
- * And it moves over no ink that stays (E3, by construction): `stays(x0, x1, y0, y1)`, the foot (PDF y) of the lowest ink in
- * a box that the drawing leaves visible, or null (stayingInk: the page's ink but the glyphs its painted units take away,
- * and the add-on's dirty boxes). A unit whose own lines' band holds such ink does not move; one that would rise into it
- * stops short of its foot by `gap` of its pitch (P.borrowGap: the room a unit's borrowed lines keep above ink below
- * them). Null: no ink is read (the tests of the rest).
- * Returns the moves by unit id (PDF units up), the units that moved in the order they were taken.
- */
-export function packPage(pg, units, rects, chars, stays = null, gap = 0) {
-  const lastOf = p => { let i = -1; p.blocks.forEach((b, j) => { if (b.page === pg) i = j }); return i }
-  const linesOf = (p, bi) => p.layout.lines.filter(l => l.page === pg && l.block === bi)
-  const body = units.filter(p => EVEN_KINDS.has(p.unit.kind) && !p.refused && p.layout)
-  const movable = body.filter(p => p.pages.length === 1 && p.pages[0] === pg && p.blocks.length === 1 && p.blocks[0].page === pg && linesOf(p, 0).length)
-    .sort((a, b) => b.blocks[0].B[0] - a.blocks[0].B[0])
-  const moves = new Map()
-  for (const q of movable) {
-    const b = q.blocks[0], top = b.B[0] + 0.75 * (b.sizes[0] ?? q.s)
-    let upper = null
-    for (const p of body) {
-      if (p === q) continue
-      const ai = lastOf(p)
-      if (ai < 0 || !linesOf(p, ai).length) continue
-      const a = p.blocks[ai]
-      const span = Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0)
-      if (span < 0.5 * Math.min(a.x1 - a.x0, b.x1 - b.x0) || !(a.B.at(-1) > b.B[0])) continue
-      // (the nearest above it: the lowest last line over its first)
-      if (!upper || a.B.at(-1) < upper.a.B.at(-1)) upper = { p, a, ai }
-    }
-    if (!upper) continue
-    const { p, a, ai } = upper
-    const foot = a.B.at(-1) - 0.22 * (a.sizes.at(-1) ?? p.s), g0 = foot - top
-    if (!(g0 > 0) || g0 > 3 * (a.pitch0 ?? 1.2 * p.s)) continue
-    const x0 = Math.max(a.x0, b.x0), x1 = Math.min(a.x1, b.x1)
-    const across = (l, r) => Math.min(x1, r) - Math.max(x0, l) > 1
-    if (rects.some(([id, r]) => id !== p.id && id !== q.id && r[0] === pg && across(r[1], r[3]) && r[4] > top + 0.1 && r[2] < foot - 0.1)) continue
-    if (chars.some(c => /\S/.test(c.ch) && across(c.x0, c.x1) && c.yb + 0.28 * c.size > top && c.yb + 0.28 * c.size < foot)) continue
-    // (nor one whose first line it shares with what stays: a run-in heading, a label, the tail of a unit before it)
-    const start = b.x0 + (b.indent ?? 0) - 1
-    if (rects.some(([id, r]) => id !== q.id && r[0] === pg && r[2] < b.B[0] && r[4] > b.B[0] && r[3] > b.x0 && r[1] < b.x1)) continue
-    if (chars.some(c => /\S/.test(c.ch) && Math.abs(c.yb - b.B[0]) < 0.3 * c.size && c.x1 > b.x0 && c.x1 < start)) continue
-    // (by baselines: the upper's last drawn line as it now stands, a unit above it that moved having moved it, above its
-    // original's last by what its fill left; the lower's first as far from it as the original's are. A size smaller than the
-    // original's is not made up for: its glyphs' smaller ascent is no blank line, and its lines stay on the original's pitch)
-    const own = linesOf(q, 0), up = linesOf(p, ai)
-    let d = Math.round(((Math.min(...up.map(l => l.baseline)) - a.B.at(-1)) - (Math.max(...own.map(l => l.baseline)) - b.B[0])) * 1000) / 1000
-    if (d <= 0) continue
-    // (over no ink that stays: its glyphs' band as drawn, a CJK em over the baseline to a descender under it, must hold
-    // none, and the band it rises into is held clear of the lowest by the clearance)
-    if (stays) {
-      const f = q.layout.f, clearance = gap * (b.pitch0 ?? 1.2 * q.s)
-      const top = Math.max(...own.map(l => l.baseline)) + 0.88 * f, low = Math.min(...own.map(l => l.baseline)) - 0.25 * f
-      if (stays(b.x0, b.x1, low, top) !== null) continue
-      const ink = stays(b.x0, b.x1, top, top + d + clearance)
-      if (ink !== null) d = Math.round((ink - clearance - top) * 1000) / 1000
-      if (d <= 0) continue
-    }
-    for (const l of q.layout.lines) l.baseline += d
-    moves.set(q.id, d)
-  }
-  return moves
-}
-
-/**
  * v0 over a paper's first `pages` pages. `doc`: the original opened by PDF.js (with PDF_OPTIONS); `geometry`: the made
  * output's geometry (schema 1); `units`: its units file's units (each { kind, src, pieces, state }); `target`: the
  * language; `expect`: the ids of the units the run will report that are still to come (take, end), `units` then sparse
@@ -606,7 +602,7 @@ export function packPage(pg, units, rects, chars, stays = null, gap = 0) {
  * in `units`. `groups`: each unit's table group, known at open (the paper's bundle, groups.mjs groupOf), so that a
  * group is read once its own cells' rows are in; null: once every row is. Options as main.js's query: `scale` (CSS px a
  * PDF unit), `dpr`, `batch`, `phMode` ('auto' or 'source'),
- * `restoring`, `order` (ids whose order a page's units are laid in, in place of layGroups': a recorded run's). `faces`:
+ * `order` (ids whose order a page's units are laid in, in place of layGroups': a recorded run's). `faces`:
  * 'roles' (the role table's) or 'prototype' (the prototype's own).
  * `faceSources(id)`: a promise of the slices the host serves of a role table face, each { url, ranges } (its file on the
  * host's origin and its code points as [start, end] pairs), null where the face is not served, rejected where the host
@@ -616,31 +612,25 @@ export function packPage(pg, units, rects, chars, stays = null, gap = 0) {
  * `faceUrl(file)`, covering the face's COVERAGE. The target's body face's first slice is fetched at the open.
  * `faceUrl(file)`, `fontUrl(file)`, `hyphUrl(lang)`: where the host serves the role table's faces (by file name), the
  * prototype's Latin Modern (by name) and TeX's patterns. Nothing is drawn until `until(p)` is awaited.
- * `tex` (the hybrid, tex.mjs): the layout file (`index`, layout/file.mjs indexLayout's), the units file's pieces by unit
- * (`pieces`), and how its geometry is taken (`use`: 'ph', each placeholder's ink alone; 'lines', the unit's lines,
- * label too, its blocks v0's rule's over them; `extents`: 'v0' or 'tex', with 'lines'; `texOnly`: with 'lines', the units the file locates whole
- * that v0's geometry does not hold, but table cells; `symbols`: 'strict' or 'text', locatedWhole's). Each unit the file
- * locates whole takes them; every other unit is v0's own, every rendering proven by the file (tex.mjs proofOf). Null: v0
- * alone, and with `proof` (a reader's paper whose layout file the maker refused or the bundle dropped) every unit still
- * under the proof, no file proving anything: only TeX's own nothing, a space and a text symbol draw, and any other
- * placeholder leaves its unit the original's (`unproven`), so no crop or source text is drawn unproven. Without `proof`
- * (the lab's v0 alone), no proof.
+ * `tex` (the layout file, tex.mjs; required): the layout file (`index`, layout/file.mjs indexLayout's, a file of no unit
+ * where the maker refused to make one or the bundle dropped it), the units file's pieces by unit (`pieces`), and how its
+ * geometry is taken (`extents`: 'v0' or 'tex', the lines' erase extents as v0 reads them from the characters or the
+ * file's; `symbols`: 'strict' or 'text', locatedWhole's). The layer draws a unit only from the file: each unit the file
+ * locates whole takes its lines, label and placeholders from it (the units only the file holds too, but table cells);
+ * every other unit, one the file does not hold or one with a visible piece it has no position for, is the original's, and
+ * so is a unit whose ink the file cannot draw (`unproven`, tex.mjs cropsOf).
  * `copy`: whether each page's copy is kept at v0's own resolution (`right`), the plane the checker and the gate measure;
  * a view draws the page at its own (drawCopy) and needs none. Without it the original (`left`) is read once, for the page's
  * ink, and its canvas let go as the page is drawn (`left` is null): nothing else reads it, and the checker, which does, is
  * refused.
- * `removal` (the text-removed PDF, removal.mjs and layout/remove.mjs): { mode: 'draw', doc, manifest } (and PDF.js's OPS,
- * which no drawing reads: the gate's instrument reads a page's ink with it):
- * `doc` is arXiv's PDF with the paper's add-on appended (its page sets at the manifest's places), one a paper whatever the
- * target, made from the layout file alone; it may be the `doc` v0 is given, the one document a reader opens (arXiv's own
- * pages the manifest's count). On a page the manifest says is removed, a unit the file locates whole is drawn over the
- * file's own rectangles (removal.mjs fileSwap: its lines' erase rectangles, its inline placeholders' segments, a label it
- * draws in the target's name, less what its reading keeps), filled with paper, or the removed page swapped in where the
- * manifest's `dirty` boxes say kept ink lies under them; its crops are cut from the original through their placeholders'
- * segments (layer2.mjs removalOps). No ink is read and no pixel. A unit v0 reads on its own (the file's miss) is drawn
- * the old way, erased and put back, as on a page the add-on did not remove. Null: v0's own drawing.
+ * `doc` is our wrapped page (docs/route/ocg-erasure.md §2: each unit's ink in its own optional-content groups, all shown by
+ * default): a unit is drawn by hiding its groups on the pages it is drawn on (hide.mjs, visibility.mjs), its crops cut from the page
+ * with every unit's text hidden, what its reading keeps pasted from a render that shows it. `hiding` (the file's word on what it
+ * could not wrap): `unhidden(id)`, why a unit's ink cannot be hidden (marks, across, spell, page, bounds) or null, and
+ * `rules(page)`, the table rules near the page's cells (x0, y0, x1, y1 stride 4: layer2.mjs cellBands); a unit it says is unhidden,
+ * or whose text group the document does not hold, is the original's. Absent: every unit the document holds a group for is drawn.
  * `labels`: { captions }, which of the two floats, figures and tables, the final names in the target's language (the
- * record's `captions`, live.mjs captionsOf): a float's label is drawn in the target's name for it, which the layout rules
+ * reader's CAPTIONS, layer-proto/reader.mjs; a fixture's record's `captions`): a float's label is drawn in the target's name for it, which the layout rules
  * give (`rules`), where the final's is (layer2.mjs labelInTarget), else kept as the original's ink; and each babel name
  * the layout file locates (a generated heading: Abstract, References, Contents, …) in the target's word for it, unless the
  * target has none: the captions do not decide for a name TeX identified (layer2.mjs nameInTarget; paintNames). A table's group
@@ -650,11 +640,11 @@ export function packPage(pg, units, rects, chars, stays = null, gap = 0) {
  * breaks, the hyphenation patterns and their minimums, the CJK family, the names of a float. Absent: BUILTIN_RULES. A
  * host passes the set it loaded (readRules); there is no per-field override.
  * `parts` (BUNDLE 4's door, the door design §0 to §3): the paper comes in parts (grow, endParts), opened with no view and no left
- * unit (`geometry` its kinds alone), each unit's group (`groups`), the hybrid over a layout index that follows the parts
- * (facade.mjs) and the text removal over a manifest of no page: a page is drawn once a part covers it, a unit placed once its
+ * unit (`geometry` its kinds alone), each unit's group (`groups`), the layout file's index following the parts
+ * (facade.mjs): a page is drawn once a part covers it, a unit placed once its
  * part is in (and its row taken or the rows ended), and every page drawn as the open over the whole paper draws it. A page no
  * part covers once the parts end, or whose drawing throws, fails (`failed`) and is stepped over. `onRetired(doc)`: a document
- * the run read and no longer reads (swap, dispose), told once. `onStep(page)`: a page's step ended (its units laid, or it
+ * the run read and no longer reads (dispose), told once. `onStep(page)`: a page's step ended (its units laid, or it
  * failed). `onWait(what)`: the run waits, for a `part` or for `rows` (an instrument: the readiness its host tells is held by it).
  * `free` (the reader's; the 1b design §3): what the run reads to lay a page let go once nothing will read it again. A page's
  * analysis state (its characters, its ink map, its items and what its painted units account for and keep, its units laid)
@@ -668,26 +658,40 @@ export function packPage(pg, units, rects, chars, stays = null, gap = 0) {
  * With both, what the run lets go is kept on the gate's shelf (`full`, `chars`, the checker): the run draws as one that
  * frees, and the gate measures it whole.
  * `drawOf(page)` (E-C, the door's for BUNDLE 5's parts): a promise of the page's draw geometry (layer-proto/draw.mjs, checked:
- * its text items, fonts and Link annotations, as the server read them of arXiv's PDF), or null; asked once a page, for every page of
+ * its text items, fonts and Link annotations, as the server read them of the base page), or null; asked once a page, for every page of
  * a closure as it is taken. A page with a draw is read from it: its viewport alone of PDF.js's (getPage), no text content,
  * annotation or pixel read; one with none (null, an ask that threw, a draw whose font key names another font than before) is read
  * live, as without drawOf. Its pixels (its ink map) are read where a step reads them, and only there: the page asked, at once; a
  * unit's lay that reads a page's ink (borrowing below its lines, widening over the paper beside them: laid again once the pixels
  * are in, NeedPixels), a crop's growth, a name put back; and a paint, which waits for the page's own closure (a unit running on to
  * a page beside the one asked is painted there once that page is laid, in its own order). Every page is drawn as without drawOf.
- * Used where every ink read can wait so: no copy kept (`copy` false), a page pass, no even pass, no leftover packed; else ignored
+ * Used where every ink read can wait so: no copy kept (`copy` false) and a page pass; else ignored
  * (`drawStats` null). Absent: every page read live, today's path. `drawsComing` (the door's, its head's `draw: 1`: the parts may carry
  * draws): the page asked is read for its pixels at its ask, once a part covers it, before its draw (or page 1's) is in, whether it
  * is then read from its draw or live; without it, once its draw is in, a page with none read in the closure's order, page 1 first.
  * `OPS` (PDF.js's operator codes, the host's): a page read live reads its characters' fills off the list PDF.js drew it by
- * (liveFillsOf), as its draw tells them; without it such a page tells none.
+ * (liveFillsOf), as its draw tells them; without it such a page tells none. `fillsMs` (default LIVE_FILLS_MS, the reader's): the
+ * longest that walk runs, ms; Infinity (the lab's gates): no clock, the walk bounded by its caps alone, so that a run's drawing and
+ * work counters (work.mjs) are the same however loaded the machine is.
  */
-export async function openProto({ doc, geometry, units: given, expect = null, groups: tableGroups = null, target: to, pages = 999, scale = 1.25, dpr = 1, batch = 8, phMode = 'auto', restoring = true, order: orderIn = null, faces = 'roles', faceSources = null, faceUrl = file => `/fonts/${encodeURIComponent(file)}`, fontUrl, hyphUrl = lang => `/hyph/${lang}.json`, tex = null, proof = false, copy = true, removal = null, labels = null, rules = BUILTIN_RULES, parts: partsMode = false, onRetired = null, onStep = null, onWait = null, free = false, records = true, drawOf = null, drawsComing = false, OPS = null }) {
+/** whether a table cell's box is other cells' too (cells.mjs cellSpans), of the unit openProto holds: the source
+ *  unit's, which rows.mjs unitOf carries (`spans`, a translated row keeping no piece of its \\multirow), else the unit's own */
+export const unitSpans = u => (typeof u?.spans === 'boolean' ? u.spans : cellSpans(u))
+export { cellSpans }
+
+export async function openProto({ doc, geometry, units: given, expect = null, groups: tableGroups = null, target: to, pages = 999, scale = 1.25, dpr = 1, batch = 8, phMode = 'auto', order: orderIn = null, faces = 'roles', faceSources = null, faceUrl = file => `/fonts/${encodeURIComponent(file)}`, fontUrl, hyphUrl = lang => `/hyph/${lang}.json`, tex, copy = true, hiding = null, labels = null, rules = BUILTIN_RULES, parts: partsMode = false, onRetired = null, onStep = null, onWait = null, free = false, records = true, drawOf = null, drawsComing = false, OPS = null, classes = null, fillsMs = LIVE_FILLS_MS }) {
+  if (classes !== null && typeof classes !== 'object') throw new TypeError(`classes: the reader's toggles or null, not ${kindOf(classes)}`)
+  // (the reader's toggles, the door's option, which the door gives resolved: a unit whose class they do not show is the original's.
+  // A direct open given none takes the reader's defaults, the author block (its names and its places) and a bibliography's
+  // entries left the original's: TOGGLE_DEFAULTS)
+  const on = classesOn(classes), classShown = u => unitShown(u, on)
   if (expect !== null && (!Array.isArray(expect) || !expect.every(id => Number.isSafeInteger(id) && id >= 0))) throw new TypeError(`expect: ids of units or null, not ${kindOf(expect)}`)
+  if (typeof fillsMs !== 'number' || !(fillsMs > 0)) throw new TypeError(`fillsMs: a positive number of ms or Infinity, not ${typeof fillsMs === 'number' ? fillsMs : kindOf(fillsMs)}`)
   if (drawOf !== null && typeof drawOf !== 'function') throw new TypeError(`drawOf: a function or null, not ${kindOf(drawOf)}`)
   if (tableGroups !== null && !(tableGroups instanceof Map)) throw new TypeError(`groups: a Map of ids to groups or null, not ${kindOf(tableGroups)}`)
   if (faceSources !== null && typeof faceSources !== 'function') throw new TypeError(`faceSources: a function or null, not ${kindOf(faceSources)}`)
-  if (partsMode && (!tableGroups || !tex || removal?.mode !== 'draw' || !proof)) throw new TypeError('parts: the open is given each unit\'s table group, the hybrid, the text removal and the proof (the door\'s choices)')
+  if (tex === null || typeof tex !== 'object' || !tex.index) throw new TypeError(`tex: the layout file's index and the units' pieces (the layer draws only from the file), not ${kindOf(tex)}`)
+  if (partsMode && !tableGroups) throw new TypeError('parts: the open is given each unit\'s table group (the door\'s choice)')
   // (parts: the views and the left come with the parts, grow; the views given are none)
   if (partsMode) geometry = { ...geometry, left: { pages: [], units: [] } }
   // every choice made for the target, in one call: the layout rules' (rules/layout.mjs resolveRules), the built-in set's or
@@ -696,22 +700,19 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   const P = R.params
   /** the paper's \lineskip and \lineskiplimit, TeX's (the layout file's): where a laid line comes nearer the one before it
    *  than the limit, its crops being taller or deeper than its room, it opens as TeX opens one (layer2.mjs breakLines);
-   *  null where the file has none, or with no file: no line opens */
-  const LINESKIP = tex?.index?.file?.lineskip ?? null
-  /** whether a page's units are set together once all are laid (the even pass, the page fill, the leftover packed) */
-  const PASSES = !!(P.even || P.adaptiveFill || P.leftover === 'pack')
-  /** whether a page may be laid with its closure alone, whatever was laid before it (the 1b-D design §1.4): every pass reads
+   *  null where the file has none: no line opens */
+  const LINESKIP = tex.index.file.lineskip ?? null
+  /** whether a page's units are set together once all are laid (the page fill) */
+  const PASSES = !!P.adaptiveFill
+  /** whether a page may be laid with its closure alone, whatever was laid before it (the 1b-D design §1.4): the page fill reads
    *  only its own units' fits and fit-time numbers of a unit running on to it, and a page is painted in its own order at its
-   *  passes. Not where the even pass or the leftover's packing reads a unit running on to the page as laid on the page
-   *  before (1b-design C1), nor where no pass runs and each unit is painted as it is laid (no adaptive fill): those lay in
-   *  the stream's order, the prefix needsOf reads. No built-in rule set is so */
-  const ORDER_FREE = PASSES && !P.even && P.leftover !== 'pack'
+   *  passes. Not where no pass runs and each unit is painted as it is laid (no adaptive fill): that lays in the stream's order,
+   *  the prefix needsOf reads. No built-in rule set is so */
+  const ORDER_FREE = PASSES
   /** whether pages are read from their draws (drawOf): where every ink read can wait for a page's pixels, no copy kept (the
-   *  checker's, which reads every page's), a page pass (each unit painted as it is laid reads its pages' ink at once), no even pass
-   *  (it lays a page's units anew, and a fit may then measure the room below a block, its page's ink, outside the lay that waits
-   *  for pixels) and no leftover packed (the pass reads its page's ink as it moves units). The other passes read no ink: the page
-   *  fill lays at a fit's own state (layoutAt), and a paint waits for its page's pixels (paintOn) */
-  const DATA = drawOf !== null && !copy && PASSES && !P.even && P.leftover !== 'pack'
+   *  checker's, which reads every page's) and a page pass (each unit painted as it is laid reads its pages' ink at once). The
+   *  page fill reads no ink: it lays at a fit's own state (layoutAt), and a paint waits for its page's pixels (paintOn) */
+  const DATA = drawOf !== null && !copy && PASSES
   // iteration 2's hyphenation, fetched at once (local, small)
   const hyphP = Promise.all(R.patterns.map(async l => L2.setHyphenData(l, await loadHyphenation(l, hyphUrl(l)))))
   // the target's likely faces loaded meanwhile (Times-like until the paper's own designs are known), and Latin Modern at
@@ -727,9 +728,30 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   // fetches
   const FS = roles ? roleFaceSet({ faceSources, faceUrl }) : null
   FS?.warm(bodyFaceId())
-  // (arXiv's own pages: `doc` may be the paper with its add-on appended, one document a reader opens, whose sets follow
-  // them: the manifest's count)
-  const N = Math.min(removal?.manifest?.pages ?? doc.numPages, doc.numPages, pages)
+  const N = Math.min(doc.numPages, pages)
+  // the document's groups, read once (visibility.mjs): a unit is drawn only where its own groups can hide its ink (decide)
+  const VIS = visibilityOf(doc)
+  await VIS.ready
+  /** why unit `id`'s ink cannot be hidden, or null: the file's own reason (`hiding.unhidden`: marks, across, spell, page,
+   *  bounds), or its text group missing from the document */
+  const unhiddenOf = id => hiding?.unhidden?.(id) ?? (VIS.has(textGroup(id)) ? null : 'no group')
+  /** whether unit `id`'s label may be drawn anew: its label group in the document, and the file not keeping it as the original's
+   *  (`labelKept`, design §6: a label its marks cannot delimit stays the original's ink, the body drawn) */
+  const relabels = id => !hiding?.labelKept?.(id) && VIS.has(labelGroup(id))
+  /** unit `p`'s label as a theorem-like head in the target's name (layer2.mjs headLabelInTarget), its characters the page's in
+   *  the layout file's label box (its first: a head's one), or null. The page's, not the unit's own part of it: the box is TeX's,
+   *  and the part's split may leave a head's first letters to the unit before (2610.18513v1 p18 u150, "finition5.1(") */
+  const headOf = p => {
+    const lb = p.tex?.lu?.labels
+    if (!lb || lb.length < 7) return null
+    const [, pg, x0, , x1, top, bottom] = lb
+    const chars = (chars2[pg - 1] ?? []).filter(c => /\S/.test(c.ch) && (c.x0 + c.x1) / 2 >= x0 - 0.5 && (c.x0 + c.x1) / 2 <= x1 + 0.5 && c.yb >= bottom - 0.5 && c.yb <= top + 0.5).map(c => ({ ...c, page: pg }))
+    if (!chars.length) return null
+    const head = L2.headLabelInTarget(chars, to, ownNames)
+    return head ? { ...head, chars } : null
+  }
+  /** page j's table rules near its cells (the file's: layer2.mjs cellBands), or undefined */
+  const rulesOf = j => hiding?.rules?.(j)
   // (parts: the last page a part covers, and whether the parts have ended; every page at once otherwise. A page that failed:
   // its drawing threw, or no part covers it once the parts have ended)
   let through = partsMode ? 0 : N, partsEnded = !partsMode
@@ -743,7 +765,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
    *  words (the page's word table, built as each unit is painted in `wordsOpen` and frozen into `words` once the page is final:
    *  words.mjs) and links (links.mjs: frozen into `links` once the page is final, null before; `linksOpen` holds the moved
    *  records the units' matches make as they are made, each over the unit's drawing on this page: linkUnit), its fill numbers
-   *  (adaptiveFill's pass) */
+   *  (adaptiveFill's pass), its text items kept compact (`items`, textlayer.mjs itemsOf: read as the page is drawn) and what each
+   *  drawn thing adds to its text layer (`text`: the operations it appended and its segments, textRecord) */
   const makeRow = i => {
     const view = geometry.left.pages[i - 1] ?? [0, 0, 612, 792]
     const w = (view[2] - view[0]) * scale, h = (view[3] - view[1]) * scale
@@ -751,7 +774,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // (no pixels until the page is drawn, drawPageOn sizes them: a page never drawn holds its row alone, not a canvas's default
     // 300 x 150, which a jump past a paper's pages kept on every page it did not draw)
     for (const c of [left, right]) if (c) { c.width = 0; c.height = 0; c.style.width = `${w}px`; c.style.height = `${h}px` }
-    rows[i - 1] = { page: i, left, right, w, h, base: false, ops: [], markup: [], words: null, wordsOpen: null, links: null, linksOpen: null, fill: null }
+    rows[i - 1] = { page: i, left, right, w, h, base: false, ops: [], off: new Set(), markup: [], words: null, wordsOpen: null, links: null, linksOpen: null, fill: null, items: null, text: null }
   }
   if (!partsMode) for (let i = 1; i <= N; i++) makeRow(i)
   const sheet = document.head.appendChild(document.createElement('style'))
@@ -778,55 +801,73 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   // the geometry's units with v0's own copy of their line rectangles: v0 grows and moves a unit's lines as it lays it,
   // and every other unit reads them as grown (its others), so the copy is shared by all of v0's reading; the geometry
   // given stays as it was (a second run over it draws as the first: the text removal's plan run and its drawing)
-  const GU = geometry.left.units.map(([id, stream, rects]) => [id, stream, rects.map(r => r.slice())])
+  // (a figure unit is no unit the layer places: its figure row draws it, paintFigures; its left anchor is the hover's alone,
+  // view/shapes.mjs, pipeline/ink-pass.mjs figureAnchors)
+  const placesUnit = id => geometry.kinds?.[id] !== FIGURE_KIND
+  const GU = geometry.left.units.filter(([id]) => placesUnit(id)).map(([id, stream, rects]) => [id, stream, rects.map(r => r.slice())])
   const placed = [], skipped = []
   const inGeometry = new Set(GU.map(u => u[0]))
   // the units as they have come (take), by id: none for one not yet arrived, or never to come; and the ids still
   // awaited (expect's, but those given at once)
   const U = new Map()
-  given.forEach((u, id) => U.set(id, u))
-  const awaited = new Set(expect ?? [])
+  // (the paper's structural names, units of kind `name` (bundleUnitsOf, the geometry's kinds): no page's ink, never laid nor
+  // awaited; each translated one the target's word for its English (layer2.mjs nameOfRow), which a head and a generated
+  // reference read where no package names it, given at the open or taken with the rows: §19.14)
+  const ownNames = new Map()
+  const takeName = u => { const w = L2.nameOfRow(u); if (w) ownNames.set(w[0], w[1]) }
+  given.forEach((u, id) => { if (u?.kind === NAME_KIND) takeName(u); else U.set(id, u) })
+  const awaited = new Set((expect ?? []).filter(id => geometry.kinds?.[id] !== NAME_KIND))
   const pending = new Set([...awaited].filter(id => U.get(id) === undefined))
   // each unit's table group as the paper's own bundle gives it (groups.mjs groupOf), where the host knows it: a group is
   // then read once its own cells' rows are in, not every row
   const membersOf = new Map()
   if (tableGroups) for (const [id, g] of tableGroups) (membersOf.get(g) ?? membersOf.set(g, []).get(g)).push(id)
-  // (parts: the units of a part with no layout, `layout: null`, drawn as with no layout file: read by the file in no way)
-  const layoutless = new Set()
-  /** whether a unit is read with the layout file: the one place a part's `layout: null` is answered */
-  const filed = id => !!tex && !layoutless.has(id)
+  /** whether the layout file locates a unit whole (tex.mjs locatedWhole): its lu and kOf, else why not. A unit of a part with no
+   *  layout (`layout: null`, or a refusal's record) is in no file, and so is not located */
   const judge = (id, u) => {
-    if (!filed(id)) return null
     const lu = tex.index.unit(id)
-    const w = locatedWhole(lu, u, tex.pieces.get(id), { symbols: tex.symbols ?? 'text', held: tex.use === 'lines' })
+    const w = locatedWhole(lu, u, tex.pieces.get(id), { symbols: tex.symbols ?? 'text' })
     return w.ok ? { lu, kOf: w.kOf } : { why: w.why }
   }
-  const placeOf = (id, stream, rects, u, t) => {
-    const onPages = rects.filter(r => r[0] <= N)
+  /** a unit the file locates whole, placed by its lines in the file (texRects: the rectangles its exact baselines are by); null
+   *  where none of them is on the pages shown */
+  const placeByFile = (id, stream, u, w) => {
+    const lines = texRects(w.lu)
+    const rects = lines.rects, onPages = rects.filter(r => r[0] <= N)
     if (!onPages.length) return null
     // (cut: the unit goes on past the pages shown. It is laid over all its lines, those past the pages shown too, and
     // drawn on the pages shown: laid over the lines shown alone, all of its translation was set into them, shrunk to the
     // floor and the rest clipped, though the reader shows its next page as any other (1810.04805's unit 164 on page 12 of
     // 12 shown, 200 characters clipped in each alphabet). Its pages are the pages shown: it is laid when they are drawn)
-    return { id, stream, rects, unit: u, blocks: blocksOf(onPages, geometry.left.pages), pages: [...new Set(onPages.map(r => r[0]))], cut: onPages.length < rects.length, tex: t }
+    return { id, stream, rects, unit: u, blocks: blocksOf(onPages, geometry.left.pages), pages: [...new Set(onPages.map(r => r[0]))], cut: onPages.length < rects.length, tex: { ...w, lines } }
   }
-  /** a unit the file locates whole, placed by its lines in the file (texRects: the rectangles its exact baselines are by) */
-  const placeByFile = (id, stream, u, w) => { const lines = texRects(w.lu); return placeOf(id, stream, lines.rects, u, { ...w, lines }) }
   const translated = u => !!u?.pieces && (u.state === 'whole' || u.state === 'partial')
-  const unanchoredOf = (id, u) => ({ id, kind: u.kind, why: 'unanchored', chars: trCharsOf(u) })
-  // every unit v0 may place, in the order layGroups takes them (the text's stream): the geometry's, and, with texOnly,
-  // the units the file locates whole that v0's geometry does not hold, at their place in the stream after the unit
-  // before them, table cells among them (a cell's lines are TeX's, and the text removal takes its glyphs alone, never
-  // its table's rules). `cands` in the order the hybrid reports its sources in, K in the stream's
+  /** the file's own reason for a unit it does not lay (file.mjs UNLAID, its `unlaid`), or null: read from the file the index
+   *  holds now (under parts, the parts told so far) */
+  let unlaidFile = null, unlaidBy = null
+  const makerWhy = id => {
+    const f = tex.index.file
+    if (f !== unlaidFile) { unlaidFile = f; unlaidBy = new Map(f.unlaid ?? []) }
+    return unlaidBy.get(id) ?? null
+  }
+  /** a unit left the original's for want of the file's place (`code` of SKIP_CODES): `unlocated` with the maker's reason */
+  const unanchoredOf = (id, u, code) => ({ id, kind: u.kind, why: 'unanchored', code: skipCode(code), ...(code === 'unlocated' ? { unlaid: makerWhy(id) } : {}), chars: trCharsOf(u) })
+  // every unit the layer may place, in the order layGroups takes them (the text's stream): the geometry's, and the units the
+  // file locates whole that the geometry does not hold, at their place in the stream after the units before them placed up to
+  // their own page (need.mjs pagedBefore), or beside the geometry's unit they share one of TeX's lines with (need.mjs lineAfterOf;
+  // both as the cutter's K, cut.mjs entriesOf), table cells among them (a cell's lines are TeX's, and the text removal takes its
+  // glyphs alone, never its table's rules). The
+  // geometry's rectangles are the left's: a unit's place on the original, and the page's text area and columns the fitting
+  // reads; the unit is drawn by the file's lines. `cands` in the order the layer reports its sources in, K in the stream's
   const cands = GU.map(([id, stream, rects]) => ({ id, stream, rects }))
-  if (tex?.texOnly && tex.use === 'lines') {
-    const streamOf = new Map(GU.map(([id, stream]) => [id, stream]))
-    for (const id of tex.index.file.units.map(r => r[0])) {
-      if (inGeometry.has(id)) continue
-      let before = -1
-      for (const [gid, s] of streamOf) if (gid < id && s > before) before = s
-      cands.push({ id, stream: before + 0.5, rects: null })
-    }
+  const streamOf = new Map(GU.map(([id, stream]) => [id, stream])), streams = leftStreams(streamOf), lines = lineReader(tex.index)
+  const firstPageOf = new Map(GU.map(([id, , rects]) => [id, Math.min(...rects.map(r => r[0]))]))
+  for (const id of tex.index.file.units.map(r => r[0])) {
+    if (inGeometry.has(id)) continue
+    let before = -1
+    const lu = tex.index.unit(id), page = lu?.lines.length ? lu.lines[0] : undefined
+    for (const [gid, s] of streamOf) if (gid < id && s > before && (page === undefined || firstPageOf.get(gid) <= page)) before = s
+    cands.push({ id, stream: (lineAfterOf(tex.index, id, streams, lines) ?? before) + 0.5, rects: null })
   }
   const K = [], candOf = new Map()
   /** each unit whose last row another unit's first row continues on a shared line (K's `follows`), that unit's id */
@@ -838,8 +879,11 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
    *  and its rectangles, where the left holds it, counted in its pages' text area, columns and every unit's rectangles */
   const addUnits = entries => {
     for (const c of entries) {
-      const lu = tex?.use === 'lines' ? tex.index.unit(c.id) : null
-      const from = [c.rects, lu ? texRects(lu).rects : null].filter(Boolean)
+      const lu = tex.index.unit(c.id)
+      // (its own rows on our page, the layout file's lines: where its text stands there, which a copy of another unit's left
+      // tokens may not stand on, freezeWordsOf)
+      c.ownRows = lu ? texRects(lu).rects : null
+      const from = [c.rects, c.ownRows].filter(Boolean)
       c.lists = from.map(shownOf).filter(l => l.length)
       c.reach = new Set(from.flatMap(rs => rs.map(r => r[0])))
       // (and what Need reads of it besides (need.mjs NeedEntry): its placeholders' pages, its table group; its place in K, and
@@ -851,10 +895,9 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       // the door's parts come): its lay reads that unit's (layout2's start), which Need lays with it, `follows`; that unit's lay
       // reads that it has one, `followers`. Only where a page is laid by its closure alone (ORDER_FREE): there the unit before it
       // is laid first and no pass lays it anew or moves it after (the page fill keeps its share, fillPage). Rules that lay in
-      // order (the even pass and the leftover's packing, which lay a unit anew or move it once the unit after it has been laid
-      // from it, or no pass, whose closures may leave the unit before it to a later one) share no line: the next unit's first
-      // line stays where TeX set it, the same however the paper is opened)
-      c.lead = ORDER_FREE && tex?.use === 'lines' ? rowLeadOf(tex.index, c.id, aid => candOf.has(aid)) : null
+      // order (no pass, whose closures may leave the unit before it to a later one) share no line: the next unit's first line
+      // stays where TeX set it, the same however the paper is opened)
+      c.lead = ORDER_FREE ? rowLeadOf(tex.index, c.id, aid => candOf.has(aid)) : null
       c.follows = c.lead ? c.lead.id : null
       if (c.follows !== null) followers.set(c.follows, c.id)
       c.k = K.length
@@ -868,6 +911,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       for (const r of c.rects) pageBottom[r[0]] = Math.min(pageBottom[r[0]] ?? Infinity, r[2] + 0.24 * (r[4] - r[2]))
       if (geometry.kinds[c.id] === 'para') for (const r of c.rects) (cols[r[0]] ??= []).push([r[1], r[3]])
       addRects(c.id, c.rects)
+      if (c.ownRows) addOwn(c.id, c.ownRows)
     }
   }
 
@@ -896,7 +940,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
    *  line on): what its lay reads besides its lines' pages (Need's `reads`) */
   const segPagesOf = c => {
     const out = new Set()
-    for (const row of (tex ? tex.index.unit(c.id)?.ph?.values() : null) ?? []) for (let o = 0; o + 5 < row.segs.length; o += 6) if (row.segs[o] >= 1 && row.segs[o] <= N) out.add(row.segs[o])
+    for (const row of tex.index.unit(c.id)?.ph?.values() ?? []) for (let o = 0; o + 5 < row.segs.length; o += 6) if (row.segs[o] >= 1 && row.segs[o] <= N) out.add(row.segs[o])
     return [...out]
   }
   /** the pages a unit's lay reads, of those shown (its sources' lines' and its placeholders' segments'), held for it until its
@@ -912,9 +956,37 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     const r = rows[q - 1]
     if (!r || r.words) return
     const painted = new Set((r.wordsOpen?.spans ?? []).map(s => s[0]))
-    const original = []
+    const original = [], ownRows = []
     for (const c of K) if (!painted.has(c.id) && c.lists.some(l => l.includes(q))) original.push(c.id)
-    r.words = freezeWords(r.wordsOpen, original)
+    // (a unit shown as the original lights on the right by copies of its left tokens, the left's geometry, which our page may set
+    // elsewhere — a line our compile moved across the page break, the drift the line check draws (carry.mjs, a drift run) —: each
+    // unit the layout lays its rows on the page (none where they are all on other pages), and whether the page's lines moved,
+    // a unit's pages on the left not its rows' pages here; view/shapes.mjs layerShapes copies by them)
+    // (a unit shown as the original lights by its own boxes on our page, the layout file's — its lines, its label, its pieces, its
+    // displays under their ids —, where the file holds it: what the page shows of it is its own ink, whether or not the left located it)
+    for (const id of original) {
+      const lu = tex?.index.unit(id)
+      if (!lu) continue
+      const ds = displayIdsOf(id, [...lu.ph].filter(([, row]) => row.kind === 'display' && row.segs.length >= 6).map(([k]) => k))
+      addBoxWords(r.wordsOpen ??= newWords(), q, id, lu, ds)
+    }
+    const shownOn = new Set(original)
+    let drift = false
+    for (const c of K) {
+      if (!c.ownRows) continue
+      const rs = c.ownRows.filter(x => x[0] === q)
+      if (rs.length || shownOn.has(c.id)) ownRows.push([c.id, rs.flatMap(x => [x[1], x[2], x[3], x[4]])])
+      if (!drift && c.rects && c.rects.some(x => x[0] === q) !== rs.length > 0) drift = true
+    }
+    // (and every babel name of the page the layer did not draw — no word of the target's, its own again, a face refused, unfit,
+    // no group of its own —, left the original's in its place: its hover id, lit there as the left's, view/shapes.mjs
+    // layerShapes; one that leads a unit is that unit's)
+    for (const nm of tex?.index.names(q) ?? []) {
+      if (nm.unit >= 0) continue
+      const id = nameOccurrenceId(nm.occurrence)
+      if (id !== null && !painted.has(id)) original.push(id)
+    }
+    r.words = freezeWords(r.wordsOpen, original, ownRows, drift)
     r.wordsOpen = null
   }
   /** the annotations of each page (links.mjs annotsOf; null where the read failed), read once as the page is drawn and held
@@ -1004,8 +1076,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
         if (t.st?.link !== undefined) drawnPair.add(t.st.link)
       }
     }
-    const lu = p.tex?.lu ?? (filed(p.id) ? tex.index.unit(p.id) : null)
-    const kOf = p.tex?.kOf ?? (lu ? kOfPieces(p.unit, tex.pieces.get(p.id)) : null)
+    const { lu, kOf } = p.tex
     const targets = []
     // (each piece's index in the unit's source, by which a tier pairs pieces with annotations: the layout file's k, else the row's;
     // never its place in the translation, which may set two of them the other way)
@@ -1026,9 +1097,20 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       const draw = r && TEXT_MODES.has(r.mode) && drawnText.has(k) ? 'text' : r?.mode === 'crop' && drawnCrop.has(k) ? 'crop' : null
       targets.push({ ord: ordOf(k), k, ...(kind ?? { kind: null }), single: LK.singleTarget(piece, kind), gap, segs: segs.length ? segs : null, draw })
     })
+    // (and the unit's whole drawing, which a link round all of the unit's own characters the drawing replaces takes, where no
+    // piece took it: a contents entry's title, an ink unit of no placeholder, whose link was dropped with the ink it erased;
+    // links.mjs matchUnit's tier 5, 2610.40645v1 p1)
+    // (its characters read only where the match leaves an annotation: the speed check's heap grew 0.1 % a laid page where every
+    // unit with a link read them)
+    const ownOf = () => {
+      const own = []
+      for (const c of p.prep.uc ?? []) if (!c.sep && !c.space && /\S/.test(c.ch) && p.prep.cat?.get(L2.charKey(c)) === 'acc') own.push({ key: L2.charKey(c), page: c.page, x0: c.x0, x1: c.x1, yb: c.yb })
+      return own
+    }
+    if (L.lines.some(line => line.items.some(it => typeof it.t.s === 'string' && !it.t.space && !it.t.crop))) targets.push({ ord: null, kind: null, gap: null, segs: null, draw: 'whole', own: ownOf })
     const m = LK.matchUnit({ cands, targets, budget })
     const lines = L.lines.map(line => ({ line, runs: L2.lineRuns(line, L) }))
-    const placed = LK.placeUnit({ groups: m.groups, lines, edge: (line, run, at) => L2.runEdge(run, at, line, L), band: (t, line) => tokenBand(t, L, line.baseline), scale: L.scale, budget })
+    const placed = LK.placeUnit({ groups: m.groups, lines, edge: (line, run, at) => L2.runEdge(run, at, line, L), band: (t, line) => tokenBand(t, line.seg ?? L, line.baseline), scale: L.scale, budget })
     // (each page's records in the unit's drawing order there, after those of the units before it)
     const byPage = new Map()
     for (const r of placed.records) if (rows[r.page - 1]) (byPage.get(r.page) ?? byPage.set(r.page, []).get(r.page)).push(r)
@@ -1051,7 +1133,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     annots[q - 1] = consumed[q] = whyOf[q] = undefined
     unswept.delete(q)
     chars2[q - 1] = rowsByPage[q] = undefined
-    inks[q] = pageItems[q] = accounted[q] = keptOf[q] = laid[q] = undefined
+    inks[q] = laid[q] = undefined
     // (a reading of its pixels still under way is no longer the page's: its result is dropped as it comes, pixelsOf)
     pixelTasks.delete(q)
     heldLists.delete(q)
@@ -1067,7 +1149,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     for (const q of unswept) if (!reads[q] && readyOf(q) && !awaitsPaint(q)) letGoPage(q)
   }
   /** what a unit holds for its lay, its passes and its paint alone (and the file's lines it is laid by: `tex.lines`) */
-  const HEAVY = ['prep', 'tokens', 'layout', 'blocks', 'local', 'lead', 'P', 'clear', 'wordOf', 'pieceAt']
+  const HEAVY = ['prep', 'tokens', 'layout', 'blocks', 'local', 'lead', 'P', 'clear', 'wordOf', 'pieceAt', 'runs', 'whole']
   /** a unit nothing reads again: painted on every page it is on, or left the original's (refused, or withheld with its
    *  group), its table group settled, and each of its pages passed (with a page pass: a pass reads the units running on to
    *  its page) */
@@ -1082,9 +1164,9 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // it is (L1), and reads what it holds; a page that failed grows nothing. So the run that lets go grows as the one that keeps)
     if (p.linePages && !p.linePages.every(g => p.grew.has(g) || failedPages.has(g))) return
     p.letGo = true
-    if (shelf) shelf.units.set(p.id, { ...p, tex: p.tex && { ...p.tex } })
+    if (shelf) shelf.units.set(p.id, { ...p, tex: { ...p.tex } })
     for (const k of HEAVY) p[k] = undefined
-    if (p.tex) p.tex.lines = undefined
+    p.tex.lines = undefined
     leadsOf.delete(p.id)
   }
 
@@ -1098,40 +1180,35 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
    *  that cannot be drawn: readGroup) */
   const refusalOf = (id, u) => {
     if (!shapely(u)) return "row: not a unit's shape"
-    const lu = tex ? tex.index.unit(id) : null, kind = geometry.kinds?.[id]
+    const lu = tex.index.unit(id), kind = geometry.kinds?.[id]
     if ((lu && u.kind !== lu.kind) || (kind !== undefined && u.kind !== kind)) return 'row: another kind'
     if (tableGroups && (u.group ?? null) !== (tableGroups.get(id) ?? null)) return 'row: another group'
     if (lu && u.pieces.some(q => q.t !== 'text' && q.k !== undefined && !(Number.isInteger(q.k) && q.k >= 0 && q.k < lu.pieces))) return "row: a k not its source's"
     return null
   }
-  const refusedOf = (id, u, why) => ({ id, kind: u.kind, why, chars: shapely(u) ? trCharsOf(u) : 0 })
+  const refusedOf = (id, u, why) => ({ id, kind: u.kind, why, code: 'refused', chars: shapely(u) ? trCharsOf(u) : 0 })
   /**
-   * What v0 makes of a unit once its row is in, before its table's group is read: placed (with the pages it is drawn
-   * on and which source its geometry is), or not, and why it is left (`skip`); the hybrid's why a unit placed is v0's
-   * (`why`), or the file's why it does not locate one only it holds (`missed`)
+   * What the layer makes of a unit once its row is in, before its table's group is read: placed (with the pages it is drawn
+   * on), or not, and why it is left the original's (`skip`); the file's why it does not locate the unit whole (`missed`).
+   * The layer draws a unit only from the file: one the file does not locate whole (not held, or a visible piece with no
+   * position) is the original's, wherever the left holds it
    */
   const decide = (c, u) => {
     if (!translated(u)) return { p: null }
     const no = refusalOf(c.id, u)
     if (no) return { p: null, skip: refusedOf(c.id, u, no) }
-    if (c.rects) {
-      if (u.kind === 'author') return { p: null, skip: { id: c.id, kind: u.kind, why: 'author', chars: trCharsOf(u), pages: [...new Set(c.rects.map(r => r[0]))] } }
-      const w = judge(c.id, u)
-      let p = null
-      if (w?.lu && tex.use === 'lines') {
-        // the file's lines, frames and label in place of the anchors' rectangles (v0's where the file's lie past the
-        // pages shown and the anchors' do not)
-        p = placeByFile(c.id, c.stream, u, w)
-        if (!p && (p = placeOf(c.id, c.stream, c.rects, u, null))) w.why = 'pages'
-      } else p = placeOf(c.id, c.stream, c.rects, u, w?.lu ? w : null)
-      return { p, why: p && w && !p.tex ? w.why : null }
-    }
-    // (the file's alone: a unit it does not locate whole is left unanchored, as v0's geometry does not hold it)
-    if (u.kind === 'author') return { p: null, skip: unanchoredOf(c.id, u) }
+    // (a unit whose class the reader's toggles hide: its row made, its ink the page's — rules/content-classes.mjs; the door
+    // takes no row of one, so one comes here only where a host gives the open its units or rows itself)
+    if (!classShown(u)) return { p: null, skip: c.rects ? { id: c.id, kind: u.kind, why: 'hidden', code: 'hidden', chars: trCharsOf(u), pages: [...new Set(c.rects.map(r => r[0]))] } : unanchoredOf(c.id, u, 'hidden') }
+    // (a unit the left holds wholly past the pages shown is none of the run's)
+    if (c.rects?.every(r => r[0] > N)) return { p: null }
     const w = judge(c.id, u)
-    if (!w.lu) return { p: null, skip: unanchoredOf(c.id, u), missed: `unanchored, ${w.why}` }
+    if (!w.lu) return { p: null, skip: unanchoredOf(c.id, u, JUDGED[w.why]), missed: `unanchored, ${w.why}` }
+    // (a unit whose ink the file cannot hide is the original's, design §6)
+    const no2 = unhiddenOf(c.id)
+    if (no2) return { p: null, skip: { id: c.id, kind: u.kind, why: `unhidden: ${no2}`, code: 'unhidden', chars: trCharsOf(u), pages: [...new Set(texRects(w.lu).rects.map(r => r[0]))] } }
     const p = placeByFile(c.id, c.stream, u, w)
-    return { p, skip: p ? null : unanchoredOf(c.id, u) }
+    return { p, skip: p ? null : unanchoredOf(c.id, u, 'offPages') }
   }
   // (each decision kept with the row it was made of: a row taken again before it is fixed is decided again)
   const decisions = new Map()
@@ -1144,6 +1221,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   // a table's consistency group drawn whole or not at all (the table-groups brief, 2026-10-07): the record translates
   // or keeps each group whole (its cells' `group`, cache.mjs unitsOf), and a translated cell that cannot be drawn here —
   // no lines for it, none on the pages shown, a row refused (refusalOf) — keeps every cell of its group the original's.
+  // But a cell whose ink the file cannot hide (`unhidden`) is the original's alone, the rest of its group drawn (the
+  // coordinator's ruling of 2026-10-24: a table with one English cell beats an English table), unless it spans columns.
   // A group's cells may be anywhere in the paper: it is read once its own cells' rows are in where the open is given each
   // unit's group (`groups`), else once every row is (or end()), every row fixed then; the rows it reads are fixed from
   // then on. Given each unit's group, a group's cells are the units given it whose rows are translated, whatever group
@@ -1156,7 +1235,11 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   const readGroup = (g, ids) => {
     read.add(g)
     for (const id of ids) fixed.add(id)
-    const cells = ids.filter(id => translated(U.get(id)))
+    // (a cell whose ink the file cannot hide is the original's alone, the rest of its group drawn: coverage first, the
+    // coordinator's ruling of 2026-10-24 — but one spanning columns or rows (\\multicolumn, \\multirow), whose box is the
+    // others' too, keeps the group whole; and so does one that fails the spell check, whose range may hold a sibling's ink)
+    const kept = id => { const d = candOf.has(id) ? decisionOf(candOf.get(id)) : null; return !!d && !d.p && d.skip?.code === 'unhidden' && d.skip.why !== 'unhidden: spell' && !unitSpans(U.get(id)) }
+    const cells = ids.filter(id => translated(U.get(id)) && !kept(id))
     if (!cells.length) return
     groupCells.set(g, cells)
     if ((tableGroups && ids.some(id => awaited.has(id) && U.get(id) === undefined)) || cells.some(id => !(candOf.has(id) && decisionOf(candOf.get(id)).p))) split.add(g)
@@ -1198,89 +1281,18 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     if (fromData[pg] && !pixelsIn[pg]) throw new NeedPixels(pg, why)
     return inks[pg]
   }
-  // each page's characters that a painted unit accounts for (its text, its placeholders drawn elsewhere), and its items
-  const accounted = [], keptOf = [], pageItems = []
-  const restoreOf = (p, pg) => {
-    if (!restoring || !p.prep?.cat) return null
-    // (the page's ink, read before anything of the page's is counted: a page read from its draw is painted once its pixels are in, paintOn)
-    inkOf(pg, 'paint')
-    if (!accounted[pg]) accounted[pg] = new Set()
-    const acc = accounted[pg]
-    // what any unit keeps stays, whatever another unit says of it (a formula's glyph two units' lines both hold)
-    if (!keptOf[pg]) keptOf[pg] = { keys: new Set(), hulls: [] }
-    const kept = keptOf[pg]
-    const px = pxOf(pg)
-    const lines = new Map()
-    for (const [key, cat] of p.prep.cat) {
-      if (!key.startsWith(`${pg}|`)) continue
-      if (cat === 'acc') acc.add(key)
-      if (cat === 'keep') kept.keys.add(key)
-    }
-    for (const c of p.prep.uc ?? []) {
-      if (c.page !== pg || c.sep || c.space || !/\S/.test(c.ch) || p.prep.cat.get(L2.charKey(c)) !== 'keep') continue
-      const k = c.rect.join()
-      if (!lines.has(k)) lines.set(k, [])
-      lines.get(k).push(c)
-    }
-    for (const cs of lines.values()) {
-      // grown over its ink as a crop is (a big bracket's or a radical's hanging part)
-      const hull = { crop: [Math.min(...cs.map(c => c.x0)) - 0.5, Math.min(...cs.map(c => (c.ybEff ?? c.yb) - 0.35 * c.size)), Math.max(...cs.map(c => c.x1)) + 0.5, Math.max(...cs.map(c => c.yb + 0.9 * c.size))], gap: { chars: cs } }
-      L2.growCrop(hull, inks[pg], px, scale * dpr, p.local?.[pg - 1] ?? chars2[pg - 1])
-      const [ax, ay] = px(hull.crop[0], hull.crop[3]), [bx, by] = px(hull.crop[2], hull.crop[1])
-      kept.hulls.push([Math.min(ax, bx), Math.min(ay, by), Math.max(ax, bx), Math.max(ay, by)])
-    }
-    pageItems[pg] ??= L2.pageItemsOf(chars2[pg - 1] ?? [], pg, pxOf(pg), inks[pg])
-    return { items: pageItems[pg].items, cover: pageItems[pg].cover, ink: inks[pg], accounted: acc, kept }
-  }
-  // ---- the text-removed PDF (one add-on a paper, made from the layout file: removal.mjs pagePlan). Nothing of the page's
-  // ink is read here: a unit's swap is the layout file's own rectangles (its lines' erase, its placeholders' segments,
-  // its label), filled with paper where the manifest says nothing kept lies under them, else the removed page swapped in
-  const RM = removal ? {
-    mode: removal.mode, manifest: removal.manifest ?? null, removed: [], others: [],
-    stats: { pages: 0, refused: 0, units: 0, tex: 0, v0: 0, fills: 0, swaps: 0, swapPages: 0, extra: 0, byPage: {}, ms: { render: 0, rects: 0 } },
-  } : null
-  /** whether page j's text is removed in the add-on (draw mode) */
-  const removedPage = j => RM?.mode === 'draw' && !!RM.manifest?.page?.[j]?.ok
-  /** page j's page in a set of the add-on: where its manifest entry names it (a compact add-on, which holds the pages it
-   *  removes alone), else at the set's fixed place */
-  const setPage = (name, j) => RM?.manifest?.page?.[j]?.at?.[name] ?? (RM?.manifest?.sets?.[name] ?? 0) + j
-  /** the kept ink under the paper's units' rectangles on page j, by the manifest (x0, y0, x1, y1 each): where a fill would
-   *  take it, the removed page is swapped in instead */
-  const dirtyOf = j => { const d = RM.manifest.page[j]?.dirty ?? []; const out = []; for (let q = 0; q + 3 < d.length; q += 4) out.push([d[q], d[q + 1], d[q + 2], d[q + 3]]); return out }
-  /** what a unit's fill on a page keeps clear of (removal.mjs protection): every other unit's rectangles until it is
-   *  drawn there, then those it keeps */
-  const guard = RM && tex ? protection(tex.index) : null
-  /**
-   * A unit's drawing over the text-removed PDF on page pg, from the layout file's rectangles (removal.mjs fileSwap): the
-   * rectangles (v0's device pixels) the removed page is swapped into where kept ink lies under them, those filled with
-   * paper elsewhere, its crops' clips (its placeholders' segments), and the characters its reading accounts for that the
-   * file gives it no rectangle for (erased over their boxes)
-   */
-  const swapOf = (p, pg) => {
-    const t = performance.now()
-    // (a name set as its first line's start is its own: replaced with it, and kept clear of no more)
-    const nm = p.lead?.nm.page === pg ? p.lead.nm : null
-    if (nm) guard.accept(`name:${nm.occurrence}`, pg, [])
-    const sw = fileSwap({ page: pg, lu: p.tex.lu, kOf: p.tex.kOf, lines: p.tex.lines, prep: p.prep, others: guard.others(pg, p.id), dirty: dirtyOf(pg), also: nm ? [[nm.x0, nm.bottom, nm.x1, nm.top]] : [] })
-    // (drawn there from now: what it replaces no longer kept clear of, what it keeps still)
-    guard.accept(p.id, pg, sw.kept)
-    const px = pxOf(pg)
-    const dev = b => { const [ax, ay] = px(b[0], b[3]), [bx, by] = px(b[2], b[1]); return [Math.min(ax, bx), Math.min(ay, by), Math.abs(bx - ax), Math.abs(by - ay)] }
-    const clips = new Map([...sw.clips].map(([k, c]) => [k, { rects: c.rects.map(dev), own: c.own.map(dev) }]))
-    RM.stats.ms.rects += performance.now() - t
-    RM.stats.fills += sw.fill.length
-    RM.stats.swaps += sw.swap.length
-    RM.stats.extra += sw.extra.length
-    return { rects: sw.swap.map(dev), erase: [...sw.fill, ...sw.extra].map(dev), clips, lines: sw.lines }
-  }
+  /** what the run hid and showed again: units drawn, the boxes pasted from render B and from render C (`pastedKeep`) */
+  const hidStats = { units: 0, fromB: 0, pastedKeep: 0, crops: 0 }
   /** whether a crop may be cut from page j (S1): a page of the paper whose drawing was read and did not fail, a fact of the
    *  page itself, never whether the host has let it go (its row's `base`): a view cuts it from the page as PDF.js draws it
    *  then (drawCopy), and v0's own copy keeps the page's canvases while a unit on it is still to be painted (release) */
   const hasSource = j => j >= 1 && j <= N && !failedPages.has(j) && views[j - 1] !== undefined
-  const sourceOn = (j, plane) => {
-    const r = rows[j - 1]
-    if (!r?.base) return null
-    return plane === 'R' ? RM?.removed[j] ?? null : r.left
+  /** a drawn thing's part of its page's text layer (textlayer.mjs): the range of the page's operations it appended (whose erasures
+   *  are its own) and its drawn lines as segments, kept with the page's record. A page's are final once it is (textOf) */
+  const textRecord = (r, from, key, unit, segs) => {
+    const T = (r.text ??= { owners: [], drawn: [] })
+    if (r.ops.length > from) T.owners.push([from, r.ops.length, key])
+    T.drawn.push(unit === undefined ? { key, segs } : { key, unit, segs })
   }
   const paint = (p, pg) => withWork(pg, () => paintUnit(p, pg))
   const paintUnit = (p, pg) => {
@@ -1288,36 +1300,27 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     if (!p.linked) linkUnit(p)
     const tOps = performance.now()
     const r = rows[pg - 1]
-    // (what the unit accounts for is counted whichever way it is drawn: a unit drawn the old way after it puts back only
-    // what no painted unit accounts for)
-    const ro = restoreOf(p, pg)
-    let ops = null
-    // the text-removed PDF, on a page the add-on removed: a unit the layout file locates whole is drawn over the file's own
-    // rectangles (filled with paper, or the removed page swapped in where kept ink lies under them), its crops cut from
-    // the original through its placeholders' segments; a unit v0 reads on its own (the file's miss) is drawn the old way,
-    // erased and put back. No output needs a plan of its own: the add-on is the paper's
-    if (RM?.mode === 'draw' && removedPage(pg)) {
-      const here = (RM.stats.byPage[pg] ??= { units: 0, tex: 0, v0: 0 })
-      RM.stats.units++
-      here.units++
-      if (p.tex && p.prep) {
-        const sw = swapOf(p, pg)
-        ops = L2.removalOps(p.layout, pg, { px: pxOf(pg), k: scale * dpr, hasSource, pxOf, rects: sw.rects, erase: sw.erase, clips: sw.clips, lines: sw.lines, removed: removedPage, audit, id: p.id })
-        RM.stats.tex++
-        here.tex++
-      } else { RM.stats.v0++; here.v0++ }
-    }
-    // else the unit's drawing as data, and on v0's own copy where it is kept: from the pages drawn now, as v0 drew it
-    if (!ops) ops = L2.unitOps(p.layout, p.blocks, pg, { px: pxOf(pg), k: scale * dpr, hasSource, pxOf, extents: p.layout.extents, audit, id: p.id, restore: ro })
-    for (const o of ops) r.ops.push(o)
+    // its groups hidden on the page (hide.mjs): its text, its placeholders where one is moved, its label where it is drawn anew,
+    // the name it leads; what its reading keeps shown again from B or C; its crops cut from B through their segments
+    const nm = p.lead?.nm.page === pg ? p.lead.nm : null
+    const h = unitHiding({ page: pg, id: p.id, lu: p.tex.lu, kOf: p.tex.kOf, lines: p.tex.lines, prep: p.prep, nm, has: VIS.has })
+    for (const g of h.off) r.off.add(g)
+    const ops = L2.hideOps(p.layout, pg, { px: pxOf(pg), k: scale * dpr, hasSource, pxOf, hidden: h.hidden, fromB: h.fromB, fromC: h.fromC, clips: h.clips, audit, id: p.id })
+    hidStats.units++
+    hidStats.fromB += h.fromB.length
+    hidStats.pastedKeep += h.fromC.length
+    const opsFrom = r.ops.length
+    for (const o of ops) { r.ops.push(o); if (o.op === 'crop') hidStats.crops++ }
     const tCompose = performance.now()
-    if (r.right) L2.drawOps(r.right.getContext('2d'), ops, 1, sourceOn, scale * dpr)
     const tSvg = performance.now()
     r.markup.push(L2.svgOfUnit(p.layout, pg, cssOf(pg), scale, p.id))
     const tWords = performance.now()
     // (the page's word table, beside the markup: the unit's words in its text's order, its kept lines where the text passes them,
     // each token's place in its translation; a page whose table is frozen is final)
-    if (!r.words) addUnitWords(r.wordsOpen ??= newWords(), p.layout, pg, p.id, (at, end) => (p.wordOf ??= wordIndexer(plainOfPieces(p.unit.pieces)))(at, end), L2.keptLines(p.rects, p.prep, pg, p.blocks), crop => hasSource(crop.page), p.pieceAt ??= pieceOffsets(p.unit.pieces))
+    // (and its own ink the page keeps, its label, its kept pieces, its displays each under its own id: hide.mjs `shown`)
+    if (!r.words) addUnitWords(r.wordsOpen ??= newWords(), p.layout, pg, p.id, (at, end) => (p.wordOf ??= wordIndexer(plainOfPieces(p.unit.pieces)))(at, end), L2.keptLines(p.rects, p.prep, pg, p.blocks), crop => hasSource(crop.page), p.pieceAt ??= pieceOffsets(p.unit.pieces), h.shown)
+    // (and its text layer's: the operations it appended, and its drawn lines as segments, read by textOf once the page is final)
+    textRecord(r, opsFrom, `u${p.id}`, p.id, TL.segsOfUnit(p.layout, pg, crop => hasSource(crop.page)))
     workOf(pg).ops += ops.length
     const T = timesOf(pg)
     T.ops += tCompose - tOps
@@ -1345,27 +1348,43 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   const styleOfChars = cs => L2.styleOfChars(cs, designs.serif)
   /** each unit's lead, by the unit: the name RUN_IN before its first line, its record, its word, style and characters */
   const leadsOf = new Map()
+  /** the characters of a name's row that are the counter TeX set after it: those whose middle stands within the counter's width
+   *  at the row's end, as the maker found it (file.mjs `counter`, names.mjs counterAfter), never read again here, so that a thin
+   *  space before it, a letter-spaced name or a stop after a space is the maker's verdict and no other; none where it found none */
+  const counterOf = (chars, nm) => (nm.counter > 0 ? chars.filter(c => (c.x0 + c.x1) / 2 > nm.x1 - nm.counter) : [])
   const paintNames = async pg => {
     if (!tex || !labels) return
     for (const nm of tex.index.names(pg)) {
-      const rec = { occurrence: nm.occurrence, key: nm.key, page: pg, drawn: false, why: null, chars: [], box: { x0: nm.x0, x1: nm.x1, baseline: nm.baseline, top: nm.top, bottom: nm.bottom, size: nm.size } }
+      const rec = { occurrence: nm.occurrence, key: nm.key, page: pg, drawn: false, why: null, chars: [], box: { x0: nm.x0, x1: nm.x1, baseline: nm.baseline, top: nm.top, bottom: nm.bottom, size: nm.size }, column: [nm.cx0, nm.cx1] }
       names.push(rec)
       const mine = (chars2[pg - 1] ?? []).filter(c => /\S/.test(c.ch) && (c.x0 + c.x1) / 2 >= nm.x0 - 0.5 && (c.x0 + c.x1) / 2 <= nm.x1 + 0.5 && Math.abs(c.yb - nm.baseline) < 0.3 * nm.size)
       if (!mine.length) { rec.why = 'unread'; continue }
-      const text = L2.nameInTarget(nm, mine.map(c => c.ch).join(''), R.labels, to)
+      // (a name that leads no unit holds the counter TeX set after it in its row, where the maker found one (names.mjs
+      // counterAfter: IEEEtran's "APPENDIX A", "Appendix A:"): its characters in the counter's width, set after the target's word)
+      const counter = nm.unit >= 0 ? [] : counterOf(mine, nm)
+      const own = L2.nameStyleOf(mine.filter(c => !counter.includes(c)), nm)
+      const word = L2.nameInTarget(own.small ? { ...nm, capitals: false } : nm, mine.filter(c => !counter.includes(c)).map(c => c.ch).join(''), R.labels, to)
+      const text = word === null ? null : counter.length ? `${word} ${counter.map(c => c.ch).join('')}` : word
+      // its size and its faked small capitals, read off its characters as a unit's are (layer2.mjs nameStyleOf): set in faked small
+      // capitals, it is drawn in small capitals as such a unit is, its word in its own case (the layer drawing its small capitals,
+      // a CJK target's at CJK_CAPS_SIZE of the size), never as a case change's capitals (above, with its counter)
       if (text === null) { rec.why = !R.labels?.[nm.key] ? 'no word' : 'same'; continue }
       // its style: its characters' (a class's bold or italic heading, small capitals), its design the paper's
-      const st = styleOfChars(mine)
+      const st = own.small ? { ...styleOfChars(mine), caps: true } : styleOfChars(mine)
+      const at = own.small && P.cjk ? own.size * L2.CJK_CAPS_SIZE : own.size
       // (leading a unit: that unit's, once it is laid)
       if (nm.unit >= 0) {
         Object.assign(rec, { why: 'inline: its unit not drawn', text, unit: nm.unit })
         leadsOf.set(nm.unit, { nm, rec, text, st, chars: mine.map(c => ({ ...c, page: pg })) })
         continue
       }
-      const face = faceOf(st, /[\u2e80-\u9fff\uac00-\ud7af\u3040-\u30ff\uf900-\ufaff]/.test(text) ? 'cjk' : 'latin', to)
+      // (its runs by script, each in its face, as a unit's words are drawn: its CJK characters in the target's CJK face, the rest
+      // in the Latin one, the served CJK faces holding no Latin letter or digit; its small capitals, where a face has none of its
+      // own, drawn by the layer: layer2.mjs nameScriptRuns, nameRuns)
+      const drawn = L2.nameScriptRuns(text, cls => faceOf(st, cls, to), to, P.cjkQuotes)
       if (FS) {
         const tFonts = performance.now()
-        const no = await FS.check([{ face, text }])
+        const no = await FS.check(drawn.runs.map(q => ({ face: q.face, text: q.s })))
         fontWait += performance.now() - tFonts
         if (disposed) return
         if (no) { rec.why = no.why; continue }
@@ -1380,65 +1399,104 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
         else if (c.x0 >= nm.x1 - 0.1) right = Math.min(right, c.x0 - 0.25 * nm.size)
       }
       left = Math.min(left, nm.x0); right = Math.max(right, nm.x1)
-      const w = L2.widthOf(text, face) * nm.size, mid = (nm.x0 + nm.x1) / 2
+      const w = L2.runsWidth(drawn) * at, mid = (nm.x0 + nm.x1) / 2
       const room = nm.centred ? 2 * Math.min(mid - left, right - mid) : right - nm.x0
       const k = w > room ? room / w : 1
       if (k < P.floorMin - 1e-9) { Object.assign(rec, { why: 'unfit', text, w: r1(w), room: r1(room) }); continue }
-      const size = nm.size * k, x = nm.centred ? mid - (w * k) / 2 : nm.x0
-      // its ink erased: its characters the unit-like text it is, accounted on the page before any unit is painted there
-      const keys = mine.map(c => `${pg}|${c.item}|${c.k}`)
-      if (!accounted[pg]) accounted[pg] = new Set()
-      for (const key of keys) accounted[pg].add(key)
-      const r = rows[pg - 1], px = pxOf(pg), box = [nm.x0, nm.bottom, nm.x1, nm.top], ops = []
-      const dev = b => { const [ax, ay] = px(b[0], b[3]), [bx, by] = px(b[2], b[1]); return [Math.min(ax, bx), Math.min(ay, by), Math.abs(bx - ax), Math.abs(by - ay)] }
-      if (RM?.mode === 'draw' && removedPage(pg) && guard) {
-        const self = `name:${nm.occurrence}`, dirty = dirtyOf(pg)
-        const meets = (q, d) => d[0] < q[2] && d[2] > q[0] && d[1] < q[3] && d[3] > q[1]
-        const swap = [], fill = []
-        for (const q of swapRects([box], guard.others(pg, self), SWAP_PAD)) (dirty.some(d => meets(q, d)) ? swap : fill).push(q)
-        guard.accept(self, pg, [])
-        if (swap.length) ops.push({ op: 'swap', page: pg, rects: swap.map(dev) })
-        if (fill.length) ops.push({ op: 'paper', rects: fill.map(dev) })
-        const [ax, ay, aw, ah] = dev(box)
-        audit?.push({ what: 'erase', unit: -1, name: nm.occurrence, page: pg, box: [ax, ay, ax + aw, ay + ah], swap: true })
-      } else {
-        const [ax, ay, aw, ah] = dev([nm.x0 - 0.3, nm.bottom - 0.5, nm.x1 + 0.3, nm.top + 0.5])
-        ops.push({ op: 'erase', box: [ax, ay, aw, ah] })
-        audit?.push({ what: 'erase', unit: -1, name: nm.occurrence, page: pg, box: [ax, ay, ax + aw, ay + ah] })
-        if (restoring) {
-          if (!keptOf[pg]) keptOf[pg] = { keys: new Set(), hulls: [] }
-          // (a page read from its draw: its pixels read now, what it puts back is read of them)
-          if (fromData[pg] && !pixelsIn[pg]) {
-            needed('names')
-            await pixelsOf(pg, 'names')
-            if (disposed) return
-          }
-          inkOf(pg, 'names')
-          pageItems[pg] ??= L2.pageItemsOf(chars2[pg - 1] ?? [], pg, px, inks[pg])
-          const back = L2.restoreUnaccounted([[ax, ay, ax + aw, ay + ah]], px, { items: pageItems[pg].items, cover: pageItems[pg].cover, ink: inks[pg], accounted: accounted[pg], kept: keptOf[pg] }, audit, -1, pg)
-          if (back) ops.push(back)
-        }
-      }
-      for (const o of ops) r.ops.push(o)
-      if (r.right) L2.drawOps(r.right.getContext('2d'), ops, 1, sourceOn, scale * dpr)
-      r.markup.push(L2.svgOfName({ occurrence: nm.occurrence, text, x, baseline: nm.baseline, size, face, color: st.color ?? null }, cssOf(pg), scale))
+      const size = at * k, x = nm.centred ? mid - (w * k) / 2 : nm.x0
+      // its ink hidden by its own group (`n<occ>`): a name whose group the document does not hold stays the original's
+      if (!VIS.has(nameGroup(nm.occurrence))) { Object.assign(rec, { why: 'unhidden', text }); continue }
+      const r = rows[pg - 1], px = pxOf(pg)
+      r.off.add(nameGroup(nm.occurrence))
+      const [ax, ay] = px(nm.x0, nm.top), [bx, by] = px(nm.x1, nm.bottom)
+      const hid = [Math.min(ax, bx), Math.min(ay, by), Math.abs(bx - ax), Math.abs(by - ay)]
+      const opsFrom = r.ops.length
+      r.ops.push({ op: 'hidden', rects: [hid] })
+      audit?.push({ what: 'erase', unit: -1, name: nm.occurrence, page: pg, box: [hid[0], hid[1], hid[0] + hid[2], hid[1] + hid[3]] })
+      r.markup.push(L2.svgOfName({ occurrence: nm.occurrence, text, x, baseline: nm.baseline, size, face: drawn.face, runs: drawn.runs, color: st.color ?? null }, cssOf(pg), scale))
+      const seg = TL.nameSeg(text, x, w * k, nm.baseline, size)
+      textRecord(r, opsFrom, `n${nm.occurrence}`, undefined, [seg])
+      // (its words in the page's word table under its occurrence's hover id, which no bundle id reaches (units.mjs
+      // nameOccurrenceId): the hover lights it as a heading, and the left its original by its box, view/shapes.mjs createShapes)
+      const nid = nameOccurrenceId(nm.occurrence)
+      if (nid !== null && !r.words) addSegWords(r.wordsOpen ??= newWords(), nid, [seg])
       Object.assign(rec, { drawn: true, text, size: r1(size), x: r1(x), w: r1(w * k), chars: mine.map(c => ({ ...c, page: pg })) })
     }
   }
 
-  // the columns of each page, as its paragraphs' lines span them (each unit's lines as it is added, addUnits): a unit of a
-  // part with no layout is centred where its lines are its column's middle, every line short of it, the first not at its
-  // edge (a caption under its figure, a title over the text), as the file's flag is no such unit's
-  const cols = []
-  const centredInColumn = b => {
-    const rs = b.rects, list = cols[b.page] ?? []
-    const mid = (b.x0 + b.x1) / 2
-    const own = list.filter(([a, z]) => a <= mid && z >= mid)
-    if (own.length < 3) return false
-    const cx0 = Math.min(...own.map(c => c[0])), cx1 = Math.max(...own.map(c => c[1])), cmid = (cx0 + cx1) / 2
-    const centres = rs.map(r => (r[1] + r[3]) / 2)
-    return centres.every(c => Math.abs(c - cmid) < 2.5) && rs.every(r => r[3] - r[1] < 0.92 * (cx1 - cx0)) && rs[0][1] > cx0 + 4
+  // ---- the figures' text (the content class `figures`, docs/route/orphan-text.md stage 5): each figure unit its page's parts
+  // carry (hiding.figures: BUNDLE 11's figure rows, figure-rows.mjs), drawn in its translation where the reader shows figures
+  // translated (hiding.figuresShown), its ink hidden by its own group (`f<k>`), its words by the fit rule with the rest of its set
+  // (figure-fit.mjs fitFigureSet: on its baseline, turned as it was, from its anchor's edge, into the room beside its box, every
+  // unit of one set at one size, the original's or one factor less, to the rules' last floor), in the faces of its font's family
+  // and weight (its CJK characters in the target's CJK face, the rest in the Latin one), in its fill; else left the original's, why told (`no row`, `untranslated`, `same` as its source, `unhidden` where the
+  // document holds no group of it, a face's refusal, `unfit`, `crowded` where at its size it reaches the stroke under its
+  // original's text, its row's `under`: figure-fit.mjs). A page whose figures are shown waits for their rows as for its
+  // units' (figuresWait). `figures`: each figure unit of the pages laid, drawn or why not
+  const figureRecs = []
+  /** each page's figures: 1 while painted (an await of their faces under way), 2 once painted; a page is ready at 2 alone */
+  const figuresDone = new Uint8Array(N + 1)
+  const figuresOn = pg => (hiding?.figuresShown ? hiding.figures?.(pg) ?? [] : [])
+  const figuresWait = pg => !ended && figuresOn(pg).some(f => pending.has(f.id))
+  const paintFigures = async pg => {
+    if (figuresDone[pg]) return
+    figuresDone[pg] = 1
+    // (each unit's translation and face first, then each set fitted at one size, then each drawn in its rows' order)
+    const ready = []
+    for (const f of figuresOn(pg)) {
+      const rec = { id: f.id, group: f.group, page: pg, drawn: false, why: null }
+      figureRecs.push(rec)
+      const u = U.get(f.id)
+      if (!translated(u)) { rec.why = !u ? 'no row' : u.state === 'kept' ? 'kept' : 'untranslated'; continue }
+      const text = u.pieces.map(p => (p.t === 'text' ? shownPiece(p) : ' ')).join('').replace(/\s+/g, ' ').trim()
+      if (!text || sameAsSource(text, u.src ?? '')) { Object.assign(rec, { why: 'same', text }); continue }
+      if (!VIS.has(f.group)) { Object.assign(rec, { why: 'unhidden', text }); continue }
+      // its faces: its font's family, weight and slant, the paper's design of that family; its CJK characters in the target's
+      // CJK face and every other in that family's Latin face, a run each (layer2.mjs figureRuns: one CJK face for the whole
+      // text left 2010.11929v2's "Width MLP" and "Head 2" the original's, the served CJK faces holding no Latin letter or digit)
+      const cf = classifyFont(f.font)
+      const fam = cf.fam === 'math' ? 'serif' : cf.fam
+      const st = { fam, bold: cf.bold, italic: cf.italic, caps: false, design: designs[fam] ?? designs.serif }
+      const runs = L2.figureRuns(text, cls => faceOf(st, cls, to), P.cjkQuotes)
+      if (FS) {
+        const tFonts = performance.now()
+        const no = await FS.check(runs.map(r => ({ face: r.face, text: r.s })))
+        fontWait += performance.now() - tFonts
+        if (disposed) return
+        if (no) { Object.assign(rec, { why: no.why, text }); continue }
+      }
+      ready.push({ f, rec, text, runs, width1: L2.figureRunsWidth(runs), depth1: L2.figureRunsDepth(runs) })
+    }
+    const bySet = new Map()
+    for (const c of ready) (bySet.get(c.f.set ?? c.f.group) ?? bySet.set(c.f.set ?? c.f.group, []).get(c.f.set ?? c.f.group)).push(c)
+    const fits = new Map()
+    for (const list of bySet.values()) fitFigureSet(list, P.floorMin).forEach((fit, i) => fits.set(list[i], fit))
+    for (const c of ready) {
+      const { f, rec, text, runs } = c, fit = fits.get(c)
+      if (!fit) { Object.assign(rec, { why: fit === false ? 'crowded' : 'unfit', text }); continue }
+      const r = rows[pg - 1], px = pxOf(pg)
+      r.off.add(f.group)
+      // (the original's box on the page, its band across it: where its ink was hidden, for the links' and the text layer's question)
+      const nx = -f.uy, ny = f.ux, lo = f.descent * f.size, hi = f.ascent * f.size
+      const corners = [[0, lo], [f.length, lo], [0, hi], [f.length, hi]].map(([s, t]) => px(f.x + f.ux * s + nx * t, f.y + f.uy * s + ny * t))
+      const xs = corners.map(c => c[0]), ys = corners.map(c => c[1])
+      const hid = [Math.min(...xs), Math.min(...ys), Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)]
+      const opsFrom = r.ops.length
+      r.ops.push({ op: 'hidden', rects: [hid] })
+      audit?.push({ what: 'erase', unit: f.id, figure: f.group, page: pg, box: [hid[0], hid[1], hid[0] + hid[2], hid[1] + hid[3]] })
+      const x = f.x + f.ux * fit.offset, y = f.y + f.uy * fit.offset, angle = (Math.atan2(f.uy, f.ux) * 180) / Math.PI
+      r.markup.push(L2.svgOfFigure({ group: f.group, runs, x, y, angle, size: fit.size, color: f.fill > 0 ? L2.hexOf(f.fill) : null }, cssOf(pg), scale))
+      // (a level one's words in the page's text layer, as a name's, under its unit's id; a turned one's are not selectable:
+      // figure-rows.mjs levelRun. None in the page's word table: a figure's labels are not paired on the hover, their two panes
+      // standing side by side, and their pairing measured not free (the owner, 2026-10-30; docs/PDF-READER.md §17.1))
+      if (levelRun(f.ux, f.uy)) textRecord(r, opsFrom, f.group, f.id, [TL.nameSeg(runs.map(q => q.s).join(''), x, fit.width, y, fit.size)])
+      Object.assign(rec, { drawn: true, text, size: r1(fit.size), x: r1(x), y: r1(y), w: r1(fit.width), set: f.set ?? f.group })
+    }
+    figuresDone[pg] = 2
   }
+
+  // the columns of each page, as its paragraphs' lines span them (each unit's lines as it is added, addUnits)
+  const cols = []
   // a table cell's centring, which TeX's probe does not tell (a cell's marks carry none) and the page's column does not
   // either: a cell of several lines by its own (blocks2's rule, `undefined`: their middles agree and their widths do not, a
   // makecell's or a shortstack's); one of a single line by its table's column on its page, the file's lines of the cells of
@@ -1465,7 +1523,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     if (new Set(p.rects.filter(r => r[0] === r0[0]).map(r => Math.round(r[2]))).size > 1) return undefined
     const spans = []
     for (const id of columnOfCell(p)) {
-      const L = filed(id) ? tex.index.unit(id)?.lines : null
+      const L = tex.index.unit(id)?.lines
       for (let j = 0; L && j + 7 < L.length; j += 8) if (L[j] === r0[0]) spans.push([L[j + 1], L[j + 2]])
     }
     if (spans.length < 2) return null
@@ -1476,17 +1534,23 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     return Math.max(...widths) - Math.min(...widths) > 4 ? true : null
   }
   // every unit's rectangles by page, for growing a unit's lines over what no other unit holds (with the file's lines of
-  // the units the hybrid draws that v0's geometry does not hold, as each is placed)
-  // (and a copy of each as it was added, before any unit grew one: what decides whether all of a unit's lines are another's)
-  const rectsByPage = new Map(), placedByPage = new Map()
+  // the units the file holds that the geometry does not, as each is placed, or as each is decided not placed: consume)
+  const rectsByPage = new Map()
   const addRects = (id, rects) => {
     for (const r of rects) {
-      if (!rectsByPage.has(r[0])) { rectsByPage.set(r[0], []); placedByPage.set(r[0], []) }
+      if (!rectsByPage.has(r[0])) rectsByPage.set(r[0], [])
       rectsByPage.get(r[0]).push([id, r])
-      placedByPage.get(r[0]).push([id, r.slice()])
     }
   }
   const textArea = pg => { const rs = (rectsByPage.get(pg) ?? []).map(([, r]) => r); return [Math.min(...rs.map(r => r[1])), Math.max(...rs.map(r => r[3]))] }
+  // (and the file's own lines of the units the geometry holds, on our page: a neighbour's line grows over none of them either.
+  // Their left rectangles are arXiv's page's, which stand where ours do but where the two pages differ, a page drawn through
+  // drift (layout/carry.mjs, a drift run): 2610.37668v1 p21, set 9 pt lower on our page than on arXiv's, where the left
+  // rectangle of "Initialization." stood over its own line, no barrier on it, and its text's first line grew over the head's
+  // word, which its source holds, to the head's start: laid from the head's ink with no separation (0.05 em, the original's
+  // 0.71). Only the growth reads them: the page's text area and its columns stay the left's)
+  const ownByPage = new Map()
+  const addOwn = (id, rects) => { for (const r of rects) (ownByPage.get(r[0]) ?? ownByPage.set(r[0], []).get(r[0])).push([id, r]) }
   /** the text area of page pg as unit p reads it: as the page's growth step left it once p's own lines there grew (growOn),
    *  the units ranked before it on the page grown and those after it not yet, whenever p is laid */
   const areaOf = (p, pg) => p.area?.get(pg) ?? textArea(pg)
@@ -1520,6 +1584,47 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       const mid = (r[1] + r[3]) / 2, half = Math.min(right - mid, mid - left)
       if (half > (r[3] - r[1]) / 2) { b.x0 = mid - half; b.x1 = mid + half }
     } else if (right > b.x1) b.x1 = right
+  }
+  /** whether something of the page stands on a shared row (need.mjs rowLeadOf: `row`, the last row of the unit before) between
+   *  that unit's end there and `x`, where the next unit's text begins: a character of the page, which stays where it is (a
+   *  label kept as the original's, a name), so that the next unit is not laid from that unit's end (layout2's `start`); the glyphs
+   *  `own` keys (L2.charKey) aside, which go with the next unit (its label carried, ownLabelOnRow) */
+  const keptBetween = (row, x, own = null) => (chars2[row.page - 1] ?? []).some(c => /\S/.test(c.ch) && (c.x0 + c.x1) / 2 > row.x1 + 0.1 && (c.x0 + c.x1) / 2 < x - 0.1 && Math.abs(c.yb - row.baseline) < 0.4 * row.size && !own?.has(L2.charKey({ page: row.page, item: c.item, k: c.k })))
+  /** a unit's shared row (`followers`: the next unit's first row continues its last) where something stays between the two
+   *  (keptBetween), read before the next unit is laid: up to where the file begins that unit's first line, or ends its label
+   *  on the row where the file holds one (the label stays the original's, and its text begins after it); else null */
+  const keptAfter = p => {
+    const fid = followers.get(p.id), row = fid === undefined ? null : candOf.get(fid)?.lead
+    const fu = row ? tex.index.unit(fid) : null
+    if (!fu?.lines.length) return null
+    let x = fu.lines[1]
+    const lb = fu.labels
+    if (lb.length >= 7 && lb[1] === row.page && Math.abs(lb[3] - row.baseline) < 0.4 * row.size) x = Math.max(x, lb[4] + 0.2)
+    if (!keptBetween(row, x)) return null
+    // (only the next unit's own label there, which goes with it (ownLabelOnRow): this unit's text still ends where TeX's did, and
+    // the next unit is laid from that end all the same)
+    return ownLabelOnRow(fid, row, x) ? { ...row, byLabel: true } : row
+  }
+  /**
+   * The label TeX set for unit `id` at the start of its first row where that row is a shared line (`row`, need.mjs rowLeadOf: the
+   * unit before ends on it), when it is the only thing that stays between the two there: the file's label row of the unit (its
+   * glyphs before the unit's start mark, make.mjs labelOf, whatever command set them: an inline list's item, enumitem's
+   * `enumerate*` or paralist's `inparaenum`, an `\item[(1)]` by hand), on the row's baseline, after the unit before's end, and
+   * nothing else of the page between that end and the unit's first word (`x`, or the label's end where that is further) but the
+   * label's own glyphs (keptBetween): those the unit carries (`carried`, its prep's label), or, read before the unit is (keptAfter),
+   * those of the file's label box, which are what it will carry (tex.mjs labelBoxChars). A mark between the label and the word
+   * (another unit's, or no unit's) keeps the label and the unit where TeX set them: carried, the two went to the row's start and
+   * left the mark there alone. Its own group the layer hides (`relabels`). It goes
+   * with its unit: drawn at the shared line's start, its ink copied, and its text after it. Kept as the original's where TeX set
+   * it, it held the unit's text there, after the English words of the unit before, whatever the translation's length
+   * (2610.21085v1 p2's "(1)" to "(4)": a blank of several em after the paragraph's first sentence, "(2)" and "(3)" alone at the
+   * column's right edge, "(4)" mid-line). The label row [kind, page, x0, baseline, x1, top, bottom], or null
+   */
+  const ownLabelOnRow = (id, row, x, carried = null) => {
+    const lb = tex.index.unit(id)?.labels
+    if (!lb || lb.length < 7 || !relabels(id) || lb[1] !== row.page || Math.abs(lb[3] - row.baseline) >= 0.4 * row.size || lb[2] < row.x1 - 0.5) return null
+    const own = new Set((carried ?? labelBoxChars(lb, chars2[row.page - 1])).map(L2.charKey))
+    return keptBetween(row, Math.max(x, lb[4] + 0.2), own) ? null : lb
   }
   /** the unit's edges (P.halfLead; layer2.mjs footFloorAt): whether its first and last lines share their baseline with ink
    *  that stays where it is, a label kept as the original's or a character of the page beside the line's own in its column (a
@@ -1567,7 +1672,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   }
   /** a CJK table cell's bands between the rules near its lines (layer2.mjs cellBands: the manifest's rules), or null; a
    *  script no taller than Latin is not held, nor a paragraph, whose lines stand by a rule only by chance */
-  const clearanceOf = (p, s) => (P.cjk && p.unit.kind === 'cell' ? L2.cellBands(p.blocks, pg => RM?.manifest?.page?.[pg]?.rules, s, P) : null)
+  const clearanceOf = (p, s) => (P.cjk && p.unit.kind === 'cell' ? L2.cellBands(p.blocks, rulesOf, s, P) : null)
   // the free space below a block, down to the first ink in its column or the page's lowest unit line
   const freeFor = (b, s) => {
     const map = inkOf(b.page, 'freeFor')
@@ -1619,18 +1724,14 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     }
     return dir > 0 ? Math.min(x, limit) : Math.max(x, limit)
   }
-  /** what a unit's drawing takes away on page j, where its own ink may be run over: over the text-removed PDF, the layout
-   *  file's rectangles a unit it locates whole replaces (its lines' erase rectangles, its inline placeholders'
-   *  segments), all that it removes; drawn the old way, its lines' erase extents. A rule beside its text that an erase
-   *  extent reaches (a table's column rule) stays on the removed page, and a slot run over it is drawn over it */
+  /** what a unit's drawing takes away on page j, where its own ink may be run over: the layout file's rectangles of the ink its
+   *  groups hide (its lines' erase rectangles, its inline placeholders' segments). A rule beside its text that an erase extent
+   *  reaches (a table's column rule) is no unit's and stays, and a slot run over it is drawn over it */
   const ownInk = (p, j) => {
-    if (p.tex && removedPage(j)) {
-      const lu = p.tex.lu, out = []
-      for (let l = 0; l < lu.erase.length; l++) { const e = lu.erase[l]; if (!e || lu.lines[8 * l] !== j) continue; for (let o = 0; o + 3 < e.length; o += 4) out.push([e[o], e[o + 1], e[o + 2], e[o + 3]]) }
-      for (const row of lu.ph.values()) { if (row.kind === 'display') continue; for (let o = 0; o + 5 < row.segs.length; o += 6) if (row.segs[o] === j) out.push([row.segs[o + 1], row.segs[o + 5], row.segs[o + 3], row.segs[o + 4]]) }
-      return out
-    }
-    return [...(p.prep.extents ?? new Map())].filter(([r]) => r[0] === j).flatMap(([, e]) => (Array.isArray(e[0]) ? e : [e]))
+    const lu = p.tex.lu, out = []
+    for (let l = 0; l < lu.erase.length; l++) { const e = lu.erase[l]; if (!e || lu.lines[8 * l] !== j) continue; for (let o = 0; o + 3 < e.length; o += 4) out.push([e[o], e[o + 1], e[o + 2], e[o + 3]]) }
+    for (const row of lu.ph.values()) { if (row.kind === 'display') continue; for (let o = 0; o + 5 < row.segs.length; o += 6) if (row.segs[o] === j) out.push([row.segs[o + 1], row.segs[o + 5], row.segs[o + 3], row.segs[o + 4]]) }
+    return out
   }
   /** a unit's single-line blocks widened over the paper beside them (paperTo), within the page's text area; a centred one
    *  as far to either side. Returns the widened blocks, or null where none grew */
@@ -1651,14 +1752,48 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     return grew ? out : null
   }
   /**
+   * A run-in head's room on its row (the owner's ruling of 2026-11-03): a unit whose last row another unit's first
+   * continues on a shared line (`followers`, need.mjs rowLeadOf), that row the only line of its last block (a run-in heading:
+   * 2610.19159v1 p7's "Node-level grading still separates agents.", 170.6 pt of row for 34 em of Japanese), and nothing kept
+   * between the two (`kept`, keptAfter). Laid in its row alone, its fit clipped at the floor (it would shrink below it, or be
+   * left the original's: `fitFurther`), its last block runs on to the end of the next unit's first line, as one line of the row,
+   * and is laid again; taken where it fits so. That next unit is then laid from where it ends (layout2's `start`), its first line
+   * shorter, or given way to its next row. Returns { id, blocks, layout, tokens }, or null
+   */
+  const overFollower = (p, tokens, s, kept) => {
+    const fid = followers.get(p.id)
+    if (fid === undefined || kept || p.unit.kind === 'cell') return null
+    // (only a head its row cannot hold at its floor: one it holds shrunk within the floor keeps its row, and the paragraph's first
+    // line its room. Taken wherever it fit smaller, the paragraph after it paid: 1810.04805v2's Russian p4, a head from 0.85 to
+    // 1 and its paragraph, already below its floor, from 0.73 to 0.70)
+    if (!p.layout.clipped) return null
+    // (a next unit that will be laid: placed, its row decided before this one is laid (consume), and not laid yet. One left the
+    // original's as it is decided — a row kept, a unit skipped — is never laid, and its English first row stays where TeX set it:
+    // 2610.22065v1 p1's "and" between two author names kept, which ran on 2 pt over the second)
+    const f = byId.get(fid)
+    if (!f || f.refused || f.taken) return null
+    const row = candOf.get(fid)?.lead, fu = tex.index.unit(fid)
+    if (!row || !fu?.lines.length || fu.lines[0] !== row.page) return null
+    // (a head on the row's page alone: one that begins on an earlier page is set by that page's pass and painted on the row's
+    // page then (paintOn), before the next unit is laid there, so it could not be laid again in its row should that unit be
+    // left the original's)
+    if (p.pages.some(q => q !== row.page)) return null
+    const bi = p.blocks.length - 1, b = p.blocks[bi]
+    if (!b || b.page !== row.page || b.rects.length !== 1 || b.centred || Math.abs(b.B[0] - row.baseline) >= 0.05) return null
+    const x1 = fu.lines[2]
+    if (!(x1 > b.x1 + 0.1)) return null
+    const blocks = p.blocks.map((q, i) => (i === bi ? { ...q, x1 } : q))
+    const laid = L2.layoutCut(tokens, blocks, s, p.P)
+    if (laid.layout.clipped) return null
+    return { id: fid, blocks, layout: laid.layout, tokens: laid.tokens }
+  }
+  /**
    * The fit's further steps for a unit its states leave clipped (P.further, in order): 'widen', its single lines widened
-   * over the paper beside them (widenOverPaper), the fit run again in them; 'flow', the text run past a display where the
-   * slots after it are too few (layoutUnit2's P.flowPast: out of the translation's order, but all of it shown, as v0's
-   * own last pass already ran text on past a display); 'shrink', the size's steps on below the fit's floor, to
+   * over the paper beside them (widenOverPaper), the fit run again in them; 'shrink', the size's steps on below the fit's floor, to
    * P.floorMin. Returns the first layout that sets every token, with the blocks it was laid in (widened: with their
    * bands between the rules, `clear`, and the parameters they hold it to, `P`), or null.
    */
-  const fitFurther = (p, tokens, s) => {
+  const fitFurther = (p, tokens, s, walked) => {
     for (const step of P.further ?? []) {
       if (step === 'widen') {
         const wide = widenOverPaper(p)
@@ -1670,11 +1805,9 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
         const l = L2.layoutUnit2(tokens, wide, s, PW)
         if (!l.clipped) return { layout: { ...l, knob: 'widen' }, blocks: wide, P: PW, clear }
       } else if (step === 'shrink' && P.floorMin < P.floor - 1e-9) {
-        const l = L2.layoutUnit2(tokens, p.blocks, s, { ...p.P, floor: P.floorMin })
-        if (!l.clipped) return { layout: { ...l, knob: 'below-floor' }, blocks: p.blocks }
-      } else if (step === 'flow') {
-        const l = L2.layoutUnit2(tokens, p.blocks, s, { ...p.P, flowPast: true })
-        if (!l.clipped) return { layout: { ...l, knob: 'flow' }, blocks: p.blocks }
+        // (the fit's own walk, which set none of its states (`walked`), goes on below the floor: the states above it were laid)
+        const l = L2.layoutUnit2(tokens, p.blocks, s, { ...p.P, floor: P.floorMin }, walked ? p.P : null)
+        if (l && !l.clipped) return { layout: { ...l, knob: 'below-floor' }, blocks: p.blocks }
       }
     }
     return null
@@ -1700,6 +1833,10 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   // (the time the font waits of the unit in hand took, so that its timings are its own work's: lap())
   let fontWait = 0
   const lap = () => performance.now() - fontWait
+  // (the time the records took, the gate's and the lab's (`records`): a running total that each timed stretch of laying takes
+  // its share out of, booked as `rec`, so that `lay` is what a reader, which opens with no records, pays: recTimed)
+  let recMs = 0
+  const recTimed = f => { const t = performance.now(); try { return f() } finally { recMs += performance.now() - t } }
   /** a unit whose first line a name leads, left the original's after all: the name with it */
   const unlead = p => {
     if (!p.lead) return
@@ -1747,40 +1884,24 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   /** a unit placed: its pages' growth to come (its lines' pages, the units on each) */
   const toGrow = p => {
     p.linePages = [...new Set(p.rects.map(r => r[0]))]
-    // (its first page as placed, before any of its lines is dropped: where its first line is read, L4)
+    // (its first page as placed: where its first line is read, L4)
     p.firstPage = p.rects[0]?.[0]
-    Object.assign(p, { local: [], dropped: 0, grown: 0, area: new Map(), grew: new Set() })
+    Object.assign(p, { local: [], grown: 0, area: new Map(), grew: new Set() })
     for (const g of p.linePages) (onPage.get(g) ?? onPage.set(g, []).get(g)).push(p)
   }
-  const overlap = (a, b) => Math.max(0, Math.min(a[3], b[3]) - Math.max(a[1], b[1])) * Math.max(0, Math.min(a[4], b[4]) - Math.max(a[2], b[2]))
-  const covered = (r, o) => overlap(r, o) > 0.5 * (r[3] - r[1]) * (r[4] - r[2])
   /** unit p's lines on page g dropped and grown, reading that page alone; the page's text area as they leave it kept for p */
   const growOn = (p, g) => {
     const others = []
-    others[g] = (rectsByPage.get(g) ?? []).filter(([id]) => id !== p.id).map(([, r]) => r)
+    others[g] = [...(rectsByPage.get(g) ?? []), ...(ownByPage.get(g) ?? [])].filter(([id]) => id !== p.id).map(([, r]) => r)
     // (the file's lines are the unit's own, whole, and its first line starts at the unit's own mark: none of the
     // anchors' repairs of which lines are the unit's or where it starts; but a line's extent across is its words', as the
     // anchors' is (the maker's rows are the text layer's word tokens'), and is grown as v0 grows them, over a formula's
     // tail and a justified line's last glyphs: 1512.03385 page 10's "(mAP @" and "IoU =", whose "@" and "=" were put back
-    // under the translation)
-    const fileLines = !!p.tex?.lines
-    // a line another unit's rectangle mostly covers is that unit's (the anchors carried a mark to the wrong column:
-    // 1512.03385 page 3, a paragraph's last lines laid over the next column's): left out, on each page by the others'
-    // rectangles there as they stand, unless every line of the unit is another's, which keeps them all (then nothing says
-    // which are its own). That is decided once, by the rectangles as they were placed, before any unit grew one (the rows on
-    // the unit's own pages alone, so no page's growth waits on another's), and is the whole unit's as before wherever the
-    // others' growth makes none of its lines another's that was not. What growth does and does not stop at: a line grows
-    // sideways character by character and stops at one inside another unit's rectangle (`foreign`, extendRects and
-    // extendRects2's loops), but it is also taken to the end of a text item that ends less than 8 pt past it, or to the end of
-    // the word it ends in, whatever stands there (extendRects2 checks no `foreign` for that), and a block's far-in first line
-    // is moved to the block's edge unless another unit's line overlaps it by more than half its height (extendFirstLines).
-    // Where growth would still leave a unit no line, the unit is the original's (layout2). Its pages stay as they
-    // were counted: a page it no longer holds lines on is painted with nothing
-    if (!fileLines) {
-      p.keepAll ??= p.rects.every(r => (placedByPage.get(r[0]) ?? []).some(([id, o]) => id !== p.id && covered(r, o)))
-      const gone = p.keepAll ? null : new Set(p.rects.filter(r => r[0] === g && others[g].some(o => covered(r, o))))
-      if (gone?.size) { p.rects = p.rects.filter(r => !gone.has(r)); p.dropped += gone.size }
-    }
+    // under the translation). What growth does and does not stop at: a line grows sideways character by character and stops
+    // at one inside another unit's rectangle (`foreign`, extendRects and extendRects2's loops), but it is also taken to the
+    // end of a text item that ends less than 8 pt past it, or to the end of the word it ends in, whatever stands there
+    // (extendRects2 checks no `foreign` for that). Its pages stay as they were counted: a page it holds no lines on is
+    // painted with nothing
     const rs = p.rects.filter(r => r[0] === g), shown = p.pages.includes(g)
     // iteration 3: the unit's own part of the page (its rectangles' box, 20 pt above and below, 60 pt to either side), one
     // pass over the page, for every search below (each scanned the whole page, rectangle by rectangle)
@@ -1790,9 +1911,6 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       const [x0, x1, y0, y1] = win
       p.local[g - 1] = (chars2[g - 1] ?? []).filter(c => c.x1 >= x0 && c.x0 <= x1 && c.yb >= y0 && c.yb <= y1)
     }
-    // iteration 3: a block's far-in first line from its block's edge, and lines over what stands beside them, before the
-    // unit is aligned (what they then hold is the unit's)
-    if (!fileLines) L2.extendFirstLines(rs, geometry.left.pages, others)
     // (the words its source begins with before its first line over the page's whole width on its lines' bands, step 3:
     // they may stand further from it than the unit's own part of its page reaches, 60 pt, 1706.03762's "Work performed
     // while at Google" before "Research.")
@@ -1806,7 +1924,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // whose lines were all another's included (L4). Its lines as they stand would make a page's growth read whether the
     // unit's earlier page had grown yet, which a page laid by its closure need not have)
     const first = p.rects[0]?.[0] === p.firstPage ? p.rects[0] : null
-    const grown = L2.extendRects2(rs, p.local, others, p.unit.src, wordsOf, norm, geometry.left.pages, bands, first, fileLines)
+    const grown = L2.extendRects2(rs, p.local, others, p.unit.src, wordsOf, norm, geometry.left.pages, bands, first)
     p.grown += grown
     // (and the unit's part of the page again where its lines grew past it: what they grew over is the unit's to read and
     // to account for, or its characters there were put back under the translation)
@@ -1815,8 +1933,6 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       const gx0 = Math.min(x0, ...rs.map(r => r[1])), gx1 = Math.max(x1, ...rs.map(r => r[3]))
       if (gx0 < x0 || gx1 > x1) p.local[g - 1] = (chars2[g - 1] ?? []).filter(c => c.x1 >= gx0 && c.x0 <= gx1 && c.yb >= y0 && c.yb <= y1)
     }
-    // its first line's edge snapped back to its first word's start, on its first page as placed alone (L4)
-    if (!fileLines && g === p.firstPage && p.rects[0]?.[0] === g) p.inkBefore = L2.snapFirstRect2(p.rects, p.local)
     p.area.set(g, textArea(g))
     // (its rectangles on the page as its growth leaves them, which a link's owner is read by: its lay may move its first line's
     // edge to its label after a unit ranked after it here is matched, links.mjs ownersOf)
@@ -1888,23 +2004,41 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // (none of its lines left: every one another unit's once theirs grew, though not as placed (growOn); the unit is the
     // original's, where the whole unit's rule kept them all)
     if (!p.rects.length) { p.refused = true; p.why = 'unfit'; unlead(p); return }
-    const fileLines = !!p.tex?.lines, local = p.local, inkBefore = p.inkBefore
-    // the hybrid: a unit the file locates whole read with the file's parts; any other, v0's reading, each rendering proven
-    // by the file (proofOf: a crop cut from its placeholder's own ink, page text in its segments), or the unit left the
-    // original's where the file proves one not; a unit of a part with no layout as with no file (filed), through the same proof
-    // (and each placeholder's fill and each colour piece's run's by the file where it holds the unit: what they are drawn in)
-    const fileLu = !p.tex && filed(p.id) ? tex.index.unit(p.id) : null, fileK = fileLu ? kOfPieces(p.unit, tex.pieces.get(p.id)) : null
-    const parts = p.tex ? texParts(p.tex.lu, p.tex.kOf, { use: tex.use, lines: p.tex.lines, extents: tex.extents ?? 'v0', shown: N, lineskip: LINESKIP }) : filed(p.id) ? { proof: proofOf(fileLu, fileK, N), fillOf: fillOf(fileLu, fileK), colourOf: colourOf(fileLu, fileK) } : proof ? { proof: proofOf(null, null, N) } : null
+    // (the rectangles as its lay begins of a run-in head laid over the next unit's first row, and of that next unit: where each
+    // is laid again (relay) should the head go back to its own row. Kept on those two alone, where the rule is taken, and on no
+    // other unit of a shared line)
+    const lead0 = byId.get(candOf.get(p.id)?.follows)
+    const rects0 = followers.has(p.id) || lead0?.over ? p.rects.slice() : null
+    if (p.rects0) p.rects0 = undefined
+    if (lead0?.over) p.rects0 = rects0
+    if (p.over) p.over = undefined
+    const local = p.local
+    // the unit read with the file's parts: its lines, label and placeholders (and each placeholder's fill and each colour
+    // piece's run's: what they are drawn in)
+    const parts = texParts(p.tex.lu, p.tex.kOf, { lines: p.tex.lines, extents: tex.extents ?? 'v0', shown: N, lineskip: LINESKIP })
     // (the citations and macros its renderings teach are the unit's own, learnt as it is read: a later placeholder of the
     // unit reads its earlier ones, never another unit's, S2. The paper's, learnt in lay order, made a unit's reading a
     // function of every unit laid before it; no unit of the 30 outputs is read otherwise without it, 2026-10-15)
     const prep = L2.prepareUnit(p.unit, p.rects, local, phMode === 'source' ? null : new Map(), null, parts)
     if (prep.unproven !== undefined) { p.refused = true; p.why = 'unproven'; unlead(p); return }
+    // (the names cleveref and \autoref generate in its references, and a citation's note's, in the target's: layer2.mjs
+    // renameRefs, PDF-READER §19.11)
+    if (labels) L2.renameRefs(prep, to, R.labels, ownNames)
     // a float's label in the target's name where the final names it so (labelInTarget): its ink erased and accounted as
     // the unit's text, and set as the line's start, in its own style, before the translation
-    const relabel = labels ? L2.labelInTarget(prep.label, R.labels, labels.captions, to) : null
-    if (relabel) {
-      prep.label = { ...prep.label, drawn: relabel }
+    // (a float's label TeX set on a line of its own, found by its call (IEEEtran's "TABLE I" above the caption's text): this layer
+    // sets a relabel as the first line's start, which would carry it into the text's line, so it stays the original's ink there,
+    // as before it was found: relabelled only on the unit's first line, L2.labelOnFirstLine; v2 lays it as a row of its own.
+    // A flag of today's layer alone, no rule of reading: it goes with this layer at the cut-over, never carried into v2)
+    const relabelsP = relabels(p.id) && (!prep.label?.chars?.length || L2.labelOnFirstLine(prep.label, p.rects[0]))
+    const relabel = labels && relabelsP ? L2.labelInTarget(prep.label, R.labels, labels.captions, to) : null
+    // or a theorem-like head's (its unit's body or its note), in translator's name for the target, its number and punctuation
+    // the original's (headLabelInTarget, PDF-READER §19.11): read from the page's characters in the file's label box, each
+    // part in its own style
+    const head = !relabel && labels && relabelsP && (p.unit.kind === 'theorem' || p.unit.kind === 'heading') ? headOf(p) : null
+    if (head) prep.label = { ...(prep.label ?? {}), x1: Math.max(...head.chars.map(c => c.x1)), text: head.chars.map(c => c.ch).join(''), chars: head.chars, drawn: head.text, parts: head.parts, open: head.open }
+    if (relabel || head) {
+      if (relabel) prep.label = { ...prep.label, drawn: relabel }
       for (const c of prep.label.chars) prep.cat?.set(L2.charKey(c), 'acc')
       // (a file's first line starts at the unit's own mark, after the label the class set before it: the line the label
       // is now part of starts where the label does)
@@ -1916,7 +2050,9 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // geometry v0 lays it by) and its glue, the translation after both; the line starting where the name does, their
     // characters the unit's text. The same lead a float's label in the target's name is
     const ld = leadsOf.get(p.id)
-    if (ld && p.rects[0]?.[0] === ld.nm.page) {
+    // (a name and its joint drawn anew only where their groups hide them: the name's, and the unit's label for a joint; else the
+    // lead stays the original's ink, its unit drawn after it)
+    const jointOf = ld => {
       const nameKeys = new Set(ld.chars.map(L2.charKey)), lb = tex.index.unit(p.id)?.labels ?? [], pg = ld.nm.page
       const joint = []
       for (let o = 0; o + 6 < lb.length; o += 7) {
@@ -1924,7 +2060,10 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
         const x0 = lb[o + 2], x1 = lb[o + 4], top = lb[o + 5], bottom = lb[o + 6]
         for (const c of chars2[pg - 1] ?? []) if (/\S/.test(c.ch) && (c.x0 + c.x1) / 2 >= x0 - 0.5 && (c.x0 + c.x1) / 2 <= x1 + 0.5 && c.yb >= bottom - 0.5 && c.yb <= top + 0.5 && !nameKeys.has(L2.charKey({ ...c, page: pg }))) joint.push({ ...c, page: pg })
       }
-      joint.sort((a, b) => a.x0 - b.x0)
+      return joint.sort((a, b) => a.x0 - b.x0)
+    }
+    const joint = ld && p.rects[0]?.[0] === ld.nm.page && VIS.has(nameGroup(ld.nm.occurrence)) && !hiding?.labelKept?.(p.id) ? jointOf(ld) : null
+    if (joint && (!joint.length || relabelsP)) {
       const jText = joint.map(c => c.ch).join('')
       // (the glue in em of the unit's own size, its first line's in the file: tokensOf2 sets it at the size the unit is drawn)
       const size0 = tex.index.unit(p.id)?.lines[6] ?? ld.nm.size
@@ -1950,73 +2089,123 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     }
     const t1 = lap()
     const orig = prep.orig
-    const s = orig?.size ?? median(p.rects.map(r => r[4] - r[2])) / 0.894
+    // (the original's size, its faked small capitals aside; a CJK target's small capitals at CJK_CAPS_SIZE of it: layer2.mjs unitSizeOf)
+    const s = L2.unitSizeOf(prep, P, p.unit) ?? median(p.rects.map(r => r[4] - r[2])) / 0.894
     const base = orig && orig.st.fam !== 'math' ? { ...orig.st } : { fam: 'serif', bold: p.unit.kind === 'heading', italic: false, caps: false, design: designs.serif }
     const keep = prep.keep?.length ? new Set(prep.keep) : null
     // (centred as the layout file has the unit, UNIT_FLAG.CENTRED: TeX's own alignment where the marked original tells it, else
-    // the maker's reading of arXiv's lines, make.mjs; a unit of a part with no layout by its lines, blocks2's)
-    const lu = filed(p.id) ? tex.index.unit(p.id) : null
-    // a centred unit whose first line starts with a label kept as the original's (IEEEtran's "I." before its centred section
-    // heading): centred with the line, label and text one, as TeX centred them, its ink copied as the line's start (a crop, as
-    // a numbered heading's below), the line from the label on (`carried`). Left where it was, the shorter text centred alone
-    // stood an em or more away from it
-    const byCell = lu && p.unit.kind === 'cell' ? cellCentred(p) : null
-    const centredFlag = !lu ? undefined : byCell !== null ? byCell : lu.centred
-    const carried = centredFlag === true && !!prep.label?.chars?.length && !prep.label.drawn && !!p.rects[0] && prep.label.chars.every(c => c.page === p.rects[0][0])
-    if (carried) { const r0 = p.rects[0], lx0 = Math.min(...prep.label.chars.map(c => c.x0)); if (lx0 < r0[1]) p.rects[0] = [r0[0], lx0, r0[2], r0[3], r0[4]] }
-    p.blocks = L2.blocks2(p.rects, geometry.left.pages, keep, prep.lineInfo, prep.regionOf, prep.referenced, filed(p.id) ? LINESKIP : null, prep.breakAt, prep.joinAt, centredFlag)
-    if (!lu) for (const b of p.blocks) if (!b.centred && centredInColumn(b)) b.centred = true
+    // the maker's reading of arXiv's lines, make.mjs)
+    const lu = p.tex.lu
+    // a unit whose first line starts with a label kept as the original's and is not laid from where TeX set it — centred (IEEEtran's
+    // "I." before its centred section heading; an affiliation's raised number before its centred place) or flush right —: the
+    // label goes with the line, label and text one, as TeX set them, its ink copied as the line's start (a crop, as a numbered
+    // heading's below) and erased where it stood (`carried`). Left where it was, the shorter text centred alone stood an em or more
+    // away from it (2610.20716v1 p1: the "1" 93 pt left of its place). Only a label whose ink is hidden with the unit: its own
+    // group, or, an ink unit's, which has none, its text's (its glyphs its line's, inside the line's first rectangle); a label the
+    // wrap left the original's (`labelKept`) stays
+    const byCell = p.unit.kind === 'cell' ? cellCentred(p) : null
+    const centredFlag = byCell !== null ? byCell : lu.centred
+    const r00 = p.rects[0]
+    const labelHides = !!prep.label?.chars?.length && !prep.label.drawn && !!r00 && prep.label.chars.every(c => c.page === r00[0]) && (relabelsP || (INK_UNITS.has(p.unit.kind) && !hiding?.labelKept?.(p.id) && !VIS.has(labelGroup(p.id)) && prep.label.chars.every(c => c.x0 >= r00[1] - 0.5 && c.x1 <= r00[3] + 0.5)))
+    // (centred by the file's flag: the block's first rect from the label on, so that label and text are centred together on the
+    // original's middle; centred by the door's reading of its lines, or flush right: the label is inside the rect already, or the
+    // block is read from the rects as they are)
+    if (labelHides && centredFlag === true) { const lx0 = Math.min(...prep.label.chars.map(c => c.x0)); if (lx0 < r00[1]) p.rects[0] = [r00[0], lx0, r00[2], r00[3], r00[4]] }
+    p.blocks = L2.blocks2(p.rects, geometry.left.pages, keep, prep.lineInfo, prep.regionOf, prep.referenced, LINESKIP, prep.breakAt, prep.joinAt, centredFlag, prep.paraAt)
+    // (a unit TeX set flush left or flush right, the layout file's UNIT_FLAG.FLUSH_LEFT or FLUSH_RIGHT, keeps that alignment
+    // (lane B's B2): its lines never justified, layer2.mjs placeItems; a cell is set by its own lines)
+    if (lu.flush && p.unit.kind !== 'cell') for (const b of p.blocks) if (!b.centred) b.flush = lu.flush
+    const carried = labelHides && !!p.blocks[0] && p.blocks[0].page === r00[0] && (p.blocks[0].centred || p.blocks[0].flush === 'right')
     if (p.unit.kind !== 'cell') for (const b of p.blocks) widen(b, p)
+    // (a unit whose last row another unit's first continues on a shared line, where something of the page stands between the
+    // two that stays (a label kept as the original's: inparaenum's "(2)" between two items, 2610.21098 page 2): the next unit's
+    // first line stays where TeX set it (layout2's `start` is not taken, keptBetween), so this unit's text on the row ends
+    // where TeX ended it (`stop`, slotsAt), as it does where nothing comes after it. Run past it to the block's edge, its
+    // last line was drawn over that label and over the next unit's first words)
+    const kept = keptAfter(p)
+    if (kept) for (const b of p.blocks) if (b.page === kept.page && b.B.some(y => Math.abs(y - kept.baseline) < 0.05)) b.stop = { y: kept.baseline, band: kept.size, x1: kept.x1 }
     // (the unit's displays TeX set with its short skip under a line of its own that ends 2 em before them, each the block's of
     // that line: the line laid there ends as far before them, layer2.mjs slotsAt)
-    const luOf = p.tex?.lu ?? (filed(p.id) ? tex.index.unit(p.id) : null)
-    if (luOf) L2.shortSkipsTo(p.blocks, shortSkipsOf(luOf), prep.lineInfo)
+    L2.shortSkipsTo(p.blocks, shortSkipsOf(lu), prep.lineInfo)
     // a label the first line starts with stays the original's: the line starts after it. A file's first line starts at
     // the unit's own mark, and so where the original's text does: after a label the file sets apart, at the line's own
     // start; after one it holds (a footnote's mark), where its first word is, never before the label's end (v0's quarter
     // of an em after it set a footnote's text 1.7 pt right of the original's)
     if (prep.label && !prep.label.drawn && p.blocks[0]) {
       const b = p.blocks[0]
-      if (!fileLines) b.indent = Math.max(b.indent, prep.label.x1 + 0.25 * s - b.x0)
-      else if (prep.label.x1 > p.rects[0][1] + 0.1) b.indent = Math.max(b.indent, (prep.firstX0 !== undefined && prep.firstX0 > prep.label.x1 ? prep.firstX0 : prep.label.x1 + 0.25 * s) - b.x0)
+      if (prep.label.x1 > p.rects[0][1] + 0.1) b.indent = Math.max(b.indent, (prep.firstX0 !== undefined && prep.firstX0 > prep.label.x1 ? prep.firstX0 : prep.label.x1 + 0.25 * s) - b.x0)
     }
     // a section heading (not the paper's title or front matter) of several lines in one block: set in fewer lines, it stands on
     // the original's last ones (layer2.mjs laidOut, P.lastLines). Where its class set its number before its first line, kept
     // as the original's ink there, the number goes with it, its ink copied as the line's start (`numbered`, once it is laid)
     const heading = p.unit.kind === 'heading' && !p.unit.title && !p.unit.front
-    const numbered = heading && !carried && !prep.lead && p.blocks.length === 1 && L2.originalLines(p.blocks[0]) > 1 && !!prep.label?.chars?.length && !prep.label.drawn && prep.label.chars.every(c => c.page === p.blocks[0].page)
+    const numbered = heading && !carried && !prep.lead && relabelsP && p.blocks.length === 1 && L2.originalLines(p.blocks[0]) > 1 && !!prep.label?.chars?.length && !prep.label.drawn && prep.label.chars.every(c => c.page === p.blocks[0].page)
     // a first row TeX set on the line another unit's last row ends (a shared line, need.mjs rowLeadOf: a run-in heading's text,
-    // a paragraph's part after the float that split it) starts where that unit's translation ends on the row, the original's
+    // a paragraph's part after the float that split it) starts where that unit's translation's ink ends on the row, the original's
     // separation after it (`start`, slotsAt), or at the row's own start where that unit set no text there (shareOf): not where
     // the original's did, after the English words' end (1810.04805's "Model Architecture" in Chinese ended 60 pt before its text
-    // began, 10.9 pt in the original). The first line shortens where that unit's translation ends further on, and gives way to
+    // began, 10.9 pt in the original), nor at its last advance's end, which after a full-width mark is that mark's blank half
+    // (2010.11929v2 p4's "Inductive bias." in Chinese, which ends in an ideographic full stop: 1.71 em to its text against the
+    // original's 1.05, the separation kept and the stop's 0.66 em on it; shareOf's `ink`). The original's separation stays the file's, advance to advance (its rows' x1 and x0: the layout
+    // file holds no ink of the original's glyphs). The first line shortens where that unit's translation ends further on, and gives way to
     // the next row where none of it is left (slotsAt's sliver). That unit is laid before it (layIn), and its page's fill keeps
     // where it ended (fillPage). The first line stays where TeX set it where that unit is the original's (not placed, refused, or
     // its row kept), or anything of the page stands between the two on the row (a label or a name kept as the original's).
     // Where that unit's text on the row stands off TeX's baseline (its leading spread its lines over its rows: shareOf's `at`),
     // the first line stands on that unit's baseline (`startY`, slotsAt), so that the row is one line and not two a few points
     // apart (2608.16117 p39: unit 115's last line 7.2 pt over the row, unit 119 set from its end); on TeX's, it stays there
-    const row = fileLines ? candOf.get(p.id)?.lead : null
-    if (row && p.blocks[0] && !p.blocks[0].centred && p.blocks[0].page === row.page && Math.abs(p.blocks[0].B[0] - row.baseline) < 0.05) {
+    const row = candOf.get(p.id)?.lead
+    // (its own label on the row goes with it, drawn at the start (ownLabelOnRow): its glyphs are the door's reading of the file's
+    // label row, on the row)
+    let rowLabel = null, onLeadOf = null
+    if (row && p.blocks[0] && !p.blocks[0].centred && !carried && p.blocks[0].page === row.page && Math.abs(p.blocks[0].B[0] - row.baseline) < 0.05) {
       const b = p.blocks[0], a = byId.get(row.id), share = a && !a.refused ? a.share ?? null : null, x = b.x0 + b.indent
-      const between = (chars2[b.page - 1] ?? []).some(c => /\S/.test(c.ch) && (c.x0 + c.x1) / 2 > row.x1 + 0.1 && (c.x0 + c.x1) / 2 < x - 0.1 && Math.abs(c.yb - row.baseline) < 0.4 * row.size)
-      if (share && !between) {
-        b.start = share.end !== null ? share.end + Math.max(0, x - row.x1) : row.x0
+      const lb = prep.label?.chars?.length && !prep.label.drawn && prep.label.chars.every(c => c.page === row.page && Math.abs(c.yb - row.baseline) < 0.4 * row.size) ? ownLabelOnRow(p.id, row, x, prep.label.chars) : null
+      if (share && !share.kept && (lb || !keptBetween(row, x))) {
+        if (lb) { rowLabel = { lb, baseline: row.baseline }; b.indent = 0 }
+        b.start = share.end !== null ? share.ink + Math.max(0, (lb ? lb[2] : x) - row.x1) : row.x0
         if (share.end !== null && Math.abs(share.at - b.B[0]) >= 0.05) b.startY = share.at
+        // (where that unit's translation ended above the row, its last line the shared one (shareOf's `above`): this unit's lines
+        // flow on from it, layer2.mjs slotsAt; where none of its text fits after that line's end, its first line stands a pitch
+        // under it, unless its last then stands lower than laid on TeX's row: as before, below)
+        // (and where that unit's text on the row stands above TeX's baseline, within an em of it (shareOf's `at`): its lines flow on
+        // from that line too, not from TeX's row under it, a pitch and the lines' distance after their first. 2610.21098v1 p2's
+        // item (3): its first line on item (2)'s last, 9.5 pt over the row, its second 26.4 pt under it at a pitch of 16.9.
+        // `onLeadOf`: where it is laid as before, below)
+        if (share.above) { b.onLead = true; onLeadOf = { start: row.x0, startY: undefined } }
+        else if (b.startY !== undefined && b.startY > b.B[0] + 0.05) { b.onLead = true; onLeadOf = { start: b.start, startY: b.startY } }
+        // (the lines it so flows on over the rows that unit's shorter translation left, down to the shared row, are that paragraph's
+        // lines: each takes the measure TeX set at its height, that unit's rows' and on the row both units' (`flowX`, the row and
+        // that unit's block that holds it: layer2.mjs flowMeasureAt), not this unit's first block's, which is only its own rows
+        // there: the row's remainder alone where TeX set a float right after it (2608.16117v1 p19's u59, "The increasing-" at the
+        // end of the line before Figure 9: its flowed lines were laid at that 79 pt, "and" and "MacKintosh," each a line of its
+        // own at the column's right edge))
+        const lead = b.onLead ? a.blocks?.find(q => q.page === row.page && q.B.some(y => Math.abs(y - row.baseline) < 0.05)) : undefined
+        if (lead) b.flowX = { y: row.baseline, lead }
         // (painted on the row's page after that unit, whose erasing of the row covers where it starts: paintLed)
         p.ledBy = row.id
       }
     }
+    // (a unit whose first line follows on its line a babel name that leads no unit, the name's counter its row's (an appendix's
+    // contents line, "Appendix A: Top-p Scaling …", its title an ink unit): laid from where the name's drawn word and counter end,
+    // the original's separation after them, as a shared line's next unit is from where the unit before it ends; where the name
+    // was not drawn, where TeX set it. Its line's in the name's column only: a unit across the gutter is the other column's)
+    if (p.ledBy === undefined && p.blocks[0] && !p.blocks[0].centred) {
+      const b = p.blocks[0], x = b.x0 + b.indent, size = b.sizes?.[0] ?? 10
+      const nm = names.find(r => r.drawn && r.unit === undefined && r.page === b.page && Math.abs(r.box.baseline - b.B[0]) < 0.25 * size && r.box.x1 <= x + 0.5 && x - r.box.x1 < 3 * size && x >= r.column[0] && x < r.column[1])
+      if (nm) b.start = nm.x + nm.w + Math.max(0, x - nm.box.x1)
+    }
     if (P.borrow && p.unit.kind !== 'cell') for (const b of p.blocks) b.freeOf = () => freeFor(b, s)
     const t2 = lap()
     // (the label's own style: a class's bold or italic label)
-    const lead = prep.lead ?? (prep.label?.drawn ? { parts: [{ text: prep.label.drawn, st: (st => (st && st.fam !== 'math' ? { bold: !!st.bold, italic: !!st.italic, ...L2.colourOfStyle(st) } : {}))(prep.label.chars[0]?.st) }] } : null)
+    const lead = prep.lead ?? (prep.label?.parts ? { parts: prep.label.parts, ...(prep.label.open ? { gap: 0 } : {}) } : prep.label?.drawn ? { parts: [{ text: prep.label.drawn, st: (st => (st && st.fam !== 'math' ? { bold: !!st.bold, italic: !!st.italic, ...L2.colourOfStyle(st) } : {}))(prep.label.chars[0]?.st) }] } : null)
     // the faces the unit's runs are set in, served and loaded before a width is taken in any of them (one taken before its
-    // slice is there would stay in the cache): the tokens read once with no measure, their faces and texts checked; a
-    // unit with a character no served slice holds, or a slice that does not load, stays the original's
+    // slice is there would stay in the cache): the tokens read with no measure, their faces and texts checked, then measured;
+    // a unit with a character no served slice holds, or a slice that does not load, stays the original's
+    let tokens = L2.tokensOf2(p.unit, prep, to, base, designs, P, lead, null, true)
     if (FS) {
       const tFonts = performance.now()
-      const no = await FS.check(runsOfTokens(L2.tokensOf2(p.unit, prep, to, base, designs, P, lead, () => 0)))
+      const no = await FS.check(runsOfTokens(tokens))
       fontWait += performance.now() - tFonts
       // (let go while its faces loaded: nothing more of it, not even its measures, in roles a newer layer may have set)
       if (disposed) return
@@ -2024,44 +2213,67 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     }
     // (from here to the unit's end nothing is awaited: its work is charged to its first page in `arrive`)
     workMarks.set(p, markWork())
-    let tokens = L2.tokensOf2(p.unit, prep, to, base, designs, P, lead, undefined, true)
-    if (carried && p.blocks[0]?.centred) {
+    L2.measureTokens(tokens)
+    // (its label on a shared row carried with it, ownLabelOnRow: its ink copied as the first line's start, as a numbered heading's
+    // number is, the original's space after it to its text kept, and erased where it stood; set by the row's baseline, so that a
+    // raised mark stays raised: 2608.06701v1 p5's paragraph footnotes, each mark set on the line after the note before)
+    if (rowLabel) {
+      const cs = prep.label.chars, start = prep.firstX0 !== undefined && prep.firstX0 > prep.label.x1 ? prep.firstX0 : prep.label.x1 + 0.25 * s
+      const x0 = Math.min(...cs.map(c => c.x0)) - 0.4, x1 = Math.max(Math.max(...cs.map(c => c.x1)) + 0.4, start - 0.4)
+      const crop = { mode: 'crop', page: p.blocks[0].page, crop: [x0, Math.min(...cs.map(c => c.yb - 0.26 * c.size)), x1, Math.max(...cs.map(c => c.yb + 0.8 * c.size))], baseline: rowLabel.baseline, text: prep.label.text }
+      // (and its first word with it: no line ends after the label alone, 2610.21098v1 p2's "(2)" at the end of the line before)
+      if (tokens[0] && !tokens[0].space) tokens[0].glue = true
+      tokens = Object.assign([{ crop, cw: x1 - x0, glue: false, w100: 0, ownLabel: true }, ...tokens], { base: tokens.base })
+      prep.label = { ...prep.label, drawn: prep.label.text }
+      for (const c of cs) prep.cat?.set(L2.charKey(c), 'acc')
+    }
+    if (carried) {
       const cs = prep.label.chars, b0 = p.blocks[0], start = prep.firstX0 !== undefined && prep.firstX0 > prep.label.x1 ? prep.firstX0 : prep.label.x1 + 0.25 * s
       const x0 = Math.min(...cs.map(c => c.x0)) - 0.4, x1 = Math.max(Math.max(...cs.map(c => c.x1)) + 0.4, start - 0.4)
-      const crop = { mode: 'crop', page: b0.page, crop: [x0, Math.min(...cs.map(c => c.yb - 0.26 * c.size)), x1, Math.max(...cs.map(c => c.yb + 0.8 * c.size))], baseline: median(cs.map(c => c.yb)), text: prep.label.text }
+      // (set by its line's baseline as the page's characters give it, the unit's own on its first line, so that a raised mark stays
+      // raised and a label TeX set on the line stays on it, as a shared row's own label is set by the row's: set by its own
+      // baseline, an affiliation's raised number stood on the translation's, 3.8 pt low, 2610.20716v1 p1)
+      const k0 = `${r00[0]}|${r00.slice(1).join()}`, labelKeys = new Set(cs.map(L2.charKey))
+      const own = (prep.uc ?? []).filter(c => !c.sep && !c.space && /\S/.test(c.ch) && c.rect && `${c.page}|${c.rect.join()}` === k0 && !labelKeys.has(L2.charKey(c)))
+      const crop = { mode: 'crop', page: b0.page, crop: [x0, Math.min(...cs.map(c => c.yb - 0.26 * c.size)), x1, Math.max(...cs.map(c => c.yb + 0.8 * c.size))], baseline: own.length ? median(own.map(c => c.yb)) : b0.B[0], text: prep.label.text }
       tokens = Object.assign([{ crop, cw: x1 - x0, glue: false, w100: 0 }, ...tokens], { base: tokens.base })
       b0.indent = 0
       prep.label = { ...prep.label, drawn: prep.label.text }
       for (const c of cs) prep.cat?.set(L2.charKey(c), 'acc')
     }
-    // (each later page's text where its source sets it: the translation cut at the source's page breaks, E3c, laid where that
-    // costs the unit nothing of its fit: layoutCut, below)
-    const cuts = prep.pageStarts?.size ? L2.pageCutsOf(tokens, p.unit, prep.pageStarts, P) : []
     const t3 = lap()
-    // (the unit's leading relative to the original's own pitch, step 3: leadOf)
+    // (the unit's leading relative to the original's own pitch, the script's own on a solid-set original, step 3: leadOf)
     p.tokens = tokens
     p.prep = prep
     p.s = s
-    p.P = { ...P, leadBase: L2.leadOf(p.blocks, s, P), trackStart: P.trackStart ?? cjkAdvance(), lineskip: filed(p.id) ? LINESKIP : null, halfLead: edgesOf(p, prep), lastLines: heading && !numbered }
+    p.P = { ...P, leadBase: L2.leadOf(p.blocks, s, P), trackStart: cjkAdvance(), lineskip: LINESKIP, halfLead: edgesOf(p, prep), lastLines: heading && !numbered }
     // (no larger than its lines' room between the rules over and under them leaves its script's em box: clearanceOf)
     p.clear = clearanceOf(p, s)
     if (p.clear && p.clear.cap < 1) p.P.capScale = p.clear.cap
-    // (fillBySize, P.fillSize, off by default: where the leading rule gave up a step (0.05) or more of the script's
-    // leading on a loose original, the paragraph is filled by its text's size instead, up to P.fillSize × the
-    // original's; a solid-set original keeps the script's leading, and its units are never grown)
-    if (P.fillSize > 1 && p.P.leadBase <= P.leadBase - 0.05 + 1e-9) p.P.growTo = P.fillSize
-    // (adaptiveFill: every unit is laid at its leading relative to the original's own pitch, the script's own on a solid-set
-    // original, and filled by its page's pass, fillPass. D filled a loose original's units alone (S3-12, against a band of
-    // leading page by page moving the pages' pitches apart); D6's F6b fills every original's, its page's target held within
-    // the band of its own page's anchor (1b-C))
-    if (P.adaptiveFill) {
-      p.fillable = true
-      p.P.leadBase = L2.leadOf(p.blocks, s, { ...P, leadRel: true })
-      p.P.growTo = 0
+    // (adaptiveFill: every unit is filled by its page's pass, fillPass. D filled a loose original's units alone (S3-12, against a
+    // band of leading page by page moving the pages' pitches apart); D6's F6b fills every original's, its page's target held
+    // within the band of its own page's anchor (1b-C))
+    if (P.adaptiveFill) p.fillable = true
+    // (a unit over a page break: laid as without its cuts, the fit's states searched once, and again at that state with a page
+    // break before each later page at its share of the paragraph's height, at a line end (E3c by height, layoutCut), kept
+    // where it fits: its further steps and passes then lay the tokens it holds)
+    ;({ layout: p.layout, tokens: p.tokens } = L2.layoutCut(tokens, p.blocks, s, p.P))
+    // (laid on from the line before, none of it there (its first line a pitch under that line): kept so only where its last line
+    // stands no lower than laid from TeX's shared row as before (`onLead`'s corner), and where it sets a line on that row's page
+    // when laid so sets one there; else laid there, as before. A line on a later page stands lower than any of the page before:
+    // 2501.14787v1 p57's u423, its first block the row alone at p57's foot, its line a pitch under u422's last one stood 0.6 pt
+    // under the row at its leading of 1.3, past the block's foot, and so none of it was on p57, its row erased and drawn empty
+    // and its text all on p58, where its last line stood as it does laid from the row: its first line, on p58, was read as
+    // higher than u422's last line on p57)
+    const lowerThan = (a, b) => a.page > b.page || (a.page === b.page && a.baseline < b.baseline - 0.05)
+    if (onLeadOf && p.layout.lines[0] && lowerThan(p.layout.lines[0], { page: p.blocks[0].page, baseline: p.blocks[0].startY })) {
+      const b0 = p.blocks[0], before = [{ ...b0, start: onLeadOf.start, startY: onLeadOf.startY, onLead: undefined }, ...p.blocks.slice(1)]
+      const was = L2.layoutCut(tokens, before, s, p.P), lw = was.layout.lines.at(-1), lc = p.layout.lines.at(-1)
+      const onPage = lines => lines.some(l => l.page === b0.page)
+      if (!lw || lowerThan(lc, lw) || (!onPage(p.layout.lines) && onPage(was.layout.lines))) { p.blocks = before; ({ layout: p.layout, tokens: p.tokens } = was); p.onLeadKept = true } else p.onLeadBelow = true
     }
-    // (laid as without its cuts, the fit's states searched once, and again with them at that state where that layout sets a
-    // later page's text on an earlier page, kept where it fits: its further steps and passes then lay the tokens it holds)
-    ;({ layout: p.layout, tokens: p.tokens } = L2.layoutCut(tokens, cuts, p.blocks, s, p.P))
+    // (clipped, the fit's walk at p.P over the unit's tokens and blocks: layoutCut's first, which fitFurther goes on from)
+    const walked = { layout: p.layout, blocks: p.blocks, P: p.P }
     // a numbered heading set in fewer lines than the original's: laid again on the original's last lines with its number as
     // its first line's start, the number's own ink copied there (a crop: its face, its colour, the space its class set after
     // it, as the original's) and erased where it was. Where that does not fit, or moves it nowhere, as it was
@@ -2077,26 +2289,44 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
         for (const c of cs) prep.cat?.set(L2.charKey(c), 'acc')
       }
     }
+    // (a run-in head, the unit before a shared line, laid in its row alone where its translation fits there only below its floor
+    // or not at all: laid on over the next unit's first row to that row's end, the next unit laid from where it ends there
+    // (`start`), where it fits so (overFollower). Decided with the next unit: that unit left the original's, or not laid from its end, it is
+    // laid again in its row alone, as before (settleLeadOf))
+    const over = p.noOver ? null : overFollower(p, tokens, s, kept)
+    if (over) { p.blocks = over.blocks; p.layout = over.layout; p.tokens = over.tokens; p.over = { id: over.id }; p.rects0 = rects0 }
     // (step 3: never drawn in part: given more room where the page has it, else left the original's, whole)
     if (p.layout.clipped) {
-      const further = fitFurther(p, tokens, s)
+      const further = fitFurther(p, tokens, s, p.layout === walked.layout && p.blocks === walked.blocks && p.P === walked.P)
       if (further) { p.layout = further.layout; p.blocks = further.blocks; if (further.P) { p.P = further.P; p.clear = further.clear } }
       else { p.refused = true; unlead(p); return }
+    } else if (p.unit.kind !== 'cell') {
+      // (a unit split by its displays into runs: each run its own text block, at the first state at which its own text fits its
+      // own slots, so that a cramped run alone shrinks (layer2.mjs layoutRuns); its page's fill fills each run apart (fillPass).
+      // A unit of one run, or one its runs do not set alone, as before; a table's cell is one block of its table's)
+      const laidRuns = L2.layoutRuns(p.tokens, p.blocks, s, p.P, p.layout.lines)
+      if (laidRuns) {
+        // (the unit's fit as one kept (`whole`): its page's target reads the unit once, at the fill leading it had as one, as it
+        // did before units were laid in runs, so that a neighbour's rhythm is the same (fillPass))
+        p.whole = p.layout
+        p.layout = laidRuns.layout
+        p.runs = laidRuns.runs.map((r, i) => ({ id: p.id, unit: p.unit, parent: p, run: i, refused: false, fillable: !!p.fillable, tokens: r.tokens, blocks: r.blocks, bi0: r.bi0, s, P: r.P, layout: r.layout, clear: null, share: null }))
+      }
     }
     settleLayout(p)
     // (a unit whose last row another unit's first continues on a shared line: where its translation ends on that row, which
-    // that unit is laid from, and which its page's fill keeps)
-    if (followers.has(p.id)) { const r = candOf.get(followers.get(p.id))?.lead; p.share = r ? L2.shareOf(p.layout, p.blocks, r) : null }
+    // that unit is laid from, and which its page's fill keeps; its last run's, where it is laid in runs)
+    // (`kept`: something stays between the two on the row, keptAfter, and this unit's text there ended where TeX's did: the next
+    // unit's first line stays where TeX set it, whatever its own reading of the row)
+    if (followers.has(p.id)) { const r = candOf.get(followers.get(p.id))?.lead; p.share = r ? L2.shareOf(p.layout, p.blocks, r) : null; if (p.share && kept && !kept.byLabel) p.share.kept = true; if (p.runs) p.runs.at(-1).share = p.share }
     const t4 = lap()
     p.layout.extents = new Map([...prep.extents].map(([r, e]) => [r.join(), e]))
-    if (p.blocks[0] && (prep.label || prep.firstX0 !== undefined || inkBefore !== undefined)) {
+    if (p.blocks[0] && (prep.label || prep.firstX0 !== undefined)) {
       const r0 = p.blocks[0].rects[0], ext = p.layout.extents.get(r0.join()) ?? r0.slice(1)
       // (an extent of several boxes, the file's: its first)
       const multi = Array.isArray(ext[0]), e = multi ? ext[0] : ext
       if (e) {
         let x0 = prep.firstX0 !== undefined ? Math.min(e[0], prep.firstX0 - 0.2) : e[0]
-        // from right after the ink before it (a label), but never more than 2 pt before the line's own first word
-        if (inkBefore !== undefined) x0 = Math.min(x0, Math.max(inkBefore + 0.5, (prep.firstX0 ?? e[0]) - 2))
         // (a label set in the target's name is the line's: erased from its first glyph)
         if (prep.label?.drawn) x0 = Math.min(x0, ...prep.label.chars.map(c => c.x0 - 0.2))
         else if (prep.label) x0 = Math.max(x0, prep.label.x1 + 0.6)
@@ -2108,11 +2338,15 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     drawnUnits++
     p.counted = true
     if (!records) return
+    recTimed(() => recordLaid(p, tokens, orig, [r1(t1 - t0), r1(t2 - t1), r1(t3 - t2), r1(t4 - t3)]))
+  }
+  /** a laid unit's record (layOnce, with `records`): what it reads of the unit as laid, `ms` its lay's segments */
+  const recordLaid = (p, tokens, orig, ms) => {
     try {
       const lines = recLinesOf(p)
       const drawnTok = new Set(p.layout.lines.flatMap(l => l.items.map(it => it.t)))
       const tr = tokens.filter(t => t.s && !t.ph && !t.sup)
-      record(p, { ...(tex ? { source: p.tex ? 'tex' : 'v0' } : {}), grown: p.grown, dropped: p.dropped, s, f: p.layout.f, fitScale: p.layout.scale, knob: p.layout.knob, clipped: p.layout.clipped, opened: p.layout.opened, unopened: p.layout.unopened, lostChars: p.layout.lostChars, chars: p.layout.chars, lead: p.layout.state.lead, track: p.layout.state.track || p.layout.state.trackLatin, compress: p.layout.state.compress, borrow: p.layout.state.borrow, free: r1(Math.max(0, ...p.blocks.map(b => b.free))), tried: p.layout.tried, lines, orig, drawnRuns: L2.drawnRuns(tokens), drawnBase: styleKey(tokens.base), trChars: tr.reduce((a, t) => a + [...t.s].length, 0), trDrawn: p.layout.lines.reduce((a, l) => a + l.items.reduce((b, it) => b + (it.t.s && !it.t.ph && !it.t.sup ? [...it.t.s].length - (it.t.hyphenated ? 1 : 0) : 0), 0), 0), modes: modesOf(prep), unused: drawnTok.size, ms: [r1(t1 - t0), r1(t2 - t1), r1(t3 - t2), r1(t4 - t3)], tokens: tokens.length })
+      record(p, { grown: p.grown, s: p.s, f: p.layout.f, fitScale: p.layout.scale, knob: p.layout.knob, clipped: p.layout.clipped, opened: p.layout.opened, unopened: p.layout.unopened, lostChars: p.layout.lostChars, chars: p.layout.chars, lead: p.layout.state.lead, track: p.layout.state.track || p.layout.state.trackLatin, compress: p.layout.state.compress, borrow: p.layout.state.borrow, free: r1(Math.max(0, ...p.blocks.map(b => b.free))), tried: p.layout.tried, lines, orig, drawnRuns: L2.drawnRuns(tokens), drawnBase: styleKey(tokens.base), trChars: tr.reduce((a, t) => a + [...t.s].length, 0), trDrawn: p.layout.lines.reduce((a, l) => a + l.items.reduce((b, it) => b + (it.t.s && !it.t.ph && !it.t.sup ? [...it.t.s].length - (it.t.hyphenated ? 1 : 0) : 0), 0), 0), modes: modesOf(p.prep), unused: drawnTok.size, ms, tokens: tokens.length })
     } catch (e) {
       if (isMemoryError(e)) throw e
       // (no record of it, nor one on the unit for a pass to update, which would read what failed again: the error alone)
@@ -2122,60 +2356,46 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   }
   function record(p, x) {
     const match = x.orig !== undefined ? L2.styleMatch(x.orig, x.drawnRuns, x.drawnBase) : undefined
-    // the record is the unit's at once: the page's even pass may run in the same task and update it
+    // the record is the unit's at once: the page's fill may run in the same task and update it
     p.rec = { id: p.id, kind: p.unit.kind, v: 2, pages: p.pages, cut: p.cut, ...x, sizeRatio: x.s ? r1(x.f / x.s) : undefined, s: x.s ? r1(x.s) : undefined, f: x.f ? r1(x.f) : undefined, orig: x.orig ? { key: x.orig.key, size: r1(x.orig.size), runs: x.orig.runs.length } : x.orig, match, drawnRuns: undefined, drawnBase: x.drawnBase }
     // (in the units' rank, the order they are laid in when the pages are laid in turn: whatever order they were laid in)
     byRank(stats, p.rec)
   }
 
-  // even=1: a page's body units laid out first, then all set at the smallest size any of them needs, then painted; a
-  // unit on two pages is set by its first page's pass and counts as fixed on the next; even=2 sets the leading alike as
-  // well (the smallest any body unit of the page took)
+  // each page's units laid, in their rank (L3): what its pass sets and paints
   const laid = Array.from({ length: N + 1 }, () => [])
-  const evenPass = pg => {
-    const body = laid[pg].filter(p => EVEN_KINDS.has(p.unit.kind) && !p.refused)
-    const target = Math.min(1, ...body.map(p => p.layout.scale))
-    const leadTo = P.even >= 2 ? Math.min(P.leadBase, ...body.map(p => p.layout.state.lead)) : P.leadBase
-    for (const p of body) {
-      if (p.pages[0] !== pg) continue
-      if (p.layout.scale <= target + 1e-9 && p.layout.state.lead <= leadTo + 1e-9) continue
-      const keep = { extents: p.layout.extents, rec: p.rec }
-      const PU = p.P ?? P
-      p.layout = L2.layoutUnit2(p.tokens, p.blocks, p.s, { ...PU, maxScale: target, leadBase: Math.min(PU.leadBase, leadTo) })
-      p.layout.extents = keep.extents
-      settleLayout(p)
-      if (p.rec) Object.assign(p.rec, { f: r1(p.layout.f), sizeRatio: r1(p.layout.f / p.s), fitScale: p.layout.scale, knob: p.layout.knob, opened: p.layout.opened, unopened: p.layout.unopened, lead: p.layout.state.lead, lines: recLinesOf(p) })
-    }
-  }
   // adaptiveFill's pass over a page's units that begin on it (fillPage), each filled unit's record updated from the layout
   // it is drawn with (the lines TeX's rule opened among them: a looser leading may open none the fit's did). A page's target
   // is a function of its own units alone (pageTarget): no page reads another's, whatever the order the passes run in
   const fillPass = pg => {
     const begun = laid[pg].filter(p => p.fillable && !p.refused && p.pages[0] === pg)
-    // (after the even pass, which laid them anew: their fill leadings are the pass's, as they were)
-    if (P.even) for (const p of begun) fillLeadsOf(p, P)
-    const r = fillPage(begun, P, (p, target) => {
+    const recorded = (p, target, fillLead) => {
       const l = p.layout
-      if (p.rec) Object.assign(p.rec, { f: r1(l.f), sizeRatio: r1(l.f / p.s), fitScale: l.scale, knob: l.knob === 'none' ? 'fill' : l.knob, opened: l.opened, unopened: l.unopened, lead: l.state.lead, track: l.state.track, lines: recLinesOf(p), fill: { target, lead: p.fillLead } })
-    }, { continuing: laid[pg].filter(p => p.fillable && !p.refused && p.pages[0] !== pg) })
+      if (p.rec) recTimed(() => Object.assign(p.rec, { f: r1(l.f), sizeRatio: r1(l.f / p.s), fitScale: l.scale, knob: l.knob === 'none' ? 'fill' : l.knob, opened: l.opened, unopened: l.unopened, lead: l.state.lead, track: l.state.track, lines: recLinesOf(p), fill: { target, lead: fillLead } }))
+    }
+    // (a unit laid in runs is filled a run at a time, each run a unit of the page's fill, read by its target once, as one: a block
+    // between two displays is a text block of its own), then laid as one again
+    const filledRuns = new Map()
+    // (a unit's runs are filled on the page the unit begins on, together: one pass, so that they keep one tracking (fillPage).
+    // Filling each on the page it begins on was measured and declined (2026-10-24, 7 Chinese papers: link colours lost 2 -> 9,
+    // paragraph ends letter-spaced 4 -> 14), left to its own change)
+    const { units: filling, ...told } = fillUnitsOf(begun, laid[pg].filter(p => p.fillable && !p.refused && p.pages[0] !== pg))
+    const r = fillPage(filling, P, (q, target) => {
+      if (q.parent) { filledRuns.set(q.parent, target); return }
+      recorded(q, target, q.fillLead)
+    }, told)
+    for (const [p, target] of filledRuns) {
+      const keep = p.layout.extents
+      p.layout = L2.joinRuns(p.runs)
+      p.layout.extents = keep
+      settleLayout(p)
+      // (its fill leading as its page's target read it, the unit's as one; each run's beside it)
+      recorded(p, target, p.fillLead)
+      if (p.rec) p.rec.fill.runs = p.runs.map(q => q.fillLead)
+    }
     // (the page's fill numbers, kept with its record)
     rows[pg - 1].fill = r && { own: r.own, anchor: r.anchor, target: r.target, body: r.body }
-  }
-  // the leftover packed (packPage) over a page's units laid, each moved unit's record updated
-  const packPass = pg => {
-    // (the ink that stays, by the page's ink map: no move is made on a page whose map is not read)
-    const map = inkOf(pg, 'pack'), dev = pxOf(pg), vw = views[pg - 1]
-    const accounted = []
-    // (a table's cell may be withheld with its group after this pass: its glyphs are not taken as gone)
-    for (const p of laid[pg]) {
-      if (p.refused || p.unit.kind === 'cell' || !p.prep?.cat) continue
-      for (const c of p.prep.uc ?? []) if (c.page === pg && !c.sep && !c.space && p.prep.cat.get(L2.charKey(c)) === 'acc') accounted.push([c.x0, c.yb - 0.25 * c.size, c.x1, c.yb + 0.88 * c.size])
-      for (const c of p.lead?.chars ?? []) if (c.page === pg) accounted.push([c.x0, c.yb - 0.25 * c.size, c.x1, c.yb + 0.88 * c.size])
-    }
-    const stays = map ? stayingInk({ map, toDev: dev, toPdf: (x, y) => vw.convertToPdfPoint(x / dpr, y / dpr), accounted, dirty: removedPage(pg) ? dirtyOf(pg) : [] }) : () => -Infinity
-    const moved = packPage(pg, laid[pg], rectsByPage.get(pg) ?? [], chars2[pg - 1] ?? [], stays, P.borrowGap)
-    for (const [id, d] of moved) { const p = byId.get(id); if (p?.rec) Object.assign(p.rec, { lines: recLinesOf(p), pack: r1(d) }) }
-    return moved
+    for (const p of laid[pg]) dropFillLaid(p)
   }
   const ms = new Map()
   // A table group's cells laid, then painted all together or not at all (the table-groups brief): a cell is painted
@@ -2190,7 +2410,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     if (r >= 0) stats.splice(r, 1)
     if (p.counted) { p.counted = false; drawnUnits-- }
     p.withheld = true
-    skipped.push({ id: p.id, kind: p.unit.kind, why: `group: ${why}`, chars: trCharsOf(p.unit), pages: p.pages })
+    skipped.push({ id: p.id, kind: p.unit.kind, why: `group: ${why}`, code: 'group', chars: trCharsOf(p.unit), pages: p.pages })
   }
   /** group g decided once every cell of it is laid: withheld, or to be painted whole (true) */
   const settleGroup = g => {
@@ -2199,7 +2419,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     laidCells.done = true
     const pages = new Set(laidCells.list.flatMap(p => p.pages))
     // (and over the text-removed PDF, a cell on a page the remover refused: it could only be erased)
-    const why = pages.size > 1 ? 'on two pages' : laidCells.list.some(p => p.refused || p.layout.clipped) ? 'a cell unfit' : RM?.mode === 'draw' && [...pages].some(pg => RM.manifest?.page?.[pg] && !removedPage(pg)) ? 'its page not removed' : null
+    const why = pages.size > 1 ? 'on two pages' : laidCells.list.some(p => p.refused || p.layout.clipped) ? 'a cell unfit' : null
     if (why) {
       for (const p of laidCells.list) withhold(p, why)
       // (withheld, never to be painted: a cell whose pages have all passed lets go now, the others as their pages pass)
@@ -2212,8 +2432,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   const paintGroup = (g, q = null) => { for (const p of groupLaid.get(g).list) for (const pg of p.pages) if (q === null || pg === q) paint(p, pg) }
   // ---- each page painted by itself (1b-B, the 1b design §2.3 C1): a page's pass decides the layouts of the units that begin
   // on it, and paints nothing; a page is painted in one order, whatever order the passes ran in: its names (at its drawing),
-  // then, for each first page f of the units on it, f's pass's units in their order (a unit moved by the leftover's packing
-  // last) and the table groups settled at f. The first pages are taken in the order their passes run laid in order: by
+  // then, for each first page f of the units on it, f's pass's units in their order and the table groups settled at f. The first pages are taken in the order their passes run laid in order: by
   // when the last unit on each is laid (its lay rank), and where one unit's laying completes two, in its pages' order
   // (passKey). That is a function of the units' ranks alone, and it is the order a page was painted in before: a page's
   // paint is order-dependent (what the restore counts as accounted, the removal's guard), so it keeps that one, also where
@@ -2278,17 +2497,19 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   /** whether unit u's part of page q (its first page's) is painted, u with it (not waiting there for the unit before it on a
    *  shared line: paintLed) */
   const partPainted = (u, q) => !!paintedOn[q]?.has(u.pages[0]) && !u.waitsOn?.has(q)
-  /** page pg's pass: the even pass, the page fill and the leftover packed over the units that begin on it, its groups
+  /** page pg's pass: the page fill over the units that begin on it, its groups
    *  settled, then each page its units are on painted as far as it can be */
   const passPage = pg => withWork(pg, () => passPageOf(pg))
   const passPageOf = pg => {
-    if (P.even) evenPass(pg)
-    if (P.adaptiveFill) fillPass(pg)
-    // (the leftover packed: the units moved are painted after the others, from the top, so that no erasing of the
-    // unit above takes what they draw over its foot)
-    const moved = P.leftover === 'pack' ? packPass(pg) : null
-    const order = moved?.size ? [...laid[pg].filter(u => !moved.has(u.id)), ...laid[pg].filter(u => moved.has(u.id)).sort((a, b) => b.blocks[0].B[0] - a.blocks[0].B[0])] : laid[pg]
-    passOrder[pg] = order.filter(u => !u.refused && u.pages[0] === pg && (!u.unit.group || !groupCells.has(u.unit.group)))
+    if (P.adaptiveFill) {
+      // (the page's fill is its lay's, less its records': the speed check reads it)
+      const t = performance.now(), rec0 = recMs
+      fillPass(pg)
+      timesOf(pg).lay += performance.now() - t - (recMs - rec0)
+      timesOf(pg).rec += recMs - rec0
+    }
+    L2.forgetInk()
+    passOrder[pg] = laid[pg].filter(u => !u.refused && u.pages[0] === pg && (!u.unit.group || !groupCells.has(u.unit.group)))
     settledAt[pg] = [...new Set(laid[pg].map(u => u.unit.group).filter(x => x && groupCells.has(x)))].filter(settleGroup)
     passed[pg] = 1
     touched.add(pg)
@@ -2299,7 +2520,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   }
   const arrive = async p => {
     fontWait = 0
-    const t0 = performance.now()
+    const t0 = performance.now(), rec0 = recMs
     // (a unit that throws while it is laid is the original's, why `error`: its page completes, never blank for one unit; a
     // memory error is no unit's, and goes on)
     try { await layout2(p) } catch (e) {
@@ -2312,17 +2533,99 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     const mark = workMarks.get(p)
     if (mark) { workMarks.delete(p); if (!disposed) chargeWork(p.pages[0], mark) }
     if (disposed) return
-    // (the faces it waited for apart from its laying: no task of v0's)
-    timesOf(p.pages[0]).lay += performance.now() - t0 - fontWait
+    // (the faces it waited for apart from its laying: no task of v0's; and its record, which no reader makes)
+    timesOf(p.pages[0]).lay += performance.now() - t0 - fontWait - (recMs - rec0)
     timesOf(p.pages[0]).fonts += fontWait
+    timesOf(p.pages[0]).rec += recMs - rec0
+    await settleLeadOf(p, true)
+    if (disposed) return
     afterLay(p)
     ms.set(p.id, performance.now() - t0 - fontWait)
   }
-  /** a unit left the original's without being laid (`why`: `page`, on a page that failed), counted as one laid and left */
-  const refuseUnit = (p, why) => {
+  /**
+   * The unit before p on a shared line, laid over p's first row (overFollower), where p is left the original's, not laid from
+   * its end (`ledBy`), or laid from its end only below its own floor (`below-floor`: the head's room taken from a text that
+   * then fell under the floor the head was lifted to): laid again in its row alone (relay), as before the ruling, so that
+   * neither stands over the other and no unit goes under its floor for another; and p, where it was laid while that unit held
+   * part of its first row, laid again from where that unit now ends, as before the ruling. Each relay settles in turn the unit
+   * before the one it lays, so a row three units share comes back whole. Run as p's lay ends (arrive, relay; `laid`) and as p
+   * is left the original's unlaid (refuseUnit: a page of it failed, which its head's lay could not know), before p is counted
+   * and their page passes: none has been painted
+   */
+  const settleLeadOf = async (p, laid, after = false) => {
+    const lead = byId.get(candOf.get(p.id)?.follows)
+    if (!lead?.over || lead.refused) return
+    const led = !p.refused && p.ledBy === lead.id
+    if (led && p.layout?.knob !== 'below-floor') return
+    await relay(lead, true)
+    if (disposed) return
+    // (one refused before its rectangles were kept (none left it, its growth threw) is refused so again: not laid again)
+    if (laid && (p.refused || led) && p.rects0) await relay(p, after)
+  }
+  /**
+   * Unit a laid again as before the ruling (settleLeadOf): from its rectangles as its lay began (`rects0`), never over the
+   * row after it (`noOver`). Its record and count withdrawn, and with `after` (its lay already ended: afterLay) its skip; laid,
+   * or left the original's as its row leaves it, recorded, and with `after` its skip and fill leading as afterLay sets them
+   */
+  const relay = async (a, after) => {
+    const r = stats.indexOf(a.rec)
+    if (r >= 0) stats.splice(r, 1)
+    if (a.counted) { a.counted = false; drawnUnits-- }
+    if (after && a.refused) { const k = skipped.findLastIndex(x => x.id === a.id); if (k >= 0) skipped.splice(k, 1) }
+    a.rects = a.rects0.slice()
+    a.over = undefined
+    a.noOver = true
+    a.runs = undefined
+    a.whole = undefined
+    a.share = null
+    a.ledBy = undefined
+    a.refused = false
+    a.why = undefined
+    a.missing = undefined
+    const fw = fontWait
+    fontWait = 0
+    const t0 = performance.now(), rec0 = recMs
+    try { await layout2(a) } catch (e) {
+      if (isMemoryError(e)) throw e
+      a.refused = true
+      a.why = 'error'
+      unlead(a)
+    }
+    const mark = workMarks.get(a)
+    if (mark) { workMarks.delete(a); if (!disposed) chargeWork(a.pages[0], mark) }
+    if (disposed) return
+    timesOf(a.pages[0]).lay += performance.now() - t0 - fontWait - (recMs - rec0)
+    timesOf(a.pages[0]).fonts += fontWait
+    timesOf(a.pages[0]).rec += recMs - rec0
+    fontWait = fw
+    if (after) {
+      if (a.refused) skipped.push({ id: a.id, kind: a.unit.kind, why: a.why ?? 'unfit', code: skipCode(a.why ?? 'unfit'), ...(a.missing ? { missing: a.missing } : {}), chars: trCharsOf(a.unit), pages: a.pages })
+      // (laid again after its page's pass: no fill lays it at its fill leading's state again)
+      else if (PASSES && P.adaptiveFill && a.fillable) { unitFillLeads(a); dropFillLaid(a) }
+    }
+    await settleLeadOf(a, true, after)
+  }
+  /** a unit left the original's without being laid (`why`: `page`, on a page that failed), counted as one laid and left; the
+   *  head laid over its first row laid again in its row first (settleLeadOf) */
+  const refuseUnit = async (p, why) => {
     p.refused = true
     p.why = why
+    await settleLeadOf(p, false)
+    if (disposed) return
     afterLay(p)
+  }
+  /**
+   * Unit p's fill leadings, fixed as its lay ends (fillLeadsOf): a unit laid in runs each run's own, the page fill's units, and
+   * the unit's own read from its fit as one (its one vote in its pages' targets, and its line count, which the page's size step
+   * reads for each of its runs). Their work and time are its first page's lay's, as its fit's are: the speed check reads them
+   */
+  const unitFillLeads = p => {
+    const t = performance.now()
+    withWork(p.pages[0], () => {
+      for (const q of p.runs ?? [p]) fillLeadsOf(q, P)
+      if (p.runs) { const joined = p.layout; p.layout = p.whole; fillLeadsOf(p, P); p.layout = joined }
+    })
+    timesOf(p.pages[0]).lay += performance.now() - t
   }
   /** a unit laid (or left the original's) counted, recorded and painted: its page passes, its table group, its paint */
   const afterLay = p => {
@@ -2330,19 +2633,14 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     dropReads(candOf.get(p.id))
     // (a unit no step fits is the original's: neither erased nor drawn, nor checked; nor one whose characters no served
     // slice holds (`served`) or whose slice did not load (`face`))
-    if (p.refused) skipped.push({ id: p.id, kind: p.unit.kind, why: p.why ?? 'unfit', ...(p.missing ? { missing: p.missing } : {}), chars: trCharsOf(p.unit), pages: p.pages })
+    if (p.refused) skipped.push({ id: p.id, kind: p.unit.kind, why: p.why ?? 'unfit', code: skipCode(p.why ?? 'unfit'), ...(p.missing ? { missing: p.missing } : {}), chars: trCharsOf(p.unit), pages: p.pages })
     const g = p.unit.group && groupCells.has(p.unit.group) ? p.unit.group : null
     // (each list a page's or a group's units laid, in their rank whatever order they were laid in (L3): a pass paints in it)
     if (g) byRank((groupLaid.get(g) ?? groupLaid.set(g, { list: [], done: false }).get(g)).list, p)
     for (const pg of p.pages) touched.add(pg)
     if (PASSES) {
-      // (its fill leading is its fit's, fixed now (fillLeadsOf). With the even pass, which lays the units of a page anew before
-      // the fill, the fill leading of a unit on its own first page is the pass's, as it was (fillPass), and `fit` keeps the
-      // fit's, which is all a page it runs on to reads of it: no page's target then reads another page's even pass)
-      if (P.adaptiveFill && p.fillable && !p.refused) {
-        fillLeadsOf(p, P)
-        if (P.even) p.fit = { fillLead: p.fillLead, fitLines: p.fitLines }
-      }
+      // (its fill leading is its fit's, fixed now (fillLeadsOf), which is all a page it runs on to reads of it)
+      if (P.adaptiveFill && p.fillable && !p.refused) unitFillLeads(p)
       // (a page's pass sets the units that begin on it, which are then painted on each of their pages, each page in its
       // own order (paintOn): a unit is never painted from two layouts; a table's cells with their group, once it is laid
       // whole)
@@ -2367,12 +2665,14 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   }
 
   // a page drawn: its characters read, its copy made and its ink mapped; the paper's designs from the first
-  // each page's costs, ms (the gate's --perf): its original drawn (render), its text read (text), the removal's reading of
-  // its ink and its plan (ink), its removed page drawn for v0's copy (rp); its units laid (lay: a unit's on its first
-  // page, less the faces it waited for, fonts) and painted, their operations made (ops: the erase and its put-back, or
-  // the swap's rectangles), drawn on the copy (compose) and set as SVG (svg)
+  // each page's costs, ms (the gate's --perf): its original drawn (render), its text read (text, less its fills read live:
+  // fills), the removal's reading of its ink and its plan (ink), its removed page drawn for v0's copy (rp); its units laid (lay:
+  // a unit's fit and fill leadings on its first page, the page's fill on it, less the faces they waited for, fonts, and the
+  // records the gate keeps of them, rec, which a reader opened with no records never makes) and painted, their operations made
+  // (ops: the erase and its put-back, or the swap's rectangles), drawn on the copy (compose) and set as SVG (svg); its links
+  // (the wait for its annotations past the text read, and their parse)
   const pageTimes = []
-  const timesOf = pg => (pageTimes[pg] ??= { render: 0, text: 0, ink: 0, rp: 0, lay: 0, fonts: 0, ops: 0, compose: 0, svg: 0, words: 0, links: 0, fills: 0 })
+  const timesOf = pg => (pageTimes[pg] ??= { render: 0, text: 0, ink: 0, rp: 0, lay: 0, fonts: 0, ops: 0, compose: 0, svg: 0, words: 0, links: 0, fills: 0, rec: 0 })
   // the deterministic work a page cost (work.mjs: integer counts, no clock), by page, as pageTimes is. Charged over stretches of
   // synchronous code, so that a page's counts are the same whatever the order pages were asked in and however the tasks
   // interleaved; `inWork` keeps a stretch inside another from being charged twice. Nothing the drawing reads
@@ -2390,11 +2690,10 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     const m = markWork()
     try { return f() } finally { inWork = false; chargeWork(pg, m) }
   }
-  // the documents read: the original (`doc`) and the text-removed one (`removal.doc`, often the same). Under parts the newest
-  // composed document, swapped at a part with a tail (swap); each read of a page holds its document (using), and one no longer
-  // the newest is told to the host (onRetired) once no read holds it, the newest at dispose: each once, none destroyed here
-  let D = doc, RD = removal?.doc ?? null
-  // (`retired` weakly: it only says a document was told already, and a strong set would keep every document the host has since destroyed, with its pages, for the run's length)
+  // the document read, our wrapped page (one a run: its groups hide what a unit owns, docs/route/ocg-erasure.md §4); each read of
+  // a page holds it (using), and it is told to the host (onRetired) at dispose once no read holds it: once, never destroyed here
+  const D = doc
+  // (`retired` weakly: it only says the document was told already)
   const uses = new Map(), retiring = new Set(), retired = new WeakSet()
   const tellRetired = d => { if (retired.has(d)) return; retired.add(d); onRetired?.(d) }
   const retire = d => { if (!d || retired.has(d)) return; if (uses.get(d)) retiring.add(d); else tellRetired(d) }
@@ -2409,7 +2708,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       }
     }
   }
-  const drawPage = i => { const d = D, rd = RD; return using([d, rd], () => drawPageOn(i, d, rd)) }
+  const drawPage = i => using([D], () => drawPageOn(i, D))
   /** page q's draw asked of the host, once (drawOf): its answer kept until the page is drawn; null where it has none or the ask
    *  threw (the page is read live) */
   const drawAsk = q => {
@@ -2441,16 +2740,20 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     t = using([d], async () => {
       const t0 = performance.now()
       const page = await d.getPage(q)
+      // (a run let go renders nothing more: its renders would hold the document's queue for the run over it after, and push its
+      // pages out of the warm ones; one let go while its render waits its turn is not drawn either, VIS.render's `live`)
+      if (disposed) return
       const viewport = page.getViewport({ scale })
       const c = document.createElement('canvas')
       c.width = Math.floor(viewport.width * dpr)
       c.height = Math.floor(viewport.height * dpr)
       let list = null
+      // (the page kept warm by the document after it: the copy of the page asked renders from the same parse)
       try {
-        await page.render({ canvas: c, canvasContext: c.getContext('2d'), viewport, transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined }).promise
-        // (the list it was drawn by, before the cleanup lets it go: the page's fills, should its draw be refused or late)
-        if (Number.isInteger(OPS?.showText)) list = renderedList(page)
-      } finally { page.cleanup() }
+        await VIS.render(page, { canvas: c, canvasContext: c.getContext('2d'), viewport, transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined }, [], live)
+      } catch (e) { if (disposed && e?.name === 'AbortError') { c.width = 0; c.height = 0; return } throw e }
+      // (the list it was drawn by: the page's fills, should its draw be refused or late)
+      if (Number.isInteger(OPS?.showText)) list = renderedList(page)
       // (kept only while it is still the page's reading: not where the page was let go (letGoPage) or the ask it was read for
       // given up before the page was drawn (dropPixels), whose result would be held for good)
       if (!disposed && pixelTasks.get(q) === t) {
@@ -2473,7 +2776,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     pixelTasks.set(q, t)
     return t
   }
-  const drawPageOn = async (i, d, rd) => {
+  const drawPageOn = async (i, d) => {
     const tPage = performance.now()
     // (its draw, where pages are read from theirs: asked at its closure's taking, or now)
     const asked = DATA ? drawAsk(i) : null
@@ -2481,47 +2784,49 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     const tGot = performance.now()
     const r = rows[i - 1]
     let x = null
-    try {
-      if (asked) {
-        let timer, late = false
-        const draw = await Promise.race([asked, new Promise(ok => { timer = setTimeout(() => { late = true; ok(null) }, DRAW_WAIT_MS) })])
-        clearTimeout(timer)
-        drawAsks.delete(i)
-        if (late) drawStats.late.push(i)
-        if (draw) x = readDraw(i, draw)
-      }
-      const viewport = page.getViewport({ scale })
-      views[i - 1] = viewport
-      if (!x) {
-        r.left.width = Math.floor(viewport.width * dpr)
-        r.left.height = Math.floor(viewport.height * dpr)
-        if (r.right) { r.right.width = r.left.width; r.right.height = r.left.height }
-      }
-      r.view = page.view
-      let tc, annP, fonts, tRendered, fills = null
-      if (x) {
-        // (from its draw: no text content, annotation or pixel read of PDF.js's; its pixels are read where a step reads its ink)
-        fromData[i] = 1
-        drawStats.data.push(i)
-        tc = x.tc
-        annP = x.raw
-        fonts = x
-        fills = x.fills
-        heldLists.delete(i)
-        tRendered = performance.now()
-      } else {
-        if (DATA) drawStats.live.push(i)
-        // (its render's time from here where its draw was waited for, which is no render's; the page's own start otherwise)
-        const tLive = asked ? performance.now() : tPage
-        const textP = page.getTextContent()
+    if (asked) {
+      let timer, late = false
+      const draw = await Promise.race([asked, new Promise(ok => { timer = setTimeout(() => { late = true; ok(null) }, DRAW_WAIT_MS) })])
+      clearTimeout(timer)
+      drawAsks.delete(i)
+      if (late) drawStats.late.push(i)
+      if (draw) x = readDraw(i, draw)
+    }
+    const viewport = page.getViewport({ scale })
+    views[i - 1] = viewport
+    if (!x) {
+      r.left.width = Math.floor(viewport.width * dpr)
+      r.left.height = Math.floor(viewport.height * dpr)
+      if (r.right) { r.right.width = r.left.width; r.right.height = r.left.height }
+    }
+    r.view = page.view
+    let tc, annP, fonts, tRendered, fills = null, fillsMs0 = 0
+    if (x) {
+      // (from its draw: no text content, annotation or pixel read of PDF.js's; its pixels are read where a step reads its ink)
+      fromData[i] = 1
+      drawStats.data.push(i)
+      tc = x.tc
+      annP = x.raw
+      fonts = x
+      fills = x.fills
+      heldLists.delete(i)
+      tRendered = performance.now()
+    } else {
+      if (DATA) drawStats.live.push(i)
+      // (its render's time from here where its draw was waited for, which is no render's; the page's own start otherwise)
+      const tLive = asked ? performance.now() : tPage
+      const textP = page.getTextContent()
+      // (held warm until its fills are read off the list it was drawn by: the renders of other pages meanwhile let it go no sooner)
+      const unpin = VIS.pin(page)
+      try {
         // (read for its pixels already, its draw then refused or late: its ink is that reading's, the same pixels at the same size,
         // their render charged there, pixelsOf)
         const prefetched = pixelTasks.has(i)
         if (prefetched) await pixelTasks.get(i)
-        else await page.render({ canvas: r.left, canvasContext: r.left.getContext('2d'), viewport, transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined }).promise
+        // (a live reading under way when the run is let go ends as it began: its page's canvases go once it ends)
+        else await VIS.render(page, { canvas: r.left, canvasContext: r.left.getContext('2d'), viewport, transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined })
         tRendered = performance.now()
-        // (the page's links, asked once the render is done so that the worker does not parse them ahead of it: one more round trip,
-        // read before the page is cleaned up)
+        // (the page's links, asked once the render is done so that the worker does not parse them ahead of it: one more round trip)
         annP = LK.readAnnots(page)
         // (and its getPage, which an ordinary live reading's time holds too; never the wait for its draw)
         if (!prefetched) timesOf(i).render += tRendered - tLive + (asked ? tGot - tPage : 0)
@@ -2530,66 +2835,49 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
         // (its characters' fills as its draw would tell them: its ink off the list PDF.js drew it by, here or in its early pixel read)
         const tFills = performance.now(), held = heldLists.get(i)
         heldLists.delete(i)
-        fills = await liveFillsOf(OPS, page, tc.items, workOf(i), held?.doc === d ? held.list : null)
-        timesOf(i).fills += performance.now() - tFills
-      }
-      if (i === 1 && lmP) await lmP
-      const fontOf = fonts.fontOf
-      // the slices of the role table's faces that hold the page's characters, before they are measured in them (layer2.mjs
-      // wDesign measures a character in its font's design, as upright or slanted as the font is)
-      if (FS) {
-        const byFace = new Map()
-        for (const it of tc.items) {
-          const st = it.str ? fontOf(it.fontName) : null
-          if (!st?.known) continue
-          const face = faceOf({ ...st, fam: st.fam === 'math' ? 'serif' : st.fam }, 'latin', 'en'), key = fontString(face, 100)
-          const e = byFace.get(key) ?? byFace.set(key, { face, text: '' }).get(key)
-          e.text += it.str
-        }
-        await Promise.all([...byFace.values()].map(e => FS.ready(e.face, e.text)))
-      }
-      chars2[i - 1] = L2.pageChars2(tc, fontOf, fonts.mapOf, fills)
-      // (and its characters by baseline, which every unit's edges read, made once the page is: edgesOf)
-      rowsByPage[i] = rowsOf(chars2[i - 1])
-      workOf(i).edges += chars2[i - 1].length
-      timesOf(i).text += performance.now() - tRendered
-      // (the Link annotations with the glyph points inside each: the engine's own reading of what PDF.js calls overlaid text)
-      const raw = await annP
-      if (raw === null) { annots[i - 1] = null; linkStats.unread++ } else {
-        const read = LK.annotsOf(raw, LK.pointsOf(tc.items), LK.charPoints(chars2[i - 1]))
-        annots[i - 1] = read.list
-        linkStats.total += read.total
-        linkStats.unsupported += read.unsupported
-      }
-      // (the request's latency from its dispatch to its answer, and the parse)
-      timesOf(i).links += performance.now() - tRendered
-    } finally {
-      // (its pixels and characters read, or the read thrown: nothing reads the proxy's rendering state again (lp item 2), a
-      // view's copy renders the page anew (renderAt), and PDF.js keeps the state of a render still under way to the end)
-      page.cleanup()
+        fills = await liveFillsOf(OPS, page, tc.items, workOf(i), held?.doc === d ? held.list : null, fillsMs)
+        fillsMs0 = performance.now() - tFills
+        timesOf(i).fills += fillsMs0
+      } finally { unpin() }
     }
+    if (i === 1 && lmP) await lmP
+    const fontOf = fonts.fontOf
+    // the slices of the role table's faces that hold the page's characters, before they are measured in them (layer2.mjs
+    // wDesign measures a character in its font's design, as upright or slanted as the font is)
+    if (FS) {
+      const byFace = new Map()
+      for (const it of tc.items) {
+        const st = it.str ? fontOf(it.fontName) : null
+        if (!st?.known) continue
+        const face = faceOf({ ...st, fam: st.fam === 'math' ? 'serif' : st.fam }, 'latin', 'en'), key = fontString(face, 100)
+        const e = byFace.get(key) ?? byFace.set(key, { face, text: '' }).get(key)
+        e.text += it.str
+      }
+      await Promise.all([...byFace.values()].map(e => FS.ready(e.face, e.text)))
+    }
+    chars2[i - 1] = L2.pageChars2(tc, fontOf, fonts.mapOf, fills, fonts.nus ?? null)
+    // (its text items kept compact with its record, for its text layer: textOf)
+    r.items = TL.itemsOf(tc)
+    // (and its characters by baseline, which every unit's edges read, made once the page is: edgesOf)
+    rowsByPage[i] = rowsOf(chars2[i - 1])
+    workOf(i).edges += chars2[i - 1].length
+    // (its fills apart: `fills`)
+    const tText = performance.now()
+    timesOf(i).text += tText - tRendered - fillsMs0
+    // (the Link annotations with the glyph points inside each: the engine's own reading of what PDF.js calls overlaid text)
+    const raw = await annP
+    if (raw === null) { annots[i - 1] = null; linkStats.unread++ } else {
+      const read = LK.annotsOf(raw, LK.pointsOf(tc.items), LK.charPoints(chars2[i - 1]))
+      annots[i - 1] = read.list
+      linkStats.total += read.total
+      linkStats.unsupported += read.unsupported
+    }
+    // (the wait for the request, dispatched before the text read, past that read's end, and the parse: the text read is `text`)
+    timesOf(i).links += performance.now() - tText
+    // (its pixels and characters read: its rendering state is the document's, kept warm for the page's copy or let go among the
+    // oldest, visibility.mjs)
     if (shelf) shelf.chars[i - 1] = chars2[i - 1]
-    r.right?.getContext('2d').drawImage(r.left, 0, 0)
     r.base = true
-    if (RM) {
-      if (removedPage(i)) {
-        RM.stats.pages++
-        // its removed page, where v0 keeps a copy of its own (the gate's) and the manifest has kept ink under a unit's
-        // rectangles there: a view draws it at its own resolution, drawCopy, and only where a swap asks for it
-        if (copy && RM.manifest.page[i]?.dirty?.length) {
-          const t = performance.now()
-          const pg = await rd.getPage(setPage('R', i))
-          const c = document.createElement('canvas')
-          c.width = r.left.width
-          c.height = r.left.height
-          try { await pg.render({ canvas: c, canvasContext: c.getContext('2d'), viewport: pg.getViewport({ scale }), transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined }).promise } finally { pg.cleanup() }
-          RM.removed[i] = c
-          RM.stats.swapPages++
-          RM.stats.ms.render += performance.now() - t
-          timesOf(i).rp += performance.now() - t
-        }
-      } else if (RM.mode === 'draw') RM.stats.refused++
-    }
     // (let go while the page was drawn: its canvases are gone, so there is no ink to read, and the roles and faces every run
     // shares are a newer layer's to set)
     if (disposed) return
@@ -2643,7 +2931,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   // the file's lines in place of the geometry's decide which units are placed, and so the batches). A unit's row is fixed
   // once it is decided (a row taken for it later is late), and every row once a table's group is read
   // (the geometry's units and the file's alone, in the stream's order: v0's sort is stable, so equal streams keep the
-  // order the hybrid reports its sources in)
+  // order the layer reports its sources in)
   addUnits(cands.slice().sort((a, b) => a.stream - b.stream))
   /** K as laying the pages in order reads it (closureOf's prefix: the rules that lay in order, ORDER_FREE false). Under parts,
    *  until they end, an entry past K stands for every part not told: framed on the page after the last covered, so that each
@@ -2696,9 +2984,19 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     if (p && u.group) {
       if (!tableGroups) freezeAll()
       else if (!read.has(u.group)) readGroup(u.group, membersOf.get(u.group) ?? [])
-      if (split.has(u.group)) { skipped.push({ id: p.id, kind: u.kind, why: 'group: a cell not drawn', chars: trCharsOf(u), pages: p.pages }); p = null }
+      if (split.has(u.group)) { skipped.push({ id: p.id, kind: u.kind, why: 'group: a cell not drawn', code: 'group', chars: trCharsOf(u), pages: p.pages }); p = null }
     }
-    if (!p) { dropReads(c); return }
+    if (!p) {
+      // (a unit the left does not locate, the file's alone (most of a table's cells), left the original's (a row kept, a unit
+      // skipped or withheld with its group): its ink stays where TeX set it, so its file lines are among the page's rectangles,
+      // which no neighbour's line may grow over, as a located unit's left rectangles are whether it is laid or not. Told here,
+      // as it is decided: a unit is laid, and grows, only once every entry on its pages is decided. 1810.04805v2's Table 8:
+      // NER's "Fine-tune" grew over MNLI's kept "Fine-tune" beside it, the same words, and its translation was laid over that
+      // ink, its own place left erased)
+      if (!c.rects && c.ownRows) addRects(c.id, c.ownRows)
+      dropReads(c)
+      return
+    }
     p.k = c.k
     inStream(laidOut, p)
     inStream(placed, p)
@@ -2739,6 +3037,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   let wake = null
   /** whether the run was let go (dispose): nothing is drawn or laid after it */
   let disposed = false
+  /** whether a render of the run's still has a reader: none once it is let go (VIS.render's `live`) */
+  const live = () => !disposed
   const changed = () => { const w = wake; wake = null; w?.() }
   /** the one wait, until a take, a part, end() or a poke changes something: the waiter set before the instrument hears of it,
    *  so that what the instrument does at once is not lost */
@@ -2756,7 +3056,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
    *  neither holds nor the file alone locates (a unit not told yet is not unanchored) */
   const account = () => {
     for (const c of deferred.splice(0)) { fixed.add(c.id); const d = decisionOf(c); if (d.skip) skipped.push(d.skip) }
-    U.forEach((u, id) => { if (!translated(u) || candOf.has(id)) return; const no = refusalOf(id, u); skipped.push(no ? refusedOf(id, u, no) : unanchoredOf(id, u)) })
+    // (a figure's ink unit is no unit the left or the file places: its page's figures tell it, paintFigures)
+    U.forEach((u, id) => { if (!translated(u) || candOf.has(id) || u.kind === FIGURE_KIND) return; const no = refusalOf(id, u); skipped.push(no ? refusedOf(id, u, no) : unanchoredOf(id, u, 'unlocated')) })
   }
   /** whether laying page p waits for nothing more to come, neither a part nor a row (the 1b-D design §2.1): the parts cover
    *  its closure's bound, or have ended, and every entry it decides is in K and decided or settleable */
@@ -2764,6 +3065,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     const C = closure(p)
     if (!partsEnded && through < C.bound) return false
     for (const i of C.rows) { if (i >= K.length) return false; const c = K[i]; if (!c.decided && !settleable(c)) return false }
+    if ([p, ...C.draw].some(figuresWait)) return false
     return true
   }
   /** the ids of the units whose rows laying page p still waits for, taken neither nor ended (its closure's over K so far: a
@@ -2780,6 +3082,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       if (!tableGroups) { for (const id of pending) out.add(id); break }
       for (const id of membersOf.get(c.group) ?? []) if (pending.has(id)) out.add(id)
     }
+    // (its pages' figures', where they are shown)
+    for (const q of new Set([p, ...closure(p).draw])) for (const f of figuresOn(q)) if (pending.has(f.id)) out.add(f.id)
     return [...out].sort((a, b) => a - b)
   }
   const toldComplete = new Uint8Array(N + 1)
@@ -2800,6 +3104,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     if (!(q >= 1 && q <= N)) return false
     if (readyAt[q]) return true
     if (!drawnPages[q] || failedPages.has(q) || undecided[q] || laid[q].length !== expected[q]) return false
+    // (its figures painted, where it has figures shown)
+    if (figuresDone[q] !== 2 && figuresOn(q).length) return false
     if (PASSES && expected[q]) {
       if (!passed[q]) return false
       for (const f of firstsOn[q] ?? []) if (!paintedOn[q]?.has(f)) return false
@@ -2921,7 +3227,15 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
         consume(c)
       }
       if (!missing && !partsEnded && through < C.bound) missing = 'part'
+      // (and its pages' figures' rows, where the reader shows figures translated)
+      if (!missing && [p, ...C.draw].some(figuresWait)) missing = 'rows'
       if (missing) { report(ms); if (!still()) return; await wait(missing); continue }
+      // its pages' figures painted (paintFigures), once each, before its units: their groups and its units' are apart
+      for (const q of new Set([p, ...C.draw])) {
+        if (!drawnPages[q] || failedPages.has(q) || figuresDone[q]) continue
+        await paintFigures(q)
+        if (disposed) return
+      }
       if (!planned) plan()
       report(ms)
       // its units, in their rank (laid in order, the units its pages' drawings lay: those whose group page is p's doneAt at most)
@@ -2945,7 +3259,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
           if (!(await drawOne(q, still, wait))) return
         }
         if (disposed) return
-        if (u.pages.some(q => failedPages.has(q))) { u.taken = true; refuseUnit(u, 'page'); report(ms); continue }
+        if (u.pages.some(q => failedPages.has(q))) { u.taken = true; await refuseUnit(u, 'page'); if (disposed) return; report(ms); continue }
         // (the slice's work done: a yield; let go during it, as a host's dispose usually is, or overtaken by a newer target, that
         // unit is not laid: it stays for its page's closure to lay)
         if (slices.due()) { await slices.give(); if (disposed || !still()) return }
@@ -2984,18 +3298,25 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   }
   const cellRects = pg => GU.filter(([id]) => geometry.kinds[id] === 'cell').flatMap(([, , rs]) => rs.filter(r => r[0] === pg))
   const toPdf = (pg, x, y) => views[pg - 1].convertToPdfPoint(x / dpr, y / dpr)
-  // a page as PDF.js draws it at k device pixels a PDF unit: drawCopy's source of another page's crop
-  // (from the newest document: it holds every earlier tail)
-  const renderAt = (pg, k, plane = 'O') => { const d = plane === 'O' ? D : RD; return using([d], async () => {
-    const page = plane === 'O' ? await d.getPage(pg) : await d.getPage(setPage(plane, pg))
+  /** the groups a plane of page pg hides (§4.1): A the units drawn there (its row's `off`), B every unit's text and label (a crop's
+   *  source: every placeholder shown), C none (every group shown: the ink a reading keeps) */
+  const offOf = (pg, plane) => (plane === 'A' ? [...(rows[pg - 1]?.off ?? [])] : plane === 'B' ? cropSourceOff : [])
+  /** page pg's plane drawn by PDF.js at k device pixels a PDF unit, on `canvas` where given (sized by its caller) else on a new one
+   *  of the page's size; `annotationMode` PDF.js's, where the host sets it. The page's rendering state (its operator list and
+   *  the images it decoded) is the document's, warm for the renders after it (visibility.mjs WARM_PAGES): the planes of one copy,
+   *  the copies again after a zoom and a later run's copies over the same document are one parse of the page, not one each */
+  // (`box`: [x, y, w, h] device pixels of the page at k, the part rendered on a canvas of that size alone: a plane's sources, opsSources)
+  const renderAt = (pg, k, plane, canvas = null, annotationMode = undefined, box = null) => using([D], async () => {
+    // (a run let go renders nothing more: the document's queue and its warm pages are the next run's)
+    if (disposed) throw Object.assign(new Error('the run is let go'), { name: 'AbortError' })
+    const page = await D.getPage(pg)
     const viewport = page.getViewport({ scale: k })
-    const c = document.createElement('canvas')
-    c.width = Math.ceil(viewport.width)
-    c.height = Math.ceil(viewport.height)
-    // (drawn, the page's rendering state let go: lp item 2)
-    try { await page.render({ canvas: c, canvasContext: c.getContext('2d'), viewport }).promise } finally { page.cleanup() }
+    const c = canvas ?? document.createElement('canvas')
+    if (!canvas) { c.width = box ? box[2] : Math.ceil(viewport.width); c.height = box ? box[3] : Math.ceil(viewport.height) }
+    const params = { canvas: c, canvasContext: c.getContext('2d'), viewport, ...(box ? { transform: [1, 0, 0, 1, -box[0], -box[1]] } : {}), ...(annotationMode === undefined ? {} : { annotationMode }) }
+    await VIS.render(page, params, offOf(pg, plane), live)
     return c
-  }) }
+  })
   const needsCopy = () => {
     if (!copy) throw new Error("v0's checker reads its copy at its own resolution: open with copy: true")
     if (!records) throw new Error("v0's checker reads the drawing's audit and what the run lets go: open with records: true")
@@ -3009,7 +3330,6 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       r.base = false
       r.released = true
     }
-    if (RM) { for (const c of RM.removed) if (c) { c.width = 0; c.height = 0 }; RM.removed = []; RM.others = [] }
   }
 
   return {
@@ -3023,6 +3343,9 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     /** babel's names of the pages laid (D1a): each { occurrence, key, page, drawn, why, chars, box (the original's), and
      *  where drawn its text, size, x and width } */
     names,
+    /** the figures' text of the pages laid (the content class `figures`): each figure unit { id, group, page, drawn, why, and where
+     *  drawn its text, size, x, y and width } */
+    figures: figureRecs,
     /**
      * Page `pg`'s SVG, a new element each call (the 1b design §1, I2 and I3): class, size and spacing as the page's own, its
      * markup the strings its names and units were set in, in their order. No layout, face, ink or PDF.js call (I4): a parse of
@@ -3045,6 +3368,9 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
      * caller may transfer or free them). Only a page that is final (ready) has one: it is frozen at the first ask if it is not
      * already; a RangeError for another, never a table that would change
      */
+    /** how many groups page pg's copy hides (render A's off): 0 where the layer draws nothing of its own there, its copy our base page
+     *  as it is */
+    hides: pg => rows[pg - 1]?.off?.size ?? 0,
     wordsOf(pg) {
       const r = rows[pg - 1]
       if (!r) throw new RangeError(`wordsOf: page ${pg} has no row`)
@@ -3063,6 +3389,18 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       if (!readyOf(pg)) throw new RangeError(`linksOf: page ${pg} is not final`)
       freezeLinksOf(pg)
       return LK.copyLinks(r.links)
+    },
+    /**
+     * Page `pg`'s text layer (textlayer.mjs; docs/PDF-READER.md §11.11): the composed page's text items the drawing keeps, those
+     * it moves with a crop, and each drawn line of the translation, in reading order, plain data made anew on every ask (none of
+     * its objects the run's). Only a page that is final (ready) has one; a RangeError for another. Read from the page's record
+     * alone (its text items, its operations and its drawn things' segments): no layout, ink or PDF.js call
+     */
+    textOf(pg) {
+      const r = rows[pg - 1]
+      if (!r) throw new RangeError(`textOf: page ${pg} has no row`)
+      if (!readyOf(pg)) throw new RangeError(`textOf: page ${pg} is not final`)
+      return TL.textLayerOf({ n: pg, items: r.items ?? TL.NO_ITEMS, view: r.view ?? [0, 0, r.w / scale, r.h / scale] }, { ops: r.ops, devOf: pxOf(pg), owners: r.text?.owners ?? [] }, r.text?.drawn ?? [], { sourceOf: j => rows[j - 1]?.items ?? null })
     },
     /** the counts of the links read and frozen so far (LayerStats.links), a copy */
     get linkStats() { return { ...linkStats, dropped: { ...linkStats.dropped } } },
@@ -3083,14 +3421,14 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     /**
      * What the run holds (the 1b design §3). With no page: whether it lets go (`free`), keeps the units' records and the
      * audit (`records`), and keeps on the gate's shelf what it lets go (`shelf`). With a page: the analysis state it holds of
-     * the page (`chars`, `ink`, `items`, `accounted`, `kept`, `laid`, and `canvas` and `removed`, a copy's), the units on it
+     * the page (`chars`, `ink`, `laid`, and `canvas`, a copy's), the units on it
      * still holding their own state, and the units still to be laid that read it (`reads`)
      */
     held(pg) {
       if (pg === undefined) return { free, records, shelf: !!shelf }
       const r = rows[pg - 1]
-      const state = Object.entries({ chars: chars2[pg - 1], ink: inks[pg], items: pageItems[pg], accounted: accounted[pg], kept: keptOf[pg], laid: laid[pg], canvas: r?.left ?? r?.right, removed: RM?.removed[pg], pixels: pixelTasks.get(pg), draw: drawAsks.get(pg) }).filter(([, v]) => v).map(([k]) => k)
-      const units = [...byId.values()].filter(u => u.pages.includes(pg) && (HEAVY.some(k => u[k] !== undefined) || !!u.tex?.lines)).map(u => u.id)
+      const state = Object.entries({ chars: chars2[pg - 1], ink: inks[pg], laid: laid[pg], canvas: r?.left ?? r?.right, pixels: pixelTasks.get(pg), draw: drawAsks.get(pg) }).filter(([, v]) => v).map(([k]) => k)
+      const units = [...byId.values()].filter(u => u.pages.includes(pg) && (HEAVY.some(k => u[k] !== undefined) || !!u.tex.lines)).map(u => u.id)
       return { state, units, reads: reads[pg] ?? 0 }
     },
     /** a placed unit as it was laid: the shelf's where the run let it go (`free` and `records`), else the unit itself */
@@ -3098,19 +3436,17 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     /** the layout rule set the run was opened with (rules/layout.mjs): its schema and version */
     rules: { schema: RULES_SCHEMA, version: R.version },
     get designs() { return designs },
-    /** the hybrid's: each placed unit's source, in the order of the geometry's units then the file's alone, and why the
-     *  units placed by v0's geometry are (and those only the file holds it does not locate whole) */
+    /** the units the layer placed, in the order of the geometry's units then the file's alone, and why the others are the
+     *  original's (the file does not locate them whole: its why) */
     get sources() {
-      const out = { tex: [], v0: [], why: {} }
-      if (!tex) return out
+      const out = { tex: [], why: {} }
       let only = 0
       for (const c of cands) {
         const d = fixed.has(c.id) ? decisions.get(c.id)?.d : null
         if (!d) continue
-        const why = c.rects ? d.why : d.missed
-        if (why) out.why[why] = (out.why[why] ?? 0) + 1
+        if (d.missed) out.why[d.missed] = (out.why[d.missed] ?? 0) + 1
         if (!c.rects && d.p) only++
-        if (byId.has(c.id)) (byId.get(c.id).tex ? out.tex : out.v0).push(c.id)
+        if (byId.has(c.id)) out.tex.push(c.id)
       }
       if (only) out.texOnly = only
       return out
@@ -3134,11 +3470,11 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     idsOf: entries => entries.map(i => K[i]?.id),
     /**
      * Parts (`parts`: the open given no view and no left unit): the next part, read by readPart against the chain, its layout
-     * merged into the hybrid's index by the host before (facade.mjs). The views of the pages it tells first and their rows;
+     * merged into the layout file's index by the host before (facade.mjs). The views of the pages it tells first and their rows;
      * its manifest's entries; its units added to the stream after the last told, in (slot, id) order (a left unit at its
-     * stream, its rectangles copied; a file-only one at `after` + 0.5, never worked out again); those of a part with no layout
-     * read as with no layout file (`filed`). The pages it covers can be drawn; with the rows ended its units are placed at
-     * once. Sync, and nothing checked again: the host's readPart and the door have
+     * stream, its rectangles copied; a file-only one at `after` + 0.5, the cutter's, never worked out again); those of a part with no layout,
+     * or a refusal's record, are in no file and so the original's. The pages it covers can be drawn; with the rows ended its
+     * units are placed at once. Sync, and nothing checked again: the host's readPart and the door have
      */
     grow(part) {
       const [a, b] = part.pages
@@ -3146,11 +3482,9 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
         if (geometry.left.pages[q - 1] === undefined) geometry.left.pages[q - 1] = part.views.slice(4 * (q - a), 4 * (q - a + 1))
         if (!rows[q - 1]) makeRow(q)
       }
-      if (part.addon) Object.assign(RM.manifest.page, part.addon.manifest.page)
-      const entries = part.left.map(([id, stream, rects]) => ({ id, stream, rects: rects.map(r => r.slice()) }))
-      if (tex.texOnly && tex.use === 'lines') for (const [id, after] of part.fileOnly) entries.push({ id, stream: after + 0.5, rects: null })
+      const entries = part.left.filter(([id]) => placesUnit(id)).map(([id, stream, rects]) => ({ id, stream, rects: rects.map(r => r.slice()) }))
+      for (const [id, after] of part.fileOnly) entries.push({ id, stream: after + 0.5, rects: null })
       entries.sort((x, y) => x.stream - y.stream || x.id - y.id)
-      if (part.layout === null) for (const [id] of part.left) layoutless.add(id)
       for (const c of entries) { cands.push(c); if (c.rects) GU.push([c.id, c.stream, c.rects]) }
       addUnits(entries)
       through = b
@@ -3171,15 +3505,6 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       if (ended) { readGroups(); account(); plan() }
       changed()
     },
-    /** the newest composed document (a part with a tail): read from now on, the one it replaces told to `onRetired` once no
-     *  read holds it */
-    swap(next) {
-      if (next === D) return
-      const old = D
-      if (RD === D) RD = next
-      D = next
-      retire(old)
-    },
     /** the last page a part covers (every page, a whole open) */
     get through() { return through },
     get partsEnded() { return partsEnded },
@@ -3193,7 +3518,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     poke: () => changed(),
     /**
      * Units as they arrive (rows: id → its row, the units record's): each awaited unit's row, which wins over one taken
-     * before it until the unit is placed; a translated row's pieces' k read into the hybrid's pieces (trPiecesOf: the
+     * before it until the unit is placed; a translated row's pieces' k read into the file's pieces (trPiecesOf: the
      * units file's TrPiece). A row that can no longer change the drawing is late (late()); one no unit of this paper's
      * is left the original's (refusalOf). Returns the pages newly complete: those not reported complete before.
      */
@@ -3201,10 +3526,12 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       const list = [...rows]
       for (const [id, row] of list) if (!Number.isSafeInteger(id) || id < 0 || row === null || typeof row !== 'object') throw new TypeError(`take: a row is [id, unit], not [${kindOf(id)}, ${kindOf(row)}]`)
       for (const [id, row] of list) {
+        // (a structural name's row: the target's word for it, never laid; one taken after a page is drawn changes no drawing)
+        if (row.kind === NAME_KIND) { takeName(row); continue }
         if (ended || frozenAll || fixed.has(id) || !awaited.has(id)) { late.add(id); continue }
         U.set(id, row)
         pending.delete(id)
-        // (the hybrid's pieces, as the units file holds them: a translated unit's alone)
+        // (the file's pieces, as the units file holds them: a translated unit's alone)
         if (tex) { const tr = translated(row) ? trPiecesOf(row.pieces, q => q.k) : null; if (tr) tex.pieces.set(id, tr); else tex.pieces.delete(id) }
       }
       changed()
@@ -3230,32 +3557,37 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
      *  page to draw again: no laid page ever changes */
     late: () => [...late],
     /**
-     * Page `pg`'s copy at a view's own resolution, `k` device pixels a PDF unit (its CSS px a unit × its device pixel
-     * ratio × its zoom), once its units are painted (until): onto `ctx`, a canvas of the page at k, the page as PDF.js
-     * drew it at k (`source`, left untouched), then the page's drawing (its units' operations in the order v0 painted
-     * them) scaled to k, its restores and crops cut from `source` and, for a crop of another page, from that page drawn
-     * by PDF.js at k here. At any k and as often as the zoom changes, a page let go too: nothing of v0's own canvases is
-     * drawn, so that a table, a figure, a kept line and a crop are as sharp as the original at every zoom.
+     * Page `pg`'s copy at a view's own resolution, `k` device pixels a PDF unit (its CSS px a unit × its device pixel ratio × its
+     * zoom), once its units are painted (until): onto `ctx`, a canvas of the page at k from its top-left corner, render A (the page
+     * with the groups of the units drawn on it hidden: offOf), then the page's drawing (its units' operations in the order v0
+     * painted them) scaled to k: its crops cut from render B of their page, what its readings keep pasted from render B or C of
+     * this page. Every render is the composed document's at k, through its one configuration (visibility.mjs), so that the copy is
+     * as sharp as the original at every zoom. `signal`: an abort stops the copy before its next render (a page that left the view).
+     * `annotationMode`: PDF.js's, for every render of the copy (the host's: a delta's replaced page draws
+     * none of the original's annotations)
      */
-    async drawCopy(pg, ctx, source, k) {
+    async drawCopy(pg, ctx, k, { annotationMode, signal = null } = {}) {
       const r = rows[pg - 1]
-      // every page and plane the drawing cuts from but this page's own original (`source`): the removed page a swap takes
-      // from, and the other pages a crop takes from
+      // every plane the drawing cuts from: B of a crop's page, B and C of this page for its pastes
+      // (each plane rendered on the box its operations cut from alone, not the whole page: L2.opsSources)
+      const z = k / (scale * dpr), boxes = L2.opsSources(r.ops, z)
       const others = new Map()
-      const need = (j, plane) => { const key = `${plane}${j}`; if (!(plane === 'O' && j === pg) && !others.has(key)) others.set(key, [j, plane]) }
-      for (const o of r.ops) { if (o.op === 'swap') need(o.page, 'R'); else if (o.op === 'crop') need(o.page, o.plane ?? 'O') }
-      // (let go while it reads: no document read after, a retired one among them, and nothing drawn)
+      const need = (j, plane) => { const key = `${plane}${j}`; if (!others.has(key)) others.set(key, [j, plane]) }
+      for (const o of r.ops) { if (o.op === 'crop' || o.op === 'paste') need(o.page, o.plane) }
+      await renderAt(pg, k, 'A', ctx.canvas, annotationMode)
+      // (let go while it reads: nothing drawn after)
       const rendered = []
-      for (const [key, [j, plane]] of others) {
-        if (disposed) { for (const c of rendered) { c.width = 0; c.height = 0 } return }
-        const c = await renderAt(j, k, plane)
-        rendered.push(c)
-        others.set(key, c)
-      }
-      if (disposed) { for (const c of rendered) { c.width = 0; c.height = 0 } return }
-      ctx.drawImage(source, 0, 0)
-      L2.drawOps(ctx, r.ops, k / (scale * dpr), (j, plane = 'O') => (j === pg && plane === 'O' ? source : (others.get(`${plane}${j}`) ?? null)), k)
-      for (const c of others.values()) { c.width = 0; c.height = 0 }
+      try {
+        for (const [key, [j, plane]] of others) {
+          if (disposed || signal?.aborted) return
+          const box = boxes.get(key)
+          const c = await renderAt(j, k, plane, null, annotationMode, box)
+          rendered.push(c)
+          others.set(key, box ? { canvas: c, x: box[0], y: box[1] } : c)
+        }
+        if (disposed || signal?.aborted) return
+        L2.drawOps(ctx, r.ops, z, (j, plane) => others.get(`${plane}${j}`) ?? null)
+      } finally { for (const c of rendered) { c.width = 0; c.height = 0 } }
     },
     /** a done page's canvases let go (its record stays), once no unit on it is still to be painted on any of its pages: no
      *  unit paints it, nor cuts from it on v0's own copy, again. The gate's and the lab's, which read a copy's planes once a
@@ -3266,14 +3598,14 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       // (nor while a unit on it is still to be painted on one of its pages: a crop may be cut from it there, on v0's own copy)
       // (a page let go, `free`, has none: sweep lets it go only then)
       if (awaitsPaint(pg)) return
-      for (const c of [r.left, r.right, RM?.removed[pg]]) if (c) { c.width = 0; c.height = 0 }
-      if (RM) for (const k of ['removed', 'others']) RM[k][pg] = undefined
+      for (const c of [r.left, r.right]) if (c) { c.width = 0; c.height = 0 }
       r.base = false
       r.released = true
     },
     /** the run let go: its sheet removed, every page's canvases released (a page under way when it is called, once it ends),
      *  nothing drawn or laid after; an until under way resolves. Its pages' records stay with whoever holds them */
     dispose() {
+      // (the pages kept warm are the document's, for the next run over it: let go among the oldest, or with the document)
       if (disposed) return
       disposed = true
       sheet.remove()
@@ -3286,7 +3618,6 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       heldLists.clear()
       // (the documents it reads, told to the host once no read holds them)
       retire(D)
-      retire(RD)
     },
     /** the deterministic work counters (work.mjs) summed over the pages: the same for the same input, whatever the machine's speed */
     workTotal() {
@@ -3294,27 +3625,34 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       for (const w of pageWork) if (w) for (const k of WORK_KEYS) t[k] += w[k]
       return t
     },
-    /** how the removal went: pages removed and refused, units drawn by it (tex) and the old way (v0), the rectangles filled
-     *  and swapped, the pages a swap draws the removed page for */
-    removalStats: () => RM?.stats ?? null,
+    /** what the run hid and showed again (hide.mjs): units drawn, boxes pasted from render B, boxes pasted from render C
+     *  (`pastedKeep`, design G6), crops */
+    hidingStats: () => ({ ...hidStats }),
     /** where pages are read from their draws (drawOf): the pages read from data and live, the draws refused, each page whose pixels
      *  were read and the step that asked first, the times a step needed a page's pixels it had not (by step), the lays done again
      *  and the draws' reading in ms; a copy. Null where no page is (no drawOf, or rules that read every page's ink at once) */
     get drawStats() { return DATA ? { ...drawStats, data: drawStats.data.slice(), live: drawStats.live.slice(), refused: drawStats.refused.slice(), late: drawStats.late.slice(), pixels: { ...drawStats.pixels }, need: { ...drawStats.need }, lists: heldLists.size } : null },
-    /** a done page's removed page at v0's own resolution (draw mode, until released), for a check */
-    removedCanvas: pg => RM?.removed[pg] ?? null,
-    /** the prototype's completeness checker on one done page (main.js check=1's, its pixels of that page alone, its
-     *  placeholders of the units with lines on it) */
-    checkPage(pg) {
+    /** a done page's copy at v0's own resolution (`right`, with `copy`): drawn as a view draws it (drawCopy), once a check reads it */
+    async copyCanvas(pg) {
       needsCopy()
-      const here = placed.filter(p => p.pages.includes(pg) && !p.refused).map(p => shelf?.units.get(p.id) ?? p)
-      const only = rows.map((r, i) => (i === pg - 1 ? r : { ...r, base: false }))
-      return checkAll({ N, placed: here, rows: only, pxOf, toPdf, chars2: shelf ? shelf.chars : chars2, audit, cols: colsOf, cellRects, named: names.filter(n => n.drawn && n.page === pg) })
+      const r = rows[pg - 1]
+      if (!r?.right || !readyOf(pg)) return null
+      if (!r.copied) { r.right.width = r.left?.width ?? r.right.width; r.right.height = r.left?.height ?? r.right.height; await this.drawCopy(pg, r.right.getContext('2d'), scale * dpr); r.copied = true }
+      return r.right
     },
-    /** the prototype's completeness checker over every page still held (main.js check=1's window.__result.check) */
-    check() {
+    /** what the prototype's completeness checker reads (check.mjs checkAll, the gates', which import it themselves: no reader
+     *  carries it) of one done page, `pg` (main.js check=1's, its pixels of that page alone, its placeholders of the units with
+     *  lines on it), or of every page still held, with none (main.js check=1's window.__result.check) */
+    async checkInputs(pg = null) {
       needsCopy()
-      return checkAll({ N, placed: placed.filter(p => !p.refused).map(p => shelf?.units.get(p.id) ?? p), rows, pxOf, toPdf, chars2: shelf ? shelf.chars : chars2, audit, cols: colsOf, cellRects, named: names.filter(n => n.drawn) })
+      if (pg !== null) {
+        await this.copyCanvas(pg)
+        const here = placed.filter(p => p.pages.includes(pg) && !p.refused).map(p => shelf?.units.get(p.id) ?? p)
+        const only = rows.map((r, i) => (i === pg - 1 ? r : { ...r, base: false }))
+        return { N, placed: here, rows: only, pxOf, toPdf, chars2: shelf ? shelf.chars : chars2, audit, cols: colsOf, cellRects, named: names.filter(n => n.drawn && n.page === pg) }
+      }
+      for (let q = 1; q <= N; q++) if (readyOf(q) && rows[q - 1]?.base) await this.copyCanvas(q)
+      return { N, placed: placed.filter(p => !p.refused).map(p => shelf?.units.get(p.id) ?? p), rows, pxOf, toPdf, chars2: shelf ? shelf.chars : chars2, audit, cols: colsOf, cellRects, named: names.filter(n => n.drawn) }
     },
   }
 }

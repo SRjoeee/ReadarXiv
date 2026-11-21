@@ -5,6 +5,7 @@ import { IDBKeyRange, indexedDB } from 'fake-indexeddb'
 import { describe, expect, it } from 'vitest'
 import Dexie from 'dexie'
 import { createLayerDb, createLayerStore } from '@/cache/layer-store'
+import { createLayerDb as createFrozenDb, createLayerStore as createFrozenStore } from './layer-v4'
 
 let n = 0
 const dbOf = () => createLayerDb(`axt-layer-test-${++n}`, { indexedDB, IDBKeyRange })
@@ -152,5 +153,23 @@ describe('the layer store', () => {
     await s.clear()
     expect(await s.usage()).toEqual({ count: 0, bytes: 0 })
     expect(await s.catalog('2600.00001v1')).toBeUndefined()
+  })
+})
+
+describe('the frozen copy of version 4 that the version step is proved against (tests/cache/layer-v4.ts)', () => {
+  it('declares the schema this store declares, and its writes leave the rows this store\'s leave', async () => {
+    const shapeOf = (db: Dexie) => ({ verno: db.verno, tables: db.tables.map(t => [t.name, t.schema.primKey.src, t.schema.indexes.map(i => i.src)]).sort() })
+    const rowsOf = async (db: Dexie) => Object.fromEntries(await Promise.all(['objects', 'papers', 'refs'].map(async t => [t, await db.table(t).toArray()])))
+    const live = dbOf()
+    const frozen = createFrozenDb(`axt-layer-test-${++n}`, { indexedDB, IDBKeyRange })
+    expect(shapeOf(frozen)).toEqual(shapeOf(live))
+    const b = bytes(20, 9), d = await sha(b)
+    for (const s of [createLayerStore({ db: live, now: () => 7 }), createFrozenStore({ db: frozen, now: () => 7 })]) {
+      await s.putObject('2600.00001v1', d, b)
+      await s.putCatalog('2600.00001v1', bytes(5, 1))
+      await s.putObject('2600.00002v1', d, b)
+      expect([await s.object(d), await s.usage()]).toEqual([b, { count: 2, bytes: 45 }])
+    }
+    expect(await rowsOf(frozen)).toEqual(await rowsOf(live))
   })
 })

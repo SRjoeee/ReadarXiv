@@ -1,11 +1,16 @@
 /* The Tailwind entry for the extension's own pages — the popup, the settings page, the gallery and the controls sheet
-   (the redesign's design, §2.2): the tokens generated from src/shared/tokens.ts, the controls the pages share, the
+   (the redesign's design, §2.2): the tokens generated from packages/ui/src/tokens.ts, the controls the pages share, the
    roles as Tailwind's colours and shadows, and the pages' base. @theme must sit at the top level, never inside a media
    query (Tailwind v4), so the utilities name the variables through @theme inline and only the variables change with
    the theme */
-@import "tailwindcss";
-@import "./tokens.css";
-@import "./controls.css";
+/* the utilities come from the product's own files alone (src/ and the packages' src/), named here: Tailwind's automatic
+   scan read the whole repository, tests, documents and the bytes of a model among it, and brought `.top-1`, `.m-2`,
+   `.select-all` and `.z-8` into this sheet (scripts/check-output.mjs holds the line) */
+@import "tailwindcss" source(none);
+@source "../";
+@source "../../packages/*/src/**/*";
+@import "@readarxiv/ui/tokens.css";
+@import "@readarxiv/ui/controls.css";
 
 /* the roles as Tailwind's colours and shadows, for the pages' own layouts (the redesign's design, §2.2), under the
    reader's names (reader.css), the hairline `line` as the reader's sheet names it */
@@ -37,8 +42,8 @@
 /* a list under a search field (the language menu, the popup's and the settings page's alike): five rows and a half,
    the half saying there is more (round 1). The list scrolls in a box of its own, so that the field above it never
    leaves the view as the active row is brought into it (MenuList's reveal). Keyed on MenuList's own markup, the field
-   drawn before the list; here and not in controls.css, which the PDF reader imports alone: its nine languages are
-   not capped (the maintainer, 2026-09-30) */
+   drawn before the list; here and not in controls.css, which the PDF reader imports alone: its list is eight rows and
+   a half (reader.css; the owner, 2026-11-03) */
 @layer components {
   .pop .search ~ [role="listbox"] { max-height: 165px; overflow: auto; scrollbar-width: none; }
 }

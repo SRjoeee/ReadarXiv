@@ -8,9 +8,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { LayerDocument } from '@/pdf-reader/engine/layer-proto/reader.mjs'
 import type { Row } from '@/pdf-reader/engine/layer-proto/rows.mjs'
+import { internalsOf } from '@/pdf-reader/engine/view/reader-view.mjs'
 import { type Made, N } from './helpers/format-paper'
 import { cutSpec, docsOf, type PaperSpec, rowsOfIndex } from './helpers/parts-paper'
-import { ALL, content, installSideFakes, jobRef, layerOf, M, macrotask, nearOn, type Options, type Setup, settle, setup } from './helpers/side-setup'
+import { FakePDFViewer } from './helpers/reader-fakes'
+import { ALL, content, installSideFakes, jobRef, layerOf, M, macrotask, nearOn, type Options, places, type Setup, settle, setup } from './helpers/side-setup'
 
 // a canvas context that draws nothing and reads a white page, made before layer2.mjs loads (it measures with a canvas of its own
 // made then): an em a CJK character, half one any other (layer-door.test.ts's)
@@ -36,8 +38,10 @@ vi.hoisted(() => {
 
 installSideFakes()
 const served = async (id: string) => [{ url: `/f/${id}.otf`, ranges: [0, 0x10ffff] }]
-/** the format test's paper's text layer, from its left's rectangles (layer-door.test.ts's) */
-const textOf = (m: Made) => ({ pages: 4, units: m.index.units.map((_, id) => ({ text: `unit ${id}`, lines: m.readParts.flatMap(p => p.left.filter(w => w[0] === id).flatMap(w => w[2].map(r => [r[0], r[1], r[3], r[2] + 2.15]))) })) })
+/** the format test's paper's text layer, from its left's rectangles (layer-door.test.ts's); each unit's text 400 pt wide at most,
+ *  so that its first character stands inside the segment of the paragraph's formula (the layer reads a placeholder's rendering
+ *  from the page's characters inside its segment in the layout file) */
+const textOf = (m: Made) => ({ pages: 4, units: m.index.units.map((_, id) => ({ text: `unit ${id}`, lines: m.readParts.flatMap(p => p.left.filter(w => w[0] === id).flatMap(w => w[2].map(r => [r[0], r[1], Math.min(r[3], r[1] + 400), r[2] + 2.15]))) })) })
 /** the side over the real door; `fail`: the composed pages that cannot be read */
 async function real(o: Options & { fail?: number[] } = {}) {
   const m = await M()
@@ -89,7 +93,9 @@ describe('the real door: L3, what comes in parts gives the pages one take gives'
     a.side.end()
     await still(a)
     const whole = drawn(a)
-    expect(whole.every(x => x !== null)).toBe(true)
+    // (pages 1 to 3 are drawn; page 4 is its third part\'s, which records no layout: the original\'s page, nothing of the layer in its place)
+    expect(whole.slice(0, 3).every(x => x !== null)).toBe(true)
+    expect(whole[3]).toBeNull()
     a.view.dispose()
     const b = await real()
     await nearOn(b, [1, 2, 3, 4])
@@ -134,22 +140,26 @@ describe('the real door: (c) a page stepped over', () => {
   it('a later page whose composed page cannot be read fails alone and shows the original; the pages around it are laid', async () => {
     const m = await M()
     const s = await real({ fail: [3] })
-    await nearOn(s, [2, 3, 4])
+    await nearOn(s, [1, 2, 3, 4])
     s.side.tell(await ALL())
     s.side.take(rowsOfIndex(m.index))
     s.side.end()
     await still(s)
-    expect([1, 2, 3, 4].map(p => s.layer()?.pageState(p))).toEqual(['ready', 'ready', 'failed', 'ready'])
-    for (const p of [2, 4]) expect(content(s, p), `page ${p}`).toBe('layer')
+    // (page 4 is its third part\'s, which records no layout: never asked of the door, the original\'s page)
+    expect([1, 2, 3].map(p => s.layer()?.pageState(p))).toEqual(['ready', 'ready', 'failed'])
+    for (const p of [1, 2]) expect(content(s, p), `page ${p}`).toBe('layer')
     expect(content(s, 3)).toBe('original')
-    expect(s.side.coverage()).toMatchObject({ laid: 3, failed: 1, total: N })
+    expect(content(s, 4)).toBe('original')
+    expect(layerOf(s, 4)).toBeNull()
+    expect(s.side.coverage()).toMatchObject({ laid: 2, failed: 1, total: N })
   })
 })
 
 describe('the real door: (d) a fresh LaidPage each call, and L1 text as text', () => {
   it('a page let go and asked again is drawn anew, its markup equal; a translation of markup is text, a control character no element', async () => {
     const m = await M()
-    const s = await real()
+    // (no drawing kept off the view: a page let go is asked of the door again as it comes near)
+    const s = await real({ keepPixels: 0 })
     await nearOn(s, [1, 2])
     s.side.tell(await ALL())
     const rows = rowsOfIndex(m.index).map(r => (r[0] === 0 ? ([0, ['<img src=x onerror=alert(1)>'], r[2], r[3], r[4]] as Row) : r[0] === 2 ? ([2, ['a \u202e b'], r[2], r[3], r[4]] as Row) : r))
@@ -165,7 +175,8 @@ describe('the real door: (d) a fresh LaidPage each call, and L1 text as text', (
     // the markup drawn as its text; the row with a bidirectional control is no unit's (rows.mjs inBound): its unit the original's
     expect(svg.textContent).toContain('<img src=x onerror=alert(1)>')
     const words = (await s.layer()?.pageOf(1, { lang: 'zh' }))?.words
-    expect(words?.spans.map(x => x[0])).toEqual([0])
+    // (unit 0 painted; unit 2 shown as the original, by its own boxes: words.mjs addBoxWords)
+    expect(words?.spans.map(x => x[0])).toEqual([0, 2])
     expect(words?.original).toEqual([2])
     const html = svg.outerHTML
     await nearOn(s, [1], false)
@@ -179,7 +190,7 @@ describe('the real door: (d) a fresh LaidPage each call, and L1 text as text', (
 })
 
 describe('the real door: L2 served faces only', () => {
-  it('no face served: every unit stays the original\'s, its tokens the left\'s copies on the right; no face rule in the pane', async () => {
+  it('no face served: every unit stays the original\'s, so the page draws nothing of its own and shows arXiv\'s page (no SVG of the layer); no face rule in the pane', async () => {
     const m = await M()
     const s = await real({ faceSources: async () => null })
     await nearOn(s, [1])
@@ -187,9 +198,9 @@ describe('the real door: L2 served faces only', () => {
     s.side.take(rowsOfIndex(m.index))
     s.side.end()
     await still(s)
-    expect(content(s, 1)).toBe('layer')
-    const svg = layerOf(s, 1)?.querySelector('svg') as SVGSVGElement
-    expect(svg.querySelectorAll('tspan').length).toBe(0)
+    expect(s.layer()?.pageState(1)).toBe('ready')
+    expect(content(s, 1)).toBe('original')
+    expect(layerOf(s, 1)).toBeNull()
     const sheets = [...document.querySelectorAll('style')].map(x => x.textContent ?? '').join('\n')
     expect(sheets).not.toMatch(/@font-face|local\(/)
   })
@@ -201,7 +212,7 @@ describe('the real door: (g) parts with no add-on', () => {
   const SPEC: PaperSpec = { pages: 3, units: [para('First paragraph', 1, 260, 0), { ...para('Running on', 1, 40, 5), lines: [[1, 20, 280, 40], [2, 20, 280, 270]] }, para('Second page', 2, 120, 30), para('Third page', 3, 220, 60)] }
 
   it('a cutter with no add-on: one composed document, the original alone; each part added with no document, every page laid', async () => {
-    const { cut, index } = await cutSpec(SPEC, [1, 2], { addon: false })
+    const { cut, index } = await cutSpec(SPEC, [1, 2])
     const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
     const s = await setup({ faceSources: served, paper: { objects: [...cut.units, cut.head, ...cut.parts, ...cut.left], pages: 3 }, real: { openLayer, docFor: docsOf(SPEC) as unknown as (r: number) => LayerDocument } })
     await nearOn(s, [1, 2, 3])
@@ -221,7 +232,7 @@ describe('the real door: target-first laying (1b-D1, #380)', () => {
   const para = (text: string, page: number, b: number, stream: number) => ({ kind: 'para', text, lines: [[page, 20, 280, b]] as [number, number, number, number][], file: true, stream })
   const SPEC: PaperSpec = { pages: 8, units: Array.from({ length: 8 }, (_, i) => para(`Paragraph of page ${i + 1}`, i + 1, 200, 20 * i)) }
   async function eight() {
-    const { cut, index } = await cutSpec(SPEC, undefined, { addon: false })
+    const { cut, index } = await cutSpec(SPEC, undefined)
     const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
     const s = await setup({ faceSources: served, paper: { objects: [...cut.units, cut.head, ...cut.parts, ...cut.left], pages: 8 }, real: { openLayer, docFor: docsOf(SPEC) as unknown as (r: number) => LayerDocument } })
     const refs = { head: cut.head.ref, units: cut.units.map(u => u.ref), parts: cut.parts.map((p, i) => ({ ...p.ref, prev: i ? cut.parts[i - 1]!.sha256 : null })), end: cut.end }
@@ -299,7 +310,7 @@ describe('the real door: a fork, and L8', () => {
     const { partInputs } = await import('./helpers/format-paper')
     const { writePart } = await import('@/pdf-reader/engine/layer-proto/format.mjs')
     const input = partInputs(m.head.sha256, m.lefts)[1]!
-    const other = await writePart({ ...input, prev: m.parts[0]!.sha256, addon: { ...input.addon!, manifest: { ...input.addon!.manifest, stats: { removed: 9 } } } })
+    const other = await writePart({ ...input, prev: m.parts[0]!.sha256, rules: { 2: [72, 501, 540, 501.4] } })
     const sheets = () => document.querySelectorAll('style, link[rel="stylesheet"]').length + (document.adoptedStyleSheets?.length ?? 0)
     const before = sheets()
     const s = await real({ extra: [other] })
@@ -330,7 +341,7 @@ describe('the real door: a fork, and L8', () => {
 })
 
 describe('the real door: (e) documents, (f) one open layer a page', () => {
-  it('each composed document told retired is destroyed once, the last at dispose; again() disposes before it opens', async () => {
+  it('one composed document a head, opened once whatever the parts and destroyed once, at dispose; again() disposes before it opens', async () => {
     const m = await M()
     const s = await real()
     await nearOn(s, [1])
@@ -341,10 +352,10 @@ describe('the real door: (e) documents, (f) one open layer a page', () => {
     s.side.tell({ parts: [jobRef(m, 1), jobRef(m, 2)], end: { through: N } })
     s.side.take(rowsOfIndex(m.index))
     await still(s)
-    expect(s.composed.length).toBe(3)
-    expect(s.destroyed.sort()).toEqual(['destroy composed 0', 'destroy composed 1'])
+    expect(s.composed.length).toBe(1)
+    expect(s.destroyed).toEqual([])
     expect(content(s, 1)).toBe('layer')
-    // again: the door disposed, then opened over the latest document (no throw of a second open); the rows taken again
+    // again: the door disposed, then opened over the same document (no throw of a second open); the rows taken again
     s.side.again()
     await still(s)
     expect(s.opens).toBe(2)
@@ -352,13 +363,13 @@ describe('the real door: (e) documents, (f) one open layer a page', () => {
     s.side.take(rowsOfIndex(m.index))
     s.side.end()
     await still(s)
-    expect(s.composed.length).toBe(3)
+    expect(s.composed.length).toBe(1)
     expect(content(s, 1)).toBe('layer')
     expect(s.doors[1]?.layer.pageState(1)).toBe('ready')
     s.side.dispose()
     await macrotask()
     await macrotask()
-    expect(s.destroyed.sort()).toEqual(['destroy composed 0', 'destroy composed 1', 'destroy composed 2'])
+    expect(s.destroyed).toEqual(['destroy composed 0'])
   })
 })
 
@@ -390,5 +401,145 @@ describe('the real door: the laid page\'s links (3b)', () => {
     a.find(x => x.getAttribute('href')?.startsWith('#'))?.click()
     await macrotask()
     expect(asked).toEqual([records.find(r => r.dest !== undefined)?.dest])
+  })
+})
+
+describe('the real door: a page the layer draws nothing of its own on is arXiv\'s page, never our base page in its place', () => {
+  const noneRows = (m: Made) => rowsOfIndex(m.index).map(r => [r[0], [], 'none', null, null] as unknown as Row)
+  for (const [what, feed] of [
+    ['every row `none`, then the end (a reply of no shape for every unit)', (s: Setup, m: Made) => { s.side.take(noneRows(m)); s.side.end() }],
+    ['every row `none`, no end (a stop after them)', (s: Setup, m: Made) => { s.side.take(noneRows(m)) }],
+    ['no row at all, then the end (nothing to translate)', (s: Setup) => { s.side.end() }],
+  ] as const) {
+    it(what, async () => {
+      const m = await M()
+      const s = await real()
+      await nearOn(s, [1])
+      s.side.tell(await ALL())
+      feed(s, m)
+      await still(s)
+      expect(s.layer()?.pageState(1)).toBe('ready')
+      expect(content(s, 1)).toBe('original')
+    })
+  }
+  it('a page that ended as the original with nothing drawn carries no translating card, whatever rows come after for another page', async () => {
+    const m = await M()
+    const s = await real()
+    await nearOn(s, [1])
+    s.side.tell(await ALL())
+    s.side.take(noneRows(m))
+    await still(s)
+    expect(content(s, 1)).toBe('original')
+    const cards = () => places(s)[0]?.querySelectorAll('.axt-translating .axt-translating-mark').length ?? 0
+    expect(cards()).toBe(0)
+    // (another batch of rows: the page that ended stays bare)
+    s.side.take(noneRows(m).slice(0, 2))
+    await still(s)
+    expect(cards()).toBe(0)
+  })
+  it('the same pages with their rows translated: the layer (the control)', async () => {
+    const m = await M()
+    const s = await real()
+    await nearOn(s, [1])
+    s.side.tell(await ALL())
+    s.side.take(rowsOfIndex(m.index))
+    await still(s)
+    expect(content(s, 1)).toBe('layer')
+  })
+})
+
+describe('the real door: H3, the highlight\'s data made on the pointer\'s first want alone, and told what came meanwhile', () => {
+  type Given = { shapes: { runs(id: number): { page: number }[]; block(run: unknown, pad: number): unknown }; starts: ReadonlyMap<number, Int32Array> | null } | null
+  /** the shapes each pane was last given (the view's seam, setShapes) */
+  function watch(s: Setup) {
+    const h = internalsOf(s.view), given: Record<'left' | 'right', Given> = { left: null, right: null }, set = h.setShapes
+    h.setShapes = (side, shapes, starts = null) => { given[side] = shapes ? ({ shapes, starts } as unknown as Given) : null; set(side, shapes, starts) }
+    return given
+  }
+  /** every unit's runs on both panes (each run's page and block) and its starts, as the panes were last given them */
+  const shapesOf = (m: Made, given: Record<'left' | 'right', Given>) => Object.fromEntries((['left', 'right'] as const).map(side => [side, m.index.units.map((_, id) => {
+    const g = given[side]
+    return { runs: g ? g.shapes.runs(id).map(r => ({ page: r.page, block: g.shapes.block(r, 0) })) : null, starts: g?.starts?.get(id) ? [...(g.starts.get(id) as Int32Array)] : null }
+  })]))
+  /** the pointer over unit 0's first line on the right's page 1 */
+  async function hover(s: Setup, m: Made) {
+    const r = m.readParts.flatMap(p => p.left.filter(w => w[0] === 0).flatMap(w => w[2])).find(x => x[0] === 1)!
+    // (the view's own left viewer: the fakes' first is an earlier visit's)
+    const vp = (FakePDFViewer.made.at(-1) as FakePDFViewer).getPageView(0)!.viewport
+    const [vx, vy] = vp.convertToViewportPoint((r[1] + r[3]) / 2, (r[2] + r[4]) / 2) as [number, number]
+    const b = (places(s)[0] as HTMLElement).getBoundingClientRect()
+    const c = { clientX: b.left + vx, clientY: b.top + vy }
+    s.panes.right.dispatchEvent(new MouseEvent('mousemove', { clientX: c.clientX, clientY: c.clientY, bubbles: true }))
+    await s.clock.advance(20)
+    await still(s)
+  }
+  /** the paper told in batches, its pages laid, one let go far and brought back; the pointer's first want `at` the start, the end,
+   *  or at the start with the highlight then off until the end */
+  async function visit(at: 'start' | 'end' | 'paused') {
+    const m = await M()
+    const rows = rowsOfIndex(m.index)
+    const s = await real()
+    const given = watch(s)
+    await nearOn(s, [1, 2])
+    s.side.tell({ head: m.head.ref, units: m.chunks.map(c => c.ref) })
+    await still(s)
+    if (at !== 'end') await hover(s, m)
+    if (at === 'paused') s.highlight(false)
+    s.side.tell({ parts: [jobRef(m, 0)] })
+    s.side.take(rows.slice(0, 2))
+    await still(s)
+    s.side.tell({ parts: [jobRef(m, 1), jobRef(m, 2)], end: { through: N } })
+    s.side.take(rows.slice(2))
+    s.side.end()
+    await still(s)
+    await nearOn(s, [3])
+    await nearOn(s, [1], false)
+    await still(s)
+    await nearOn(s, [1])
+    await still(s)
+    expect([content(s, 1), content(s, 2)]).toEqual(['layer', 'layer'])
+    // (nothing of the highlight's made, nor any left part asked for it (the door reads those it lays by itself), before the pointer
+    // wants a page with the highlight on)
+    if (at === 'end') expect([s.side.probe().shapes, s.side.probe().leftAsked, s.side.probe().leftParts]).toEqual(['none', 0, 0])
+    if (at === 'paused') expect(s.side.probe().shapes).toBe('paused')
+    if (at === 'paused') s.highlight(true)
+    await hover(s, m)
+    expect(s.side.probe().shapes).toBe('live')
+    return { m, s, given }
+  }
+
+  it('the shapes made on the first want at the end equal those made at the start and told as things came; those told nothing while the highlight was off, told on its next want, too', async () => {
+    const early = await visit('start')
+    const want = shapesOf(early.m, early.given)
+    expect(want.right?.filter(u => u.runs?.length).length).toBeGreaterThan(0)
+    expect(want.left?.filter(u => u.runs?.length).length).toBeGreaterThan(0)
+    expect(early.s.side.probe().shapesLaid).toBeGreaterThan(0)
+    const laidEarly = early.s.side.probe().shapesLaid
+    early.s.view.dispose()
+    const late = await visit('end')
+    expect(shapesOf(late.m, late.given)).toEqual(want)
+    expect(late.s.side.probe().shapesLaid).toBe(laidEarly)
+    late.s.view.dispose()
+    const paused = await visit('paused')
+    expect(shapesOf(paused.m, paused.given)).toEqual(want)
+    expect(paused.s.side.probe().shapesLaid).toBe(laidEarly)
+  })
+
+  it('with the highlight off nothing of its data is made: a pointer over the pages wants nothing, and no left part is asked for it', async () => {
+    const m = await M()
+    const s = await real()
+    s.highlight(false)
+    await nearOn(s, [1, 2])
+    s.side.tell(await ALL())
+    s.side.take(rowsOfIndex(m.index))
+    s.side.end()
+    await still(s)
+    await hover(s, m)
+    expect([s.side.probe().shapes, s.side.probe().leftAsked, s.side.probe().leftParts, s.view.probe().lit]).toEqual(['none', 0, 0, null])
+    // (on, the pointer's next move makes them, and asks the page's left part for them)
+    s.highlight(true)
+    await hover(s, m)
+    expect(s.side.probe().shapes).toBe('live')
+    expect(s.side.probe().leftParts).toBeGreaterThan(0)
   })
 })

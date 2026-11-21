@@ -1,0 +1,486 @@
+// lab/typeset/parity/join.mjs: the parity's join of v2's members to today's units, which v2.mjs writes into its file
+// (`today`: part ord -> today's ord) and measure.mjs keys both sides by. Every member the entry's Pages carry is joined, laid
+// or not and whatever gate-l1's runner did with it (its stops record nothing): the join is the part's and today's, not a lay's.
+// First by what a reader sees, the same glyphs of A: a member and today's unit both dumps state on the same lines of A, one to
+// one (seenJoin; lane pairs-91: the two front ends spell some characters apart, `\#` today's placeholder and v2's text "#", and
+// a unit's id hashes that spelling). Then the baseline's rule over what the lines left: a member's unit id, its rank among those
+// members of that id by ord, today's unit of that id at that rank by ord (by rank alone, a repeated text whose occurrence today
+// spelled otherwise shifted every later one onto another page's unit).
+// A member's unit id is its text, but an ink unit's that echoes a source unit: the part names the echoed unit's id as its text
+// (packages/engine/src/bundle/bundle.ts placedOf, `echo ?? mem.id`: a contents line its heading's, a note its source
+// footnote's, an author block's names their author's), its kind its own; locate made it of the echoed
+// content (locate/ink.ts), so its own id is the format's unitId over its kind and that content, today's id of the ink unit.
+// Echoes are ink units' alone (inkUnitsOf's kinds, INK_KIND): a figure text's placement, of kind 'figure' over its unit of
+// kind 'inkfigures', names its own unit; one whose glyphs set a run in another face holds a group of it, today's unit its text
+// alone, joined by that one's id (l1.ts todayUnitOf). A member whose unit holds kept runs as elements that today's held otherwise
+// (its addresses, today's text; an ink unit's scripts in a text face, today's text or text and a placeholder) joins no id of
+// today's: it is joined, after the ids, to today's unit of its glyphs, the same reading set on the same lines of A (l1.ts
+// keptJoin, over today's prepare dump). A member neither joins is joined, last, to today's unit stage 1a states its unit holds
+// whole (lab/pdf/prepare-back/stated.mjs: held whole (f), by the author block (b'), by the block's units on its line (f'), a names
+// unit's stand-in of its ledger class with today's characters, the statement naming the holder): a unit whose kind moved, its id with it (an ink unit's id names its kind: rebuild/author-toggle's
+// AND, today's inkorphan, v2's inknames), the coordinator's ruling of 2026-11-10, heldJoin.
+import { existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { HOLDER_JOIN } from '../../pdf/prepare-back/stated.mjs'
+import { INK_KIND } from '../../../packages/engine/src/locate/ink-units.ts'
+import { unitId } from '../../../packages/format/src/ids.ts'
+import { sourcePieces } from '../../../packages/typeset/src/lay/read.ts'
+import { keptJoin, L1_BUNDLES, todayUnitOf } from '../../../packages/typeset/tests/replay/l1.ts'
+
+const INK = new Set(Object.values(INK_KIND))
+/** a member's own unit id: its text, or the ink unit's where its text names the source unit it echoes (`units` by id) */
+function ownIdOf(m, units) {
+  if (typeof m.text !== 'string') return null
+  const named = units.get(m.text)
+  if (named && INK.has(m.kind) && named.kind !== m.kind) return unitId(m.kind, named.content)
+  return named ? todayUnitOf(named).id : m.text
+}
+
+/** the causes stage 1a states a unit of today's held whole by one unit of the candidate's by, the statement naming the holder
+ *  (stated.mjs's HOLDER_JOIN 'whole': (f), (b'), (f'), a names unit's stand-in of its ledger class (`order`), (l') `seen`, (k) by
+ *  group `pitchGroup`, (o) `characters`): read from stage 1a's own table, so that a cause it states with a holder is joined as it
+ *  declares (round 8 B8: this list, kept here by hand, had gained `pitchGroup` and not `characters`) */
+const HOLDS = new Set(Object.keys(HOLDER_JOIN).filter((cause) => HOLDER_JOIN[cause] === 'whole'))
+/** the causes the joined join reads: those and today's unit now wholly an element of the holder that keeps it as the original's
+ *  ink, (k) on elements, (n) and (m) (HOLDER_JOIN 'element': `pitch`, `decoration`, `formula`, lane fig-text): one of the units
+ *  the holder holds in order, its text the element's */
+const JOINS = new Set(Object.keys(HOLDER_JOIN))
+/** the folder of the candidate's prepare dumps, stage 1a's statements in them: AXT_L1_DUMPS, else the one beside the bundles
+ *  (a stage 1a run's `<run>/prepare`, its bundles `<run>/bundles`) */
+export const L1_DUMPS = process.env.AXT_L1_DUMPS ?? join(L1_BUNDLES, '..', 'prepare')
+/** a paper's statements of today's units the candidate does not make (its dump's `replaced` units with `stated`), none where
+ *  lab-data holds no dump of it or the run stated none so */
+export function candidateStated(paper, dumps = L1_DUMPS) {
+  const f = join(dumps, `${paper}.prepare.json`)
+  if (!existsSync(f)) return []
+  return JSON.parse(readFileSync(f, 'utf8')).units.filter((u) => u.replaced && u.stated)
+}
+/**
+ * The members the candidate's prepare keeps by a rule's mark `by` (its dump's `keptBy`, lab/pdf/prepare-back/run.mjs): 'pitch',
+ * text set wholly in a face of one pitch (Rule 1, PDF-READER §18.22, the engine's InstrumentUnit `pitch`); 'address', a kept
+ * block of e-mail addresses and their separators alone (the engine's `address`); 'identifier', a figure text kept for an
+ * identifier it holds (the engine's `figure: identifier`, PDF-READER §18.25). By the member ords the run's located file joins
+ * their dump ords to (`dumpOrds`); none where lab-data holds no dump or located file of it. The verdict reads no other unit v2
+ * leaves the original's as kept by a rule (the owner's and the coordinator's rulings of 2026-11-10)
+ */
+export function candidateKept(paper, by, dumps = L1_DUMPS) {
+  const f = join(dumps, `${paper}.prepare.json`),
+    g = join(dumps, '..', 'located', `${paper}.json`)
+  if (!existsSync(f) || !existsSync(g)) return []
+  const ords = new Set(JSON.parse(readFileSync(f, 'utf8')).units.filter((u) => !u.replaced && u.keptBy === by).map((u) => u.ord))
+  return (JSON.parse(readFileSync(g, 'utf8')).dumpOrds ?? []).filter(([d]) => ords.has(d)).map(([, m]) => m)
+}
+/**
+ * The ink of the elements the candidate's prepare keeps as the original's, by member (the coordinator's ruling 1 on F0,
+ * 2026-11-10): a figure text's element its dump marks `keptBy` 'pitch' (its run of one pitch, F0) or 'decoration' (a stretch a
+ * frame, an underline or a tone holds, (n)). `[member ord, [page, x0, y0, x1, y1][]]`, each element's segments, by the member
+ * its unit is joined to (`dumpOrds`); none where lab-data holds no dump or located file of it
+ */
+export function candidateKeptElements(paper, dumps = L1_DUMPS) {
+  const f = join(dumps, `${paper}.prepare.json`),
+    g = join(dumps, '..', 'located', `${paper}.json`)
+  if (!existsSync(f) || !existsSync(g)) return []
+  const KEPT = new Set(['pitch', 'decoration'])
+  const ink = new Map()
+  for (const u of JSON.parse(readFileSync(f, 'utf8')).units) {
+    if (u.replaced) continue
+    const boxes = (u.elements ?? [])
+      .filter((e) => KEPT.has(e.keptBy))
+      .flatMap((e) => (e.segs ?? []).map((k) => [k.page, k.x0, Math.min(k.top, k.bottom), k.x1, Math.max(k.top, k.bottom)]))
+    if (boxes.length) ink.set(u.ord, boxes)
+  }
+  return (JSON.parse(readFileSync(g, 'utf8')).dumpOrds ?? []).filter(([d]) => ink.has(d)).map(([d, m]) => [m, ink.get(d)])
+}
+/**
+ * The units the candidate's prepare made no member of the part for, each with its statement (its dump's units of state
+ * `unlaid`, not `replaced`: { kind, why }, "unlocated: text past its source"), by today's ord. A unit with no member has no
+ * Page, no facts and no join of v2's: this is what states it. Each joined to the one unit of today's (`today`, today's prepare
+ * dump's units: { ord, kind, pieces }) no member is joined to (`joined`, today's ords), of its kind, whose words are its words
+ * (wordsOf over each piece's text or source, sameWords: one front end reads as an element what the other reads as text,
+ * 2610.40576v1 t240's `\dots`), one to one: a unit two of today's say alike, or one of today's two say, joins none. Empty
+ * where lab-data holds no dump
+ */
+export function candidateUnlaid(paper, today, joined = new Set(), dumps = L1_DUMPS) {
+  const f = join(dumps, `${paper}.prepare.json`)
+  if (!existsSync(f)) return new Map()
+  const wordsOfPieces = (ps) => wordsOf((ps ?? []).map((p) => (p.kind === 'text' ? p.s : ` ${p.src ?? ''} `)))
+  const unlaid = JSON.parse(readFileSync(f, 'utf8'))
+    .units.filter((u) => !u.replaced && u.state === 'unlaid')
+    .map((u) => ({ kind: u.kind, why: u.why ?? null, words: wordsOfPieces(u.pieces) }))
+    .filter((u) => u.words.length)
+  const free = (today ?? []).filter((t) => !joined.has(t.ord)).map((t) => ({ ord: t.ord, kind: t.kind, words: wordsOfPieces(t.pieces) }))
+  const said = (u, t) => u.kind === t.kind && sameWords(u.words, t.words)
+  const out = new Map()
+  for (const u of unlaid) {
+    const ts = free.filter((t) => said(u, t))
+    if (ts.length !== 1 || unlaid.filter((v) => said(v, ts[0])).length !== 1) continue
+    out.set(ts[0].ord, { kind: u.kind, why: u.why })
+  }
+  return out
+}
+/** the members the candidate's prepare keeps for their text set wholly in a face of one pitch (candidateKept's 'pitch') */
+export const candidatePitch = (paper, dumps = L1_DUMPS) => candidateKept(paper, 'pitch', dumps)
+/** the members the candidate's prepare keeps as a line of e-mail addresses (candidateKept's 'address') */
+export const candidateAddress = (paper, dumps = L1_DUMPS) => candidateKept(paper, 'address', dumps)
+/**
+ * Today's units the candidate's prepare states kept by a rule's mark, `[today's ord, mark]`: a statement of its dump's (stage
+ * 1a's, stated.mjs) carrying `keptBy`, a unit of today's the candidate makes no unit of for the rule (a cell of identifiers
+ * alone, a line of ink of them a kept block holds); none where lab-data holds no dump of it
+ */
+export function candidateKeptToday(paper, dumps = L1_DUMPS) {
+  return candidateStated(paper, dumps)
+    .filter((u) => u.keptBy)
+    .map((u) => [u.stated.ord, u.keptBy])
+}
+/**
+ * The members `members` (no id or glyphs joined them), each joined to the unit of today's (`free`, today's ords no member is
+ * joined to) that stage 1a states its unit holds whole (`stated`: candidateStated's), the statement naming its unit as the
+ * holder: one of today's for one member; where several members of one id hold as many of today's units, by their order, as
+ * the baseline joins equal ids. `same`: the two units' contents one (today's prepare dump's flat pieces, `prepared` by ord, and
+ * the unit's source pieces, each its text or its element's source), so that today's row says v2's unit: the rows the lay is
+ * given (gate-l1's `held`) take those alone. `units` the bundle's units by id. Returns member ord -> { today, same }
+ */
+export function heldJoin(members, units, stated, free, prepared = null) {
+  const open = new Set(free)
+  const by = new Map()
+  for (const s of stated)
+    if (HOLDS.has(s.stated.cause) && s.stated.holder && open.has(s.stated.ord)) {
+      if (!by.has(s.stated.holder)) by.set(s.stated.holder, [])
+      by.get(s.stated.holder).push(s.stated.ord)
+    }
+  const mine = new Map()
+  for (const m of [...members].sort((a, b) => a.ord - b.ord)) {
+    const id = ownIdOf(m, units)
+    if (!id || !by.has(id)) continue
+    if (!mine.has(id)) mine.set(id, [])
+    mine.get(id).push(m)
+  }
+  const out = new Map()
+  for (const [id, ms] of mine) {
+    const ts = by.get(id).sort((a, b) => a - b)
+    if (ts.length !== ms.length) continue
+    ms.forEach((m, k) => {
+      const t = prepared?.get(ts[k])
+      const src = typeof m.text === 'string' ? units.get(m.text) : undefined
+      const flat = src ? sourcePieces(todayUnitOf(src).content) : null
+      const same =
+        !!t &&
+        !!flat &&
+        t.pieces.length === flat.length &&
+        t.pieces.every((p, j) => p.kind === flat[j].t && (p.kind === 'text' ? p.s === flat[j].s : (p.src ?? null) === (flat[j].src ?? null)))
+      out.set(m.ord, { today: ts[k], same })
+    })
+  }
+  return out
+}
+
+/**
+ * How several of today's units say one unit of v2's (lane fig-text: F0's line, a figure paragraph; fig-smallcaps' word joined
+ * across a size change, 2608.06701v1 p1's "…th" | "e…"), by the exact text: today's texts in their order (`texts`, each a
+ * unit's text as the prepare dump states it), white space aside, are v2's unit's text (`content`, its pieces: its text, and each
+ * element its source's text), each of today's a run of v2's text pieces or one element whole, a line-end hyphen of today's
+ * standing where v2's text has none (a word TeX broke) left out. Returns the plan v2's row is said by, each piece of v2's in its
+ * order: { t: 'today', i } (today's i-th unit's row: its text), { t: 'el', id } (v2's element, a kept one where today's said
+ * it, else carried as v2 carries it); null where the texts are not one
+ */
+export function joinedPlan(texts, content) {
+  // (v2's unit as a stream of characters, white space aside, each with what it is: a text piece's, or an element's)
+  const stream = []
+  const walk = (ps) => {
+    for (const p of ps) {
+      if (p.t === 'text') for (const c of p.s.replace(/\s+/gu, '')) stream.push({ c, el: null })
+      else if (p.t === 'span') walk(p.content)
+      else if (p.t === 'el') for (const c of (p.src ?? '').replace(/\s+/gu, '')) stream.push({ c, el: p.id })
+    }
+  }
+  walk(content)
+  // (each of today's in its order where it stands in the stream: its start, and what it is there)
+  const pieces = []
+  const used = new Set()
+  let at = 0
+  for (let i = 0; i < texts.length; i++) {
+    const t = texts[i].replace(/\s+/gu, '')
+    if (!t) return null
+    const from = at
+    for (let j = 0; j < t.length; j++) {
+      if (stream[at]?.c === t[j]) at++
+      // (a line-end hyphen of today's, v2's text going on without it: TeX's break of a word)
+      else if (j === t.length - 1 && /^[-‐­]$/u.test(t[j]) && i + 1 < texts.length) continue
+      else return null
+    }
+    const els = new Set(stream.slice(from, at).map((x) => x.el))
+    if (els.size !== 1) return null
+    const [el] = els
+    if (el !== null) {
+      // (one element whole: today's unit its text alone)
+      if (stream.filter((x) => x.el === el).length !== at - from || used.has(el)) return null
+      used.add(el)
+      pieces.push({ from, piece: { t: 'el', id: el } })
+    } else pieces.push({ from, piece: { t: 'today', i } })
+  }
+  if (at !== stream.length) return null
+  // (v2's elements today held in no unit of its own, each where it stands)
+  stream.forEach((x, k) => {
+    if (x.el !== null && !used.has(x.el)) {
+      used.add(x.el)
+      pieces.push({ from: k, piece: { t: 'el', id: x.el } })
+    }
+  })
+  return pieces.sort((a, b) => a.from - b.from).map((x) => x.piece)
+}
+
+/**
+ * The members `members` (no id or glyphs joined them) each of which stage 1a states holds two or more of today's units whole
+ * (`stated`: candidateStated's, the statement naming its unit as the holder), the member alone of its id, and whose text is
+ * theirs in order (joinedPlan): member ord -> { todays: today's ords in order, plan }. `units` the bundle's units by id,
+ * `prepared` today's prepare dump's units by ord (their texts)
+ */
+export function joinedJoin(members, units, stated, free, prepared = null) {
+  if (!prepared) return new Map()
+  const open = new Set(free)
+  const by = new Map()
+  for (const s of stated)
+    if (JOINS.has(s.stated.cause) && s.stated.holder && open.has(s.stated.ord)) {
+      if (!by.has(s.stated.holder)) by.set(s.stated.holder, [])
+      by.get(s.stated.holder).push(s.stated.ord)
+    }
+  // (the holder a statement names is the candidate's unit, its own id: a member's unit's id, or the id today's unit of it would
+  // have (todayUnitOf: its kept runs read as text), each held by one member alone)
+  const count = new Map()
+  for (const m of members)
+    for (const id of new Set([ownIdOf(m, units), typeof m.text === 'string' ? m.text : null]))
+      if (id) count.set(id, (count.get(id) ?? 0) + 1)
+  const out = new Map()
+  for (const m of members) {
+    const own = ownIdOf(m, units)
+    const id = typeof m.text === 'string' && by.has(m.text) ? m.text : own
+    const ts = id && count.get(id) === 1 ? (by.get(id) ?? []).sort((a, b) => a - b) : []
+    if (ts.length < 2) continue
+    const src = typeof m.text === 'string' ? units.get(m.text) : undefined
+    const texts = ts.map((t) => prepared.get(t)?.text)
+    if (!src || texts.some((t) => typeof t !== 'string')) continue
+    const plan = joinedPlan(texts, src.content)
+    if (plan) out.set(m.ord, { todays: ts, plan })
+  }
+  return out
+}
+
+/** two positions one dump states to the hundredth and the other to the hundredth: the same within that (keptJoin's) */
+const near = (a, b) => Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) <= 0.01 + 1e-9
+/** a member's own unit kind, the one its own id names (ownIdOf): an ink unit's that echoes a source unit its own, else its unit's */
+function ownKindOf(m, units) {
+  const named = typeof m.text === 'string' ? units.get(m.text) : undefined
+  if (named && INK.has(m.kind) && named.kind !== m.kind) return m.kind
+  return named ? named.kind : m.kind
+}
+/**
+ * The members `members` joined to today's units `today` (today's prepare dump's, those the ledger holds) by what a reader sees:
+ * the same glyphs of A, so the same text as arXiv's page sets it, whatever either front end spelled it as (`\#` a placeholder of
+ * today's and v2's text "#"; `\%` the same; `{\em …}` a placeholder of today's inside the group, none of v2's): both dumps state
+ * each line of the unit on A (page, baseline and the extent of its glyphs, x0 to x1), to the hundredth. A member and a unit of
+ * today's of the kind the member's own id names (ownKindOf: the id hashes the kind as well as the spelling, and an ink unit that
+ * echoes a source unit is today's ink unit, not the source unit on its lines) whose lines are the same, as many and each the
+ * same, are joined where each is the only one of its side on those lines; a member or a unit the dump states no lines of (drawn
+ * nothing of on A) joins nothing so. `units` the bundle's units by id. Returns member ord -> today's ord
+ */
+export function seenJoin(members, today, units) {
+  const same = (m, t) =>
+    !!m.lines?.length &&
+    t.kind === ownKindOf(m, units) &&
+    t.lines?.length === m.lines.length &&
+    t.lines.every((l, j) => l.page === m.lines[j][0] && near(l.baseline, m.lines[j][4]) && near(l.x0, m.lines[j][2]) && near(l.x1, m.lines[j][3]))
+  const out = new Map()
+  for (const m of members) {
+    const on = today.filter((t) => same(m, t))
+    if (on.length !== 1) continue
+    if (members.filter((x) => same(x, on[0])).length !== 1) continue
+    out.set(m.ord, on[0].ord)
+  }
+  return out
+}
+
+/**
+ * `pages` the entry's Pages by page (each `{ members: [{ ord, … }] }`), `bundle` the paper's L1 bundle (its parts' flows and
+ * its units by id: l1Paper), `units` today's units ({ ord, id }: the ledger's), `prepared` today's prepare dump's units by ord
+ * (l1.ts todayPrepared; none, no join by the glyphs), `stated` the candidate's statements of today's units (candidateStated;
+ * none, no join by them). Returns `{ [part ord]: { today: today's ord } }` for every member of the Pages that joins one.
+ */
+export function todayJoin(pages, bundle, units, prepared = null, stated = []) {
+  // (every member of the part once, from the first page that holds it)
+  const members = new Map()
+  for (const part of bundle.parts.values()) for (const flow of part.flows) for (const m of flow) if (!members.has(m.ord)) members.set(m.ord, m)
+  const join = new Map()
+  // (first, by what a reader sees: the member and today's unit set on the same lines of A, one to one: seenJoin)
+  if (prepared) {
+    const ledgered = new Set(units.map((u) => u.ord))
+    for (const [ord, t] of seenJoin([...members.values()], [...prepared.values()].filter((t) => ledgered.has(t.ord)), bundle.units)) join.set(ord, t)
+  }
+  // (then by the unit's id, over what the lines left: the members of an id by their order, today's units of it by theirs)
+  const seen = new Set(join.values())
+  const byId = new Map()
+  for (const u of [...units].sort((a, b) => a.ord - b.ord)) {
+    if (!u.id || seen.has(u.ord)) continue
+    if (!byId.has(u.id)) byId.set(u.id, [])
+    byId.get(u.id).push(u.ord)
+  }
+  const rank = new Map()
+  for (const [ord, m] of [...members].sort((a, b) => a[0] - b[0])) {
+    if (join.has(ord)) continue
+    const id = ownIdOf(m, bundle.units)
+    if (!id) continue
+    const k = rank.get(id) ?? 0
+    rank.set(id, k + 1)
+    const t = byId.get(id)?.[k]
+    if (t !== undefined) join.set(ord, t)
+  }
+  // (then the members no id joined, by their glyphs: today's units no member joined, as the ledger holds them)
+  if (prepared) {
+    const joined = new Set(join.values())
+    const ledgered = new Set(units.map((u) => u.ord))
+    const free = [...members.values()].filter((m) => !join.has(m.ord))
+    const left = [...prepared.values()].filter((t) => ledgered.has(t.ord) && !joined.has(t.ord))
+    for (const [ord, t] of keptJoin(free, bundle.units, left)) join.set(ord, t)
+  }
+  // (last, the members no id or glyphs joined, by stage 1a's statement of today's unit their unit holds whole)
+  if (stated.length) {
+    const joined = new Set(join.values())
+    const free = [...members.values()].filter((m) => !join.has(m.ord))
+    const left = units.map((u) => u.ord).filter((o) => !joined.has(o))
+    for (const [ord, { today }] of heldJoin(free, bundle.units, stated, left, prepared)) join.set(ord, today)
+  }
+  const out = {}
+  for (const page of Object.values(pages)) for (const m of page.members) if (join.has(m.ord)) out[m.ord] = { today: join.get(m.ord) }
+  return out
+}
+
+/** a text's words, by its pieces' source: each run of letters and digits (NFKC, case folded) of its text and of its elements'
+ *  and groups' source (a placeholder's `\\code{…}`, a group's `\\textcolor{blue}{`): one front end holds as an element what
+ *  the other holds as text (v2's `[sentence\\_1]` an element, today's its letters), and each piece is a separator, as are its
+ *  spaces and its punctuation */
+const wordsOf = (texts) =>
+  texts
+    .join(' ')
+    .normalize('NFKC')
+    .toLowerCase()
+    .match(/[\p{L}\p{N}]+/gu) ?? []
+/** a v2 unit's pieces' source: its text, each element's source, each group's open and close round its content (`groups`
+ *  false: its groups' contents alone, as a cell's rows read that today cut a unit a row, the box round them in none of them) */
+const v2Texts = (content, groups = true) =>
+  (content ?? []).flatMap((p) =>
+    p.t === 'text' ? [p.s] : p.t === 'span' ? (groups ? [` ${p.open ?? ''}`, ...v2Texts(p.content), `${p.close ?? ''} `] : [' ', ...v2Texts(p.content, false), ' ']) : [` ${p.src ?? ''} `],
+  )
+/** the longest common subsequence of two word lists, its length */
+const lcs = (a, b) => {
+  let prev = new Array(b.length + 1).fill(0)
+  for (let i = 1; i <= a.length; i++) {
+    const cur = new Array(b.length + 1).fill(0)
+    for (let j = 1; j <= b.length; j++) cur[j] = a[i - 1] === b[j - 1] ? prev[j - 1] + 1 : Math.max(prev[j], cur[j - 1])
+    prev = cur
+  }
+  return prev[b.length]
+}
+/** whether two word lists say the same words in the same order: equal, or in common for nine tenths of each (a placeholder one
+ *  front end reads as text, the other as an element: today's `\_`, v2's "_") */
+const sameWords = (a, b) =>
+  a.length > 0 &&
+  b.length > 0 &&
+  (a.join(' ') === b.join(' ') ||
+    (Math.min(a.length, b.length) >= 0.9 * Math.max(a.length, b.length) && lcs(a, b) >= 0.9 * Math.max(a.length, b.length)))
+
+/**
+ * The parity's join by pieces (lane hdr-lines, S1 and S2, the coordinator's of 2026-11-15): today's reader and v2's cut some
+ * texts into other units, so that one unit of today's is several members of v2's part (S1: a lead sentence and the prompt box
+ * set in it, which v2's prepare sets apart and keeps for its one pitch) and several units of today's one member (S2: a table cell
+ * set on two lines, today a unit a line). No id joins them, nor one member to one unit: their pieces do. A unit of today joins the
+ * run of members, two or more, consecutive in the part's order, whose words together are its words in order (sameWords; a
+ * member's read with its groups' opens and closes and without); a member, the run of today's units, two or more, consecutive in
+ * today's order, whose words together are its own; a run whose first alone says them, none. Over what the
+ * one-to-one join (`todayOf`: part ord -> today's ord, todayJoin) left, on a page both stand on (a unit of today's by its lines'
+ * pages, a member by the parts that hold it), each unit and member in one group at most. `bundle` the paper's L1 bundle,
+ * `prepared` today's prepare dump's units ({ ord, lines, pieces }). Returns the groups, `{ today: [ords], members: [ords],
+ * pages: { [member ord]: [pages] } }`, in today's order: `pages` each member's pages the part states a line of it on, where it
+ * stands on A (a part holds whole flows, bundle.ts, so the parts that carry a member are more pages than those), which the
+ * verdict judges it on (measurePage's `shown`)
+ */
+export function piecesJoin(bundle, prepared, todayOf) {
+  const joinedToday = new Set(todayOf.values())
+  // (each member once, its pages the parts that hold it, the pages it stands on its lines', its words its unit's)
+  const members = new Map()
+  for (const [pg, part] of bundle.parts)
+    for (const flow of part.flows)
+      for (const m of flow) {
+        if (todayOf.has(m.ord) || typeof m.text !== 'string') continue
+        const content = bundle.units.get(m.text)?.content
+        const x = members.get(m.ord) ?? { ord: m.ord, pages: new Set(), on: [...new Set(m.lines.map((l) => l[0]))].sort((a, b) => a - b), words: wordsOf(v2Texts(content)), bare: wordsOf(v2Texts(content, false)) }
+        x.pages.add(pg)
+        members.set(m.ord, x)
+      }
+  const free = [...members.values()].filter((m) => m.words.length).sort((a, b) => a.ord - b.ord)
+  const left = [...prepared]
+    .filter((u) => !joinedToday.has(u.ord))
+    .map((u) => {
+      const words = wordsOf((u.pieces ?? []).map((p) => (p.kind === 'text' ? p.s : ` ${p.src ?? ''} `)))
+      return { ord: u.ord, pages: new Set((u.lines ?? []).map((l) => l.page)), words, bare: words }
+    })
+    .filter((u) => u.words.length)
+    .sort((a, b) => a.ord - b.ord)
+  const meets = (a, b) => [...a.pages].some((p) => b.pages.has(p))
+  const used = { today: new Set(), members: new Set() }
+  const groups = []
+  const pagesOf = (ms) => Object.fromEntries(ms.map((m) => [m.ord, m.on]))
+  // (each side's words read twice, a v2 member's with its groups' opens and closes and without them (`bare`: a merged cell's
+  // box, `\makecell{`, stands round its rows, and today's unit a row holds none of it), today's alike both times: two say the
+  // same where either reading does)
+  const same = (a, b) => sameWords(a.words, b.words) || sameWords(a.bare, b.bare)
+  /** whether each unit of `run` says words of `one`'s: the run's words in common with it fewer without that unit's, read either
+   *  way (`words`, `bare`). A unit whose words the tenth's tolerance alone takes says none of them: 2610.21084v1 p1's three author
+   *  units (7 words) before the abstract (87), joined to v2's abstract member, which holds none of the names */
+  const each = (run, one) =>
+    run.every((x, i) =>
+      ['words', 'bare'].some((w) => {
+        const all = run.flatMap((y) => y[w])
+        const rest = run.flatMap((y, j) => (j === i ? [] : y[w]))
+        return lcs(one[w], all) > lcs(one[w], rest)
+      }),
+    )
+  /** the run from `start` of `list`, consecutive in its order, each on a page `one` stands on, two or more, whose words are its,
+   *  each of its units saying some of them (`each`); none where its first alone says them (one member or unit is no group of
+   *  pieces, whatever the one-to-one join left of it: a run that goes on past it adds only words a tenth may hide, 2611.03953v2-zh
+   *  p8's paragraph and the merged cell after it), nor where one of its units says none of them */
+  const runOf = (one, list, start, taken) => {
+    const run = []
+    const got = { words: [], bare: [] }
+    for (let k = start; k < list.length; k++) {
+      const x = list[k]
+      if (taken.has(x.ord) || !meets(one, x) || Math.min(got.words.length, got.bare.length) >= one.words.length * 1.1) break
+      run.push(x)
+      got.words = [...got.words, ...x.words]
+      got.bare = [...got.bare, ...x.bare]
+      if (same(got, one)) return run.length >= 2 && each(run, one) ? run : null
+    }
+    return null
+  }
+  for (const t of left) {
+    if (used.today.has(t.ord)) continue
+    for (let k = 0; k < free.length; k++) {
+      const run = runOf(t, free, k, used.members)
+      if (!run) continue
+      for (const m of run) used.members.add(m.ord)
+      used.today.add(t.ord)
+      groups.push({ today: [t.ord], members: run.map((m) => m.ord), pages: pagesOf(run) })
+      break
+    }
+  }
+  for (const m of free) {
+    if (used.members.has(m.ord)) continue
+    for (let k = 0; k < left.length; k++) {
+      const run = runOf(m, left, k, used.today)
+      if (!run) continue
+      for (const t of run) used.today.add(t.ord)
+      used.members.add(m.ord)
+      groups.push({ today: run.map((t) => t.ord), members: [m.ord], pages: pagesOf([m]) })
+      break
+    }
+  }
+  return groups.sort((a, b) => a.today[0] - b.today[0])
+}

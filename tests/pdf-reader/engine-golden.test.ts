@@ -8,15 +8,10 @@ import { afterAll, describe, expect, it } from 'vitest'
 import { bundleUnitsOf, readBundle, writeBundle } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
 import { batchesOf, layerRows, runRows, sourceUnitsOf, toTranslate, unitOf } from '@/pdf-reader/engine/layer-proto/rows.mjs'
 import { loadProject, patch } from '@/pdf-reader/engine/source/latex-front.mjs'
-import { paperAddon } from '@/pdf-reader/engine/layout/addon.mjs'
-import { parseAddonManifest } from '@/pdf-reader/engine/layout/addon-manifest.mjs'
 import { encodeLayout, indexLayout, type LayoutFile, type LayoutIndex, parseLayout } from '@/pdf-reader/engine/layout/file.mjs'
 import { inkSamples, LAYOUT_CLASSES, probeSamples, readInkProbe, readMarkProbe } from '@/pdf-reader/engine/layout/marks.mjs'
-import { keptFor, openPaper, originalFiles, probeFiles, translationFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
+import { keptFor, openPaper, originalFiles, probeFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
 import { rehydrate, serialize, serializeTags, translateUnits } from '@/pdf-reader/engine/translate/mt.mjs'
-import { strategiesFor } from '@/pdf-reader/engine/pipeline/scripts.mjs'
-import { typesetting } from '@/pdf-reader/engine/pipeline/typeset/tex.mjs'
-import { DESIGN } from '@/pdf-reader/engine/pipeline/typeset/type.mjs'
 import { column, layoutOf } from './helpers/layout-of'
 
 // The reader's engine, locked by what it makes before its files move (Stage 5, Task 4): every output below is SHA-256
@@ -190,7 +185,8 @@ describe('the files of a compile', () => {
     lock('compile-files', `${name}: the original with the layout compile's marks, lines, switches and inkless`, () => texts(originalFiles(paper(), { lines: true, layout: LAYOUT_CLASSES, switches: SWITCHES, inkless: INKLESS })))
     lock('compile-files', `${name}: the original with lines`, () => texts(originalFiles(paper(), { lines: true })))
     lock('compile-files', `${name}: the original as at 3cb5a733`, () => texts(originalFiles(paper())))
-    lock('compile-files', `${name}: the probes`, () => { const p = paper(); return [texts(probeFiles(p)), texts(probeFiles(p, { width: true })), texts(probeFiles(p, { marks: true }))] })
+    // (the width probe's case went with the typesetting rule, 2026-11-04: the two left are the bytes they were)
+    lock('compile-files', `${name}: the probes`, () => { const p = paper(); return [texts(probeFiles(p)), texts(probeFiles(p, { marks: true }))] })
     lock('compile-files', `${name}: what the probes read from a log`, () => {
       const p = paper()
       return { samples: probeSamples(p.units), ink: inkSamples(p.units), switches: readMarkProbe(PROBE_LOG, probeSamples(p.units)), inkless: readInkProbe(PROBE_LOG, inkSamples(p.units)) }
@@ -200,31 +196,12 @@ describe('the files of a compile', () => {
       const done = new Map(project.units.map((u, i) => [u, u.pieces.map(x => ((x as { t: string }).t === 'text' ? { ...(x as object), tr: true, s: `<T${i}>` } : x))]))
       return texts(patch(project, done as never))
     })
-    lock('compile-files', `${name}: the translation, zh: draft, final, today and by runs`, () => {
-      const p = paper(), [xe] = strategiesFor({ compiler: 'pdflatex' }, 'zh')
-      if (!xe) throw new Error('no strategy')
-      const all = new Map(p.units.map((_, i) => [i, 1.1]))
-      const typeset = typesetting(p.units, { design: DESIGN.Hans, strategy: xe.name, type: { lead: 1.35, track: 0, scale: 1 }, leads: all, sizes: new Map(all), floatsAt: new Map(), tableMin: 0.85 })
-      type Piece = { t: string; s?: string; tr?: boolean }
-      const translate = (runs: boolean) => new Map(p.units.map((u, i) => [u, (u.pieces as Piece[]).flatMap((x, k): Piece[] => {
-        if (x.t !== 'text' || !/\S/.test(x.s ?? '')) return [x]
-        const lead = k === 0 ? (x.s ?? '').match(/^\s*/)?.[0] ?? '' : '', trail = k === u.pieces.length - 1 ? (x.s ?? '').match(/\s*$/)?.[0] ?? '' : ''
-        return runs ? [{ ...x, tr: true, s: `${lead}<T${i}>${trail}` }] : [...(lead ? [{ t: 'text', s: lead }] : []), { ...x, tr: true, s: `<T${i}>` }, ...(trail ? [{ t: 'text', s: trail }] : [])]
-      })])) as Map<(typeof p.units)[number], unknown[]>
-      const given = { strategy: xe, fonts: null, aux: null, bbl: null }
-      return [
-        texts(translationFiles(p, translate(false), { ...given, draft: true, typeset })),
-        texts(translationFiles(p, translate(false), { ...given, draft: false, typeset: typeset.final })),
-        texts(translationFiles(p, translate(false), { ...given, draft: false })),
-        texts(translationFiles(p, translate(true), { ...given, draft: false })),
-      ]
-    })
   }
 })
 
-// ---- 3. the sample's bundle, its layout and its add-on
+// ---- 3. the sample's bundle and its layout
 const bundleBytes = () => sampleBytes('bundle.json')
-type Json = { versions: { image: string }; paper: { id: string; version: number; pages: number }; base: { bytes: number; sha256: string; url: string }; left: unknown; layout: LayoutFile; addon: { manifest: object; tail: string } }
+type Json = { versions: { image: string }; paper: { id: string; version: number; pages: number }; base: { bytes: number; sha256: string; url: string }; left: unknown; layout: LayoutFile }
 const bundleJson = () => JSON.parse(new TextDecoder().decode(bundleBytes())) as Json
 /** a layout index as every reader reads it: each unit it locates, each page's units and view, each font */
 function indexed(index: LayoutIndex) {
@@ -232,11 +209,11 @@ function indexed(index: LayoutIndex) {
   return { file: index.file, units: ids.map(id => index.unit(id)), pages: Array.from({ length: index.file.paper.pages }, (_, i) => ({ onPage: index.onPage(i + 1), view: index.view(i + 1) })), fonts: index.file.fonts.map((_, i) => index.font(i)) }
 }
 
-describe('the bundle, the layout file and the add-on', () => {
+describe('the bundle and the layout file', () => {
   lock('bundle', 'readBundle of the sample\'s bundle', () => readBundle(bundleBytes()))
   lock('bundle', 'writeBundle of the sample\'s parts', () => {
     const b = readBundle(bundleBytes()), raw = bundleJson()
-    return writeBundle({ paper: b.paper, base: b.base, image: raw.versions.image, units: b.units as never, left: b.left, layout: b.layout, addon: b.addon })
+    return writeBundle({ paper: b.paper, base: b.base, image: raw.versions.image, units: b.units as never, left: b.left, layout: b.layout, rules: b.rules })
   })
   lock('bundle', 'the bundle\'s units over the sample paper\'s', () => ({ made: bundleUnitsOf(openPaper(sampleFiles())), read: readBundle(bundleBytes()).units }))
 
@@ -248,27 +225,6 @@ describe('the bundle, the layout file and the add-on', () => {
     layoutOf([{ id: 1, kind: 'heading', lines: column(1, { top: 700 }) }, { id: 2, lines: [...column(4, { top: 660 }), ...column(2, { page: 2, top: 720 })], frames: [{ page: 1, lines: 4 }, { page: 2, lines: 2, share: 500, below: 100 }], ph: [{ k: 0, kind: 'math', segs: [[1, 100, 700, 130, 710, 698]] }, { k: 1, kind: 'cite', segs: [[1, 140, 688, 160, 698, 686]], text: '[1]' }, { k: 2, kind: 'macro', flags: 64, segs: [], text: '\u00b0' }], labels: [{ x0: 40, baseline: 660, x1: 60 }], erase: [[0, 70, 650, 400, 668]], held: [3] }]),
     layoutOf([{ id: 7, kind: 'caption', lines: [...column(2, { page: 1, top: 300 }), ...column(1, { page: 2, top: 720 })], frames: [{ page: 1, lines: 2 }, { page: 2, lines: 1, share: 400 }] }, { id: 9, kind: 'cell', lines: column(1, { page: 2, top: 500, w: 60 }) }], 3),
   ].map(indexed))
-  lock('layout', 'the sample\'s add-on manifest, read in its shipped form and in the check\'s', () => {
-    const raw = bundleJson(), manifest = enc(JSON.stringify(raw.addon.manifest)), pages = raw.layout.paper.pages, views = raw.layout.views
-    const read = (shipped: boolean) => { try { return parseAddonManifest(manifest, { pages, views, shipped }) } catch (e) { return { refused: (e as Error).message } } }
-    return { shipped: read(true), full: read(false), withoutViews: parseAddonManifest(manifest, { pages, shipped: true }) }
-  })
-  lock('layout', 'the add-on paperAddon makes of the sample\'s PDF and layout', async () => {
-    const bytes = sampleBytes('sample-1.pdf'), index = indexLayout(parseLayout(enc(encodeLayout(bundleJson().layout))))
-    const deflate = (b: Uint8Array) => new Uint8Array(deflateSync(b))
-    const inflate = (b: Uint8Array, limit: number) => {
-      const o = { finishFlush: zlibConstants.Z_SYNC_FLUSH, maxOutputLength: limit + 1 }
-      try { return new Uint8Array(inflateSync(b, o)) } catch (e) { if ((e as { code?: string })?.code === 'ERR_BUFFER_TOO_LARGE') throw e; return new Uint8Array(inflateRawSync(b.subarray(2), o)) }
-    }
-    const task = getDocument({ data: bytes.slice(), verbosity: 0 })
-    const doc = await task.promise
-    try {
-      const made = await paperAddon({ bytes, index, doc: doc as never, OPS: OPS as never, PL, deflate, inflate })
-      // (the tail's bytes, and so `appended`, are zlib's, which Node versions do not promise to keep; the rest of the manifest is
-      // the engine's, and it is what the layer reads)
-      return made.ok ? { ok: true, manifest: { ...made.manifest, appended: undefined }, tail: made.tail.length > 0 } : made
-    } finally { await task.destroy() }
-  })
 })
 
 // ---- 4. the rows

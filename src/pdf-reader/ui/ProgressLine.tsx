@@ -1,3 +1,4 @@
+// Kept at this path for the website's reader (readarxiv-web, @vendor/pdf-reader/ui/ProgressLine) until its cut-over; nothing in the extension imports it. See tests/contract/website-imports.test.ts.
 // The progress line along the toolbar's foot (the reader's design, §6.6; the maintainer, 2026-09-25): 2 px, quiet ink,
 // its length the share of the process done — the PDF's download, the paragraphs translated, the final (status.ts lineOf):
 // one line that never starts again (the maintainer, 2026-10-02). It grows by a transform, on the compositor; it fades

@@ -7,7 +7,7 @@ import { ruleOf, rules } from '../styles/css-rules'
 
 const read = (path: string) => readFileSync(join(import.meta.dirname, path), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
 const SHEET = read('../../src/entrypoints/popup/popup.css')
-const TOKENS = read('../../src/styles/tokens.css')
+const TOKENS = read('../../packages/ui/src/tokens.css')
 
 describe('popup.css', () => {
   it('carries no :has()', () => {

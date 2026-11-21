@@ -1,23 +1,16 @@
 // The font role table (font-roles.mjs) and its generated coverage (font-coverage.mjs): a PDF font's class from its
 // PostScript name, a paper's English family from the TeX path's probe or the layout file's fonts (one table of names behind
-// both), the faces each target draws in under the maintainer's rulings of 2026-10-06 (spec §1.3, §4.4), and whether a
-// text is drawable from the served faces alone. No face is the reader's own: one rendering on every device
+// both), the faces each target draws in under the maintainer's rulings of 2026-10-06 (spec §1.3, §4.4) and of 2026-10-29 (a
+// CJK target's Regular and Bold beside every English family), and whether a text is drawable from the served faces alone.
+// No face is the reader's own: one rendering on every device
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { COVERAGE, COVERAGE_SOURCE, METRICS } from '@/pdf-reader/engine/rules/font-coverage.mjs'
-import { canDraw, canDrawIn, classifyFont, type Design, FACES, type FaceId, type FontClass, faceFor, familyOfFonts, familyOfProbe } from '@/pdf-reader/engine/rules/font-roles.mjs'
+import { COVERAGE, COVERAGE_SOURCE, METRICS } from '../../packages/engine/src/fonts/font-coverage.ts'
+import { canDrawIn, classifyFont, type Design, FACES, type FaceId, type FontClass, faceFor, familyOfFonts, familyOfProbe } from '../../packages/engine/src/fonts/font-roles.ts'
 import { rolesFor } from './helpers/roles'
 
 const cls = (name: string) => { const c = classifyFont(name); return { cls: c.cls, bold: c.bold, italic: c.italic, caps: c.caps, design: c.design, known: c.known } }
-const covers = (id: FaceId, cp: number) => {
-  const r = COVERAGE[id] ?? []
-  for (let i = 0; i + 1 < r.length; i += 2) if (cp >= r[i]! && cp <= r[i + 1]!) return true
-  return false
-}
 const probe = (rm: string) => ({ rm, sf: 'cmss', tt: 'cmtt', body: rm })
-const run = (o: Partial<{ script: 'cjk' | 'latin'; cls: FontClass['cls']; design: Design; bold: boolean; italic: boolean; caps: boolean }>) =>
-  ({ script: 'latin' as const, cls: 'serif' as const, design: 'cm' as const, bold: false, italic: false, caps: false, ...o })
-const STYLES = [[false, false, 'regular'], [true, false, 'bold'], [false, true, 'italic'], [true, true, 'bolditalic']] as const
 
 describe('classifyFont', () => {
   it('each name\'s class', () => {
@@ -76,21 +69,244 @@ describe('the family of a paper', () => {
   })
 })
 
-describe('the roles', () => {
-  it('the CJK roles follow the rulings', () => {
-    // (no Kai, whatever the rule set names: emphasis is the body sheared, the owner's ruling of 2026-10-19)
-    expect(rolesFor('zh', 'cm').cjk).toEqual({ body: 'shs-sc-light', bold: 'shs-sc-semibold' })
-    expect(rolesFor('zh', 'garamond').cjk).toEqual({ body: 'shs-sc-light', bold: 'shs-sc-semibold' })
-    for (const family of ['times', 'libertine', 'palatino', 'charter', 'utopia', 'other'] as const) {
-      expect(rolesFor('zh', family).cjk, family).toEqual({ body: 'shs-sc-regular', bold: 'shs-sc-bold' })
+// The names no paper of the corpus is set in: each pattern of the names' table (DESIGNS: its NFSS family names, as a package's
+// font definition files declare them, and its PostScript names, as a font file names itself) and of the style and class words,
+// read on a name of its own and on one of another's. Any paper may set its body, its code or its math in such a face
+describe('the names no paper of the corpus is set in', () => {
+  it('reads each PostScript name by its design\'s pattern', () => {
+    const rows: [string, Partial<FontClass>][] = [
+      // (AMS's symbols and blackboard bold: amsfonts' msam10 and msbm10; Euler's script; the math of Latin Modern and STIX Two)
+      ['MSAM10', { cls: 'math', design: 'cm', known: true }],
+      ['MSBM10', { cls: 'math', design: 'cm', known: true }],
+      ['EUSM10', { cls: 'math', design: 'cm', known: true }],
+      ['LatinModernMath-Regular', { cls: 'math', design: 'other', known: true }],
+      ['STIXTwoMath-Regular', { cls: 'math', design: 'other', known: true }],
+      ['DejaVuSansMono-Bold', { cls: 'mono', design: 'beramono', bold: true, known: true }],
+      ['LibertinusSans-Regular', { cls: 'sans', design: 'biolinum', bold: false, known: true }],
+      ['LibertinusSerif-Bold', { cls: 'serif', design: 'libertine', bold: true, known: true }],
+      ['EBGaramond-Italic', { cls: 'serif', design: 'garamond', italic: true, known: true }],
+    ]
+    for (const [name, want] of rows) expect(cls(name), name).toMatchObject(want)
+    // (and a name of none of them: a design of no table, its class by its words)
+    expect(cls('Calluna-Regular')).toMatchObject({ cls: 'serif', design: 'other', known: false })
+  })
+
+  it('reads a probe\'s body by a text family\'s NFSS names, a mono or sans body keeping its roman\'s family', () => {
+    // (Courier (psnfss's pcr), Bera Mono (fvm), Latin Modern's typewriter (lmtt), Biolinum (libertine's LinuxBiolinumT-TLF): no
+    // text family's name, so the paper's family is its roman's; no name of theirs is a text family's)
+    const body = (b: string, rm: string) => ({ rm, sf: 'phv', tt: 'pcr', body: b })
+    expect(familyOfProbe(body('pcr', 'ptm'))).toBe('times')
+    expect(familyOfProbe(body('fvm', 'cmr'))).toBe('cm')
+    expect(familyOfProbe(body('lmtt', 'ppl'))).toBe('palatino')
+    expect(familyOfProbe(body('LinuxBiolinumT-TLF', 'LinuxLibertineT-TLF'))).toBe('libertine')
+    expect(familyOfProbe(body('foo', 'bar'))).toBe('other')
+    // (the mono and sans families' NFSS names, as their font definition files declare them: none is read as a text family)
+    const monoSans = ['pcr', 'qcr', 'txtt', 'ucr', 'zco', 'NimbusMono-TLF', 'TeXGyreCursor(0)', 'fvm', 'BeraSansMono', 'DejaVuSansMono-TLF', 'zi4', 'Inconsolata-TLF', 'cmtt', 'lmtt', 'cmvtt', 'phv', 'qhv', 'txss', 'uhv', 'zhv', 'NimbusSans-TLF', 'TeXGyreHeros(0)', 'cmss', 'lmss', 'LinuxBiolinumT-TLF', 'fxb', 'LibertinusSans-TLF']
+    for (const name of monoSans) expect(familyOfProbe(body(name, 'cmr')), name).toBe('cm')
+  })
+
+  it('reads small capitals and an unknown face\'s class by their words', () => {
+    expect(cls('Foo-SmallCaps')).toMatchObject({ caps: true, known: false })
+    expect(cls('Foo-Regular')).toMatchObject({ caps: false, cls: 'serif', known: false })
+    expect(cls('Menlo-Regular')).toMatchObject({ cls: 'mono', design: 'other', known: false })
+    expect(cls('Verdana-Bold')).toMatchObject({ cls: 'sans', design: 'other', bold: true, known: false })
+    expect(cls('OpenSymbol')).toMatchObject({ cls: 'math', design: 'other', known: false })
+  })
+
+  it('answers a target\'s face the same past the targets it remembers', () => {
+    // (more targets than any rule set names, each a language's with a region: the alphabet each is read by is its language's,
+    // whatever was asked before it)
+    const languages = ['de', 'fr', 'es', 'pt', 'it', 'nl', 'pl', 'tr', 'cs', 'sv', 'ru', 'uk', 'id', 'ms', 'bg', 'en']
+    const regions = ['AT', 'BE', 'BR', 'CA', 'CH', 'DE', 'ES', 'FR', 'GB', 'IN', 'IT', 'MX', 'NL', 'PL', 'RU', 'SE', 'US']
+    const run = { script: 'latin' as const, cls: 'serif' as const, bold: true, italic: true, caps: false, design: 'libertine' as const }
+    const own = new Map(languages.map((l) => [l, faceFor(rolesFor(l, 'libertine'), run)]))
+    let asked = 0
+    for (const r of regions)
+      for (const l of languages) {
+        expect(faceFor(rolesFor(`${l}-${r}`, 'libertine'), run), `${l}-${r}`).toBe(own.get(l))
+        asked++
+      }
+    expect(asked).toBeGreaterThan(256)
+  })
+})
+
+describe('the faces', () => {
+  it('no face is the system\'s', () => {
+    const GENERIC = /^(serif|sans-serif|monospace|cursive|fantasy|system-ui|ui-serif|ui-sans-serif|ui-monospace|ui-rounded|math|emoji|fangsong|-apple-system|BlinkMacSystemFont)$/i
+    const SYSTEM = /^(Times|Arial|Helvetica|Courier|Georgia|Verdana|Palatino|Cambria|Calibri|SimSun|SimHei|KaiTi|FangSong|PingFang|Hiragino|Songti|STSong|STKaiti|Yu ?Mincho|YuGothic|MS ?Mincho|MS ?Gothic|Meiryo|Batang|Gulim|Malgun|AppleMyungjo|Apple ?SD|Noto Serif CJK|Microsoft)/i
+    for (const [id, face] of Object.entries(FACES)) {
+      expect(face.id, id).toBe(id)
+      expect(face.family, id).toMatch(/^axt-[a-z0-9-]+$/)
+      expect(face.family, id).not.toMatch(GENERIC)
+      expect(face.file, id).not.toMatch(SYSTEM)
+      expect(face.file, id).toMatch(/^[A-Za-z0-9_-]+\.(otf|ttf)$/)
+      expect(['texlive', 'hosted'], id).toContain(face.source)
+      // what is hosted is Source Han Serif's regional OTFs and URW's base 35 release, and only they
+      expect(face.source === 'hosted', id).toBe(/^(SourceHanSerif(SC|TC|K)|NimbusRoman|NimbusSans|NimbusMonoPS)-/.test(face.file))
+      expect([300, 400, 500, 600, 700], id).toContain(face.weight)
+      expect(['normal', 'italic'], id).toContain(face.style)
     }
-    expect(rolesFor('zh-TW', 'cm').cjk).toEqual({ body: 'shs-tc-light', bold: 'shs-tc-semibold' })
-    expect(rolesFor('zh-Hant', 'times').cjk).toEqual({ body: 'shs-tc-regular', bold: 'shs-tc-bold' })
-    expect(rolesFor('ja', 'cm').cjk).toEqual({ body: 'haranoaji-light', bold: 'haranoaji-semibold' })
-    expect(rolesFor('ja', 'times').cjk).toEqual({ body: 'haranoaji-regular', bold: 'haranoaji-bold' })
-    // Korean: Source Han Serif K, as SC and TC (the maintainer, 2026-10-06)
-    expect(rolesFor('ko', 'cm').cjk).toEqual({ body: 'shs-k-light', bold: 'shs-k-semibold' })
-    expect(rolesFor('ko', 'times').cjk).toEqual({ body: 'shs-k-regular', bold: 'shs-k-bold' })
+    // one face a file, one family-weight-style a face
+    const files = Object.values(FACES).map(f => f.file)
+    expect(new Set(files).size).toBe(files.length)
+    const keys = Object.values(FACES).map(f => `${f.family}|${f.weight}|${f.style}`)
+    expect(new Set(keys).size).toBe(keys.length)
+    for (const file of ['packages/engine/src/fonts/font-roles.ts', 'packages/text/src/font-faces.ts', 'packages/engine/src/fonts/font-coverage.ts']) {
+      expect(readFileSync(file, 'utf8'), file).not.toMatch(/local\(/)
+    }
+  })
+
+  it('no family carries a name its face\'s licence reserves (OFL §3: a modified subset may not)', () => {
+    // the family is the name inside every served subset (the web's subsetter writes it as name IDs 1, 3, 4 and 6 and the CFF
+    // names), so it holds none of the names its face's licence reserves, compared as the licences do in effect: without
+    // case, spaces or punctuation. The names are the faces' own notices' (the web's credits); every face is in one row, so a
+    // face the table gains is a decision
+    const RESERVED: [RegExp, string[]][] = [
+      [/^shs-(sc|tc|k)-/, ['Source']],
+      [/^haranoaji-/, ['Harano Aji', 'Source']],
+      [/^(libertine|biolinum)-/, ['Linux Libertine', 'Biolinum']],
+      [/^erewhon-/, ['Heuristica', 'Erewhon']],
+      [/^cmun-/, ['Computer Modern Unicode fonts']],
+      [/^pt-mono-/, ['PT Sans', 'PT Serif', 'PT Mono']],
+      [/^dejavu-mono-/, ['Bitstream', 'Vera']],
+      [/^(fandolkai|bkai00mp|lm-|nimbus-|freemono-|xcharter-|ebgaramond-|domitian-|inconsolata-)/, []],
+    ]
+    const flat = (name: string) => name.toLowerCase().replace(/[^a-z0-9]/g, '')
+    const rowsOf = (id: string) => RESERVED.filter(([ids]) => ids.test(id))
+    const held = (family: string, id: string) => rowsOf(id).flatMap(([, names]) => names).filter(name => flat(family).includes(flat(name)))
+    for (const [id, face] of Object.entries(FACES)) {
+      expect(rowsOf(id), id).toHaveLength(1)
+      expect(held(face.family, id), id).toEqual([])
+    }
+    // a family that spelled its face's name would be found: Source Han Serif's, which its group's own name does not hold
+    expect(held('axt-source-han-serif-sc', 'shs-sc-regular')).toEqual(['Source'])
+    expect(held('axt-haranoaji', 'haranoaji-regular')).toEqual(['Harano Aji'])
+    // the four groups whose own names hold one are declared under neutral names; the face ids and files stay
+    expect(Object.values(FACES).filter(f => /^(haranoaji|biolinum|erewhon|pt-mono)-/.test(f.id))).toHaveLength(13)
+    expect(new Set(Object.values(FACES).filter(f => /^haranoaji-/.test(f.id)).map(f => f.family))).toEqual(new Set(['axt-mincho']))
+    expect(new Set(Object.values(FACES).filter(f => /^biolinum-/.test(f.id)).map(f => f.family))).toEqual(new Set(['axt-humanist-sans']))
+    expect(new Set(Object.values(FACES).filter(f => /^erewhon-/.test(f.id)).map(f => f.family))).toEqual(new Set(['axt-transitional']))
+    expect(new Set(Object.values(FACES).filter(f => /^pt-mono-/.test(f.id)).map(f => f.family))).toEqual(new Set(['axt-slab-mono']))
+  })
+
+  it('the table\'s faces are the plan\'s', () => {
+    // (a CJK group's Regular and Bold, which the roles draw, and its Medium, which none does; its Light and SemiBold gone with the
+    // ruling of 2026-10-29)
+    const cjk = ['regular', 'medium', 'bold']
+    const four = ['regular', 'bold', 'italic', 'bolditalic']
+    const want = [
+      ...['shs-sc', 'shs-tc', 'shs-k', 'haranoaji'].flatMap(g => cjk.map(w => `${g}-${w}`)),
+      'fandolkai', 'bkai00mp',
+      ...['lm-roman', 'lm-sans', 'nimbus-roman', 'nimbus-sans', 'freemono', 'libertine', 'biolinum', 'xcharter', 'ebgaramond', 'erewhon', 'cmun-serif', 'cmun-sans', 'cmun-mono', 'domitian', 'dejavu-mono'].flatMap(g => four.map(s => `${g}-${s}`)),
+      'lm-roman-caps', 'lm-roman-caps-italic', 'lm-mono-regular', 'lm-mono-italic', 'lm-math',
+      'inconsolata-regular', 'inconsolata-bold', 'pt-mono-regular', 'pt-mono-bold',
+    ]
+    expect(Object.keys(FACES).sort()).toEqual(want.sort())
+    expect(FACES['shs-sc-regular']).toMatchObject({ file: 'SourceHanSerifSC-Regular.otf', family: 'axt-shs-sc', weight: 400, style: 'normal', source: 'hosted' })
+    expect(FACES['haranoaji-bold']).toMatchObject({ file: 'HaranoAjiMincho-Bold.otf', family: 'axt-mincho', weight: 700, source: 'texlive' })
+    expect(FACES['lm-sans-bolditalic']).toMatchObject({ file: 'lmsans10-boldoblique.otf', family: 'axt-lm-sans', weight: 700, style: 'italic' })
+    expect(FACES['lm-roman-caps-italic']).toMatchObject({ file: 'lmromancaps10-oblique.otf', family: 'axt-lm-roman-caps', weight: 400, style: 'italic' })
+    expect(FACES['cmun-mono-bolditalic']).toMatchObject({ file: 'cmuntx.otf', family: 'axt-cmun-mono', weight: 700, style: 'italic' })
+    expect(FACES['dejavu-mono-italic']).toMatchObject({ file: 'DejaVuSansMono-Oblique.ttf', family: 'axt-dejavu-mono', weight: 400, style: 'italic' })
+    expect(FACES['biolinum-bolditalic']).toMatchObject({ file: 'LinBiolinum_RBO.otf', family: 'axt-humanist-sans', weight: 700, style: 'italic' })
+    expect(FACES['lm-sans-italic']).toMatchObject({ file: 'lmsans10-oblique.otf', family: 'axt-lm-sans', weight: 400, style: 'italic' })
+    expect(FACES['nimbus-roman-bolditalic']).toMatchObject({ file: 'NimbusRoman-BoldItalic.otf', family: 'axt-nimbus-roman', weight: 700, style: 'italic', source: 'hosted' })
+    expect(FACES['lm-roman-caps']).toMatchObject({ file: 'lmromancaps10-regular.otf', family: 'axt-lm-roman-caps' })
+  })
+
+  it('every face has its coverage, metrics and licence', () => {
+    expect(Object.keys(COVERAGE).sort()).toEqual(Object.keys(FACES).sort())
+    expect(Object.keys(METRICS).sort()).toEqual(Object.keys(FACES).sort())
+    for (const id of Object.keys(FACES)) {
+      const r = COVERAGE[id] ?? []
+      expect(r.length % 2, id).toBe(0)
+      expect(r.length, id).toBeGreaterThan(0)
+      for (let i = 0; i + 1 < r.length; i += 2) {
+        const start = r[i]!, end = r[i + 1]!
+        expect(Number.isInteger(start) && Number.isInteger(end), id).toBe(true)
+        expect(start >= 0 && start <= end && end <= 0x10ffff, `${id} range ${i / 2}`).toBe(true)
+        // sorted and disjoint, and two ranges that touch are one
+        if (i > 0) expect(start > r[i - 1]! + 1, `${id} range ${i / 2}`).toBe(true)
+      }
+      const m = METRICS[id]!
+      expect(m.unitsPerEm, id).toBeGreaterThanOrEqual(16)
+      expect(m.ascent, id).toBeGreaterThan(0)
+      expect(m.descent, id).toBeGreaterThanOrEqual(0)
+      expect(typeof m.smcp, id).toBe('boolean')
+      expect(m.sha256, id).toMatch(/^[0-9a-f]{64}$/)
+    }
+    // the same file, the same digest
+    const digest = new Map<string, string>()
+    for (const [id, f] of Object.entries(FACES)) {
+      const sha = METRICS[id]?.sha256 ?? ''
+      const seen = digest.get(sha)
+      expect(seen === undefined || seen === f.file, id).toBe(true)
+      digest.set(sha, f.file)
+    }
+    expect(COVERAGE_SOURCE.release['source-han-serif']).toMatch(/^\d+\.\d+R?$/)
+    expect(COVERAGE_SOURCE.release.texlive).toMatch(/^texlive\/texlive@sha256:[0-9a-f]{64}$/)
+    expect(COVERAGE_SOURCE.release['urw-base35-fonts']).toBe('20200910')
+
+    const web = (re: RegExp) => Object.values(FACES).filter(f => re.test(f.id)).map(f => f.web)
+    for (const f of Object.values(FACES)) {
+      // an SPDX identifier, an identifier WITH an exception, or a LicenseRef-
+      expect(f.licence, f.id).toMatch(/^(LicenseRef-[A-Za-z0-9.-]+|[A-Za-z0-9.+-]+(?: WITH [A-Za-z0-9.+-]+)?)$/)
+      expect(['ofl', 'gfl', 'notice', 'gpl', 'review'], f.id).toContain(f.web)
+      // an OFL face is served as one, and only an OFL face
+      expect(f.licence === 'OFL-1.1', f.id).toBe(f.web === 'ofl')
+    }
+    // nothing is left for review: URW's own release carries its embedding exception (the maintainer, 2026-10-06)
+    expect(Object.values(FACES).filter(f => f.web === 'review')).toEqual([])
+    expect(new Set(web(/^lm-/))).toEqual(new Set(['gfl']))
+    expect(new Set(web(/^(bkai00mp|xcharter-|dejavu-mono-)/))).toEqual(new Set(['notice']))
+    expect(Object.values(FACES).filter(f => f.web === 'gpl').map(f => f.id).sort())
+      .toEqual(['fandolkai', ...['nimbus-roman', 'nimbus-sans', 'freemono'].flatMap(g => ['regular', 'bold', 'italic', 'bolditalic'].map(s => `${g}-${s}`))].sort())
+    expect(new Set(web(/^(shs-|haranoaji-|cmun-|domitian-|erewhon-|ebgaramond-|libertine-|biolinum-)/))).toEqual(new Set(['ofl']))
+  })
+
+})
+
+// Task 7's fix round 1 (task-7-review.md): each row failed before its fix
+describe('the fixes of the review', () => {
+
+  it('M6 (with M1 and M2): every face\'s licence identifier, as its name table or licence file states it', () => {
+    const GUST = 'LicenseRef-GUST-Font-License', URW = 'AGPL-3.0-only WITH PS-or-PDF-font-exception-20170817'
+    const BY_GROUP: Record<string, string> = {
+      'shs-sc': 'OFL-1.1', 'shs-tc': 'OFL-1.1', 'shs-k': 'OFL-1.1', mincho: 'OFL-1.1',
+      fandolkai: 'GPL-3.0-or-later WITH Font-exception-2.0', bkai00mp: 'Arphic-1999',
+      'lm-roman': GUST, 'lm-roman-caps': GUST, 'lm-sans': GUST, 'lm-mono': GUST, 'lm-math': GUST, freemono: 'GPL-3.0-or-later WITH Font-exception-2.0',
+      libertine: 'OFL-1.1', 'humanist-sans': 'OFL-1.1', xcharter: 'Bitstream-Charter', ebgaramond: 'OFL-1.1', transitional: 'OFL-1.1',
+      'cmun-serif': 'OFL-1.1', 'cmun-sans': 'OFL-1.1', 'cmun-mono': 'OFL-1.1', domitian: 'OFL-1.1',
+      'nimbus-roman': URW, 'nimbus-sans': URW,
+      'dejavu-mono': 'Bitstream-Vera', 'slab-mono': 'ParaType-Free-Font-1.3',
+    }
+    const BY_FACE: Record<string, string> = { 'inconsolata-regular': 'OFL-1.1', 'inconsolata-bold': 'Apache-2.0' }
+    for (const f of Object.values(FACES)) expect(f.licence, f.id).toBe(BY_FACE[f.id] ?? BY_GROUP[f.family.slice('axt-'.length)])
+  })
+
+})
+
+
+// ---- the role table's roles, rolesFor, faceFor and canDrawIn (packages/engine src/fonts/font-roles.ts), their CJK faces the rebuilt
+// typesetter's rule data (helpers/roles.ts). Held here since lane c1-rewrites: today's halves' (font-roles-today) read the CJK faces
+// from today's layout rules and checked today's canDraw (rules/font-draw.mjs) and a CJK run's faces (layer-proto/fonts.mjs), which
+// the cut-over deletes with today's engine; the roles' assertions stay, canDraw's go, and where one held what the role table
+// chose (M3: the face drawn holds the target's letters) it is restated on canDrawIn over that face's coverage
+
+const run =(o: Partial<{ script: 'cjk' | 'latin'; cls: FontClass['cls']; design: Design; bold: boolean; italic: boolean; caps: boolean }>) =>
+  ({ script: 'latin' as const, cls: 'serif' as const, design: 'cm' as const, bold: false, italic: false, caps: false, ...o })
+const STYLES = [[false, false, 'regular'], [true, false, 'bold'], [false, true, 'italic'], [true, true, 'bolditalic']] as const
+
+describe('the roles over the rebuilt typesetter\'s CJK faces (rolesFor and faceFor: packages/engine fonts, packages/typeset rule data)', () => {
+  it('the CJK roles follow the rulings: Regular and Bold beside every English family', () => {
+    // (no Kai: emphasis is the body sheared, the owner's ruling of 2026-10-19; no Light and SemiBold beside Computer Modern
+    // and Garamond, which read lighter than the page they sit in: the maintainer's ruling of 2026-10-29)
+    const families = ['cm', 'times', 'libertine', 'palatino', 'charter', 'garamond', 'utopia', 'other'] as const
+    // (Korean: Source Han Serif K, as SC and TC, the maintainer, 2026-10-06)
+    const groups = { zh: 'shs-sc', 'zh-TW': 'shs-tc', 'zh-Hant': 'shs-tc', ja: 'haranoaji', ko: 'shs-k' } as const
+    for (const [target, group] of Object.entries(groups)) for (const family of families) {
+      expect(rolesFor(target, family).cjk, `${target} ${family}`).toEqual({ body: `${group}-regular`, bold: `${group}-bold` })
+    }
     for (const lang of ['de', 'fr', 'ru']) expect(rolesFor(lang, 'cm').cjk, lang).toBeNull()
     expect(rolesFor('zh', 'cm')).toMatchObject({ target: 'zh', family: 'cm' })
     expect(() => rolesFor('ar', 'cm')).toThrow()
@@ -98,8 +314,10 @@ describe('the roles', () => {
 
   it('the fallbacks: TC to SC at its weight, every Latin face to Latin Modern Math, none for a Kai no role takes', () => {
     const tw = rolesFor('zh-TW', 'cm')
-    expect(tw.fallbacks['shs-tc-light']).toEqual(['shs-sc-light'])
-    expect(tw.fallbacks['shs-tc-semibold']).toEqual(['shs-sc-semibold'])
+    expect(tw.fallbacks['shs-tc-regular']).toEqual(['shs-sc-regular'])
+    expect(tw.fallbacks['shs-tc-bold']).toEqual(['shs-sc-bold'])
+    // (TC's weights the catalog holds, and no other: its Light and SemiBold went with the ruling of 2026-10-29)
+    expect(Object.keys(tw.fallbacks).filter(id => id.startsWith('shs-tc-')).sort()).toEqual(['shs-tc-bold', 'shs-tc-medium', 'shs-tc-regular'])
     expect(tw.fallbacks.bkai00mp).toBeUndefined()
     expect(rolesFor('zh', 'times').fallbacks.fandolkai).toBeUndefined()
     for (const [id, face] of Object.entries(FACES)) {
@@ -161,195 +379,25 @@ describe('the roles', () => {
     expect(faceFor(rolesFor('de', 'cm'), run({ design: 'cm', caps: true, bold: true, italic: true }))).toBe('lm-roman-bolditalic')
     // CJK runs: the body family by weight and slant, whatever the run's class (no sans, no fangsong: §4.4)
     const zh = rolesFor('zh', 'cm')
-    expect(faceFor(zh, run({ script: 'cjk', cls: 'sans', design: 'helvetica' }))).toBe('shs-sc-light')
-    expect(faceFor(zh, run({ script: 'cjk', cls: 'mono', design: 'cmtt' }))).toBe('shs-sc-light')
-    expect(faceFor(zh, run({ script: 'cjk', cls: 'sans', design: 'helvetica', bold: true }))).toBe('shs-sc-semibold')
-    // a CJK run's face is its weight's, slanted or not: its slant is a shear of that face where it is drawn (layer-proto/
-    // fonts.mjs CJK_SLANT_DEG, the owner's ruling of 2026-10-19), a bold italic run's the bold face's
-    expect(faceFor(zh, run({ script: 'cjk', italic: true }))).toBe('shs-sc-light')
-    expect(faceFor(zh, run({ script: 'cjk', bold: true, italic: true }))).toBe('shs-sc-semibold')
+    expect(faceFor(zh, run({ script: 'cjk', cls: 'sans', design: 'helvetica' }))).toBe('shs-sc-regular')
+    expect(faceFor(zh, run({ script: 'cjk', cls: 'mono', design: 'cmtt' }))).toBe('shs-sc-regular')
+    expect(faceFor(zh, run({ script: 'cjk', cls: 'sans', design: 'helvetica', bold: true }))).toBe('shs-sc-bold')
+    // a CJK run's face is its weight's, slanted or not: its slant is a shear of that face where it is drawn (the owner's ruling
+    // of 2026-10-19), a bold italic run's the bold face's
+    expect(faceFor(zh, run({ script: 'cjk', italic: true }))).toBe('shs-sc-regular')
+    expect(faceFor(zh, run({ script: 'cjk', bold: true, italic: true }))).toBe('shs-sc-bold')
     expect(faceFor(rolesFor('zh', 'times'), run({ script: 'cjk', bold: true, italic: true }))).toBe('shs-sc-bold')
     expect(faceFor(rolesFor('zh-TW', 'times'), run({ script: 'cjk', italic: true }))).toBe('shs-tc-regular')
     expect(faceFor(rolesFor('zh-TW', 'times'), run({ script: 'cjk', bold: true, italic: true }))).toBe('shs-tc-bold')
     const ja = rolesFor('ja', 'times')
     expect(faceFor(ja, run({ script: 'cjk', italic: true }))).toBe('haranoaji-regular')
     expect(faceFor(ja, run({ script: 'cjk', bold: true, italic: true }))).toBe('haranoaji-bold')
-    expect(faceFor(rolesFor('ko', 'cm'), run({ script: 'cjk', bold: true }))).toBe('shs-k-semibold')
+    expect(faceFor(rolesFor('ko', 'cm'), run({ script: 'cjk', bold: true }))).toBe('shs-k-bold')
   })
 })
 
-describe('the faces', () => {
-  it('no face is the system\'s', () => {
-    const GENERIC = /^(serif|sans-serif|monospace|cursive|fantasy|system-ui|ui-serif|ui-sans-serif|ui-monospace|ui-rounded|math|emoji|fangsong|-apple-system|BlinkMacSystemFont)$/i
-    const SYSTEM = /^(Times|Arial|Helvetica|Courier|Georgia|Verdana|Palatino|Cambria|Calibri|SimSun|SimHei|KaiTi|FangSong|PingFang|Hiragino|Songti|STSong|STKaiti|Yu ?Mincho|YuGothic|MS ?Mincho|MS ?Gothic|Meiryo|Batang|Gulim|Malgun|AppleMyungjo|Apple ?SD|Noto Serif CJK|Microsoft)/i
-    for (const [id, face] of Object.entries(FACES)) {
-      expect(face.id, id).toBe(id)
-      expect(face.family, id).toMatch(/^axt-[a-z0-9-]+$/)
-      expect(face.family, id).not.toMatch(GENERIC)
-      expect(face.file, id).not.toMatch(SYSTEM)
-      expect(face.file, id).toMatch(/^[A-Za-z0-9_-]+\.(otf|ttf)$/)
-      expect(['texlive', 'hosted'], id).toContain(face.source)
-      // what is hosted is Source Han Serif's regional OTFs and URW's base 35 release, and only they
-      expect(face.source === 'hosted', id).toBe(/^(SourceHanSerif(SC|TC|K)|NimbusRoman|NimbusSans|NimbusMonoPS)-/.test(face.file))
-      expect([300, 400, 500, 600, 700], id).toContain(face.weight)
-      expect(['normal', 'italic'], id).toContain(face.style)
-    }
-    // one face a file, one family-weight-style a face
-    const files = Object.values(FACES).map(f => f.file)
-    expect(new Set(files).size).toBe(files.length)
-    const keys = Object.values(FACES).map(f => `${f.family}|${f.weight}|${f.style}`)
-    expect(new Set(keys).size).toBe(keys.length)
-    for (const file of ['src/pdf-reader/engine/rules/font-roles.mjs', 'src/pdf-reader/engine/rules/font-coverage.mjs']) {
-      expect(readFileSync(file, 'utf8'), file).not.toMatch(/local\(/)
-    }
-  })
-
-  it('no family carries a name its face\'s licence reserves (OFL §3: a modified subset may not)', () => {
-    // the family is the name inside every served subset (the web's subsetter writes it as name IDs 1, 3, 4 and 6 and the CFF
-    // names), so it holds none of the names its face's licence reserves, compared as the licences do in effect: without
-    // case, spaces or punctuation. The names are the faces' own notices' (the web's credits); every face is in one row, so a
-    // face the table gains is a decision
-    const RESERVED: [RegExp, string[]][] = [
-      [/^shs-(sc|tc|k)-/, ['Source']],
-      [/^haranoaji-/, ['Harano Aji', 'Source']],
-      [/^(libertine|biolinum)-/, ['Linux Libertine', 'Biolinum']],
-      [/^erewhon-/, ['Heuristica', 'Erewhon']],
-      [/^cmun-/, ['Computer Modern Unicode fonts']],
-      [/^pt-mono-/, ['PT Sans', 'PT Serif', 'PT Mono']],
-      [/^dejavu-mono-/, ['Bitstream', 'Vera']],
-      [/^(fandolkai|bkai00mp|lm-|nimbus-|freemono-|xcharter-|ebgaramond-|domitian-|inconsolata-)/, []],
-    ]
-    const flat = (name: string) => name.toLowerCase().replace(/[^a-z0-9]/g, '')
-    const rowsOf = (id: string) => RESERVED.filter(([ids]) => ids.test(id))
-    const held = (family: string, id: string) => rowsOf(id).flatMap(([, names]) => names).filter(name => flat(family).includes(flat(name)))
-    for (const [id, face] of Object.entries(FACES)) {
-      expect(rowsOf(id), id).toHaveLength(1)
-      expect(held(face.family, id), id).toEqual([])
-    }
-    // a family that spelled its face's name would be found: Source Han Serif's, which its group's own name does not hold
-    expect(held('axt-source-han-serif-sc', 'shs-sc-regular')).toEqual(['Source'])
-    expect(held('axt-haranoaji', 'haranoaji-regular')).toEqual(['Harano Aji'])
-    // the four groups whose own names hold one are declared under neutral names; the face ids and files stay
-    expect(Object.values(FACES).filter(f => /^(haranoaji|biolinum|erewhon|pt-mono)-/.test(f.id))).toHaveLength(15)
-    expect(new Set(Object.values(FACES).filter(f => /^haranoaji-/.test(f.id)).map(f => f.family))).toEqual(new Set(['axt-mincho']))
-    expect(new Set(Object.values(FACES).filter(f => /^biolinum-/.test(f.id)).map(f => f.family))).toEqual(new Set(['axt-humanist-sans']))
-    expect(new Set(Object.values(FACES).filter(f => /^erewhon-/.test(f.id)).map(f => f.family))).toEqual(new Set(['axt-transitional']))
-    expect(new Set(Object.values(FACES).filter(f => /^pt-mono-/.test(f.id)).map(f => f.family))).toEqual(new Set(['axt-slab-mono']))
-  })
-
-  it('the table\'s faces are the plan\'s', () => {
-    const cjk = ['light', 'regular', 'medium', 'semibold', 'bold']
-    const four = ['regular', 'bold', 'italic', 'bolditalic']
-    const want = [
-      ...['shs-sc', 'shs-tc', 'shs-k', 'haranoaji'].flatMap(g => cjk.map(w => `${g}-${w}`)),
-      'fandolkai', 'bkai00mp',
-      ...['lm-roman', 'lm-sans', 'nimbus-roman', 'nimbus-sans', 'freemono', 'libertine', 'biolinum', 'xcharter', 'ebgaramond', 'erewhon', 'cmun-serif', 'cmun-sans', 'cmun-mono', 'domitian', 'dejavu-mono'].flatMap(g => four.map(s => `${g}-${s}`)),
-      'lm-roman-caps', 'lm-roman-caps-italic', 'lm-mono-regular', 'lm-mono-italic', 'lm-math',
-      'inconsolata-regular', 'inconsolata-bold', 'pt-mono-regular', 'pt-mono-bold',
-    ]
-    expect(Object.keys(FACES).sort()).toEqual(want.sort())
-    expect(FACES['shs-sc-light']).toMatchObject({ file: 'SourceHanSerifSC-Light.otf', family: 'axt-shs-sc', weight: 300, style: 'normal', source: 'hosted' })
-    expect(FACES['haranoaji-semibold']).toMatchObject({ file: 'HaranoAjiMincho-SemiBold.otf', family: 'axt-mincho', weight: 600, source: 'texlive' })
-    expect(FACES['lm-sans-bolditalic']).toMatchObject({ file: 'lmsans10-boldoblique.otf', family: 'axt-lm-sans', weight: 700, style: 'italic' })
-    expect(FACES['lm-roman-caps-italic']).toMatchObject({ file: 'lmromancaps10-oblique.otf', family: 'axt-lm-roman-caps', weight: 400, style: 'italic' })
-    expect(FACES['cmun-mono-bolditalic']).toMatchObject({ file: 'cmuntx.otf', family: 'axt-cmun-mono', weight: 700, style: 'italic' })
-    expect(FACES['dejavu-mono-italic']).toMatchObject({ file: 'DejaVuSansMono-Oblique.ttf', family: 'axt-dejavu-mono', weight: 400, style: 'italic' })
-    expect(FACES['biolinum-bolditalic']).toMatchObject({ file: 'LinBiolinum_RBO.otf', family: 'axt-humanist-sans', weight: 700, style: 'italic' })
-    expect(FACES['lm-sans-italic']).toMatchObject({ file: 'lmsans10-oblique.otf', family: 'axt-lm-sans', weight: 400, style: 'italic' })
-    expect(FACES['nimbus-roman-bolditalic']).toMatchObject({ file: 'NimbusRoman-BoldItalic.otf', family: 'axt-nimbus-roman', weight: 700, style: 'italic', source: 'hosted' })
-    expect(FACES['lm-roman-caps']).toMatchObject({ file: 'lmromancaps10-regular.otf', family: 'axt-lm-roman-caps' })
-  })
-
-  it('every face has its coverage, metrics and licence', () => {
-    expect(Object.keys(COVERAGE).sort()).toEqual(Object.keys(FACES).sort())
-    expect(Object.keys(METRICS).sort()).toEqual(Object.keys(FACES).sort())
-    for (const id of Object.keys(FACES)) {
-      const r = COVERAGE[id] ?? []
-      expect(r.length % 2, id).toBe(0)
-      expect(r.length, id).toBeGreaterThan(0)
-      for (let i = 0; i + 1 < r.length; i += 2) {
-        const start = r[i]!, end = r[i + 1]!
-        expect(Number.isInteger(start) && Number.isInteger(end), id).toBe(true)
-        expect(start >= 0 && start <= end && end <= 0x10ffff, `${id} range ${i / 2}`).toBe(true)
-        // sorted and disjoint, and two ranges that touch are one
-        if (i > 0) expect(start > r[i - 1]! + 1, `${id} range ${i / 2}`).toBe(true)
-      }
-      const m = METRICS[id]!
-      expect(m.unitsPerEm, id).toBeGreaterThanOrEqual(16)
-      expect(m.ascent, id).toBeGreaterThan(0)
-      expect(m.descent, id).toBeGreaterThanOrEqual(0)
-      expect(typeof m.smcp, id).toBe('boolean')
-      expect(m.sha256, id).toMatch(/^[0-9a-f]{64}$/)
-    }
-    // the same file, the same digest
-    const digest = new Map<string, string>()
-    for (const [id, f] of Object.entries(FACES)) {
-      const sha = METRICS[id]?.sha256 ?? ''
-      const seen = digest.get(sha)
-      expect(seen === undefined || seen === f.file, id).toBe(true)
-      digest.set(sha, f.file)
-    }
-    expect(COVERAGE_SOURCE.release['source-han-serif']).toMatch(/^\d+\.\d+R?$/)
-    expect(COVERAGE_SOURCE.release.texlive).toMatch(/^texlive\/texlive@sha256:[0-9a-f]{64}$/)
-    expect(COVERAGE_SOURCE.release['urw-base35-fonts']).toBe('20200910')
-
-    const web = (re: RegExp) => Object.values(FACES).filter(f => re.test(f.id)).map(f => f.web)
-    for (const f of Object.values(FACES)) {
-      // an SPDX identifier, an identifier WITH an exception, or a LicenseRef-
-      expect(f.licence, f.id).toMatch(/^(LicenseRef-[A-Za-z0-9.-]+|[A-Za-z0-9.+-]+(?: WITH [A-Za-z0-9.+-]+)?)$/)
-      expect(['ofl', 'gfl', 'notice', 'gpl', 'review'], f.id).toContain(f.web)
-      // an OFL face is served as one, and only an OFL face
-      expect(f.licence === 'OFL-1.1', f.id).toBe(f.web === 'ofl')
-    }
-    // nothing is left for review: URW's own release carries its embedding exception (the maintainer, 2026-10-06)
-    expect(Object.values(FACES).filter(f => f.web === 'review')).toEqual([])
-    expect(new Set(web(/^lm-/))).toEqual(new Set(['gfl']))
-    expect(new Set(web(/^(bkai00mp|xcharter-|dejavu-mono-)/))).toEqual(new Set(['notice']))
-    expect(Object.values(FACES).filter(f => f.web === 'gpl').map(f => f.id).sort())
-      .toEqual(['fandolkai', ...['nimbus-roman', 'nimbus-sans', 'freemono'].flatMap(g => ['regular', 'bold', 'italic', 'bolditalic'].map(s => `${g}-${s}`))].sort())
-    expect(new Set(web(/^(shs-|haranoaji-|cmun-|domitian-|erewhon-|ebgaramond-|libertine-|biolinum-)/))).toEqual(new Set(['ofl']))
-  })
-
-  it('canDraw by coverage and fallbacks', () => {
-    const tw = rolesFor('zh-TW', 'cm')
-    const alone = { ...tw, fallbacks: {} }
-    // the first character of `face`'s coverage, from the CJK blocks on, that `other` alone cannot draw
-    const firstLacking = (face: FaceId, other: FaceId) => {
-      const r = COVERAGE[face] ?? []
-      for (let i = 0; i + 1 < r.length; i += 2) {
-        for (let cp = Math.max(r[i]!, 0x2e80); cp <= r[i + 1]!; cp++) if (!canDraw(String.fromCodePoint(cp), [other], alone)) return cp
-      }
-      return -1
-    }
-    // a character Source Han Serif SC holds and TC lacks is drawn through TC's fallback. Release 2.003R's language OTFs
-    // map the same 44,779 code points in SC and in TC, so there it draws nothing TC cannot: the coverage is then equal
-    const only = firstLacking('shs-sc-light', 'shs-tc-light')
-    if (only < 0) expect(COVERAGE['shs-tc-light']).toEqual(COVERAGE['shs-sc-light'])
-    else {
-      expect(canDraw(String.fromCodePoint(only), ['shs-tc-light'], tw)).toBe(true)
-      expect(canDraw(String.fromCodePoint(only), ['shs-tc-light'], alone)).toBe(false)
-    }
-    // a character no face holds (the private use area), and one face unknown to the table
-    expect(canDraw('\ue000', Object.keys(FACES), tw)).toBe(false)
-    expect(canDraw(`a\ue000`, ['lm-roman-regular'], tw)).toBe(false)
-    expect(canDraw('a', ['no-such-face'], { ...tw, fallbacks: {} })).toBe(false)
-    // white space is never a character to draw
-    expect(canDraw(' \t\n\u00a0\u3000', [], tw)).toBe(true)
-    expect(canDraw('', [], tw)).toBe(true)
-    expect(canDraw('a b', ['lm-roman-regular'], tw)).toBe(true)
-    // a symbol a Latin face lacks comes from Latin Modern Math
-    let symbol = -1
-    for (let cp = 0x2200; cp <= 0x22ff && symbol < 0; cp++) if (covers('lm-math', cp) && !covers('nimbus-roman-regular', cp)) symbol = cp
-    expect(symbol).toBeGreaterThan(0)
-    expect(canDraw(String.fromCodePoint(symbol), ['nimbus-roman-regular'], rolesFor('de', 'times'))).toBe(true)
-    expect(canDraw(String.fromCodePoint(symbol), ['nimbus-roman-regular'], { ...rolesFor('de', 'times'), fallbacks: {} })).toBe(false)
-    // a code point past the BMP is one character
-    expect(canDraw('\u{1F600}', ['lm-roman-regular'], tw)).toBe(covers('lm-roman-regular', 0x1f600) || covers('lm-math', 0x1f600))
-  })
-})
-
-// Task 7's fix round 1 (task-7-review.md): each row failed before its fix
-describe('the fixes of the review', () => {
+// Task 7's fix round 1 (task-7-review.md), the rows of the roles and of canDrawIn: each failed before its fix
+describe('the fixes of the review, on the role table over the typesetter\'s CJK faces', () => {
   const LATIN = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
   // each target's own letters: what a face must hold to set its text
   const LETTERS: Record<string, string> = {
@@ -357,13 +405,10 @@ describe('the fixes of the review', () => {
     pt: `${LATIN}ÃÕÁÂÀÇÉÊÍÓÔÚÜãõáâàçéêíóôúü`, ru: 'АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя', zh: LATIN,
   }
   const DESIGNS: Design[] = ['cm', 'other', 'times', 'libertine', 'palatino', 'charter', 'garamond', 'utopia', 'helvetica', 'cmss', 'courier', 'cmtt', 'beramono', 'inconsolata', 'biolinum']
+  /** whether a face's own coverage holds every character of a text: canDrawIn over that face's ranges alone */
+  const holds = (text: string, id: FaceId) => canDrawIn(text, [COVERAGE[id] ?? []])
 
-  it('E2: canDrawIn is canDraw over the ranges a host serves: a character in none of them is not drawable', () => {
-    // a face's whole coverage is canDraw's own check
-    const tw = rolesFor('de', 'times')
-    for (const text of ['Hello, world', 'caf\u00e9', '\u03b1\u03b2', '\u4e2d\u6587', '\ue000', '\u{1F600}']) {
-      expect(canDrawIn(text, [COVERAGE['nimbus-roman-regular']!, COVERAGE['lm-math']!]), text).toBe(canDraw(text, ['nimbus-roman-regular'], tw))
-    }
+  it('E2: canDrawIn over the ranges a host serves: a character in none of them is not drawable', () => {
     // slices: ranges cut from a face's coverage, each its own list; a character is drawable when any slice holds it
     const ascii = [0x20, 0x7e], latin1 = [0xa0, 0xff]
     expect(canDrawIn('abc', [ascii])).toBe(true)
@@ -383,32 +428,20 @@ describe('the fixes of the review', () => {
     expect(canDrawIn('a\u200bb', [ascii])).toBe(true)
   })
 
-  it('I2: canDraw skips the invisible characters, as the TeX path drops them', () => {
-    const zh = rolesFor('zh', 'cm'), ja = rolesFor('ja', 'cm'), ko = rolesFor('ko', 'cm')
-    // a zero width space, non-joiner, joiner, word joiner, byte order mark, soft hyphen, variation selector
-    for (const ch of ['\u200b', '\u200c', '\u200d', '\u2060', '\ufeff', '\u00ad', '\ufe00']) {
-      expect(canDraw(`\u4e2d${ch}\u6587`, ['shs-sc-light'], zh), ch.codePointAt(0)!.toString(16)).toBe(true)
-      expect(canDraw(`\u65e5${ch}\u672c`, ['haranoaji-light'], ja)).toBe(true)
-      expect(canDraw(`\ud55c${ch}\uad6d`, ['shs-k-light'], ko)).toBe(true)
-    }
-    // a visible character no face holds still is not drawable
-    expect(canDraw('\u4e2d\u200b\ue000', ['shs-sc-light'], zh)).toBe(false)
-  })
-
-  it('M3: a style whose face lacks the target\'s letters falls back within its family, never to the original', () => {
+  it('M3: a style whose face lacks the target\'s letters falls back within its family, never to the original: the face drawn holds every letter of the target (its coverage, canDrawIn)', () => {
     const ru = rolesFor('ru', 'libertine')
     const face = faceFor(ru, run({ design: 'libertine', bold: true, italic: true }))
     expect(face).toBe('libertine-bold')
-    expect(canDraw(LETTERS.ru!, [face], { ...ru, fallbacks: {} })).toBe(true)
+    expect(holds(LETTERS.ru!, face)).toBe(true)
     // every design, target and style: the face drawn holds every letter of the target, with no fallback
     for (const target of Object.keys(LETTERS)) {
-      const roles = rolesFor(target, 'cm'), alone = { ...roles, fallbacks: {} }
+      const roles = rolesFor(target, 'cm')
       for (const design of DESIGNS) {
         const cls: FontClass['cls'] = ['helvetica', 'cmss', 'biolinum'].includes(design) ? 'sans' : ['courier', 'cmtt', 'beramono', 'inconsolata'].includes(design) ? 'mono' : 'serif'
         for (const [bold, italic, style] of STYLES) {
           for (const caps of [false, true]) {
             const id = faceFor(roles, run({ design, cls, bold, italic, caps }))
-            expect(canDraw(LETTERS[target]!, [id], alone), `${target} ${design} ${style}${caps ? ' caps' : ''}: ${id}`).toBe(true)
+            expect(holds(LETTERS[target]!, id), `${target} ${design} ${style}${caps ? ' caps' : ''}: ${id}`).toBe(true)
           }
         }
       }
@@ -429,30 +462,7 @@ describe('the fixes of the review', () => {
     expect(faceFor(rolesFor('ru', 'libertine'), run({ design: 'biolinum', cls: 'sans', italic: true }))).toBe('biolinum-italic')
   })
 
-  it('M6 (with M1 and M2): every face\'s licence identifier, as its name table or licence file states it', () => {
-    const GUST = 'LicenseRef-GUST-Font-License', URW = 'AGPL-3.0-only WITH PS-or-PDF-font-exception-20170817'
-    const BY_GROUP: Record<string, string> = {
-      'shs-sc': 'OFL-1.1', 'shs-tc': 'OFL-1.1', 'shs-k': 'OFL-1.1', mincho: 'OFL-1.1',
-      fandolkai: 'GPL-3.0-or-later WITH Font-exception-2.0', bkai00mp: 'Arphic-1999',
-      'lm-roman': GUST, 'lm-roman-caps': GUST, 'lm-sans': GUST, 'lm-mono': GUST, 'lm-math': GUST, freemono: 'GPL-3.0-or-later WITH Font-exception-2.0',
-      libertine: 'OFL-1.1', 'humanist-sans': 'OFL-1.1', xcharter: 'Bitstream-Charter', ebgaramond: 'OFL-1.1', transitional: 'OFL-1.1',
-      'cmun-serif': 'OFL-1.1', 'cmun-sans': 'OFL-1.1', 'cmun-mono': 'OFL-1.1', domitian: 'OFL-1.1',
-      'nimbus-roman': URW, 'nimbus-sans': URW,
-      'dejavu-mono': 'Bitstream-Vera', 'slab-mono': 'ParaType-Free-Font-1.3',
-    }
-    const BY_FACE: Record<string, string> = { 'inconsolata-regular': 'OFL-1.1', 'inconsolata-bold': 'Apache-2.0' }
-    for (const f of Object.values(FACES)) expect(f.licence, f.id).toBe(BY_FACE[f.id] ?? BY_GROUP[f.family.slice('axt-'.length)])
-  })
-
-  it('M6: fallbacks of more than one hop; the probe\'s body before its roman', () => {
-    const tw = rolesFor('zh-TW', 'cm')
-    // a character AR PL KaitiM Big5 lacks, drawn only two hops away
-    let lacks = -1
-    for (let cp = 0x4e00; cp <= 0x9fff && lacks < 0; cp++) if (!canDraw(String.fromCodePoint(cp), ['bkai00mp'], { ...tw, fallbacks: {} }) && canDraw(String.fromCodePoint(cp), ['shs-sc-light'], { ...tw, fallbacks: {} })) lacks = cp
-    expect(lacks).toBeGreaterThan(0)
-    const chain = { ...tw, fallbacks: { bkai00mp: ['lm-roman-regular'], 'lm-roman-regular': ['shs-sc-light'] } }
-    expect(canDraw(String.fromCodePoint(lacks), ['bkai00mp'], chain)).toBe(true)
-    expect(canDraw(String.fromCodePoint(lacks), ['bkai00mp'], { ...chain, fallbacks: { bkai00mp: ['lm-roman-regular'] } })).toBe(false)
+  it('M6: the probe\'s body before its roman', () => {
     expect(familyOfProbe({ rm: 'cmr', sf: 'cmss', tt: 'cmtt', body: 'ptm' })).toBe('times')
     // a body set sans keeps its roman's weights
     expect(familyOfProbe({ rm: 'ptm', sf: 'phv', tt: 'pcr', body: 'phv' })).toBe('times')
@@ -501,9 +511,9 @@ describe('the fixes of the review', () => {
 
   it('Korean: Source Han Serif K with its size correction, and no role draws Un Batang', () => {
     // Source Han Serif K's Hangul matched to SC's ideographs at the same weight (median ink heights, task-7-report.md)
-    const want: Record<string, number> = { 'shs-k-light': 0.956, 'shs-k-regular': 0.959, 'shs-k-medium': 0.965, 'shs-k-semibold': 0.967, 'shs-k-bold': 0.974 }
+    const want: Record<string, number> = { 'shs-k-regular': 0.959, 'shs-k-medium': 0.965, 'shs-k-bold': 0.974 }
     for (const f of Object.values(FACES)) expect(f.size, f.id).toBe(want[f.id] ?? 1)
-    expect(faceFor(rolesFor('ko', 'cm'), run({ script: 'cjk' }))).toBe('shs-k-light')
+    expect(faceFor(rolesFor('ko', 'cm'), run({ script: 'cjk' }))).toBe('shs-k-regular')
     expect(faceFor(rolesFor('ko', 'times'), run({ script: 'cjk', bold: true, italic: true }))).toBe('shs-k-bold')
     expect(Object.values(FACES).some(f => /unbatang/i.test(f.id + f.file))).toBe(false)
     for (const target of ['ko', 'zh', 'zh-TW', 'ja', 'de', 'ru']) {

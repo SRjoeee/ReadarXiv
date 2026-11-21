@@ -7,6 +7,7 @@ import { toBcp47 } from '@/config/languages'
 import { isBuiltInService } from '@/config/services'
 import { ABSTRACT_MAX_CHARS } from '@/core/extractor/context'
 import { isPermanentErrorKind } from '@/providers/types'
+import { alignmentOf, unitOfWire, wholeAlignment, wireOfContent } from '@/core/protector/units'
 import { createMessageTransport } from '@/shared/transport'
 import { plainSource } from '../engine/translate/mt.mjs'
 
@@ -32,18 +33,6 @@ export class EngineError extends Error {
     this.kind = kind
     if (partial) Object.assign(this, { partial, lost })
   }
-}
-
-/** the texts' indices in calls of at most `chars` characters and `items` texts, as one of the engine's batches holds */
-function chunks(texts, chars, items) {
-  const out = []
-  let cur = [], n = 0
-  texts.forEach((t, i) => {
-    if (cur.length && (n + t.length > chars || cur.length >= items)) { out.push(cur); cur = []; n = 0 }
-    cur.push(i); n += t.length
-  })
-  if (cur.length) out.push(cur)
-  return out
 }
 
 /**
@@ -73,37 +62,45 @@ export async function openEngine({ paper }) {
   // over, as each answer names it
   let serving = status.available ? (status.model ? `${status.providerId} (${status.model})` : status.providerId) : status.fallback.id
   const target = status.targetLanguage
-  // (a PDF's texts: the key holds none of the HTML page's rules, cache/key.ts CacheSource)
-  const cache = { paper, renderPath: status.renderPath, source: 'pdf' }
   /**
-   * Texts in the chain's wire format → their translations, `{ text, by, alignment? }` with `by` the identity that
-   * translated the text (the background's TranslatedSegment.identity) and `alignment` the engine's sentence lengths
+   * Texts in the chain's wire format → their translations, `{ text, by, alignment? }` with `by` the identity of the
+   * translator that answered (the chain's result's `by`) and `alignment` the engine's sentence lengths
    * where it reported them, null where one did not come back: a text the engine could not
    * take. A failure not of the texts' making is thrown once every batch has answered (EngineError's `lost`)
    */
   async function translate(texts, context = {}, cuts) {
-    // an empty context is left out, not sent as {}: it enters the cache key (src/core/run/call.ts)
-    const withContext = Object.keys(context).length ? { context } : {}
+    // (stage 4b: the background's one chain takes units, not wires. Until the reader's own units reach it (stage 5a),
+    // each text the engine wrote in the chain's format is read as a unit by the HTML page's shim, and a result written
+    // back as such a text: the engine reads it as it read a translator's reply. The chain cuts its own requests, asks a
+    // refused unit again and falls through per unit, so no chunking or halving is left here)
+    const format = status.renderPath
+    const read = texts.map((text, i) => unitOfWire(String(i), text, format, { sentences: format === 'markers' || (cuts?.[i]?.length ?? 0) > 0 }))
+    // an empty context is left out, not sent as {}
+    const res = await transport.translate({ units: read.map(r => r.unit), target, ...(Object.keys(context).length ? { context } : {}), scope })
+    if (!res.ok) {
+      if (isPermanentErrorKind(res.error.kind)) throw new EngineError(res.error.kind, res.error.message)
+      throw new EngineError(res.error.kind, res.error.message, { partial: texts.map(() => null), lost: new Set(texts.map((_, i) => i)) })
+    }
     const out = new Array(texts.length).fill(null), lost = new Set()
     let failure = null
-    const call = async idx => {
-      // each text's sentence cuts where given (the tags path: the service marks them, DESIGN §8.6; they enter the cache key)
-      const segments = idx.map(i => ({ id: String(i), text: texts[i], ...(cuts?.[i] ? { cuts: cuts[i] } : {}) }))
-      const res = await transport.translate({ request: { segments, source: 'en', target, ...withContext }, cache, scope })
-      // the engine's sentence lengths where it reported them and the service verified them (Microsoft's sentLen,
-      // DESIGN §8.6), from a translation made now or one the extension's cache kept with them: the highlight's sentences
-      // (mt.mjs sentencesOf)
-      for (const s of res.ok ? res.result.segments : (res.partial ?? [])) out[Number(s.id)] = { text: s.text, by: s.identity ?? null, ...(s.alignment ? { alignment: s.alignment } : {}) }
-      if (res.ok) { serving = res.result.model ? `${res.result.provider} (${res.result.model})` : res.result.provider; return }
-      if (isPermanentErrorKind(res.error.kind)) throw new EngineError(res.error.kind, res.error.message)
-      // one text the engine cannot take must not sink its batch: halves, as the HTML page's session splits (run.ts)
-      const left = idx.filter(i => out[i] == null)
-      if (res.error.isolatable) { if (left.length > 1) await Promise.all([call(left.slice(0, left.length >> 1)), call(left.slice(left.length >> 1))]); return }
-      // a failure of the service, not of these texts: split or sent again it fails the same way, as many times over
-      for (const i of left) lost.add(i)
-      failure = res.error
+    for (const r of res.results) {
+      const i = Number(r.id), from = read[i]
+      if (!from) continue
+      if (r.ok) {
+        const back = wireOfContent(r.content, from)
+        const alignment = cuts?.[i]?.length === 0 ? wholeAlignment(texts[i], back.wire) : alignmentOf(r.sentences, from, texts[i], back)
+        out[i] = { text: back.wire, by: r.by, ...(alignment ? { alignment } : {}) }
+        if (r.engine) serving = r.engine === status.providerId && status.model ? `${r.engine} (${status.model})` : r.engine
+        continue
+      }
+      if (isPermanentErrorKind(r.error.kind)) throw new EngineError(r.error.kind, r.error.message)
+      // refused: a text the engine could not take (null); a failure not of the text's making: lost, not to be sent again
+      // piece by piece (PDF-READER §10.3)
+      if (r.why.kind !== 'refused') {
+        lost.add(i)
+        failure = r.error
+      }
     }
-    await Promise.all(chunks(texts, status.maxBatchChars, status.maxBatchItems).map(call))
     if (failure) throw new EngineError(failure.kind, failure.message, { partial: out, lost })
     return out
   }

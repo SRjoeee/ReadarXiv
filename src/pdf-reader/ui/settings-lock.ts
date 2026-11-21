@@ -1,3 +1,4 @@
+// Kept at this path for the website's reader (readarxiv-web, @vendor/pdf-reader/ui/settings-lock) until its cut-over; nothing in the extension imports it. See tests/contract/website-imports.test.ts.
 // The controls that write the settings are out of reach until the settings have landed, and for as long as they cannot
 // be read (S-R-21): a write then waits behind the read or is refused (config/storage.ts), and a control that looks
 // pressed and does nothing says nothing of why. They stay in their places, greyed (aria-disabled, so that they keep

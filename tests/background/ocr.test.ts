@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ocrCacheKey } from '@/cache/key'
+import { ocrCacheKey } from '@/cache/ocr-key'
 import { createOcrService, type OcrServiceDeps } from '@/entrypoints/background/ocr'
 import { type OcrBackend, OcrBackendError } from '@/entrypoints/background/ocr-backend'
 import { CancelledScopeRegistry } from '@/providers/request/cancellation'
@@ -25,8 +25,8 @@ function memoryCache() {
   return {
     store,
     port: {
-      getMany: async (keys: string[]) => keys.map(k => { const v = store.get(k); return v === undefined ? null : { translation: v } }),
-      putMany: async (entries: { key: string; translation: string; paper: string }[]) => { for (const e of entries) store.set(e.key, e.translation) },
+      read: async (keys: readonly string[]) => keys.map(k => store.get(k) ?? null),
+      write: async (entries: readonly (readonly [string, string])[]) => { for (const [k, v] of entries) store.set(k, v) },
     },
   }
 }
@@ -102,12 +102,12 @@ describe('createOcrService', () => {
     registry.markScope('s1')
     expect(await service.ocr(call)).toEqual({ ok: false, error: { kind: 'aborted', message: 'session withdrawn' } })
     expect(ocr).not.toHaveBeenCalled()
-    // Dropped during the cache read: wait until the service is inside getMany (the key is an await before it), hold
+    // Dropped during the cache read: wait until the service is inside its read (the key is an await before it), hold
     // it there, drop the way the router does — mark, then drain — and release
-    const original = cache.port.getMany
+    const original = cache.port.read
     let release: () => void = () => {}
     const reached = new Promise<void>(signal => {
-      cache.port.getMany = () => new Promise(resolve => { release = () => resolve([null]); signal() })
+      cache.port.read = () => new Promise(resolve => { release = () => resolve([null]); signal() })
     })
     const pending = service.ocr({ ...call, scope: 's2' })
     await reached
@@ -117,7 +117,7 @@ describe('createOcrService', () => {
     expect(await pending).toEqual({ ok: false, error: { kind: 'aborted', message: 'session withdrawn' } })
     expect(ocr).not.toHaveBeenCalled()
     // Other scopes are unaffected
-    cache.port.getMany = original
+    cache.port.read = original
     expect((await service.ocr({ ...call, scope: 's3' })).ok).toBe(true)
   })
 
@@ -125,10 +125,10 @@ describe('createOcrService', () => {
     vi.useFakeTimers()
     const { backend, ocr } = fakeBackend()
     const cache = memoryCache()
-    // Wait until the service really reaches getMany (the key computation before it is real async, and the fake clock cannot advance it); the budget timer is registered in the same expression
+    // Wait until the service really reaches the read (the key computation before it is real async, and the fake clock cannot advance it); the budget timer is registered in the same expression
     let reached: () => void = () => {}
     const reachedP = new Promise<void>(resolve => { reached = resolve })
-    cache.port.getMany = () => { reached(); return new Promise(() => {}) } // never returns
+    cache.port.read = () => { reached(); return new Promise(() => {}) } // never returns
     const service = build({ backend, cache: cache.port, cacheReadBudgetMs: 500 })
     const pending = service.ocr(call)
     await reachedP
@@ -145,10 +145,10 @@ describe('createOcrService', () => {
     cache.store.set(await ocrCacheKey('h1', 'image/png', '0.1.0'), JSON.stringify(RESULT))
     const registry = new CancelledScopeRegistry()
     const service = build({ backend, cache: cache.port, cancelled: registry })
-    const original = cache.port.getMany
+    const original = cache.port.read
     let release: () => void = () => {}
     const reached = new Promise<void>(signal => {
-      cache.port.getMany = keys => new Promise(resolve => { release = () => resolve(original(keys)); signal() })
+      cache.port.read = (keys: readonly string[]) => new Promise(resolve => { release = () => resolve(original(keys)); signal() })
     })
     const pending = service.ocr({ ...call, scope: 's9' })
     await reached
@@ -159,10 +159,10 @@ describe('createOcrService', () => {
     expect(ocr).not.toHaveBeenCalled()
   })
 
-  it('writing the cache does not block the reply: with putMany hung the recognition result still goes back (Codex on #87)', async () => {
+  it('writing the cache does not block the reply: with the write hung the recognition result still goes back (Codex on #87)', async () => {
     const { backend } = fakeBackend()
     const cache = memoryCache()
-    cache.port.putMany = () => new Promise(() => {})
+    cache.port.write = () => new Promise(() => {})
     const result = await build({ backend, cache: cache.port }).ocr(call)
     expect(result).toEqual({ ok: true, result: RESULT, cached: false })
   })

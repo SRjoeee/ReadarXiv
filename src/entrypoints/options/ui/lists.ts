@@ -1,6 +1,6 @@
 // What the settings page's sections share: an undo row back in its row's place, a list's writes and the line a refused
-// write leaves, a row focused once it is drawn, a reveal's content kept while it folds away, a popover shut from a
-// pick, an edited item written back into its list, a small segmented control's width
+// write leaves, a row focused once it is drawn, a reveal's content kept while it folds away, an edited item written back
+// into its list, a small segmented control's width
 import { type CSSProperties, useEffect, useLayoutEffect, useState } from 'react'
 
 /** A list with the rows its deletions left, each at the place its row had (§6.2: the undo row stands where the row was) */
@@ -98,9 +98,6 @@ export function useLinger<T>(value: T | null, ms = 180): T | null {
   }, [value, ms])
   return value ?? kept
 }
-
-/** A popover shut, as a pick does */
-export const shut = (id: string) => document.getElementById(id)?.hidePopover()
 
 /** A small segmented control's agreed width (settings-2), read by `.o-seg` */
 export const segmentWidth = (px: number) => ({ '--w': `${px}px` }) as CSSProperties

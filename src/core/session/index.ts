@@ -5,7 +5,6 @@
 // One session = one run (observer and requests) + one id as the cancellation scope (DESIGN §10).
 // The id belongs to this object: `start()` mints one and every callback of that run closes over
 // `alive()`; after `restore()` or a restart, results that arrive late are dropped there.
-import { type RenderPath, wireFormatOf } from '@/cache/key'
 import { type Look, lookOf } from '@/config/appearance'
 import { DEFAULT_CONFIG, MODE_VALUES, type Config } from '@/config/schema'
 import type { Block } from '@/core/extractor'
@@ -13,19 +12,19 @@ import type { PaperContext } from '@/core/extractor/context'
 import { collectImageTargets, startImageTranslation, type ImageBytes, type ImageRun, type ImageTarget } from '@/core/image'
 import { type NameEvidence, nameEvidence } from '@/core/names'
 import { startTranslation, type Progress, type TranslationRun } from '@/core/pipeline'
-import { escapeText, unescapeText } from '@/core/protector/escape'
+import type { WireFormat } from '@/core/protector/tokens'
 import {
   applyStyle, createModeController, createPlaceKeeper, createPrep, installAnchorFallback, type Mode, type ModeController, relabelFailed, restore, type SentenceHighlight, setImageModes,
   startSentenceHighlight,
 } from '@/core/renderer'
-import { translateCall } from '@/core/run/call'
+import { textOf, textUnit, translateCall } from '@/core/run/call'
 import { preloadOf } from '@/core/scheduler/lazy'
 import { createSerialQueue } from '@/core/scheduler/serial'
 import { newSessionId } from '@/core/scheduler/session'
 import { translateTitle, type TitleTranslator } from '@/core/scheduler/title'
 import type { TranslationTransport } from '@/providers/transport'
 import { isFigureText, visibleText } from '@/core/rules/latexml'
-import { isPermanentErrorKind, type TranslateContext } from '@/providers/types'
+import { REQUEST_TIMEOUT_ERROR_NAME, isPermanentErrorKind, type TranslateContext } from '@/providers/types'
 import type { PageStatus } from '@/shared/messages'
 import type { ImageProgress, OcrCall, OcrMessageResponse } from '@/shared/ocr'
 import { createIdleTrace } from './idle-trace'
@@ -57,7 +56,7 @@ export interface SessionDeps {
 }
 
 /** Why a start was refused; the popup turns the code into the interface's sentence (DESIGN §4.2: the core knows no locale pack) */
-export type StartRefusal = 'already-on' | 'session-over' | 'not-paper' | 'nothing-to-translate' | 'backend-silent' | 'no-service'
+export type StartRefusal = 'already-on' | 'session-over' | 'not-paper' | 'nothing-to-translate' | 'backend-silent' | 'backend-timeout' | 'no-service'
 
 export type StartResult = { started: true; reason?: undefined; detail?: undefined } | { started: false; reason: StartRefusal; detail?: string }
 
@@ -108,7 +107,7 @@ interface LiveSession {
   /** The start-time inputs, for the parts a settings change can restart on their own (images) */
   config: Config
   context: TranslateContext
-  renderPath: RenderPath
+  renderPath: WireFormat
   /** What the session runs on (PageStatus.running) */
   running: NonNullable<PageStatus['running']>
   /**
@@ -280,13 +279,10 @@ export function createPageSession(deps: SessionDeps): PageSession {
     if (!paper) return { started: false, reason: 'not-paper' }
     if (blocks.length === 0) return { started: false, reason: 'nothing-to-translate' }
     const tStart = now()
-    const config = await deps.config.get()
-    // The glossary goes out with every batch (§8.2). **An empty glossary omits the field**: with it every existing cache key would change at once, invalidating everything
-    const context: TranslateContext = config.glossary.length > 0 ? { ...deps.context, glossary: config.glossary } : deps.context
     // The engine chain lives in the background; only the capabilities batch planning and render-path choice need are taken here (§2 item 3)
     // The session id is minted before the status is asked: the status request carries it, and the background binds
     // the session to the chain it answers about — a chain built from the configuration as stored now (`fresh`). The
-    // target and the revision the session runs on come from that chain, not from the configuration read above: a
+    // target and the revision the session runs on come from that chain, not from the configuration read below: a
     // save between the two would otherwise leave the session pinned to a chain other than the settings it records
     // (local review). Nothing awaits after the state below is committed
     const session = newSessionId()
@@ -294,6 +290,8 @@ export function createPageSession(deps: SessionDeps): PageSession {
     try {
       status = await backend.status(session, { fresh: true })
     } catch (e) {
+      // A queue timeout's message holds a task id and milliseconds, for the console: the reader gets the code, and the host its sentence
+      if (e instanceof Error && e.name === REQUEST_TIMEOUT_ERROR_NAME) return { started: false, reason: 'backend-timeout' }
       return { started: false, reason: 'backend-silent', detail: e instanceof Error ? e.message : String(e) }
     }
     // The status request bound this session to a chain provisionally (provider-status.ts). A start refused from here
@@ -305,6 +303,20 @@ export function createPageSession(deps: SessionDeps): PageSession {
     }
     // The first choice unavailable while the chain still has a fallback: start as usual, the requests land straight on the free engine (§8.5)
     if (!status.available && !status.fallback) return release('no-service')
+    // The settings the session starts on, read **after** the status: a change the reader made while it was out (the
+    // popup's figures switch, the hover highlight, the whole paper) reaches `onConfig` while no session of this start
+    // is in force to take it, and a read made before the wait would start the session on the settings before it. The
+    // last await of a start, so nothing moves between this read and the commit below. A read that fails releases the
+    // scope the status bound, as a refusal does
+    let config: Config
+    try {
+      config = await deps.config.get()
+    } catch (e) {
+      void backend.cancel(session)
+      throw e
+    }
+    // The glossary goes out with every batch (§8.2). **An empty glossary omits the field**: with it every existing cache key would change at once, invalidating everything
+    const context: TranslateContext = config.glossary.length > 0 ? { ...deps.context, glossary: config.glossary } : deps.context
     // The reader may have restored the page while the two reads above were in flight
     if (from !== undefined && live?.id !== from) return release('session-over')
     if (epoch !== undefined && epoch !== epochNow()) return release('session-over')
@@ -399,12 +411,9 @@ export function createPageSession(deps: SessionDeps): PageSession {
       warn: trace,
       translate: async text => {
         // The same envelope as the runs' (run/call.ts): an empty context is left out here too
-        const res = await backend.translate(translateCall(
-          { target, paper, scope: session, context },
-          [{ id: 'document.title', text: escapeText(text, wireFormatOf(status.renderPath)) }],
-          status.renderPath,
-        ))
-        return res.ok ? unescapeText(res.result.segments[0]?.text ?? '', wireFormatOf(status.renderPath)) || null : null
+        const res = await backend.translate(translateCall({ target, scope: session, context }, [textUnit('document.title', text)]))
+        const r = res.ok ? res.results[0] : undefined
+        return r?.ok ? textOf(r.content) || null : null
       },
     })
     started.images = startImages(started, config)
@@ -442,7 +451,6 @@ export function createPageSession(deps: SessionDeps): PageSession {
       return `; waiting: ${shown.join(', ')}${left.length > 8 ? `, +${left.length - 8}` : ''}; observer holds ${run?.observing() ?? 0}`
     }
     run = startImageTranslation({
-      renderPath: session.renderPath,
       doc,
       targets,
       paper,

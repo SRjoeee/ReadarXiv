@@ -1,5 +1,6 @@
 import type { Config } from '@/config/schema'
-import type { ProviderStatus, TranslationTransport } from '@/providers/transport'
+import type { ProviderStatus, Surface, TranslationTransport } from '@/providers/transport'
+import { REQUEST_TIMEOUT_ERROR_NAME } from '@/providers/types'
 import type { ChainHolder } from './chain'
 import type { SessionRouter } from './sessions'
 
@@ -38,10 +39,13 @@ export const STATUS_DEADLINE_MS = 5_000
  * — nor past the deadline, which rejects: an obsolete status is not an answer, and the callers treat
  * "unknown" as they did before there was a status to ask
  */
-export async function statusInForce(chain: Pick<ChainHolder, 'current' | 'replaced'>, deadlineMs = STATUS_DEADLINE_MS): Promise<{ transport: TranslationTransport; status: ProviderStatus }> {
+export async function statusInForce(chain: Pick<ChainHolder, 'current' | 'replaced'>, deadlineMs = STATUS_DEADLINE_MS, surface?: Surface): Promise<{ transport: TranslationTransport; status: ProviderStatus }> {
   let expire: ReturnType<typeof setTimeout> | undefined
   const deadline = new Promise<never>((_, reject) => {
-    expire = setTimeout(() => reject(new Error(`the chain's status did not settle within ${deadlineMs} ms`)), deadlineMs)
+    expire = setTimeout(() => {
+      // named a timeout, as the queue's are: the page that gets the failure reply words it from the name, and the milliseconds stay in the message, for the console
+      reject(Object.assign(new Error(`the chain's status did not settle within ${deadlineMs} ms`), { name: REQUEST_TIMEOUT_ERROR_NAME }))
+    }, deadlineMs)
   })
   try {
     for (;;) {
@@ -49,7 +53,7 @@ export async function statusInForce(chain: Pick<ChainHolder, 'current' | 'replac
       // the old chain's probe would be raced against the replacement after the one already underway
       const replaced = chain.replaced().then(() => null)
       const transport = await Promise.race([chain.current(), deadline])
-      const status = await Promise.race([transport.status(), replaced, deadline])
+      const status = await Promise.race([transport.status(undefined, surface ? { surface } : undefined), replaced, deadline])
       if (status === null) continue
       if ((await Promise.race([chain.current(), deadline])) === transport) return { transport, status }
     }
@@ -73,13 +77,15 @@ export interface ProviderStatusDeps {
  * built from starts nothing (`onConfig` compares the chain fields); `current()` waits for the build in force to land.
  * Before this, the popup polled the message ten times, comparing a field of its own choosing each time
  */
-export async function providerStatus(deps: ProviderStatusDeps, message: { scope?: string; fresh?: boolean }, tabId?: number): Promise<ProviderStatus> {
+export async function providerStatus(deps: ProviderStatusDeps, message: { scope?: string; fresh?: boolean; surface?: Surface }, tabId?: number): Promise<ProviderStatus> {
+  // (the PDF reader's asks name its chain, the page's none: v22)
+  const of = message.surface ? { surface: message.surface } : undefined
   if (!message.fresh) {
     const own = message.scope ? deps.router.transportFor(message.scope) : undefined
-    if (own) return own.status()
+    if (own) return own.status(undefined, of)
   }
   if (message.fresh) await deps.offers.offer()
-  const { transport, status } = await statusInForce(deps.chain)
+  const { transport, status } = await statusInForce(deps.chain, STATUS_DEADLINE_MS, message.surface)
   // A session starting on freshly saved settings is bound to the chain it is told about: what it records and what
   // serves it are one chain, however the store moves afterwards (local review)
   if (message.fresh && message.scope) deps.router.bindTo(message.scope, transport, tabId)

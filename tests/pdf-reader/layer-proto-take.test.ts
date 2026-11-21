@@ -2,6 +2,7 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { indexLayout, LAYOUT_SCHEMA, parseLayout } from '@/pdf-reader/engine/layout/file.mjs'
 import { trPiecesOf } from '@/pdf-reader/engine/layer/pieces.mjs'
 import { BUILTIN_RULES, resolveRules } from '@/pdf-reader/engine/rules/layout.mjs'
+import { withGroups } from './helpers/groups'
 
 // v0 fed its units as they arrive (layer-proto/run.mjs openProto's `expect`, take, end): over a paper of its own making,
 // three pages of a PDF.js document's shape (its text layer, its views; nothing drawn), a layout file and v0's geometry,
@@ -36,15 +37,15 @@ afterEach(() => { delete g.scheduler })
 const H = 300, VIEW = [0, 0, 300, H]
 const KINDS = ['para', 'heading', 'caption', 'footnote', 'cell', 'abstract', 'theorem', 'figure', 'author']
 /** a unit of the paper: its lines (page, x0, x1, baseline; 10 pt), each with its part of the source; where they are read
- *  from (the layout file, or v0's geometry), and the record's row */
+ *  from (the layout file, or the left's geometry alone: a unit the layer leaves the original's), and the record's row */
 interface Spec { id: number; kind: string; lines: [number, number, number, number, string][]; from: 'file' | 'geometry'; state: string; tr?: string; group?: string; cite?: boolean }
 const CJK = (n: number, from = 0x4e00) => Array.from({ length: n }, (_, i) => String.fromCharCode(from + 7 * i)).join('')
 const para = (id: number, page: number, b: number, src: string, extra: Partial<Spec> = {}): Spec => ({ id, kind: 'para', lines: [[page, 20, 280, b, src]], from: 'file', state: 'whole', tr: CJK(6, 0x4e00 + id), ...extra })
 const cell = (id: number, x0: number, b: number, src: string, group: string, extra: Partial<Spec> = {}): Spec => ({ id, kind: 'cell', lines: [[2, x0, x0 + 60, b, src]], from: 'file', state: 'whole', tr: CJK(2, 0x5000 + id), group, ...extra })
 
 /**
- * The paper: page 1 a paragraph, an author line, a paragraph v0's geometry holds, four units not translated (none, kept,
- * lost) and a paragraph running on to page 2; page 2 a table's header and two columns (one of them split: a cell whose
+ * The paper: page 1 a paragraph, an author line, a paragraph only the left's geometry holds (the original's: the layer draws
+ * only from the file), four units not translated (none, kept, lost) and a paragraph running on to page 2; page 2 a table's header and two columns (one of them split: a cell whose
  * citation the file does not find, so that its column is kept whole) and a lost paragraph; page 3 eleven paragraphs and
  * one of the geometry's. The order the units are laid in, batches of 8 by the stream, depends on which are placed: an
  * order fixed before the rows are read (the five not placed on page 1 counted) puts page 1's last paragraph in the batch
@@ -82,7 +83,7 @@ function paper(specs = SPECS) {
   const viewportOf = (scale: number) => ({ width: 300 * scale, height: H * scale, scale, transform: [scale, 0, 0, -scale, 0, H * scale], convertToViewportPoint: (x: number, y: number) => [x * scale, (H - y) * scale], convertToPdfPoint: (x: number, y: number) => [x / scale, H - y / scale] })
   const pageOf = (n: number) => ({ view: VIEW, getViewport: ({ scale }: { scale: number }) => viewportOf(scale), getTextContent: async () => ({ items: items[n - 1], styles: { f1: { fontFamily: 'serif', ascent: 0.7, descent: -0.2 } } }), render: () => ({ promise: Promise.resolve() }), commonObjs: { get: () => ({ name: 'Times-Roman' }) }, cleanup() {} })
   const asked: number[] = []
-  const doc = { numPages: 3, asked, getPage: async (n: number) => { asked.push(n); return pageOf(n) } }
+  const doc = withGroups({ numPages: 3, asked, getPage: async (n: number) => { asked.push(n); return pageOf(n) } })
   const file = specs.filter(s => s.from === 'file')
   const layout = {
     schema: LAYOUT_SCHEMA, lineskip: null, layout: '5', pdfjs: '6.3.289', paper: { id: '2610.00001', version: 1, pages: 3 }, left: '', views: pages.flatMap(() => VIEW), fonts: ['F1'],
@@ -112,11 +113,12 @@ async function open(P: ReturnType<typeof paper>, how: 'whole' | 'parts', { group
   const pieces = new Map<number, unknown[]>()
   // (the units file's pieces: the translated units')
   if (how === 'whole') for (const [id, r] of P.rows) { const tr = r.pieces && r.state === 'whole' ? trPiecesOf(r.pieces, (p: unknown) => (p as { k: number }).k) : null; if (tr) pieces.set(id, tr) }
+  // (no toggles given: the run's defaults, the door's, which leave the author block's names the original's)
   return openProto({
     doc: P.doc, target: 'zh', pages: 3, scale: 1, dpr: 1, copy: false, geometry: P.geometry, units, order, free,
     ...(how === 'parts' ? { expect: [...P.rows.keys()] } : {}),
     ...(groups ? { groups } : {}),
-    tex: { index: P.index, pieces, use: 'lines', texOnly: true, symbols: 'text', extents: 'v0' },
+    tex: { index: P.index, pieces, symbols: 'text', extents: 'v0' },
   } as never) as Promise<Run>
 }
 /** what a run drew: each page's operations and SVG, the order its units were laid in, their records and why each unit
@@ -135,13 +137,15 @@ describe('the paper of these tests, opened whole (today\'s call)', () => {
     const run = await open(paper(), 'whole')
     await run.until(3)
     const d = drawing(run)
-    // (the author line is the file's alone, which places no author: unanchored, as a cell whose citation it does not find)
-    expect(d.skipped).toEqual(['11:unanchored', '12:group: a cell not drawn', '1:unanchored'])
-    expect(new Set(d.order)).toEqual(new Set([0, 2, 7, 8, 9, 10, ...Array.from({ length: 11 }, (_, i) => 14 + i), 25]))
+    // (the author line, a class the default toggles hide, which the file places no line of: unanchored, as a cell whose
+    // citation it does not find)
+    // (and a paragraph only the left holds is the original's: unanchored)
+    expect(d.skipped).toEqual(['11:unanchored', '12:group: a cell not drawn', '1:unanchored', '25:unanchored', '2:unanchored'])
+    expect(new Set(d.order)).toEqual(new Set([0, 7, 8, 9, 10, ...Array.from({ length: 11 }, (_, i) => 14 + i)]))
     // (their rank, the records' order: page 2's group the cells first, then the paragraph from page 1, whose second page is
     // waited on after them; laid page by page, each by its closure: page 1's lays the paragraph that runs on to page 2 with it)
-    expect(d.stats.map(r => r.id).slice(2, 6)).toEqual([8, 9, 10, 7])
-    expect(d.order.slice(0, 6)).toEqual([0, 2, 7, 8, 9, 10])
+    expect(d.stats.map(r => r.id).slice(1, 5)).toEqual([8, 9, 10, 7])
+    expect(d.order.slice(0, 5)).toEqual([0, 7, 8, 9, 10])
     expect(d.stats.map(r => r.id).sort((a, b) => a - b)).toEqual([...d.order].sort((a, b) => a - b))
     for (const p of d.pages) expect(p.svg).not.toBe('')
     // and every page is complete at once: nothing is expected that is not there
@@ -254,7 +258,7 @@ describe('v0 fed its units as they arrive (take, end)', () => {
     expect(run.order).toEqual([])
     run.take(rowsOf(P, onPage(3)))
     await three
-    expect(run.order).toEqual(onPage(3))
+    expect(run.order).toEqual(onPage(3).filter(id => id !== 25))
     expect([1, 2, 3].map(q => run.ready(q))).toEqual([false, false, true])
     expect(P.doc.asked).toEqual([1, 3])
     // page 1's closure reads page 2 (its last paragraph runs on to it) and waits for page 2's rows, which rank against it there
@@ -262,7 +266,7 @@ describe('v0 fed its units as they arrive (take, end)', () => {
     for (let i = 0; i < 100 && P.doc.asked.length < 3; i++) await tick()
     await ticks()
     expect(P.doc.asked).toEqual([1, 3, 2])
-    expect(run.order).toEqual(onPage(3))
+    expect(run.order).toEqual(onPage(3).filter(id => id !== 25))
     expect(run.rowsFor(1)).toEqual(onPage(2))
     run.take(rowsOf(P, onPage(2)))
     await one
@@ -281,7 +285,7 @@ describe('v0 fed its units as they arrive (take, end)', () => {
     expect(run.take(rowsOf(P, early)).complete.slice().sort()).toEqual([1, 2])
     expect([1, 2, 3].map(p => run.complete(p))).toEqual([true, true, false])
     await run.until(2)
-    expect(run.order).toEqual(want.order.slice(0, 6))
+    expect(run.order).toEqual(want.order.slice(0, 5))
     expect(drawing(run).pages.slice(0, 2)).toEqual(want.pages.slice(0, 2))
     expect(run.complete(3)).toBe(false)
     // a paper without tables: no group to read

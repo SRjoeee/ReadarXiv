@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
-import { type Anchor, anchorUnits, floatMatches, forwardSpans, matchUnits, pageFrame, type TextPage, tokenizeDocument, type UnitText } from '@/pdf-reader/engine/pipeline/anchors.mjs'
+import { type Anchor, anchorUnits, floatMatches, forwardSpans, matchUnits, ownOfBounds, pageFrame, type TextPage, tokenizeDocument, type UnitText } from '@/pdf-reader/engine/pipeline/anchors.mjs'
 import { leftReach, rangedAnchors } from '@/pdf-reader/engine/pipeline/left-part.mjs'
 
 // Rule 5 (the page stream's bound on a float's reach, E2b design §1.3; rule5-questions.md): a float not found between its
@@ -43,6 +43,9 @@ describe('rule 5: a float searched over the document from the page of its last b
     for (const id of [0, 1, 3]) expect(rule5.get(id)).toEqual(today.get(id))
     // (no unit inside a float: B is its body neighbour, page 3: the caption on page 5 all the same)
     expect(pageOf(anchorUnits(doc, UNITS, { bounds, floating, floatMatch, frame: pageFrame, forward: new Set() }).get(2))).toBe(5)
+    // its own marks on page 5 that do not bound it: searched on page 5 and a page either side under both rules, never the List
+    const own = new Map([...ownOfBounds(doc, bounds), ['2', [5, 5] as [number, number]]])
+    for (const forward of [null, new Set([1])]) expect(pageOf(anchorUnits(doc, UNITS, { bounds, own, floating, floatMatch, frame: pageFrame, forward }).get(2))).toBe(5)
   })
 
   it('a float\'s reach is the window between its neighbours and the document from its body neighbour\'s page on, not step T\'s match', () => {
@@ -57,11 +60,10 @@ describe('rule 5: a float searched over the document from the page of its last b
     let frame: ReturnType<typeof pageFrame> | null = null
     for (const forward of [null, new Set([1])]) {
       const whole = anchorUnits(doc, UNITS, { bounds, floating, floatMatch, frame: (d, ms) => (frame = pageFrame(d, ms)), forward })
-      const R = rangedAnchors(doc, UNITS, { floating, floatMatch, frame: () => frame as never, forward })
+      const R = rangedAnchors(doc, UNITS, { own: ownOfBounds(doc, bounds), floating, floatMatch, frame: () => frame as never, forward })
       const got = new Map<number, Anchor | null>()
-      // the paragraphs' marks known; the caption's not yet (its marks on page 5)
+      // the paragraphs' marks known; the caption, which has none, not yet told so
       for (const [u, b] of [[0, bounds.get('0')], [1, bounds.get('1')], [3, bounds.get('3')]] as const) R.mark(u, b ?? null)
-      R.own(2, 5, 5)
       R.run((id, a) => got.set(id, a), u => got.set(u, null))
       const before = R.am
       R.mark(2, null)

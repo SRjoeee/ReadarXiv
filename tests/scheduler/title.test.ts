@@ -65,4 +65,37 @@ describe('translateTitle', () => {
     expect(calls).toEqual([])
     title.stop()
   })
+
+  it('an answer to a title the page has since changed is dropped; the latest one is shown', async () => {
+    const doc = docWith('First')
+    const answers = new Map<string, (text: string) => void>()
+    const title = translateTitle(doc, { translate: text => new Promise(resolve => answers.set(text, resolve)), isCurrent: () => true })
+    doc.title = 'Second'
+    await tick()
+    answers.get('Second')!('T:Second')
+    await tick()
+    answers.get('First')!('T:First')
+    await tick()
+    expect(doc.title).toBe('T:Second')
+    title.stop()
+    expect(doc.title).toBe('Second')
+  })
+
+  it('stopped while the translation is on the way: the answer is dropped, the title stays the original', async () => {
+    const doc = docWith('A Paper')
+    let answer: (text: string) => void = () => undefined
+    const title = translateTitle(doc, { translate: () => new Promise(resolve => { answer = resolve }), isCurrent: () => true })
+    title.stop()
+    answer('Ein Papier')
+    await tick()
+    expect(doc.title).toBe('A Paper')
+  })
+
+  it('a failure is told in a line without the page\'s text', async () => {
+    const doc = docWith('Secret Title')
+    const lines: string[] = []
+    translateTitle(doc, { translate: async () => { throw new TypeError('Secret Title failed') }, isCurrent: () => true, warn: line => lines.push(line) }).stop()
+    await tick()
+    expect(lines).toEqual(['title: not translated (TypeError)'])
+  })
 })

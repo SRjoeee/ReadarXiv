@@ -12,9 +12,9 @@
 // in every one of WXT's builds, and the file is written from that once they are all done. A dependency added
 // tomorrow is in the next build's file without anyone remembering it.
 //
-// **A package without a text stops the build.** Four of the eighteen publish no licence file to npm; theirs were
-// taken from their repositories into `licenses/` here, named after the package (licenses/README.md says from
-// where). One that has neither is an error naming it, not a gap in the file.
+// **A package without a text stops the build.** Five of the twenty-one (2026-10-29; six with the dev build's one) publish
+// no licence file to npm; theirs were taken from their repositories into `licenses/` here, named after the package
+// (licenses/README.md says from where). One that has neither is an error naming it, not a gap in the file.
 //
 // **Apache-2.0's own text goes in once, at the end.** §4(a) asks for a copy of the licence; the AI SDK's packages
 // publish only its 552-byte notice and `@workflow/serde` a 73-byte pointer to a file it does not ship.
@@ -98,11 +98,29 @@ export const BUNDLED_DATA = [{
   ].join('\n'),
 }, {
   // the PDF reader's display switch draws two of the face's glyphs, A and U+6587, as outline path data made by
-  // scripts/pdf-reader-glyphs.py (src/pdf-reader/ui/display-glyphs.ts); no font file is bundled
+  // scripts/pdf-reader-glyphs.py (packages/ui/src/controls/display-glyphs.ts); no font file is bundled
   name: 'Noto Sans SC — the outlines of two glyphs, in the PDF reader\'s display switch',
   licence: 'OFL-1.1',
   source: 'https://github.com/notofonts/noto-cjk',
   text: read(join(KEPT_TEXTS, 'noto-sans-cjk-OFL-1.1.txt')),
+}, {
+  // the target languages' names (src/config/language-table.ts and language-names.ts), read out of CLDR by
+  // scripts/languages.ts and scripts/language-names.ts; the licence asks for its notice with every copy of the data
+  name: 'Unicode CLDR — the names of the target languages',
+  licence: 'Unicode-3.0',
+  source: 'https://cldr.unicode.org',
+  text: read(join(KEPT_TEXTS, 'unicode-3.0.txt')),
+}, {
+  // the target languages' codes (src/config/language-table.ts), from the rows of SIL's ISO 639-3 table that
+  // scripts/languages.ts reads; SIL's terms ask attribution as the source of the codes (scripts/data/iso-639-3.NOTICE.txt)
+  name: 'ISO 639-3 — the codes of the target languages',
+  licence: 'ISO 639-3 Code Tables Terms of Use (SIL International)',
+  source: 'https://iso639-3.sil.org/code_tables/download_tables',
+  text: [
+    'Source of the codes: iso639-3.sil.org. The extension uses the ISO 639-3 identifiers of the languages it translates',
+    'into and does not provide the code set; the menus\' order, the tags sent to translators and the names in every',
+    'language are not part of the standard.',
+  ].join('\n'),
 }]
 
 /** The file's text from the packages noted so far. Sorted, and with nothing of the machine it was built on, so two builds of one tree give one file */

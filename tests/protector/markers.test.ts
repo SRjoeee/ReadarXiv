@@ -1,7 +1,7 @@
 // The plain-text marker format (#104, DESIGN §6.1): `@a#`, voids only, paired placeholders flattened.
 // The measured basis is in the file header of tokens.ts: Microsoft's Edge endpoint 0% on the tag format, 98% on markers; Google ~99% on both.
 import { describe, expect, it } from 'vitest'
-import { escapeText, expectationsFromText, fromAlpha, rehydrate, serialize, splitRuns, toAlpha, tokenize, unescapeText, validate } from '@/core/protector'
+import { escapeText, expectationsFromText, fromAlpha, rehydrate, serialize, toAlpha, tokenize, validate } from '@/core/protector'
 import { isHashFree, markerReader } from '@/core/protector/tokens'
 import { rangesOf } from '@/core/protector/offsets'
 import { el, htmlOf } from './helpers'
@@ -160,11 +160,6 @@ describe('a marker that touches a word is set apart from it on the wire', () => 
     expect(rangesOf(f.offsets, t.indexOf('B'), t.length).map(String).join('')).toBe('B')
     // From inside the space that came off: the text's own start
     expect(rangesOf(f.offsets, 4, t.length).map(String).join('')).toBe('A & B')
-  })
-
-  it('a run goes out without the space: it is for an engine that sees the marker', () => {
-    expect(splitRuns(wire(HEADING)).runs).toEqual(['Backpropagation recursion'])
-    expect(splitRuns(wire(NOTE)).runs).toEqual(['an instance of this', ', with base type'])
   })
 })
 
@@ -344,26 +339,9 @@ describe('expectationsFromText (markers)', () => {
   })
 })
 
-describe('plain-text round trips (titles and OCR lines)', () => {
-  // These two paths have no tokenizer: escapeText → translate → unescapeText. decodeText would return as it was,
-  // and the title would gain an extra @ (Codex on #107)
-  it('escape → unescape is the identity, consecutive @ included', () => {
-    for (const s of ['@abc#', '@@abc#', '@#', '@a@b#', '@@@', '@@@@', 'a@b.com', 'plain title']) {
-      expect([s, unescapeText(escapeText(s, 'markers'), 'markers')]).toEqual([s, s])
-    }
-  })
-
-  it('a literal &amp; survives the round trip through escaping, not through “not decoding entities”', () => {
-    // The source says `&amp;` (a paper about HTML, OCR'd code) → escaped to `&amp;amp;` → decoded back to `&amp;`
-    for (const s of ['a &amp; b', 'a & b', '&lt;div&gt;', '@ &amp; @']) {
-      expect([s, unescapeText(escapeText(s, 'markers'), 'markers')]).toEqual([s, s])
-      expect([s, unescapeText(escapeText(s, 'tags'), 'tags')]).toEqual([s, s])
-    }
-  })
-
-  it('the placeholder path must not use it: tokenize has decoded once already, and a second pass eats a literal @@ down to @', () => {
+describe('a literal @@ on the placeholder path', () => {
+  it('tokenize decodes once: an escaped literal @@ comes back @@', () => {
     const escaped = escapeText('@@', 'markers')
     expect(tokenize(escaped, 'markers').map(t => (t.kind === 'text' ? t.text : '')).join('')).toBe('@@')
-    expect(unescapeText(unescapeText(escaped, 'markers'), 'markers')).toBe('@')
   })
 })

@@ -33,7 +33,7 @@ const STATIC_SHEET = `${modesCss}\n${presetsCss}\n${imageCss}\n${highlightCss}`
  * hatch — have the final word by cascade order; the variables are set nowhere else. Small, and the only sheet a look
  * change rewrites
  */
-function lookSheet(look: Look): string {
+export function lookSheet(look: Look): string {
   return appearanceRule(look) + customStyleRule(look.style.css)
 }
 
@@ -53,9 +53,6 @@ function sheetElement(doc: Document, mark: string, css: string): HTMLStyleElemen
 }
 
 const findSheet = (doc: Document, mark: string) => doc.querySelector(`style[${STYLE_ATTR}="${mark}"]`)
-
-/** The same sheets the page gets, as one, for the settings preview to put in its iframe */
-export const appearanceSheet = (look: Look): string => `${STATIC_SHEET}\n${lookSheet(look)}`
 
 /**
  * Appearance only, no translation node touched (#47): write the profile's switches and rewrite the

@@ -15,7 +15,7 @@
 import { ID_ATTR } from '@/core/extractor'
 import { indexSpans, type SpanIndex, type WireSpan } from '@/core/protector'
 import { FOR_ATTR, REAL_TRANSLATION } from './attrs'
-import { type SentenceAlignment, type SentencePair, sentencePairs } from '@/providers/alignment'
+import { type SentenceAlignment, type SentencePair, sentencePairs } from '@/core/protector/alignment'
 
 /** One side of a block: the element the pointer can be over, and the wire spans inside it. */
 export interface SentenceSide {

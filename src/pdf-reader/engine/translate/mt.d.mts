@@ -12,6 +12,8 @@ export declare function plainTranslated(pieces: Piece[]): string
 export declare const shown: (p: Piece) => string
 /** a piece a space never goes before: one that is a space itself (a tie, a control space, a kern), a group's end */
 export declare const SPACING: RegExp
+/** backref's list after a bibliography entry (latex-front.mjs BACKREF_LIST): on no wire, put back after the translation with an en space before it */
+export declare const BACKREF_LIST: string
 /** a unit's plain text (the translation's where the pieces are translated) and the offsets in it where a placeholder stood */
 export declare function unitText(pieces: Piece[]): { text: string; gaps?: number[] }
 /** an engine's plain text as TeX sets it: its invisible characters dropped, TeX's special characters escaped */
@@ -62,7 +64,11 @@ export declare function sentencesKept(s: unknown, src: string, tr: string): Sent
 export declare function textsShown<U extends { pieces: Piece[] }>(units: U[], done: Map<U, Piece[]>, sentencesOf: (pieces: Piece[]) => Sentences | undefined): ({ id: number; text: string; gaps?: number[]; lead?: string; trail?: string; inner?: string; sentences?: Sentences })[]
 type Sent = { text: string; by: string | null; alignment?: { source: number[]; target: number[] } } | null
 /** units → their translations, by unit: pieces, how they came back, the identity that answered, and a whole unit's sentences */
-export declare function translateUnits<U extends { pieces: Piece[] }>(units: U[], send: (texts: string[], cuts?: number[][]) => Promise<Sent[]>, format?: 'markers' | 'tags' | 'runs'): Promise<{ results: Map<U, { pieces?: Piece[]; state: string; by?: string; sentences?: Sentences }>; how: Record<string, number> }>
+/** whether a reply to a unit's serialisation reads back whole, strictly or tolerantly: what translateUnits takes */
+export declare function readsBack(text: unknown, ser: ReturnType<typeof serialize> | ReturnType<typeof serializeTags>, format?: 'markers' | 'tags'): boolean
+/** `send`'s `accepts[i]`: whether translateUnits' reading takes a reply for texts[i] (readsBack, or a run's letter), for a send
+ *  that asks another engine where one would not be; a send may ignore it */
+export declare function translateUnits<U extends { pieces: Piece[] }>(units: U[], send: (texts: string[], cuts?: number[][], accepts?: ((reply: string) => boolean)[]) => Promise<Sent[]>, format?: 'markers' | 'tags' | 'runs'): Promise<{ results: Map<U, { pieces?: Piece[]; state: string; by?: string; sentences?: Sentences }>; how: Record<string, number> }>
 /** the characters of plain source a batch of units holds at most: the first, then the rest */
 export declare const FIRST_BATCH: 2500
 export declare const NEXT_BATCH: 12000
@@ -83,5 +89,11 @@ export declare const WIRE: {
 }
 /** whether a short text (a table cell, a figure label) is only a name, judged against the paper's prose */
 export declare function isName(text: string, prose: string): boolean
+/** whether a short text is code: every word a markup token (<pad>, </s>), or, given `code`, a text the paper sets as code */
+export declare function isCode(text: string, code?: ReadonlySet<string> | null): boolean
+/** the texts a paper sets as code inline (\texttt, \verb, \lstinline, \code, \path, \mintinline, \Verb), escapes read */
+export declare function codeTextsOf(units: readonly { pieces?: readonly unknown[] }[]): Set<string>
+/** the running text isName reads a short text against: every unit's text but a table cell's and a figure's */
+export declare function proseOf(units: readonly ({ kind: string; pieces: Piece[] } | null | undefined)[]): string
 /** the table cells and figure texts that are only names: they keep their source */
 export declare function nameCells<U extends { kind: string; pieces: Piece[] }>(units: U[]): Set<U>

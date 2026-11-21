@@ -12,11 +12,13 @@
 // did not go through readBundle is read with the same care a row is: a unit of no shape is a dropped one, a row of no
 // shape is no row, and neither throws.
 import { decideGroups, groupOf } from '../translate/groups.mjs'
+import { cellSpans } from './cells.mjs'
 import { kOfSource } from '../layer/pieces.mjs'
 import { batchOf, FIRST_BATCH, NEXT_BATCH, plainSource, translateUnits, utf8 } from '../translate/mt.mjs'
-import { authorsTranslated } from '../translate/kept.mjs'
 import { PIECES_MAX } from '../layout/json.mjs'
 import { STRING_MAX, UNIT_FLAG_BITS } from './bundle.mjs'
+import { NAME_KIND, SETS_NOTHING } from './units.mjs'
+import { nameAnswered } from '../rules/tex-names.mjs'
 
 /** the states of a row, and those a translation gives (a kept one is a table cell held whole in its source) */
 const STATES = new Set(['whole', 'partial', 'none', 'lost', 'kept'])
@@ -53,14 +55,22 @@ function pieceFrom(p, k, at, units) {
   switch (p[0]) {
     case 0: return p.length === 2 && str(1) ? { t: 'text', s: p[1], k } : p.length === 3 && str(1) && str(2) ? { t: 'text', s: p[1], src: p[2], k } : null
     case 1: return p.length === 2 && str(1) ? { t: 'ph', src: p[1], k } : null
-    case 2: case 3: return p.length === 3 && Number.isInteger(p[1]) && str(2) ? { t: p[0] === 2 ? 'open' : 'close', id: p[1], src: p[2], k } : null
+    // (an open's fourth value, what its pair sets, units.mjs SETS_NOTHING: on the piece as the front end set it, not enumerable,
+    // so that the unit's hash and its JSON are its pieces' as before)
+    case 2: case 3: {
+      if (!((p.length === 3 || (p[0] === 2 && p.length === 4 && p[3] === SETS_NOTHING)) && Number.isInteger(p[1]) && str(2))) return null
+      const q = { t: p[0] === 2 ? 'open' : 'close', id: p[1], src: p[2], k }
+      if (p.length === 4) Object.defineProperty(q, 'sets', { value: SETS_NOTHING })
+      return q
+    }
     case 4: return p.length === 4 && str(1) && Number.isInteger(p[2]) && p[2] >= 0 && p[2] < at && units[p[2]] && str(3) ? { t: 'nested', pre: p[1], unit: units[p[2]], post: p[3], k } : null
     default: return null
   }
 }
-/** a unit as openPaper makes it, from the bundle's [kind, flags, depth, cell, edges, pieces]; null where it has no shape */
+/** a unit as openPaper makes it, from the bundle's [kind, flags, depth, cell, edges, pieces] (an ink unit's with its echo after:
+ *  units.mjs inkBundleUnitsOf); null where it has no shape */
 function unitFrom(b, at, units) {
-  if (!Array.isArray(b) || b.length !== 6) return null
+  if (!Array.isArray(b) || !(b.length === 6 || b.length === 7)) return null
   const [kind, flags, depth, cell, edges, list] = b
   if (typeof kind !== 'string' || !Number.isInteger(flags) || !Array.isArray(list)) return null
   const pieces = []
@@ -79,12 +89,20 @@ function unitFrom(b, at, units) {
     u.cell = { table: cell.table, row: cell.row, col: cell.col, span: cell.span, head: cell.head }
   }
   if (edges !== null && edges !== undefined && typeof edges === 'object') for (const e of EDGES) if (typeof edges[e] === 'string') u[e] = edges[e]
+  // (an ink unit's echo: the earlier unit whose row it is drawn with, never translated itself)
+  if (b.length === 7) { if (!(b[6] === null || (Number.isInteger(b[6]) && b[6] >= 0 && b[6] < at && units[b[6]]))) return null; if (b[6] !== null) u.echo = units[b[6]].echo ?? b[6] }
   return u
 }
 
-const NOTHING = Object.freeze({ units: Object.freeze([]), kept: new Set(), keptAll: new Set(), cells: [], idOf: new Map(), plain: [] })
-/** the source units of each bundle, built once: the units (null where dropped), the units the pipeline keeps (the KEPT
- *  flag: openPaper's `kept`), those with the author block's added, the table cells, each unit's id, and its plain
+const NOTHING = Object.freeze({ units: Object.freeze([]), kept: new Set(), cells: [], idOf: new Map(), plain: [] })
+/** a TikZ picture's text as the front end cuts it (latex-front.mjs tikzText): the layout compile marks none, so it owns no
+ *  glyph and the layer draws none; the picture's glyphs are the figure ink units' (layout/figure-text.mjs, kind `inkfigures`),
+ *  each glyph one unit's, translated once. Sent as well, the same words went to the translator twice and the one answer was
+ *  thrown away. Kept in the bundle at its id, every unit after it keeping its own, the left pane's floats reading it
+ *  (view/floats.mjs: a float that holds one is a drawing) */
+const TIKZ_KIND = 'figure'
+/** the source units of each bundle, built once: the units (null where dropped), the units the layer leaves as they are (the
+ *  KEPT flag, openPaper's `kept`, and a TikZ picture's texts, TIKZ_KIND), the table cells, each unit's id, and its plain
  *  source, worked out when asked */
 const SOURCES = new WeakMap()
 function sourceOf(bundle) {
@@ -95,11 +113,15 @@ function sourceOf(bundle) {
   const units = new Array(list.length).fill(null), kept = new Set()
   for (let i = 0; i < list.length; i++) {
     const u = unitFrom(list[i], i, units)
+    // (an ink unit that echoes a TikZ picture's text, its words the same, a running head or a contents entry that repeats a
+    // node's label, takes no echo: the text sends no row to take, so the ink unit is translated itself, its pieces being the
+    // text's; one that echoes it after is that ink unit's echo, unitFrom's chain)
+    if (u?.echo !== undefined && units[u.echo]?.kind === TIKZ_KIND) delete u.echo
     units[i] = u
-    if (u && list[i][1] & UNIT_FLAG_BITS.KEPT) kept.add(u)
+    if (u && (list[i][1] & UNIT_FLAG_BITS.KEPT || u.kind === TIKZ_KIND)) kept.add(u)
   }
   const present = units.filter(Boolean)
-  s = { units, kept, keptAll: new Set([...kept, ...present.filter(u => u.kind === 'author')]), cells: present.filter(u => u.cell), idOf: new Map(units.flatMap((u, i) => (u ? [[u, i]] : []))), plain: new Array(units.length) }
+  s = { units, kept, cells: present.filter(u => u.cell), idOf: new Map(units.flatMap((u, i) => (u ? [[u, i]] : []))), plain: new Array(units.length) }
   SOURCES.set(bundle, s)
   return s
 }
@@ -114,19 +136,44 @@ const plainOf = (s, id) => (s.plain[id] ??= plainSource(s.units[id]))
 export const sourceUnitsOf = bundle => sourceOf(bundle).units
 
 // ---------------------------------------------------------------- the ids a language translates
-/** the units a translation into `lang` leaves as they are: live.mjs keptFor's rule, over the bundle's flags and kinds */
-const keptOf = (s, lang) => (authorsTranslated(lang) ? s.kept : s.keptAll)
-/** the ids a language translates, rising: the units that stand, but the names kept (the KEPT flag) and, where the language
- *  does not write them as the paper does (translate/kept.mjs authorsTranslated), the author block */
+/** the ids a language translates, rising: the units that stand, but those the source keeps (the KEPT flag: the names a table
+ *  holds, nameCells; a TikZ picture's texts, whose glyphs the figure ink units translate), the ink units drawn with another's
+ *  row (`echo`), and a structural name the target's packages answer wherever it would be read (rules/tex-names.mjs
+ *  nameAnswered: zh's "Theorem", whose head and references the layer draws in ctex's word whatever the name unit's
+ *  translation). Every content class is translated once, whatever the language and whatever a reader's toggles show (the
+ *  owner, 2026-10-25; rules/content-classes.mjs): the author block, its names and its places, which a reader's "names" toggle
+ *  shows or hides; a bibliography's entries, under "references" (TRANSLATE_VERSION 6) */
 export function toTranslate(bundle, lang) {
-  const s = sourceOf(bundle), kept = keptOf(s, lang), ids = []
-  s.units.forEach((u, i) => { if (u && !kept.has(u)) ids.push(i) })
+  const s = sourceOf(bundle), ids = []
+  s.units.forEach((u, i) => { if (u && !s.kept.has(u) && u.echo === undefined && !(u.kind === NAME_KIND && nameAnswered(plainOf(s, i), lang))) ids.push(i) })
   return ids
 }
-/** a language's batches in source order: the first up to FIRST_BATCH characters of plain source, the rest up to NEXT_BATCH */
+/** the ids whose rows a layer awaits, rising: those a language translates (toTranslate), and each ink unit whose echo is one of
+ *  them, whose row the layer makes of its echo's (echoRows) */
+export function layerIds(bundle, lang) {
+  const s = sourceOf(bundle), mine = new Set(toTranslate(bundle, lang)), ids = []
+  s.units.forEach((u, i) => { if (u && (mine.has(i) || (u.echo !== undefined && mine.has(u.echo)))) ids.push(i) })
+  return ids
+}
+/** the rows of the ink units that echo the units of `rows` (each [id, pieces, state, …]): the echo's row under the ink unit's id,
+ *  its pieces' k the ink unit's own (its pieces its echo's: units.mjs inkBundleUnitsOf, ink-units.mjs rule 5) */
+export function echoRows(bundle, rows) {
+  const s = sourceOf(bundle)
+  let by = ECHOES.get(s)
+  if (!by) { by = new Map(); s.units.forEach((u, i) => { if (u?.echo !== undefined) (by.get(u.echo) ?? by.set(u.echo, []).get(u.echo)).push(i) }); ECHOES.set(s, by) }
+  const out = []
+  for (const row of rows) if (Array.isArray(row)) for (const id of by.get(row[0]) ?? []) out.push([id, ...row.slice(1)])
+  return out
+}
+const ECHOES = new WeakMap()
+/** the ids `ids` with the paper's structural names first (units of kind `name`, bundleUnitsOf): the first batch carries them,
+ *  so that the first page drawn has the target's words for its heads and references (PDF-READER §19.14) */
+const namesFirst = (s, ids) => [...ids.filter(i => s.units[i]?.kind === NAME_KIND), ...ids.filter(i => s.units[i]?.kind !== NAME_KIND)]
+/** a language's batches in source order, the paper's structural names first (namesFirst): the first up to FIRST_BATCH characters
+ *  of plain source, the rest up to NEXT_BATCH */
 export function batchesOf(bundle, lang) {
   const s = sourceOf(bundle), out = []
-  let left = toTranslate(bundle, lang)
+  let left = namesFirst(s, toTranslate(bundle, lang))
   for (let first = true; left.length; first = false) {
     const batch = batchOf(left, i => plainOf(s, i).length, first ? FIRST_BATCH : NEXT_BATCH)
     out.push(batch)
@@ -200,10 +247,9 @@ export function unitOf(bundle, row) {
   // (its source pieces, by identity: what each source word is inside, which the layer reads its base style and its pieces' colours by,
   // layer2.mjs sourceScopes; never written to a row)
   Object.defineProperty(unit, 'source', { value: src.pieces, enumerable: false })
-  // (its row's sentences, each one's start after the first in the plain source and translation, where the row has them: where
-  // the layer cuts the translation at a page break, layer2.mjs pageCutsOf; never written to a row)
-  const n = row[4]
-  if (isObject(n) && Array.isArray(n.src) && Array.isArray(n.tr) && n.src.length === n.tr.length && n.src.every(Number.isInteger) && n.tr.every(Number.isInteger)) Object.defineProperty(unit, 'sentences', { value: { src: n.src, tr: n.tr }, enumerable: false })
+  // (whether its box is other cells' too, of its source unit — its span, a \\multirow among its source pieces —, which a
+  // translated row's pieces may not keep: run.mjs readGroup reads it; never written to a row)
+  if (src.cell) Object.defineProperty(unit, 'spans', { value: cellSpans(src), enumerable: false })
   if (state !== 'whole' && state !== 'partial') return unit
   if (!Array.isArray(pieces) || pieces.length > PIECES_MAX) return null
   const out = []
@@ -218,7 +264,7 @@ export function unitOf(bundle, row) {
 
 /**
  * The rows the results so far allow, rising by id, and the cells held. `results` is id → translateUnits' result. A unit
- * the language keeps has no row; a unit with a result has its row (rowOf). A table cell is given only once its group is
+ * the language does not translate (toTranslate) has no row; one with a result has its row (rowOf). A table cell is given only once its group is
  * decided (groups.mjs decideGroups, over what has come in): a group translated whole gives each cell its row; a group
  * kept whole — a column of names, or a cell the translator could not take — gives each cell a `kept` row with no pieces
  * and, as the sixth value, its own translation's state; a group still waiting on a cell (not in yet, or lost to the
@@ -226,14 +272,12 @@ export function unitOf(bundle, row) {
  * owns the held cells; no caller withholds anything
  */
 export function layerRows(bundle, results, lang) {
-  const s = sourceOf(bundle), kept = keptOf(s, lang)
-  const made = new Map(), ids = []
-  s.units.forEach((u, id) => {
-    if (!u || kept.has(u)) return
-    ids.push(id)
+  const s = sourceOf(bundle), kept = s.kept, ids = toTranslate(bundle, lang)
+  const made = new Map()
+  for (const id of ids) {
     const r = results.get(id)
     if (isObject(r)) made.set(id, { row: rowOf(bundle, id, r), result: r })
-  })
+  }
   // (a cell whose row is none — a result of no shape included — is a cell the translator could not take)
   const decided = s.cells.length ? decideGroups(s.cells, u => { const m = made.get(s.idOf.get(u)); return m && { state: m.row[2], pieces: m.row[2] === 'whole' || m.row[2] === 'partial' ? m.result.pieces : undefined } }, kept) : null
   const rows = [], held = []
@@ -255,7 +299,7 @@ export function layerRows(bundle, results, lang) {
  * `onRows(rows, held)` gets the rows not given before or changed since, with the cells held now. The abort signal stops
  * the run before the next batch: it is not asked again once `translateUnits` has returned, so a batch under way when the
  * signal aborts still ends in an `onRows` call, the last. A refusal for good — an error of the service with a `kind` (engine.mjs EngineError) —
- * stops it with what it has, as runLive's does, and so does a batch part of which the service lost (translateUnits'
+ * stops it with what it has, and so does a batch part of which the service lost (translateUnits'
  * `error`); any other error is a bug and is thrown. Resolves with the final rows by id, `lost` (the units the service
  * lost, and, after a refusal, those never asked) and `stopped` (the refusal's kind, 'aborted', or null)
  */
@@ -263,8 +307,8 @@ export async function runRows(bundle, { lang, send, format = 'markers', rank = i
   const s = sourceOf(bundle), todo = new Set(toTranslate(bundle, lang))
   const results = new Map(), given = new Map()
   let final = [], stopped = null
-  /** units nearest the reader first, as `rank` has them now */
-  const nearest = ids => ids.map(i => [i, rank(i)]).sort((a, b) => a[1] - b[1] || a[0] - b[0]).map(([i]) => i)
+  /** units nearest the reader first, as `rank` has them now, the paper's structural names before them (namesFirst) */
+  const nearest = ids => namesFirst(s, ids.map(i => [i, rank(i)]).sort((a, b) => a[1] - b[1] || a[0] - b[0]).map(([i]) => i))
   for (let first = true; todo.size; first = false) {
     if (signal?.aborted) { stopped = 'aborted'; break }
     const batch = batchOf(nearest([...todo]), i => plainOf(s, i).length, first ? FIRST_BATCH : NEXT_BATCH)
@@ -289,6 +333,7 @@ export async function runRows(bundle, { lang, send, format = 'markers', rank = i
     // a failure of the service, not of these texts (engine.mjs EngineError's `lost`): the batches after it would fail the same way
     if (how.error) { stopped = how.error; break }
   }
-  const lost = [...results.values()].filter(r => r.state === 'lost').length + (stopped && stopped !== 'aborted' ? todo.size : 0)
+  // (the units never asked are lost to a stop of the service's, its error kind `aborted` included; not to the run's own abort)
+  const lost = [...results.values()].filter(r => r.state === 'lost').length + (stopped && !signal?.aborted ? todo.size : 0)
   return { rows: new Map(final.map(r => [r[0], r])), lost, stopped }
 }

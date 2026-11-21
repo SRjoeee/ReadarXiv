@@ -15,4 +15,4 @@ const base = (browser.runtime.getURL as (path: string) => string)('/pdf-reader/p
 /** what getDocument needs to find PDF.js's data files */
 export const ASSETS = { cMapUrl: `${base}cmaps/`, cMapPacked: true, standardFontDataUrl: `${base}standard_fonts/`, wasmUrl: `${base}wasm/` } as const
 export { pdfjsLib }
-export const { EventBus, LinkTarget, PDFLinkService, PDFPageView, PDFViewer } = viewer
+export const { EventBus, LinkTarget, PDFLinkService, PDFPageView, PDFViewer, TextLayerBuilder } = viewer

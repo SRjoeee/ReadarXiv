@@ -4,10 +4,7 @@
 // tab (openLink), whatever S-O-49b says: that setting is about leaving a paper's page, and this page is not one
 import { BookOpen, CircleAlert, FileText, Globe, Info, Search } from 'lucide'
 import { useId } from 'react'
-import { Icon } from '@/ui/controls/Icon'
-import { Kbd } from '@/ui/controls/Kbd'
-import { Reveal } from '@/ui/controls/Reveal'
-import { S } from '@/ui/strings'
+import { Icon, Kbd, Reveal, S } from '@readarxiv/ui'
 import type { PopupActions } from '../data'
 import { ADVANCED_SEARCH } from '../find'
 import type { FoundEntry, Note as NoteView, PopupView } from '../view-model'

@@ -6,6 +6,7 @@ import { startTranslation, type Transport } from '@/core/pipeline/run'
 import { T_CLASS } from '@/core/marks'
 import { restore } from '@/core/renderer/page'
 import { DEFAULT_PRELOAD } from '@/core/scheduler/lazy'
+import { echoChain } from '../helpers/units'
 import { tailMarkBreaches } from '../renderer/helpers'
 
 describe('pipeline × fixture', () => {
@@ -14,9 +15,11 @@ describe('pipeline × fixture', () => {
     const before = doc.documentElement.outerHTML
     const blocks = extract(doc)
     let calls = 0
+    // the page's whole path through a chain whose translator echoes: the shim, the adapter, the acceptance rule, the shim back
+    const echo = echoChain('tags')
     const transport: Transport = async req => {
       calls++
-      return { ok: true, result: { segments: req.request.segments.map(s => ({ id: s.id, text: s.text })), provider: 'mock', kind: 'mt' }, cached: 0 }
+      return echo(req)
     }
     const t0 = performance.now()
     const run = startTranslation({ doc, blocks, target: 'zh-CN', mode: 'stack', paper: '2410.00260', transport, capabilities: { maxBatchChars: 1000, maxBatchItems: 4, renderPath: 'tags' }, preload: DEFAULT_PRELOAD })

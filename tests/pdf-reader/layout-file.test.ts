@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { countValues } from '@/pdf-reader/engine/layout/json.mjs'
 import {
   checkLayoutPart, checkLineskip, encodeLayout, encodeLayoutPart, indexLayout, layoutPartRows, mergeLayout, PART_KEYS, LABEL_KINDS, LAYOUT, LAYOUT_CAP, LAYOUT_SCHEMA, MIXED_FILL, LAYOUT_DEPTH, LAYOUT_VALUES, type LayoutFile, LayoutRefusal, NAME_FLAG, NAME_KEYS, PAGE_TEXT_ALL, PAGE_TEXT_KINDS, PH_FLAG, PH_KINDS,
-  parseLayout, TEXT_MAX, UNIT_FLAG, UNIT_KINDS,
+  parseLayout, REGION_KINDS, REGIONS_ALL, TEXT_MAX, UNIT_FLAG, UNIT_KINDS, UNLAID, UNLAID_ALL,
 } from '@/pdf-reader/engine/layout/file.mjs'
 
 // The layout file (spec §4.2): a file made from a paper, read by the container's service and by the reader's main thread.
@@ -130,6 +130,27 @@ describe('a valid file', () => {
     expect(index.unit(5)!.ph.get(3)).toEqual({ kind: 'display', flags: PH_FLAG.JOINED, segs: new Float64Array(0), text: null, fill: null })
     expect(index.unit(8)!.ph.get(1)?.flags).toBe(PH_FLAG.LOST | PH_FLAG.OUTSIDE)
   })
+  it('a unit TeX set flush left or flush right indexes as such (LAYOUT 26); one of before none', () => {
+    const f = made()
+    f.units[2]![3] = UNIT_FLAG.FLUSH_LEFT
+    f.units[3]![3] = UNIT_FLAG.FRONT | UNIT_FLAG.FLUSH_RIGHT
+    const index = indexLayout(parseLayout(utf8(encodeLayout(f))))
+    const id = (i: number) => f.units[i]![0] as number
+    expect([index.unit(id(2))?.flush, index.unit(id(3))?.flush, index.unit(id(3))?.front]).toEqual(['left', 'right', true])
+    expect(indexLayout(parseLayout(utf8(encodeLayout(made())))).unit(id(2))?.flush).toBeNull()
+    expect(index.unit(7)).toMatchObject({ centred: true, flush: null })
+  })
+  it('a unit\'s alignment is one of four flags or none (LAYOUT 37): centred true, false where a flag says not, unknown where none does', () => {
+    const f = made()
+    f.units[2]![3] = UNIT_FLAG.JUSTIFIED
+    f.units[3]![3] = UNIT_FLAG.FLUSH_LEFT
+    const index = indexLayout(parseLayout(utf8(encodeLayout(f))))
+    const id = (i: number) => f.units[i]![0] as number
+    expect([index.unit(id(2))?.centred, index.unit(id(2))?.flush]).toEqual([false, null])
+    expect([index.unit(id(3))?.centred, index.unit(id(3))?.flush]).toEqual([false, 'left'])
+    expect([index.unit(id(0))?.centred, index.unit(id(0))?.title]).toEqual([undefined, true])
+    expect(index.unit(7)?.centred).toBe(true)
+  })
   it('a valid file parses, round-trips and indexes', () => {
     const f = made()
     const text = encodeLayout(f)
@@ -143,7 +164,7 @@ describe('a valid file', () => {
     expect(index.onPage(4)).toEqual([])
     expect(index.onPage(0)).toEqual([])
     const u = index.unit(5)!
-    expect(u).toMatchObject({ id: 5, kind: 'para', depth: 9, title: false, front: false, centred: false, pieces: 6, heading: null })
+    expect(u).toMatchObject({ id: 5, kind: 'para', depth: 9, title: false, front: false, centred: undefined, pieces: 6, heading: null })
     expect(u.lines).toBeInstanceOf(Float64Array)
     expect(u.lines.length).toBe(40)
     expect([...u.frames]).toEqual(f.frames[3]![1])
@@ -169,7 +190,7 @@ describe('a valid file', () => {
     expect([...index.unit(3)!.labels]).toEqual([0, 2, 50, 720, 66, 728.5, 717])
     expect([...index.unit(8)!.labels]).toEqual([3, 2, 66, 100, 70, 106, 98])
     expect(index.unit(8)!.ph.get(1)).toEqual({ kind: 'macro', flags: PH_FLAG.LOST, segs: new Float64Array(0), text: null, fill: null })
-    expect(LAYOUT).toBe('11')
+    expect(LAYOUT).toBe('43')
     expect(index.unit(5)!.held).toEqual([1])
     expect(index.unit(2)!.held).toEqual([])
     expect(PAGE_TEXT_KINDS).toEqual(['cite', 'ref', 'eqref'])
@@ -179,8 +200,12 @@ describe('a valid file', () => {
     expect(index.font(2)).toBe('CMMI10')
     expect(index.file).toEqual(f)
     // babel's names by page, in the file's order, with their flags read
-    expect(index.names(1)).toEqual([{ occurrence: 1, key: 'abstract', page: 1, x0: 280, baseline: 680, x1: 332.5, top: 687, bottom: 677.5, size: 9, font: 1, centred: true, capitals: false, unit: -1, glue: 0, cx0: 72, cx1: 540 }])
-    expect(index.names(3).map(n => [n.key, n.capitals, n.centred, n.unit, n.glue, n.cx1])).toEqual([['ref', true, false, -1, 0, 300], ['proof', false, false, 7, 2.5, 540]])
+    expect(index.names(1)).toEqual([{ occurrence: 1, key: 'abstract', page: 1, x0: 280, baseline: 680, x1: 332.5, top: 687, bottom: 677.5, size: 9, font: 1, centred: true, capitals: false, unit: -1, glue: 0, counter: 0, cx0: 72, cx1: 540 }])
+    expect(index.names(3).map(n => [n.key, n.capitals, n.centred, n.unit, n.glue, n.counter, n.cx1])).toEqual([['ref', true, false, -1, 0, 0, 300], ['proof', false, false, 7, 2.5, 0, 540]])
+    // (slot 12 of a name leading no unit: the counter's width at its row's end, which the layer splits off; never a glue)
+    const counted = structuredClone(f)
+    counted.names[0]![12] = 6
+    expect(indexLayout(parseLayout(utf8(encodeLayout(counted)))).names(1).map(n => [n.glue, n.counter])).toEqual([[0, 6]])
     expect(index.names(2)).toEqual([])
     expect(index.names(9)).toEqual([])
   })
@@ -383,7 +408,8 @@ const ROWS: [string, Edit, string][] = [
   ['schema 2, a file before the interline glue', f => { f.schema = 2 }, 'schema'],
   ['schema 3', f => { f.schema = 3 }, 'schema'],
   ['schema 4, a file before the fill', f => { f.schema = 4 }, 'schema'],
-  ['schema 6', f => { f.schema = 6 }, 'schema'],
+  ['schema 7', f => { f.schema = 7 }, 'schema'],
+  ['schema 5', f => { f.schema = 5 }, 'schema'],
   ['a lineskip of one number', f => { (f as { lineskip: unknown }).lineskip = [1] }, 'lineskip'],
   ['a lineskip that is a string', f => { (f as { lineskip: unknown }).lineskip = ['1pt', 0] }, 'lineskip[0]'],
   ['a lineskiplimit past \\maxdimen', f => { (f as { lineskip: unknown }).lineskip = [1, 1e6] }, 'lineskip[1]'],
@@ -427,11 +453,14 @@ const ROWS: [string, Edit, string][] = [
   ['an id twice', f => { f.units[2][0] = f.units[1][0] }, 'units[2][0]'],
   ['a negative id', f => { f.units[0][0] = -1 }, 'units[0][0]'],
   ['a unit row of 4', f => { f.units[1].pop() }, 'units[1]'],
-  ['a kind of 9', f => { f.units[1][1] = 9 }, 'units[1][1]'],
+  ['a kind past UNIT_KINDS', f => { f.units[1][1] = UNIT_KINDS.length }, 'units[1][1]'],
   ['depth 6', f => { f.units[1][2] = 6 }, 'units[1][2]'],
   ['depth -2', f => { f.units[1][2] = -2 }, 'units[1][2]'],
   ['depth 8', f => { f.units[1][2] = 8 }, 'units[1][2]'],
-  ['flags 8', f => { f.units[1][3] = 8 }, 'units[1][3]'],
+  ['flags 64 (8 and 16 are FLUSH_LEFT and FLUSH_RIGHT, LAYOUT 26; 32 JUSTIFIED, LAYOUT 37)', f => { f.units[1][3] = 64 }, 'units[1][3]'],
+  ['flags JUSTIFIED and CENTRED both', f => { f.units[1][3] = UNIT_FLAG.CENTRED | UNIT_FLAG.JUSTIFIED }, 'units[1][3]'],
+  ['flags CENTRED and FLUSH_LEFT both', f => { f.units[1][3] = UNIT_FLAG.CENTRED | UNIT_FLAG.FLUSH_LEFT }, 'units[1][3]'],
+  ['flags FLUSH_LEFT and FLUSH_RIGHT both', f => { f.units[1][3] = UNIT_FLAG.TITLE | UNIT_FLAG.FLUSH_LEFT | UNIT_FLAG.FLUSH_RIGHT }, 'units[1][3]'],
   ['pieces 10,001', f => { f.units[1][4] = 10001 }, 'units[1][4]'],
   // lines
   ['a line row of 7 numbers', f => { f.lines[0][1].pop() }, 'lines[0][1]'],
@@ -492,7 +521,7 @@ const ROWS: [string, Edit, string][] = [
   ['a segment on an EMPTY placeholder', f => { f.ph[4].push(...f.ph[0].slice(4)) }, 'ph[4]'],
   ['EMPTY and LOST together', f => { f.ph[4][3] = PH_FLAG.EMPTY | PH_FLAG.LOST }, 'ph[4][3]'],
   ['NUMBERED on a citation', f => { f.ph[1][3] = PH_FLAG.SOURCE_BRACKETS | PH_FLAG.NUMBERED }, 'ph[1][3]'],
-  ['a placeholder kind of 10', f => { f.ph[0][2] = 10 }, 'ph[0][2]'],
+  ['a placeholder kind of 11', f => { f.ph[0][2] = 11 }, 'ph[0][2]'],
   ['placeholder flags of 512', f => { f.ph[0][3] = 512 }, 'ph[0][3]'],
   // JOINED: a display's, alone, with no segments of its own (its ink its group's first display's)
   ['JOINED on a formula', f => { f.ph[0] = [2, 1, MATH, PH_FLAG.JOINED] }, 'ph[0]'],
@@ -547,7 +576,7 @@ const ROWS: [string, Edit, string][] = [
   ['a run-in name leading no unit of the file', f => { f.names[2][11] = 4 }, 'names[2][11]'],
   ['a name not run in that leads a unit', f => { f.names[0][11] = 7 }, 'names[0][11]'],
   ['a run-in name of no unit', f => { f.names[2][11] = -1 }, 'names[2][11]'],
-  ['a glue on a name not run in', f => { f.names[0][12] = 1 }, 'names[0][12]'],
+  ["a name's counter as wide as its row", f => { f.names[0][12] = f.names[0][5] - f.names[0][3] }, 'names[0][12]'],
   ['a negative glue', f => { f.names[2][12] = -1 }, 'names[2][12]'],
   ["a glue past the page's width", f => { f.names[2][12] = 700 }, 'names[2][12]'],
   ["a name's column with x0 = x1", f => { f.names[0][14] = f.names[0][13] }, 'names[0][13]'],
@@ -907,5 +936,70 @@ describe("each colour piece's run's fill (`colours`, PR-C): a key only where a u
     expect(mergeLayout([a, b] as never).colours).toEqual([[2, 0, 0x000099], [5, 1, 0]])
     const { colours: _drop, ...bare } = rows as { colours?: unknown }
     expect(Object.hasOwn(mergeLayout([bare] as never), 'colours')).toBe(false)
+  })
+})
+
+describe('why each unit not laid is the original\'s (`unlaid`): a key only where one is not laid', () => {
+  const withUnlaid = (unlaid: unknown) => { const f = structuredClone(made()) as unknown as Record<string, unknown>; f.unlaid = unlaid; return f }
+  it('is read, written back as it is, and its absence leaves the file the bytes it was', () => {
+    const f = withUnlaid([[1, 'noAnchor'], [4, 'lineTaken'], [6, 'unplacedMarks']])
+    const parsed = parseLayout(utf8(JSON.stringify(f)))
+    expect(parsed.unlaid).toEqual([[1, 'noAnchor'], [4, 'lineTaken'], [6, 'unplacedMarks']])
+    expect(parseLayout(utf8(encodeLayout(parsed)))).toEqual(parsed)
+    expect(encodeLayout(parseLayout(utf8(JSON.stringify(made()))))).not.toContain('unlaid')
+    // (every code of the closed set is one)
+    expect(parseLayout(utf8(JSON.stringify(withUnlaid(UNLAID.map((c, j) => [100 + j, c])))))?.unlaid).toHaveLength(UNLAID.length)
+  })
+  it('refuses an empty key, a row of another shape, a unit the file lays, ids out of order, a code not of the set, and past its bound', () => {
+    for (const [unlaid, path] of [[[], 'unlaid'], [[[1]], 'unlaid[0]'], [[[1, 'noLine', 0]], 'unlaid[0]'], [[[2, 'noLine']], 'unlaid[0][0]'], [[[4, 'noLine'], [1, 'noLine']], 'unlaid[1][0]'], [[[4, 'noLine'], [4, 'kind']], 'unlaid[1][0]'], [[[-1, 'noLine']], 'unlaid[0][0]'], [[[1.5, 'noLine']], 'unlaid[0][0]'], [[[1, 'other']], 'unlaid[0][1]'], [[[1, 3]], 'unlaid[0][1]'], ['x', 'unlaid']] as const) {
+      expect(refusal(utf8(JSON.stringify(withUnlaid(unlaid))))?.path, JSON.stringify(unlaid)).toBe(path)
+    }
+    const many = Array.from({ length: UNLAID_ALL + 1 }, (_, j) => [100 + j, 'kind'])
+    expect(refusal(utf8(JSON.stringify(withUnlaid(many))))).toMatchObject({ path: 'unlaid', bound: 'rows' })
+    // (a file cut into parts holds them all: the bound is each part's)
+    expect(parseLayout(utf8(JSON.stringify(withUnlaid(many))), { sized: false }).unlaid).toHaveLength(UNLAID_ALL + 1)
+  })
+  it('a part holds them too, and the parts merged hold them by unit', () => {
+    const f = parseLayout(utf8(JSON.stringify(withUnlaid([[1, 'noAnchor'], [6, 'dark']]))))
+    const rows = layoutPartRows(f as never)
+    expect(rows.unlaid).toEqual([[1, 'noAnchor'], [6, 'dark']])
+    expect(checkLayoutPart(structuredClone(rows), { pages: 3, views: f.views, lo: 1, hi: 3 }).unlaid).toEqual([[1, 'noAnchor'], [6, 'dark']])
+    const a = { ...(rows as object), unlaid: [[6, 'dark']] }, b = { ...(rows as object), unlaid: [[1, 'noAnchor']] }
+    expect(mergeLayout([a, b] as never).unlaid).toEqual([[1, 'noAnchor'], [6, 'dark']])
+    const { unlaid: _drop, ...bare } = rows as { unlaid?: unknown }
+    expect(Object.hasOwn(mergeLayout([bare] as never), 'unlaid')).toBe(false)
+  })
+})
+
+describe('the regions TeX set on our page (`regions`, schema 6): a key only where a page holds one', () => {
+  const withRegions = (regions: unknown) => { const f = structuredClone(made()) as unknown as Record<string, unknown>; f.regions = regions; return f }
+  it('is read, written back to a hundredth, and its absence leaves the file the bytes it was', () => {
+    const f = withRegions([[1, 0, 72.004, 600, 300, 611.5], [1, 0, 72, 588, 250, 599], [3, 0, 100, 100, 200, 110]])
+    const parsed = parseLayout(utf8(JSON.stringify(f)))
+    expect(parsed.regions).toEqual([[1, 0, 72.004, 600, 300, 611.5], [1, 0, 72, 588, 250, 599], [3, 0, 100, 100, 200, 110]])
+    const back = parseLayout(utf8(encodeLayout(parsed)))
+    expect(back.regions).toEqual([[1, 0, 72, 600, 300, 611.5], [1, 0, 72, 588, 250, 599], [3, 0, 100, 100, 200, 110]])
+    expect(encodeLayout(parseLayout(utf8(JSON.stringify(made()))))).not.toContain('regions')
+    expect(REGION_KINDS).toEqual(['code'])
+  })
+  it('refuses an empty key, a row of another shape, a kind not of REGION_KINDS, pages out of order or past the paper, and a box not on its page', () => {
+    for (const [regions, path] of [[[], 'regions'], [[[1, 0, 1, 2, 3]], 'regions[0]'], [[[1, 1, 72, 600, 300, 611]], 'regions[0][1]'], [[[1, -1, 72, 600, 300, 611]], 'regions[0][1]'], [[[2, 0, 72, 600, 300, 611], [1, 0, 72, 600, 300, 611]], 'regions[1][0]'], [[[4, 0, 72, 600, 300, 611]], 'regions[0][0]'], [[[1, 0, 72, 600, 900, 611]], 'regions[0][4]'], [[[1, 0, 300, 600, 72, 611]], 'regions[0][4]'], [[[1, 0, 72, 611, 300, 600]], 'regions[0][5]'], [[[1, 0, '72', 600, 300, 611]], 'regions[0][2]'], ['x', 'regions']] as const) {
+      expect(refusal(utf8(JSON.stringify(withRegions(regions))))?.path, JSON.stringify(regions)).toBe(path)
+    }
+    const many = Array.from({ length: REGIONS_ALL + 1 }, () => [1, 0, 72, 600, 300, 611])
+    expect(refusal(utf8(JSON.stringify(withRegions(many))))).toMatchObject({ path: 'regions', bound: 'rows' })
+  })
+  it('a part holds those of its pages, and the parts merged hold them by page', () => {
+    const f = parseLayout(utf8(JSON.stringify(withRegions([[1, 0, 72, 600, 300, 611], [3, 0, 100, 100, 200, 110]]))))
+    const rows = layoutPartRows(f as never)
+    expect(checkLayoutPart(structuredClone(rows), { pages: 3, views: f.views, lo: 1, hi: 3 }).regions).toEqual([[1, 0, 72, 600, 300, 611], [3, 0, 100, 100, 200, 110]])
+    // (a part's region on a page past its own is refused)
+    const empty = { fonts: [], units: [], lines: [], frames: [], erase: [], ph: [], labels: [], headings: [], pageText: [], held: [], names: [] }
+    expect(() => checkLayoutPart({ ...empty, regions: [[3, 0, 100, 100, 200, 110]] }, { pages: 3, views: f.views.slice(0, 8), lo: 1, hi: 2 })).toThrow(/regions\[0\]\[0\]/)
+    expect(checkLayoutPart({ ...empty, regions: [[2, 0, 100, 100, 200, 110]] }, { pages: 3, views: f.views.slice(0, 8), lo: 1, hi: 2 }).regions).toHaveLength(1)
+    const a = { ...(rows as object), regions: [[3, 0, 100, 100, 200, 110]] }, b = { ...(rows as object), regions: [[1, 0, 72, 600, 300, 611]] }
+    expect(mergeLayout([a, b] as never).regions).toEqual([[1, 0, 72, 600, 300, 611], [3, 0, 100, 100, 200, 110]])
+    const { regions: _drop, ...bare } = rows as { regions?: unknown }
+    expect(Object.hasOwn(mergeLayout([bare] as never), 'regions')).toBe(false)
   })
 })

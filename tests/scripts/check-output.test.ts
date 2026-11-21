@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -18,8 +18,11 @@ const put = (path: string, content: string | Uint8Array) => {
 }
 
 /** The script's verdict on the check whose line starts with `name`: '✓', '✗', or undefined when no line names it */
-const verdict = (name: string, env: Record<string, string> = {}) => {
-  const result = spawnSync(process.execPath, [SCRIPT], { cwd: root, encoding: 'utf8', env: { ...process.env, ...env } })
+const verdict = (name: string, env: Record<string, string | undefined> = {}) => {
+  // (a variable given as undefined is one the run does not have, whatever this process's environment holds)
+  const run = { ...process.env, ...env }
+  for (const [k, v] of Object.entries(env)) if (v === undefined) delete run[k]
+  const result = spawnSync(process.execPath, [SCRIPT], { cwd: root, encoding: 'utf8', env: run })
   return `${result.stdout}\n${result.stderr}`.split('\n').find(line => line.slice(2).startsWith(name))?.[0]
 }
 
@@ -89,20 +92,89 @@ describe('a production build fails check-output when', () => {
   })
 })
 
+// The style sheets are made from the product's own files: Tailwind's scan once read a test (`.top-1`, `.m-2`), a document
+// and a model's bytes (`.z-8`) into the popup's and the settings page's sheet (src/styles/ui.css names its sources)
+describe('a build\'s style sheets', () => {
+  const OWN = `${OUT} holds no class that no product file names`
+  it('hold the classes the product\'s files name and no class that only a test, a document or a lab file does', () => {
+    put('src/entrypoints/popup/App.tsx', 'export const App = () => <div className="flex hover:bg-sky-500 w-1/2 py-1.5 [axt:layer]" />\n')
+    put('packages/ui/src/controls.css', '.axt-menu { color: red }\n')
+    put(`${OUT}/assets/popup.css`, '.flex{display:flex}.hover\\:bg-sky-500:hover{color:blue}.w-1\\/2{width:50%}.py-1\\.5{padding:6px}.\\[axt\\:layer\\]{axt:layer}.axt-menu{color:red}\n')
+    expect(verdict(OWN)).toBe('✓')
+    // named only by a test, a document, a lab file: the seeded class arrives in the sheet, and the check names it
+    put('tests/options/form.test.ts', "expect(top).toBe('top-9')\n")
+    put('docs/DESIGN.md', 'the table header says select-all and top-5\n')
+    put('lab/probe.mjs', '// m-7\n')
+    put(`${OUT}/assets/popup.css`, '.flex{display:flex}.top-9{top:2px}.select-all{user-select:all}.top-5{top:1px}.m-7{margin:1px}\n')
+    expect(verdict(OWN)).toBe('✗')
+    for (const only of ['.top-9{top:2px}', '.select-all{user-select:all}', '.top-5{top:1px}', '.m-7{margin:1px}']) {
+      put(`${OUT}/assets/popup.css`, `.flex{display:flex}${only}\n`)
+      expect(verdict(OWN), only).toBe('✗')
+    }
+    // a word a product style sheet holds as a property's value names no class: Tailwind reads no sheet of ours, so the
+    // class came from elsewhere (`.flex-wrap` from a vendored arXiv sheet in a test fixture)
+    put('src/entrypoints/options/ui/settings.css', '.o-row { display: flex; flex-wrap: wrap; }\n')
+    put(`${OUT}/assets/popup.css`, '.flex{display:flex}.flex-wrap{flex-wrap:wrap}.o-row{display:flex}\n')
+    expect(verdict(OWN)).toBe('✗')
+    put(`${OUT}/assets/popup.css`, '.flex{display:flex}.o-row{display:flex}\n')
+    expect(verdict(OWN)).toBe('✓')
+    // a word inside a longer class name is no naming of the class
+    put('src/entrypoints/popup/App.tsx', 'export const App = () => <div className="top-10" />\n')
+    put(`${OUT}/assets/popup.css`, '.top-1{top:1px}\n')
+    expect(verdict(OWN)).toBe('✗')
+  })
+  it('may carry the classes PDF.js\'s own sheet defines, which no file of ours names, read from the package whichever way a build carries the sheet', () => {
+    // the package's sheet, where the repository resolves `pdfjs-dist/web/pdf_viewer.css`
+    const SHEET = 'node_modules/pdfjs-dist/web/pdf_viewer.css'
+    put('node_modules/pdfjs-dist/package.json', '{"name":"pdfjs-dist","version":"6.3.289"}\n')
+    put(SHEET, '.annotationLayer .popupAnnotation{position:absolute}\n')
+    // today's reader (AXT_READER=today): the sheet bundled into the page's sheet, and no copy of it beside
+    put(`${OUT}/assets/pdf-reader.css`, '.annotationLayer{position:absolute}.annotationLayer .popupAnnotation{color:red}\n')
+    expect(verdict(OWN, { AXT_READER: 'today' })).toBe('✓')
+    expect(verdict(OWN)).toBe('✓')
+    // the reader package's: a copy at `pdfjs/<version>/` besides
+    put(`${OUT}/pdfjs/6.3.289/pdf_viewer.css`, '.annotationLayer .popupAnnotation{position:absolute}\n')
+    expect(verdict(OWN)).toBe('✓')
+    // a class the package's sheet does not define is refused in either form, whatever a sheet in the build defines
+    put(SHEET, '.annotationLayer{position:absolute}\n')
+    expect(verdict(OWN)).toBe('✗')
+    rmSync(join(root, OUT, 'pdfjs'), { recursive: true })
+    expect(verdict(OWN, { AXT_READER: 'today' })).toBe('✗')
+    // and with no package's sheet to read, no class is PDF.js's
+    rmSync(join(root, 'node_modules'), { recursive: true })
+    put(`${OUT}/pdfjs/6.3.289/pdf_viewer.css`, '.annotationLayer .popupAnnotation{position:absolute}\n')
+    expect(verdict(OWN)).toBe('✗')
+  })
+  it('read no dot of a string, a comment or an address as a class', () => {
+    put(`${OUT}/assets/popup.css`, '/* .none */ a{background:url(data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg"/>) 0.5px; content:".quote"}b{margin:0.5rem;background:url("x.svg")}\n')
+    expect(verdict(OWN)).toBe('✓')
+  })
+})
+
 // The reader is the reading view on the layer (Stage 5 Tasks 9 and 17): its places' code in a chunk; no TeX page, nothing of the
 // LaTeX front end; the host permissions exactly the release's, staging's only in a staging build, and no staging host named
 // anywhere in a production one; the web-accessible resources and the offscreen document as they were
 describe('the layer reader\'s package', () => {
   const VIEW = `${OUT} holds the reading view, the reader`
+  const PACKAGE_VIEW = `${OUT} holds the reader package's, not today's reading view`
   const NO_TEX = `${OUT} names no TeX page`
   const HOSTS = 'the host permissions are exactly'
   const NO_STAGING = 'a production build names no staging host'
   const RELEASE = ['https://openrouter.ai/*', 'https://translate-pa.googleapis.com/*', 'https://edge.microsoft.com/*', 'https://arxiv.org/*', 'https://readarxiv.com/*']
-  it('holds the reading view: its places\' code in a chunk, not only their rule in the style sheet', () => {
+  it('a build of today\'s reader (AXT_READER=today) holds the reading view: its places\' code in a chunk, not only their rule in the style sheet', () => {
+    const today = { AXT_READER: 'today' }
     put(`${OUT}/assets/pdf-reader.css`, '.axt-place-view{position:absolute;inset:0}\n')
-    expect(verdict(VIEW)).toBe('✗')
+    expect(verdict(VIEW, today)).toBe('✗')
     put(`${OUT}/chunks/host-Ab12.js`, "const holder = document.createElement('div'); holder.className = 'axt-place-view'\n")
-    expect(verdict(VIEW)).toBe('✓')
+    expect(verdict(VIEW, today)).toBe('✓')
+  })
+  it('a build that names no reader is the rebuilt reader\'s (wxt.config.ts readerPath\'s default), held to its checks: none of today\'s reading view', () => {
+    const unnamed = { AXT_READER: undefined }
+    expect(verdict(PACKAGE_VIEW, unnamed)).toBe('✓')
+    expect(verdict(VIEW, unnamed)).toBeUndefined()
+    put(`${OUT}/chunks/host-Ab12.js`, "const holder = document.createElement('div'); holder.className = 'axt-place-view'\n")
+    expect(verdict(PACKAGE_VIEW, unnamed)).toBe('✗')
+    expect(verdict(PACKAGE_VIEW, { AXT_READER: 'v2' })).toBe('✗')
   })
   it('names no TeX page and holds nothing of the LaTeX front end', () => {
     expect(verdict(NO_TEX)).toBe('✓')
@@ -144,14 +216,32 @@ describe('the layer reader\'s package', () => {
     expect(verdict(ASKED, { AXT_BUILD: 'staging' })).toBe('✗')
   })
   it('the web-accessible resources are the popup and the reader to arXiv alone; the offscreen document stays', () => {
-    const war = [{ resources: ['popup.html'], matches: ['https://arxiv.org/*'] }, { resources: ['pdf-reader.html'], matches: ['https://arxiv.org/*'] }]
+    const war = [{ resources: ['popup.html'], matches: ['https://arxiv.org/*'], use_dynamic_url: true }, { resources: ['pdf-reader.html'], matches: ['https://arxiv.org/*'], use_dynamic_url: true }]
     put(`${OUT}/manifest.json`, JSON.stringify({ web_accessible_resources: war, permissions: ['storage', 'offscreen'], content_security_policy: { extension_pages: "script-src 'self'; object-src 'self'; frame-src 'none'" } }))
     expect(verdict('the web-accessible resources are popup.html and pdf-reader.html')).toBe('✓')
     expect(verdict('the offscreen document stays')).toBe('✓')
     expect(verdict('the extension\'s pages frame nothing')).toBe('✓')
+    expect(verdict('the manifest does not let a reader that is no frame act')).toBe('✓')
+    // at a stable address (no use_dynamic_url) an arXiv page could write into a frame, and a manifest that lets a reader
+    // of its own act (the harness's copy) is no build's
+    put(`${OUT}/manifest.json`, JSON.stringify({ web_accessible_resources: war.map(({ use_dynamic_url: _, ...entry }) => entry), axt_top_level_reader: true, permissions: ['storage', 'offscreen'], content_security_policy: { extension_pages: "script-src 'self'; object-src 'self'; frame-src 'none'" } }))
+    expect(verdict('the web-accessible resources are popup.html and pdf-reader.html')).toBe('✗')
+    expect(verdict('the manifest does not let a reader that is no frame act')).toBe('✗')
     put(`${OUT}/manifest.json`, JSON.stringify({ web_accessible_resources: [...war.slice(0, 1), { resources: ['pdf-reader.html'], matches: ['<all_urls>'] }], permissions: ['storage'] }))
     expect(verdict('the web-accessible resources are popup.html and pdf-reader.html')).toBe('✗')
     expect(verdict('the offscreen document stays')).toBe('✗')
     expect(verdict('the extension\'s pages frame nothing')).toBe('✗')
+  })
+})
+
+describe('the store archive', () => {
+  // `wxt zip` builds again before it writes the archive, and that build was checked by nothing: `pnpm build && pnpm zip` paired
+  // the two by convention only (#88 E8). Each archive's script ends with the check of its own kind of build
+  const scripts = (JSON.parse(readFileSync(resolve('package.json'), 'utf8')) as { scripts: Record<string, string> }).scripts
+  it('is checked as its build is: the release archive as a release, the staging archive as staging', () => {
+    expect(scripts.zip).toBe('wxt zip && node scripts/check-output.mjs')
+    expect(scripts['zip:staging']).toMatch(/ wxt zip && AXT_BUILD=staging node scripts\/check-output\.mjs$/)
+    // the archive and its build ask the same server
+    expect(scripts['zip:staging']!.split(' wxt zip')[0]).toBe(scripts['build:staging']!.split(' wxt build')[0])
   })
 })

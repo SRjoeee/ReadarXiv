@@ -18,7 +18,7 @@ vi.mock('wxt/browser', () => ({ browser: { runtime: { id: 'test-extension', getU
 import { Appearance } from '@/entrypoints/options/sections/Appearance'
 import { UNDO_MS } from '@/entrypoints/options/ui/UndoRow'
 import { drafts } from '@/ui/drafts'
-import { O, setLocale } from '@/ui/strings'
+import { O, setLocale } from '@readarxiv/ui'
 
 function Harness({ start, patches }: { start: Config; patches: Config[] }) {
   const [config, setConfig] = useState(start)
@@ -168,7 +168,7 @@ describe('the translation styles (§6.4)', () => {
     expect(editor(m.container)).not.toBeNull()
     button(editor(m.container)!, O.reading.duplicate).click()
     await m.flush()
-    expect(names(m.container).at(-1)).toBe(`${O.appearance.newStyle} ${O.reading.copySuffix}`)
+    expect(names(m.container).at(-1)).toBe(O.reading.copyName(O.appearance.newStyle))
     await m.unmount()
   })
 

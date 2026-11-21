@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { type BundleUnit, bundleUnitsOf, type ReadBundle, UNIT_FLAG_BITS } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
 import {
-  batchesOf, layerRows, type Row, rowOf, type RowSourceUnit, runRows, sourceUnitsOf, toTranslate, type TranslateResult, unitOf,
+  batchesOf, echoRows, layerIds, layerRows, type Row, rowOf, type RowSourceUnit, runRows, sourceUnitsOf, toTranslate, type TranslateResult, unitOf,
 } from '@/pdf-reader/engine/layer-proto/rows.mjs'
 import { kOfSource, trPiecesOf } from '@/pdf-reader/engine/layer/pieces.mjs'
 import { PIECES_MAX } from '@/pdf-reader/engine/layout/json.mjs'
-import { type BatchReport, type Compiled, keptFor, openPaper, runLive } from '@/pdf-reader/engine/pipeline/live.mjs'
+import { keptFor, openPaper } from '@/pdf-reader/engine/pipeline/live.mjs'
 import { batchOf, FIRST_BATCH, NEXT_BATCH, plainSource, translateUnits } from '@/pdf-reader/engine/translate/mt.mjs'
 
 // The rows (the layer-only plan §4.1, A2's E6): one unit of one language as the engine's translateUnits gave it, with each
@@ -316,20 +316,84 @@ describe('toTranslate', () => {
   const tex = '\\documentclass{article}\n\\title{A Title}\n\\author{Ada Lovelace}\n\\begin{document}\n\\maketitle\nThe prose names AlphaNet and BetaNet in running text, and says more.\n\n\\begin{tabular}{ll}\n\\toprule\nModel & Training cost \\\\\n\\midrule\nAlphaNet & fast training \\\\\nBetaNet & slow \\\\\n\\bottomrule\n\\end{tabular}\n\nAnother paragraph.\n\\end{document}\n'
   const paper = openPaper(new Map([['main.tex', enc(tex)]]))
   const bundle = bundleOf(bundleUnitsOf(paper))
-  it('holds the paper\'s units: names kept, an author block kept where the language writes it as the paper does', () => {
+  it('holds the paper\'s units: names kept, an author block', () => {
     expect(paper.units.some(u => u.kind === 'author')).toBe(true)
     expect(paper.kept.size).toBeGreaterThan(0)
     expect(toTranslate(bundle, 'zh').length).toBeGreaterThan(0)
   })
+  // (every content class translated once whatever the language, the author block's names among them: the owner's ruling of
+  // 2026-10-25, TRANSLATE_VERSION 6; a reader's "names" toggle shows them or not. keptFor, the TeX path's, keeps them for a
+  // target that writes names as the paper does)
   for (const lang of ['zh', 'zh-TW', 'ja', 'ko', 'de', 'fr', 'es', 'ru', 'en-GB', 'xx']) {
-    it(`is the complement of keptFor, rising (${lang})`, () => {
-      const kept = keptFor(paper, lang), want = paper.units.map((u, i) => (kept.has(u) ? -1 : i)).filter(i => i >= 0)
+    it(`is every unit but the names a table holds, rising, the author block's among them (${lang})`, () => {
+      const want = paper.units.map((u, i) => (paper.kept.has(u) ? -1 : i)).filter(i => i >= 0)
       expect(toTranslate(bundle, lang)).toEqual(want)
+      expect(want).toContain(paper.units.findIndex(u => u.kind === 'author'))
+      // (keptFor, the TeX path's, is the same where the target writes names its own way, and keeps them where it does not)
+      const kept = keptFor(paper, lang)
+      expect(paper.units.filter((u, i) => !kept.has(u) && !want.includes(i))).toEqual([])
     })
   }
   it('skips a dropped unit', () => {
     const b = bundleOf([BASE[0] as BundleUnit, null, BASE[1] as BundleUnit, ['para', UNIT_FLAG_BITS.KEPT, null, null, null, [[0, 'Kept']]]])
     expect(toTranslate(b, 'de')).toEqual([0, 2])
+  })
+  // (a structural name the target's packages answer wherever it would be read is never read there, so never sent:
+  // rules/tex-names.mjs nameAnswered, TRANSLATE_VERSION 10; zh's "Theorem" is ctex's, "Claim" no package's; zh's "Algorithm" is
+  // cleveref's reference alone, and a paper's own \newtheorem{algorithm}{Algorithm} reads its head from the unit: Codex on #581)
+  it('leaves out a name unit the target\'s packages answer, for that target alone', () => {
+    const b = bundleOf([BASE[0] as BundleUnit, ['name', 0, null, null, null, [[0, 'Theorem']]], ['name', 0, null, null, null, [[0, 'Claim']]], ['name', 0, null, null, null, [[0, 'and']]], ['name', 0, null, null, null, [[0, 'Algorithm']]]])
+    expect(toTranslate(b, 'zh')).toEqual([0, 2, 3, 4])
+    expect(toTranslate(b, 'de')).toEqual([0, 2, 4])
+    expect(toTranslate(b, 'ja')).toEqual([0, 1, 2, 3, 4])
+    // (the rows and the batches read the same: the name the packages answer has no row and no batch)
+    expect(layerIds(b, 'zh')).toEqual([0, 2, 3, 4])
+    expect(batchesOf(b, 'zh').flat().sort()).toEqual([0, 2, 3, 4])
+  })
+  // (a TikZ picture's texts, which the front end cuts into units of kind `figure`, latex-front.mjs tikzText: the layout compile
+  // marks none of them and the layer draws none, the picture's glyphs being the figure ink units' (kind `inkfigures`,
+  // layout/figure-text.mjs), translated once. They stay in the bundle at their ids, the left pane's floats reading them)
+  describe("a TikZ picture's texts", () => {
+    const tikz = '\\documentclass{article}\n\\usepackage{tikz}\n\\usepackage{pgfplots}\n\\begin{document}\nThe prose before the figure, a sentence.\n\n\\begin{figure}\n\\begin{tikzpicture}\n\\node[draw] (a) at (0,0) {Input layer};\n\\draw (0,1) node {Hidden units};\n\\begin{axis}[xlabel={Training steps}, title={Loss curve}]\n\\addplot coordinates {(0,1) (1,0)};\n\\addlegendentry{Validation loss}\n\\end{axis}\n\\end{tikzpicture}\n\\caption{A picture drawn with TikZ.}\n\\end{figure}\n\nThe prose after it, another sentence.\n\\end{document}\n'
+    const paper = openPaper(new Map([['main.tex', enc(tikz)]]))
+    const bundle = bundleOf(bundleUnitsOf(paper))
+    const figures = paper.units.flatMap((u, i) => (u.kind === 'figure' ? [i] : []))
+    it('are units of the bundle, at their ids, every unit after them at its own', () => {
+      expect(figures.map(i => plainSource(paper.units[i] as never))).toEqual(['Input layer', 'Hidden units', 'Training steps', 'Loss curve', 'Validation loss'])
+      expect(bundle.units.length).toBe(paper.units.length)
+      for (const i of figures) expect(bundle.units[i]?.[0]).toBe('figure')
+    })
+    for (const lang of ['zh', 'ja', 'ko', 'de', 'fr', 'ru']) {
+      it(`are none of the units a language translates, its batches or the rows it awaits (${lang})`, () => {
+        const ids = toTranslate(bundle, lang)
+        expect(ids.filter(i => figures.includes(i))).toEqual([])
+        // (every other unit is translated: the prose and the caption)
+        expect(ids).toEqual(paper.units.flatMap((u, i) => (u.kind === 'figure' || paper.kept.has(u) ? [] : [i])))
+        expect(ids.map(i => paper.units[i]!.kind)).toEqual(expect.arrayContaining(['para', 'caption']))
+        expect(batchesOf(bundle, lang).flat().filter(i => figures.includes(i))).toEqual([])
+        expect(layerIds(bundle, lang).filter(i => figures.includes(i))).toEqual([])
+      })
+    }
+    it('leave an ink unit that repeats one its own translation: it echoes none, and one that echoes it takes its row', () => {
+      // (a TikZ label, a running head of the same words the maker made an ink unit echoing it, and a contents entry echoing that
+      // head: layout/ink-units.mjs echo, rule 5, whose chain unitFrom follows)
+      const b = bundleOf([
+        ['para', 0, null, null, null, [[0, 'Prose before the figure.']]],
+        ['figure', 0, null, null, null, [[0, 'Input layer']]],
+        ['inkheads', 0, null, null, null, [[0, 'Input layer']], 1],
+        ['inkcontents', 0, null, null, null, [[0, 'Input layer']], 2],
+      ] as never)
+      for (const lang of ['zh', 'de']) {
+        expect(toTranslate(b, lang), lang).toEqual([0, 2])
+        expect(layerIds(b, lang), lang).toEqual([0, 2, 3])
+      }
+      expect(echoRows(b, [[2, ['x'], 'whole', 'g', null]] as never).map(r => r[0])).toEqual([3])
+      expect(echoRows(b, [[1, ['x'], 'whole', 'g', null]] as never)).toEqual([])
+    })
+    it('take no row, whatever results a caller holds for them', () => {
+      const results = new Map(figures.map(i => [i, { state: 'whole', pieces: [{ t: 'text', tr: true, s: 'x' }] }]))
+      expect(layerRows(bundle, results as never, 'de').rows.map(r => r[0]).filter(i => figures.includes(i))).toEqual([])
+    })
   })
 })
 
@@ -353,26 +417,22 @@ describe('batchesOf', () => {
     expect(batchesOf(sized(30000, 5, 5, 13000, 7), 'zh')).toEqual([[0], [1, 2], [3], [4]])
     expect(batchesOf(sized(), 'zh')).toEqual([])
   })
-  it('batches what toTranslate holds: a kept unit and a dropped one are in none', () => {
+  it('carries the paper\'s structural names first (units of kind `name`, after the source\'s): the first batch holds them, so that the first page drawn has its heads\' and references\' words (PDF-READER §19.14)', () => {
+    const name = (s: string): BundleUnit => ['name', 0, null, null, null, [[0, s]]]
+    const b = bundleOf([...sized(900, 900, 900, 900).units, name('Section'), name('and')])
+    // 7 + 3 + 900 + 900 = 1,810; a third paragraph would make 2,710
+    expect(batchesOf(b, 'zh')).toEqual([[4, 5, 0, 1], [2, 3]])
+    expect(toTranslate(b, 'zh')).toEqual([0, 1, 2, 3, 4, 5])
+  })
+  it('batches what toTranslate holds: a kept unit and a dropped one are in none, an author block in every language\'s', () => {
     const b = bundleOf([['para', 0, null, null, null, [[0, 'a']]], ['para', KEPT, null, null, null, [[0, 'b']]], null, ['author', 0, null, null, null, [[0, 'c']]], ['para', 0, null, null, null, [[0, 'd']]]])
-    expect(batchesOf(b, 'de')).toEqual([[0, 4]])
+    expect(batchesOf(b, 'de')).toEqual([[0, 3, 4]])
     expect(batchesOf(b, 'zh')).toEqual([[0, 3, 4]])
   })
-  it('is the one rule: batchOf takes the units in the order given, runLive\'s batches are batchesOf\'s', async () => {
+  it('is the one rule: batchOf takes the units in the order given', () => {
     expect(batchOf([5, 2, 9], i => [600, 1000, 900][[5, 2, 9].indexOf(i)] ?? 0, 2500)).toEqual([5, 2, 9])
     expect(batchOf([5, 2, 9], () => 1300, 2500)).toEqual([5])
     expect(batchOf([], () => 1, 2500)).toEqual([])
-    const body = Array.from({ length: 12 }, (_, k) => `Paragraph ${k} of the paper, ${'with words that run on for a line or two of prose '.repeat(4)}and an end.\n`).join('\n')
-    const paper = openPaper(new Map([['main.tex', enc(`\\documentclass{article}\\begin{document}\n${body}\\end{document}\n`)]]))
-    const b = bundleOf(bundleUnitsOf(paper)), batches: number[][] = []
-    const compile = async (): Promise<Compiled> => ({ ok: false, pdf: null, log: '! LaTeX Error: a failure.', ms: 1 })
-    await runLive(paper, {
-      lang: 'zh', compile, previews: false, format: 'markers',
-      translate: async (texts: string[]) => texts.map(text => ({ text, by: 'B' })),
-      onBatch: (report: BatchReport) => { if (!report.seeded) batches.push(report.units.map(u => u.id)) },
-    } as never)
-    expect(batches.length).toBeGreaterThan(1)
-    expect(batches).toEqual(batchesOf(b, 'zh'))
   })
 })
 
@@ -400,10 +460,10 @@ describe('layerRows', () => {
     const { rows } = layerRows(b, resultsOf(b, [[0, { state: 'lost' }], [1, { state: 'none' }]]), 'de')
     expect(rows).toEqual([[0, [], 'lost', null, null], [1, [], 'none', null, null]])
   })
-  it('gives no row for a unit the language keeps (its author block, a name), nor for a dropped one', () => {
+  it('gives no row for a unit kept (a name a table holds), nor for a dropped one; an author block\'s in every language', () => {
     const b = bundleOf([BASE[0] as BundleUnit, BASE[3] as BundleUnit, null, ['para', KEPT, null, null, null, [[0, 'Kept']]]])
     const results = resultsOf(b, [[0, 'T'], [1, 'Ada'], [3, 'Kept']])
-    expect(layerRows(b, results, 'de').rows.map(r => r[0])).toEqual([0])
+    expect(layerRows(b, results, 'de').rows.map(r => r[0])).toEqual([0, 1])
     expect(layerRows(b, results, 'zh').rows.map(r => r[0])).toEqual([0, 1])
   })
   it('holds a table group\'s cells until every cell of it is in, then gives every cell', () => {
@@ -530,6 +590,13 @@ describe('runRows', () => {
     expect(seen[1]?.held).toEqual([])
     expect(out.rows.size).toBe(16)
   })
+  it('asks the paper\'s structural names before any unit, wherever the reader is (PDF-READER §19.14)', async () => {
+    const b = bundleOf([...longBundle(30).units, ['name', 0, null, null, null, [[0, 'Conjecture']]]])
+    const { send, calls } = sender()
+    const out = await runRows(b, { lang: 'de', send, rank: id => Math.abs(id - 29), onRows: () => {} })
+    expect(calls[0]?.[0]).toBe('Conjecture')
+    expect(out.rows.get(30)?.[2]).toBe('whole')
+  })
   it('asks the unit nearest the reading place first, afresh for every batch', async () => {
     const b = longBundle(30), ranks: number[] = []
     let place = 29
@@ -582,6 +649,18 @@ describe('runRows', () => {
     expect(out.lost).toBe(2 + (80 - (batchesOf(b, 'de')[0] as number[]).length - second.length))
     expect(rows).toHaveLength(2)
   })
+  it('a service\'s own `aborted` (the background withdrew the scope, retired its chain) is a stop of the service\'s: the units never asked are lost, as at any stop; the run\'s own signal loses none', async () => {
+    const b = longBundle(80)
+    const { send, calls } = sender((texts, call) => {
+      if (call !== 2) return
+      throw Object.assign(new Error('cancelled (chain retired)'), { kind: 'aborted', partial: texts.map(() => null), lost: new Set(texts.map((_, i) => i)) })
+    })
+    const out = await runRows(b, { lang: 'de', send, onRows: () => {}, signal: new AbortController().signal })
+    expect(calls).toHaveLength(2)
+    expect(out.stopped).toBe('aborted')
+    // the second batch lost, and every unit after it never asked: all of them but the first batch's
+    expect(out.lost).toBe(80 - (batchesOf(b, 'de')[0] as number[]).length)
+  })
   it('lets an error with no kind through: a bug is not a refusal', async () => {
     const b = longBundle(5), { send } = sender(() => { throw new Error('a bug') })
     await expect(runRows(b, { lang: 'de', send, onRows: () => {}, signal: undefined })).rejects.toThrow('a bug')
@@ -604,5 +683,36 @@ describe('runRows', () => {
     const runs = await runRows(b, { lang: 'de', send, format: 'runs', onRows: () => {}, signal: undefined })
     expect(seen[0]?.texts.every(t => !t.includes('<x') && !t.includes('@a#'))).toBe(true)
     expect(runs.rows.get(0)?.[2]).toBe('whole')
+  })
+})
+
+describe("the ink units' rows (docs/route/orphan-text.md §8)", () => {
+  // (a heading, a paragraph, then an ink unit that echoes the heading and one of its own: units.mjs inkBundleUnitsOf's tuples)
+  const heading: BundleUnit = ['heading', 0, 1, null, null, [[0, 'Introduction']]]
+  const para: BundleUnit = ['para', 0, null, null, null, [[0, 'Some words of the body.']]]
+  const echo = ['inkcontents', 0, null, null, null, [[0, 'Introduction']], 0] as unknown as BundleUnit
+  const own = ['inkheads', 0, null, null, null, [[0, 'Journal of Things']], null] as unknown as BundleUnit
+  const b = bundleOf([heading, para, echo, own])
+  it('translates an ink unit of its own, never one that echoes a unit, and awaits both', () => {
+    expect(toTranslate(b, 'de')).toEqual([0, 1, 3])
+    expect(layerIds(b, 'de')).toEqual([0, 1, 2, 3])
+  })
+  it("gives an echo its unit's row under its own id, the row's pieces its own", () => {
+    const row = [0, ['Einleitung'], 'whole', 'test', null] as unknown as Row
+    expect(echoRows(b, [row])).toEqual([[2, ['Einleitung'], 'whole', 'test', null]])
+    expect(unitOf(b, [2, ['Einleitung'], 'whole', 'test', null] as unknown as Row)).toMatchObject({ kind: 'inkcontents', state: 'whole', pieces: [{ t: 'text', tr: true, s: 'Einleitung' }] })
+    expect(echoRows(b, [[1, ['x'], 'whole', null, null] as unknown as Row])).toEqual([])
+  })
+  it("reads an echo of an echo as its first unit's: awaited, and its row made of that unit's", () => {
+    const head2 = ['inkheads', 0, null, null, null, [[0, 'Journal of Things']], 3] as unknown as BundleUnit
+    const head3 = ['inkheads', 0, null, null, null, [[0, 'Journal of Things']], 4] as unknown as BundleUnit
+    const c = bundleOf([heading, para, echo, own, head2, head3])
+    expect(toTranslate(c, 'de')).toEqual([0, 1, 3])
+    expect(layerIds(c, 'de')).toEqual([0, 1, 2, 3, 4, 5])
+    expect(echoRows(c, [[3, ['Zeitschrift'], 'whole', 'test', null] as unknown as Row]).map(r => r[0])).toEqual([4, 5])
+  })
+  it('reads no echo that is not an earlier unit', () => {
+    const bad = bundleOf([heading, ['inkcontents', 0, null, null, null, [[0, 'Introduction']], 3] as unknown as BundleUnit])
+    expect(layerIds(bad, 'de')).toEqual([0])
   })
 })

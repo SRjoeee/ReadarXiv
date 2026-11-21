@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -175,6 +175,16 @@ describe('a run is accepted only when it is whole', () => {
   })
 })
 
+describe('an output that did not run says why where the engine did not load', () => {
+  it('names the engine\'s module in the problem, and nothing else of the reason', () => {
+    const failed = (why: string) => ({ ...run(base()), failed: [{ name: '1512.03385v1-de', why }] })
+    const r = judge(run(base()), failed('layer-proto/run.mjs: Failed to fetch dynamically imported module: http://127.0.0.1:58489/engine/layer-proto/run.mjs'))
+    expect(r.ok).toBe(false)
+    expect(r.problems).toContain('1512.03385v1-de did not run in the head run: the engine\'s layer-proto/run.mjs did not load')
+    expect(judge(run(base()), failed('TypeError: the paper says something')).problems).toContain('1512.03385v1-de did not run in the head run')
+  })
+})
+
 describe('a regression fails the run unless a ruling covers its measure and its target', () => {
   const regressed = () => judge(run(base()), run(base({ ja: [{ textDrawn: 9 }, {}] })), { rulings: [] })
   const ruling = (over: Record<string, unknown> = {}) => parseRuling({ date: '2026-10-08', by: 'the maintainer', quote: 'accepted', english: 'accepted', measures: [labelOf('unitsLeft')], targets: ['ja'], scope: 'one unit of one paper', why: 'the unit is a caption the face lacks', ...over }, 'ja-unit.json')
@@ -260,19 +270,23 @@ describe('compare as the job runs it', () => {
   const enginePipeline = /export const PIPELINE_VERSION = '([^']+)'/.exec(readFileSync(join(root, 'src/pdf-reader/engine/pipeline/versions.mjs'), 'utf8'))![1]!
   const manifest = (pipeline: string, names: string[]) => ({ schema: 1, pipeline, files: names.map(n => ({ path: `refs/${n}/ref.json` })) })
 
-  it('holds both runs to the pack\'s outputs, and warns of a pack made under another PIPELINE than the engine\'s (it finds the engine\'s version where the engine keeps it)', () => {
+  it('holds both runs to the pack\'s outputs; the pack\'s PIPELINE is its own record, in the numbers, and the comment compares no engine\'s with it', () => {
+    // (the manifest's `pipeline` is the version of the engine that first made the pack, carried by every remake since; its
+    // translations are stamped otherwise and the engine moves every round: a sentence comparing them was printed on every pull
+    // request and true of none, PR #642)
     const file = write('run.json', run(base()))
     const names = Object.keys(base())
     const ok = compareRun(`--base=${file}`, `--head=${file}`, `--out=${join(dir, 'ok')}`, `--pack=${write('pack-ok.json', manifest('9', names))}`)
     expect(ok.status, ok.stderr).toBe(0)
-    expect(readFileSync(join(dir, 'ok', 'rules-gate.md'), 'utf8')).toContain(`The pack was made under PIPELINE 9 and the engine is at PIPELINE ${enginePipeline}: remake the pack.`)
+    expect(enginePipeline).not.toBe('9')
+    expect(readFileSync(join(dir, 'ok', 'rules-gate.md'), 'utf8')).not.toContain('PIPELINE')
+    expect(JSON.parse(readFileSync(join(dir, 'ok', 'rules-gate.json'), 'utf8')).pack).toMatchObject({ pipeline: '9' })
     // a pack with one more output than the runs hold: both runs lack it
     const more = compareRun(`--base=${file}`, `--head=${file}`, `--out=${join(dir, 'more')}`, `--pack=${write('pack-more.json', manifest(enginePipeline, [...names, '2001.00001v1-zh']))}`)
     expect(more.status).toBe(1)
     const comment = readFileSync(join(dir, 'more', 'rules-gate.md'), 'utf8')
     expect(comment).toContain("- the base run lacks 1 output of the pack's: 2001.00001v1-zh")
     expect(comment).toContain("- the head run lacks 1 output of the pack's: 2001.00001v1-zh")
-    expect(comment).not.toContain('remake the pack')
   })
   it('stops at a --pack that names no file, instead of going without one', () => {
     const file = write('run.json', run(base()))
@@ -320,7 +334,7 @@ describe('the live-engines check honours the rulings, as the pull request gate d
   }
 
   /** the command on a regressed head (ja: a unit left English) against its base, with a tree */
-  async function check(tree: Record<string, string>, { regress = true, record = '', versions = {} as Record<string, number>, asAdded = {} as Record<string, string> } = {}) {
+  async function check(tree: Record<string, string>, { regress = true, record = '', versions = {} as Record<string, number>, asAdded = {} as Record<string, string>, install = (_dir: string) => {} } = {}) {
     const dir = mkdtempSync(join(tmpdir(), 'rules-gate-engines-'))
     const write = (name: string, content: unknown) => { mkdirSync(join(dir, name, '..'), { recursive: true }); writeFileSync(join(dir, name), typeof content === 'string' ? content : JSON.stringify(content)); return join(dir, name) }
     const names = Object.keys(base())
@@ -331,12 +345,28 @@ describe('the live-engines check honours the rulings, as the pull request gate d
     const t = { ...tree }
     if (record) t[RECORD] = record
     const fake = fakeGit(t, versions, asAdded)
-    const runFake = async (o: { rules: string }) => (o.rules === headRules ? headRun : baseRun)
+    // (each step in order: an engine's install, its two runs, each with what its worktree holds then)
+    const steps: string[] = []
+    const runFake = async (o: { rules: string; engine: string }) => {
+      steps.push(`run ${existsSync(join(o.engine, 'node_modules')) ? lstatSync(join(o.engine, 'node_modules')).isSymbolicLink() ? 'on a link' : 'on its own modules' : 'on no modules'}`)
+      return o.rules === headRules ? headRun : baseRun
+    }
+    const installFake = (at: string) => { steps.push('install'); install(at); mkdirSync(join(at, 'node_modules'), { recursive: true }) }
     const log = vi.spyOn(console, 'log').mockImplementation(() => {})
-    const code = await engines(argv, { run: runFake as never, git: fake.git as never, fetchImpl: (async () => { throw new Error('no network') }) as never })
+    const code = await engines(argv, { run: runFake as never, git: fake.git as never, fetchImpl: (async () => { throw new Error('no network') }) as never, install: installFake })
     const verdict = join(dir, 'out', 'v0.4.1.md')
-    return { code, said: log.mock.calls.map(c => String(c[0])).join('\n'), verdict: existsSync(verdict) ? readFileSync(verdict, 'utf8') : null, files: fake }
+    return { code, said: log.mock.calls.map(c => String(c[0])).join('\n'), verdict: existsSync(verdict) ? readFileSync(verdict, 'utf8') : null, files: fake, steps }
   }
+  it('runs each engine on modules of its own, installed in its worktree before either run, never on a link to this tree\'s (PR #642)', async () => {
+    const r = await check({ [`${RULINGS}README.md`]: '# Rulings' })
+    expect(r.steps).toEqual(['install', 'run on its own modules', 'run on its own modules'])
+  })
+  it('names an engine whose own install fails and runs nothing on it: borrowed modules would measure this tree\'s packages', async () => {
+    const r = await check({ [`${RULINGS}README.md`]: '# Rulings' }, { install: () => { throw new Error('Command failed: pnpm install\nmore') } })
+    expect(r.code).toBe(1)
+    expect(r.steps).toEqual(['install'])
+    expect(r.said).toContain("FAIL on engine v0.4.1 (v0.4.1): the gate did not run: its own install failed, and borrowed modules would run this tree's packages: Command failed: pnpm install")
+  })
   const fileOf = (over: Record<string, unknown> = {}) => ({ [`${RULINGS}ja-unit.json`]: JSON.stringify(accepted(over)) })
 
   it('fails on an engine\'s regression that no ruling accepts, naming the target and the measure', async () => {
@@ -551,10 +581,6 @@ describe('the comment', () => {
     // a file name that is no name is no ruling
     expect(() => parseRuling({ date: 'x', by: 'b', quote: 'q', measures: ['m'], targets: ['ja'], why: 'w' }, 'a|b`c.json')).toThrow(/file name/)
   })
-  it('warns when the pack was made under another PIPELINE than the engine\'s', () => {
-    const text = commentOf(judge(run(base()), run(base())), { headSha: SHA_HEAD, baseSha: SHA_BASE, pack: { digest: 'f'.repeat(64), pipeline: '10' }, enginePipeline: '11' })
-    expect(text).toMatch(/PIPELINE 10.*PIPELINE 11/)
-  })
 })
 
 describe('the job log is public: the gate\'s output is filtered before it is echoed', () => {
@@ -565,6 +591,9 @@ describe('the job log is public: the gate\'s output is filtered before it is ech
     expect(publicLine(`ok   ${NAME}: 12 pages, 111/111 text units drawn, in 9 parts (3.0 s)`)).toContain('in 9 parts')
     expect(publicLine(`FAIL ${NAME}: TypeError: cannot read ${TEXT} at layer-proto/run.mjs:12`)).toBe(`FAIL ${NAME}`)
     expect(publicLine(`FAIL ${NAME}: v0 changed its inputs (the geometry or the units) as it drew`)).toBe(`FAIL ${NAME}`)
+    // (the engine's own module that did not load in the page is named: a repository path, no paper's text — #456's head run)
+    expect(publicLine(`FAIL ${NAME}: layer-proto/run.mjs: Failed to fetch dynamically imported module: http://127.0.0.1:58489/engine/layer-proto/run.mjs (0.1 s)`)).toBe(`FAIL ${NAME}: the engine's layer-proto/run.mjs did not load`)
+    expect(publicLine(`FAIL ${NAME}: layer-proto/run.mjs: Failed to fetch dynamically imported module: http://example.com/${TEXT.replaceAll(' ', '%20')}.mjs`)).toBe(`FAIL ${NAME}`)
     expect(publicLine(`FAIL requests that would have left the machine: http://example.com/${TEXT.replaceAll(' ', '%20')}`)).toBe('FAIL requests that would have left the machine')
     expect(publicLine('model tier: 29 outputs, 483 pages in 34.2 s on 4 workers; the run in /work/out/layer-gate/model-010c5789-2026-10-08T08-05-36-198Z.json')).toMatch(/^model tier: 29 outputs/)
     expect(publicLine(`completeness (spec §5): 1 of 29 outputs fail: ${NAME} [missing, twice]`)).toContain(`${NAME} [missing, twice]`)
@@ -604,7 +633,7 @@ describe('the job log is public: the gate\'s output is filtered before it is ech
 describe('the runs are the production configuration', () => {
   it('runs the model tier of the hybrid over the text-removed PDF, on 4 workers, from the pack alone', () => {
     const { args, env } = gateArgs({ engine: '/work/base', rules: '/work/base/rules.json', pack: '/work/pack' })
-    expect(args).toEqual(['--tier=model', '--engine-kind=proto', '--proto-tex=lines', '--removal=draw', '--fixtures=/work/pack/fixtures', '--engine=/work/base', '--rules=/work/base/rules.json', '--workers=4'])
+    expect(args).toEqual(['--tier=model', '--engine-kind=proto', '--proto-tex=lines', '--fixtures=/work/pack/fixtures', '--sources=/work/pack/sources', '--engine=/work/base', '--rules=/work/base/rules.json', '--workers=4'])
     expect(env).toEqual({ AXT_DATA: '/work/pack/data', LAYER_REFS: '/work/pack/refs', LAYER_GEOMETRY: '/work/pack/geometry', TEXMF_DIST: '/work/pack/texmf' })
   })
 })
@@ -613,9 +642,10 @@ describe('the runs are the production configuration', () => {
 // are one instrument when the packs differ in the made layout files alone: the run names what the pack holds, not where it is.
 describe('the instrument of a pack', () => {
   const file = (path: string, sha: string) => ({ path, sha256: sha.repeat(64).slice(0, 64), bytes: 1 })
-  const pack = (layout: string, over: Record<string, string> = {}) => ({
+  const pack = (layout: string, over: Record<string, string> = {}, base: string | null = null) => ({
     files: [
       file('fixtures/0001.00001v1-zh/arxiv.pdf', over.pdf ?? 'a'), file('fixtures/0001.00001v1-zh/units.json', 'b'), file('fixtures/0001.00001v1-zh/layout.json', layout),
+      ...(base ? [file('fixtures/0001.00001v1-zh/base.pdf', base), file('fixtures/0001.00001v1-zh/base.json', base)] : []),
       file('refs/0001.00001v1-zh/ref.json', over.ref ?? 'c'), file('refs/0001.00001v1-zh/layout.json', 'd'), file('geometry/0001.00001-zh-geometry.json', over.geometry ?? 'e'),
       file('data/fonts/x.woff2', over.font ?? 'f'), file('texmf/tex/generic/hyph-en.tex', over.texmf ?? '7'),
     ],
@@ -623,6 +653,11 @@ describe('the instrument of a pack', () => {
 
   it('is the same for packs whose made layout files differ alone', () => {
     expect(instrumentOfPack(pack('1'))).toEqual(instrumentOfPack(pack('2')))
+  })
+
+  it('is the same with or without our base pages and their records, which an engine makes beside the layout files', () => {
+    expect(instrumentOfPack(pack('1'))).toEqual(instrumentOfPack(pack('2', {}, '8')))
+    expect(instrumentOfPack(pack('1', {}, '8'))).toEqual(instrumentOfPack(pack('1', {}, '9')))
   })
 
   it('differs for another PDF, reference, geometry, face or pattern, each in its own part alone', () => {

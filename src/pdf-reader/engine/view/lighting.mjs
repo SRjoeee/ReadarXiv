@@ -1,9 +1,9 @@
 // The highlight's paint and what the pointer lights (docs/PDF-READER.md §17), over one seam: a pane is read through its
-// Shapes alone (reader-view.d.mts) — its runs, a run's block and a sentence's shape, the float a unit lights whole, what a
-// point lights — in its own pages' coordinates. The left's shapes are made of its layout, the right's its own over its own
-// token copies (the shared reader view's contract §2.7: no run object of the left reaches the right, since what was drawn is
-// kept by run). A pane with no shapes yet lights nothing; the pointer over a page of it is a want of that page, which the
-// layer side answers with the page's geometry, and then the pointer is looked at again.
+// Shapes alone (reader-view.d.mts) — its runs, a run's block and a sentence's shape, what a point lights — in its own
+// pages' coordinates. The left's shapes are made of its layout, the right's its own over its own token copies (the shared
+// reader view's contract §2.7: no run object of the left reaches the right, since what was drawn is kept by run). A pane
+// with no shapes yet lights nothing; the pointer over a page of it is a want of that page, which the layer side answers
+// with the page's geometry, and then the pointer is looked at again.
 //
 // What a unit paints: a block per run (one page and one column of it), padded PAD beside; where its sentences are known on
 // both panes and hold its words there, the sentence under the pointer instead (one outline per run). The look is the band's
@@ -76,24 +76,8 @@ export function createLighting(o) {
     })
   }
 
-  /** the lit unit's float on a pane, painted; false where it is none's or the pane has no shapes */
-  function paintFloat(side) {
-    const f = side.shapes?.float(lit.id)
-    if (!f) return false
-    const layer = o.layerOf(side, f.page)
-    if (!layer) return true
-    const s = o.scaleOf(side, f.page)
-    for (const shape of side.shapes.floatShapes(f, PAD / s)) {
-      const el = document.createElement('div')
-      el.className = shape.frame ? 'axt-hl axt-hl-frame' : 'axt-hl'
-      const box = o.box(side, shape)
-      Object.assign(el.style, pinned(box, s))
-      layer.append(el)
-      side.lit.push(el)
-    }
-    return true
-  }
-  /** what is lit, painted on a pane: written only, every number from its shapes and its pages' viewports */
+  /** what is lit, painted on a pane: written only, every number from its shapes and its pages' viewports. A unit alone, never its
+   *  float (the owner, 2026-10-30: a caption lights by sentence, a table cell by cell, a picture nothing; floats.mjs floatHitOf) */
   function paint(side) {
     const starts = lit != null && lit.s >= 0 && side.shapes ? startsOf(side, lit.id) : null
     // a sentence lit whose fit is on its way keeps what is drawn for it, and is drawn anew when it lands
@@ -102,7 +86,6 @@ export function createLighting(o) {
     side.lit = []
     side.shows = null
     if (lit == null || !side.shapes) return
-    if (paintFloat(side)) { side.shows = lit; return }
     if (lit.s >= 0 && !starts) return
     side.shows = lit
     for (const run of side.shapes.runs(lit.id)) {

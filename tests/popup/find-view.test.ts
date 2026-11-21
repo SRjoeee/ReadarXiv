@@ -1,7 +1,7 @@
 import { act } from 'react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { ADVANCED_SEARCH, searchUrl } from '@/entrypoints/popup/find'
-import { S, setLocale } from '@/ui/strings'
+import { S, setLocale } from '@readarxiv/ui'
 import { stubPopovers } from '../pdf-reader/ui/popover-stub'
 import { draw, drawInput, fixture } from './draw'
 

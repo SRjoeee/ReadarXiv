@@ -16,7 +16,7 @@
 import { chainConfigChanged } from '@/config/revision'
 import type { Config } from '@/config/schema'
 import type { Progress } from '@/core/pipeline/run'
-import type { Locale } from '@/locales'
+import type { Locale } from '@readarxiv/ui'
 import type { PageAction, PageDecision } from '@/shared/page-action'
 
 export interface ToggleWords {

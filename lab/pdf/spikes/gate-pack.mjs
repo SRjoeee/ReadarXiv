@@ -4,11 +4,16 @@
 // PDFs, the layout files made from them and the PIPELINE translations are under arXiv's licence. The pack is those inputs
 // and nothing else, made on the maintainer's machine, kept in a private bucket, and restored by digest:
 //   pack/fixtures/<fx>/arxiv.pdf, layout.json     the made layout files (--fixtures)
+//   pack/fixtures/<fx>/base.pdf, base.json        our base page the layout file was made over, where it was (BUNDLE 8: the final
+//                                                 pass of the marked original, layer-fixtures.mjs), and its record (baseRecordOf)
 //   pack/fixtures/<fx>/units.json, record.json    the PIPELINE translations, which the gate reads beside them (--records' files)
+//   pack/sources/<paper>/source.gz                each paper's source as arXiv serves it (--sources, <paper>/source.gz), where a
+//                                                 fixture's base is ours: the layer gate wraps that base by optional content at
+//                                                 load from the source's units (layer-gate/wrap.mjs, docs/PDF-READER.md §19.9)
 //   pack/refs/<fx>/ref.json, layout.json          the frozen reference text area and the instrument's kept layout (LAYER_REFS)
 //   pack/geometry/<paper>-<target>-geometry.json  the geometry the gate resolves for each output (LAYER_GEOMETRY)
 //   pack/data/fonts/<file>                        the served faces (AXT_DATA=pack/data)
-//   pack/texmf/<tex/generic/...>                  the en and de hyphenation patterns (TEXMF_DIST=pack/texmf)
+//   pack/texmf/<tex/generic/...>                  the hyphenation patterns of TEX_PATTERN_FILES (TEXMF_DIST=pack/texmf)
 //   pack/manifest.json                            { schema, pipeline, layout: { schema, version }, compileImage, made, digest, files: [{ path, sha256, bytes }] }
 // `compileImage` is the pack's year's entry of lab/pdf/compile-images.json (the one place the compile images are pinned, by digest and
 // TeX Live year, shared with the web container), with `year`: a make refuses to run unless the local texlive image (`docker image
@@ -27,6 +32,7 @@
 //
 //   node lab/pdf/spikes/gate-pack.mjs make     [--year=<YYYY>] [--out=<dir>] [--json=<gate-pack.json>] [--record=<layer-gate.json>] [--fixtures=<dir>]
 //                                              [--records=<dir>] [--refs=<dir>] [--geometry=<dir>] [--fonts=<dir>] [--texmf=<dir>] [--engine=<dir>]
+//                                              [--sources=<dir>]
 // --year: the pack's TeX Live year (packPathsOf: its json, its folder and its record, the default year's as before); every command takes it
 //   node lab/pdf/spikes/gate-pack.mjs restore  [--pack=<gate-pack.json>] [--out=<dir>]    env READARXIV_CI_TOKEN, CF_ACCOUNT_ID
 //   node lab/pdf/spikes/gate-pack.mjs verify   [--pack=<gate-pack.json>] [--out=<dir>]
@@ -49,9 +55,9 @@ export { BUCKET, sha256 }
 export const PACK_SCHEMA = 2
 /** the pack's objects in the bucket: gate-pack/<sha256> */
 export const KEY_PREFIX = 'gate-pack/'
-/** the weights a CJK group's roles are built from (rules/font-roles.mjs rolesFor): the body, the bold, and the lights and semibolds
- *  the rule `cjkFaces.light` switches between */
-export const ROLE_WEIGHTS = ['light', 'regular', 'semibold', 'bold']
+/** a CJK face of a catalog, by its family (rules/font-roles.mjs CJK_GROUPS): a group's (Source Han Serif's, Harano Aji's) or a
+ *  Kai. Every engine's catalog writes them so */
+const CJK_FAMILY = /^axt-(shs-|mincho|fandolkai|bkai00mp)/
 
 const here = new URL('.', import.meta.url).pathname
 const REPO = resolve(here, '../../..')
@@ -91,25 +97,43 @@ function safePath(path) {
 }
 
 /**
- * The font files the outputs can draw in. Every face of the role table that is no CJK face, whole (no rule picks a Latin
- * face, and the papers' families decide which are drawn); of a CJK group, only what a target of the pack names: the four
- * weights its roles are built from, so that a rule moving `cjkFaces.light` can be measured, and its Kai. `known` are the
- * CJK families (`{ group, kai }`) the built-in rule set names for any script, `used` those of the pack's targets. A group
- * or a Kai the pack's targets do not use (Traditional Chinese's, which has no fixture) is left out.
+ * The CJK faces an engine draws the pack's targets in, by its own role table: for each target its built-in rule set gives CJK
+ * faces, the faces its `rolesFor` takes beside each English family it knows (an engine of schema 5 takes Light and SemiBold
+ * beside Computer Modern and Garamond, and Regular and Bold beside the rest; one of schema 6 Regular and Bold beside every
+ * family), and the faces those fall back to (Traditional Chinese's to Simplified's). A Kai is among them only where the
+ * engine's roles draw one (an engine before 2026-10-19 drew emphasis in it; none since). `engine`: the engine's
+ * { rolesFor, ENGLISH_FAMILIES } (rules/font-roles.mjs) and { BUILTIN_RULES, resolveRules } (rules/layout.mjs), as the make
+ * imports them from the tree --engine names
  */
-export function fontFiles(faces, known, used) {
+export function cjkRoleFaces({ rolesFor, ENGLISH_FAMILIES, BUILTIN_RULES, resolveRules }, targets) {
+  const out = new Set()
+  for (const target of targets) {
+    const { cjkFaces } = resolveRules(BUILTIN_RULES, target)
+    if (!cjkFaces) continue
+    for (const family of ENGLISH_FAMILIES) {
+      const roles = rolesFor(target, family, cjkFaces)
+      for (const id of Object.values(roles.cjk ?? {})) {
+        if (typeof id !== 'string') continue
+        out.add(id)
+        for (const fallback of roles.fallbacks?.[id] ?? []) out.add(fallback)
+      }
+    }
+  }
+  return out
+}
+
+/**
+ * The font files the outputs can draw in. Every face of the role table that is no CJK face, whole (no rule picks a Latin
+ * face, and the papers' families decide which are drawn); of the CJK faces, those the engine's roles draw the pack's
+ * targets in (`roleFaces`, cjkRoleFaces'), so that a rule moving which family takes which of its weights can be measured.
+ * A group the pack's targets do not draw in (Traditional Chinese's, which has no fixture), and a Kai no role draws, are left
+ * out.
+ */
+export function fontFiles(faces, roleFaces) {
   const ids = Object.keys(faces)
-  const cjk = new Set()
-  for (const { group, kai } of known) {
-    for (const id of ids) if (id.startsWith(`${group}-`)) cjk.add(id)
-    if (kai) cjk.add(kai)
-  }
-  const want = new Set(ids.filter(id => !cjk.has(id)))
+  const want = new Set(ids.filter(id => !CJK_FAMILY.test(faces[id].family ?? '')))
   const need = id => { if (!Object.hasOwn(faces, id)) throw new Error(`the role table has no face ${id}`); want.add(id) }
-  for (const { group, kai } of used) {
-    for (const w of ROLE_WEIGHTS) need(`${group}-${w}`)
-    if (kai) need(kai)
-  }
+  for (const id of roleFaces) need(id)
   return [...new Set([...want].map(id => faces[id].file))].sort()
 }
 
@@ -125,7 +149,8 @@ export function outputsOf(refs) {
 /**
  * The pack's files as { path, from }, sorted by path. `o`: the folders of a make (fixtures, records, refs, geometry),
  * `fonts` the file names to take from the fonts folder, `fontsDir`, and `patterns` the hyphenation files ({ lang: relative
- * path under texmf }) with `texmf` their root. The outputs are those of the references (`outputsOf`); every file the gate reads
+ * path under texmf }) with `texmf` their root, and `sources` the papers' sources (<paper>/source.gz), one a paper whose base is
+ * ours. The outputs are those of the references (`outputsOf`); every file the gate reads
  * for each of them must be there. Throws naming everything missing, so that a pack is never partly made.
  */
 export function entriesOf(o) {
@@ -141,6 +166,17 @@ export function entriesOf(o) {
   for (const n of names) {
     add(`fixtures/${n}/arxiv.pdf`, join(o.fixtures, n, 'arxiv.pdf'))
     add(`fixtures/${n}/layout.json`, join(o.fixtures, n, 'layout.json'))
+    // (our base page and its record, where the fixture has them: checked against each other and the layout file)
+    let base = null
+    try { base = baseRecordOf(join(o.fixtures, n)) } catch (e) { missing.push(`${n}: ${e.message}`) }
+    if (base) add(`fixtures/${n}/base.json`, join(o.fixtures, n, 'base.json'))
+    if (base?.source === 'ours') {
+      add(`fixtures/${n}/base.pdf`, join(o.fixtures, n, 'base.pdf'))
+      // (the paper's source, which the wrap reads its units from: one a paper, shared by its targets)
+      const paper = n.replace(/-[A-Za-z-]+$/, '')
+      if (!o.sources) missing.push(`sources/${paper}/source.gz (no --sources: a base of ours is wrapped from its paper's source)`)
+      else add(`sources/${paper}/source.gz`, join(o.sources, paper, 'source.gz'))
+    }
     add(`fixtures/${n}/units.json`, join(o.records, n, 'units.json'))
     add(`fixtures/${n}/record.json`, join(o.records, n, 'record.json'))
     add(`refs/${n}/ref.json`, join(o.refs, n, 'ref.json'))
@@ -153,6 +189,97 @@ export function entriesOf(o) {
   for (const rel of Object.values(o.patterns)) add(`texmf/${rel}`, join(o.texmf, rel))
   if (missing.length) throw new Error(`the pack is missing ${missing.length} input${missing.length === 1 ? '' : 's'}:\n  ${missing.slice(0, 40).join('\n  ')}${missing.length > 40 ? '\n  …' : ''}`)
   return [...out].map(([path, from]) => ({ path, from })).sort(byPath)
+}
+
+/** base.json's schema (layer-fixtures.mjs BASE_RECORD_SCHEMA) */
+export const BASE_RECORD_SCHEMA = 1
+const SHA256 = /^[0-9a-f]{64}$/
+const isSize = v => Number.isSafeInteger(v) && v > 0
+/** whether a file is `want` ({ sha256, bytes }) */
+const isFile = (file, want) => { const b = readFileSync(file); return b.length === want.bytes && sha256(b) === want.sha256 }
+/**
+ * A fixture's base page (BUNDLE 8, design note §3.1) as its record says (`dir` the fixture's folder): null where it has neither
+ * base.json nor base.pdf (a fixture of before, the layer drawn over arxiv.pdf), else base.json, checked. `source` 'ours': base.pdf
+ * is the record's `base` (its sha256 and bytes, with the head's xref, pages, tree and check), `image` (where named) the pinned
+ * image of its tree's year (a pack's base pages are each made on the tree production compiles the paper on: the year it
+ * declares, else that of arXiv's build), and layout.json the record's `layout`, the file made over it; 'arxiv': the paper refused a base page of ours (`why` the head's code, `detail` the refusal), no base.pdf,
+ * and `layout` the layout file the pack keeps in its place, made over arXiv's PDF before (production has none). Throws naming
+ * what does not hold: a base page with no record, a record of other bytes, a layout file not the one the record names
+ */
+export function baseRecordOf(dir) {
+  const json = join(dir, 'base.json'), pdf = join(dir, 'base.pdf')
+  if (!existsSync(json)) {
+    if (existsSync(pdf)) throw new Error('base.pdf with no base.json: the record of what it is')
+    return null
+  }
+  let r = null
+  try { r = readJson(json) } catch { throw new Error('base.json is not JSON') }
+  if (!isObject(r) || r.schema !== BASE_RECORD_SCHEMA) throw new Error(`base.json is not of schema ${BASE_RECORD_SCHEMA}`)
+  const file = (what, f) => isObject(f) && SHA256.test(f.sha256) && isSize(f.bytes) ? f : (() => { throw new Error(`base.json's ${what} names no file (sha256, bytes)`) })()
+  const layout = join(dir, 'layout.json')
+  if (r.source === 'ours') {
+    const b = file('base', r.base)
+    if (!isSize(b.xref) || b.xref >= b.bytes || !isSize(b.pages) || !/^\d{4}$/.test(String(b.tree ?? '')) || !isObject(b.check)) throw new Error('base.json\'s base is not a head\'s base of ours (xref, pages, tree, check)')
+    // (the image it was made on, where the record names it: the pin of the TeX Live year it was made on, compile-images.json's)
+    if (r.image !== undefined) {
+      const pin = (() => { try { return compileImagesOf().images[b.tree]?.texlive ?? null } catch { return null } })()
+      if (typeof r.image !== 'string' || !IMAGE_REF.test(r.image) || r.image !== pin) throw new Error(`base.json's image is not the pinned image of TeX Live ${b.tree} (compile-images.json)`)
+    }
+    // (`texts` as the marks file holds them: [macro source, text, …], the sources distinct, of 1 code unit or more, INK_BUDGET's
+    // 65,536 at most in all, each text of 1 to INK_TEXT_MAX's 64 — marks.mjs checkTexts, MARKS_SCHEMA 15)
+    const sources = Array.isArray(r.texts) ? r.texts.filter((_, k) => k % 2 === 0) : []
+    if (r.texts !== undefined && !(Array.isArray(r.texts) && r.texts.length % 2 === 0 && r.texts.every(t => typeof t === 'string' && t.length >= 1) && new Set(sources).size === sources.length && sources.reduce((n, t) => n + t.length, 0) <= 65536 && r.texts.every((t, k) => k % 2 === 0 || t.length <= 64))) throw new Error('base.json\'s texts are not [macro source, text, …] pairs of strings')
+    // (`inkless` as the marks file holds it: distinct macro sources of 1 code unit or more, INK_BUDGET's 65,536 at most in all —
+    // marks.mjs checkInkless, MARKS_SCHEMA 15)
+    if (r.inkless !== undefined && !(Array.isArray(r.inkless) && new Set(r.inkless).size === r.inkless.length && r.inkless.every(t => typeof t === 'string' && t.length >= 1) && r.inkless.reduce((n, t) => n + t.length, 0) <= 65536)) throw new Error('base.json\'s inkless is not a list of distinct macro sources')
+    if (!existsSync(pdf)) throw new Error('base.json names our base page, and there is no base.pdf')
+    if (!isFile(pdf, b)) throw new Error('base.pdf is not the page base.json names (sha256, bytes)')
+    if (r.layout !== null && !(existsSync(layout) && isFile(layout, file('layout', r.layout)))) throw new Error('layout.json is not the layout base.json names, made over base.pdf')
+    return r
+  }
+  if (r.source === 'arxiv') {
+    if (typeof r.why !== 'string' || !/^[a-z]+$/.test(r.why)) throw new Error('base.json says arXiv\'s PDF with no why')
+    if (existsSync(pdf)) throw new Error('base.json says arXiv\'s PDF, and there is a base.pdf')
+    if (r.layout === null) throw new Error(`our base page was refused (${r.why}) and no layout file is kept in its place: base.json's layout`)
+    if (!(existsSync(layout) && isFile(layout, file('layout', r.layout)))) throw new Error('layout.json is not the kept layout base.json names')
+    return r
+  }
+  throw new Error('base.json names no source (ours, arxiv)')
+}
+
+/**
+ * The record base.json holds for a fixture a make of the fixtures made (layer-fixtures.mjs; baseRecordOf reads it): `made` what
+ * the make says of its base page ({ source: 'ours', head }, the head's base; or { source: 'arxiv', why, detail }), `layout` the
+ * bytes of the layout file the fixture holds after the make (the one made over our page; where our page was refused, the one
+ * kept in its place, keptLayoutOf; null where there is none), `image` the compile image our page was made on
+ */
+export function baseRecordOfMade({ made, layout, image = null, texts = null, inkless = null }) {
+  const file = layout ? { sha256: sha256(layout), bytes: layout.length } : null
+  if (made?.source === 'ours') {
+    const { source, ...base } = made.head
+    // (`texts`: the marks' `marking.texts` the base page was marked with, flat [macro source, text, …]: what the gate's wrap is
+    // given, as the maker child gives production's (layout/wrap.mjs wrapFinal), for a cell's lead macro; `inkless`: the macros TeX
+    // said set no ink, which the wrap reads as no placeholder of ink, as the maker does)
+    return { schema: BASE_RECORD_SCHEMA, source, base, ...(image ? { image } : {}), layout: file, ...(texts ? { texts: [...texts] } : {}), ...(inkless ? { inkless: [...inkless] } : {}) }
+  }
+  return { schema: BASE_RECORD_SCHEMA, source: 'arxiv', why: made?.why, ...(made?.detail ? { detail: made.detail } : {}), layout: file }
+}
+
+/** the first LAYOUT whose file is written over a base page of ours (the marked final pass), not over arXiv's PDF: file.mjs LAYOUT 12 */
+const FIRST_OUR_BASE_LAYOUT = 12
+
+/**
+ * The layout file a fixture keeps where its base page of ours is refused (`bytes` the file it held, `engineLayout` the engine's
+ * LAYOUT): one an older maker made over arXiv's PDF (a LAYOUT below FIRST_OUR_BASE_LAYOUT), which the gate draws over arxiv.pdf as
+ * before; never one made over a base page of ours (the engine's own, or an earlier engine's from LAYOUT 12 on), whose coordinates
+ * are that page's and would be drawn over arxiv.pdf. Null for none
+ */
+export function keptLayoutOf(bytes, engineLayout) {
+  if (!bytes) return null
+  let v = null
+  try { v = JSON.parse(new TextDecoder().decode(bytes))?.layout ?? null } catch { return null }
+  // (the version is a token; its number is what orders it, and a token with none is no older maker's)
+  return typeof v === 'string' && v !== engineLayout && Number.parseInt(v, 10) < FIRST_OUR_BASE_LAYOUT ? bytes : null
 }
 
 /** the PIPELINE the translations of the outputs were made under: the one `pipeline` every units.json names */
@@ -194,14 +321,20 @@ export const layoutOfEngine = async engine => {
   return { schema: LAYOUT_SCHEMA, version: LAYOUT }
 }
 
+/** whether a fixture's layout file is one kept where its base page of ours was refused (its base.json says arXiv's) */
+const keptLayout = dir => { try { return readJson(join(dir, 'base.json')).source === 'arxiv' } catch { return false } }
+
 /**
- * The layout files' version: the `schema` and `layout` fields every fixtures/<fx>/layout.json of the outputs names (the reader
+ * The layout files' version: the `schema` and `layout` fields every fixtures/<fx>/layout.json of the outputs names (but a layout
+ * kept where our base page was refused: baseRecordOf) (the reader
  * refuses a file whose schema is not its own, and takes `layout` as a version token only), which must all be `expected` (the engine's own). Throws naming each output that is not, with
  * what its file says; a pack made of layout files of two makers, or of another maker than the engine's, is never made.
  */
 export function layoutVersionOf(fixtures, names, expected) {
   const bad = []
   for (const n of names) {
+    // (a layout kept where our base page was refused, base.json's: made over arXiv's PDF by the maker of before, whose version it names)
+    if (keptLayout(join(fixtures, n))) continue
     let j = null
     try { j = readJson(join(fixtures, n, 'layout.json')) } catch { /* named below */ }
     const schema = j?.schema, version = j?.layout
@@ -440,15 +573,14 @@ async function main(argv) {
     const compileImage = { year, ...pin }
     const engine = resolve(typeof arg('engine', argv) === 'string' ? arg('engine', argv) : REPO)
     const E = f => import(pathToFileURL(join(engine, ENGINE, f)).href)
-    const [{ FACES }, { BUILTIN_RULES, resolveRules, SCRIPTS }, { TEX_PATTERN_FILES }] = await Promise.all([E('rules/font-roles.mjs'), E('rules/layout.mjs'), E('layer-proto/hyph.mjs')])
+    const [{ FACES, rolesFor, ENGLISH_FAMILIES }, { BUILTIN_RULES, resolveRules }, { TEX_PATTERN_FILES }] = await Promise.all([E('rules/font-roles.mjs'), E('rules/layout.mjs'), E('layer-proto/hyph.mjs')])
     const { fixtures, records, refs, geometry } = recordInputs(argv)
     const names = outputsOf(refs)
     const layout = layoutVersionOf(fixtures, names, await layoutOfEngine(engine))
     const targets = [...new Set(names.map(n => nameOf(n).target))].sort()
-    const known = SCRIPTS.map(s => BUILTIN_RULES.scripts[s].cjkFaces).filter(Boolean)
-    const used = [...new Map(targets.map(t => resolveRules(BUILTIN_RULES, t).cjkFaces).filter(Boolean).map(c => [`${c.group}|${c.kai}`, c])).values()]
     const texmf = resolve(typeof arg('texmf', argv) === 'string' ? arg('texmf', argv) : process.env.TEXMF_DIST ?? join(homedir(), 'Library/TinyTeX/texmf-dist'))
-    const entries = entriesOf({ fixtures, records, refs, geometry, fontsDir: where(argv, 'fonts'), fonts: fontFiles(FACES, known, used), patterns: TEX_PATTERN_FILES, texmf })
+    const sources = typeof arg('sources', argv) === 'string' ? resolve(arg('sources', argv)) : resolve(REPO, 'lab/pdf/data/corpus')
+    const entries = entriesOf({ fixtures, records, refs, geometry, sources, fontsDir: where(argv, 'fonts'), fonts: fontFiles(FACES, cjkRoleFaces({ rolesFor, ENGLISH_FAMILIES, BUILTIN_RULES, resolveRules }, targets)), patterns: TEX_PATTERN_FILES, texmf })
     const manifest = makePack({ entries, out: where(argv, 'out'), pipeline: pipelineOf(records, names), layout, compileImage })
     writeFileSync(packFile, `${JSON.stringify(packJsonOf(manifest), null, 1)}\n`)
     const s = summaryOf(manifest.files)

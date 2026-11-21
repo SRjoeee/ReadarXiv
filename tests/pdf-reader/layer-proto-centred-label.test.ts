@@ -37,12 +37,13 @@ describe('a centred heading\'s kept number goes with its line', () => {
     const l = (rec?.lines ?? [])[0] as unknown as [number, number, number, boolean, string, number, number, number]
     expect(l[4]).toBe('centred')
     // (the number's ink copied as the line's start, its gap to the title with it: 20 wide, then four characters of 10, 60 wide
-    // in all and about the middle 150 of the original's number and title, 100 to 200; the original's ink erased from the number on)
-    const ops = (run.rows[0]?.ops ?? []) as { op: string; src?: number[]; dst?: number[]; box?: number[] }[]
+    // in all and about the middle 150 of the original's number and title, 100 to 200; the original's ink hidden from the number on, its label's group with it)
+    const ops = (run.rows[0]?.ops ?? []) as { op: string; src?: number[]; dst?: number[]; rects?: number[][] }[]
     const crop = ops.find(o => o.op === 'crop')
     expect(crop?.src?.[0]).toBeCloseTo(99.6, 1)
     expect(((crop?.dst?.[0] ?? 0) + l[7]) / 2).toBeCloseTo(150, 0)
-    expect(ops.some(o => o.op === 'erase' && (o.box?.[0] ?? 999) <= 100)).toBe(true)
+    expect(ops.some(o => o.op === 'hidden' && (o.rects ?? []).some(r => r[0]! <= 100))).toBe(true)
+    expect([...(run.rows[0] as unknown as { off: Set<string> }).off]).toContain('u1.l')
   })
 })
 
@@ -77,9 +78,9 @@ describe('a numbered heading set in fewer lines goes on its last line with its n
     expect(run.recordErrors).toEqual([])
     const lines = (run.stats.find(x => x.id === 1)?.lines ?? []) as unknown as [number, number][]
     expect(lines.map(l => l[1])).toEqual([188])
-    const ops = (run.rows[0]?.ops ?? []) as { op: string; src?: number[]; dst?: number[]; box?: number[] }[]
+    const ops = (run.rows[0]?.ops ?? []) as { op: string; src?: number[]; dst?: number[]; rects?: number[][] }[]
     const crop = ops.find(o => o.op === 'crop')
     expect(crop?.src?.[0]).toBeCloseTo(19.6, 1)
-    expect(ops.some(o => o.op === 'erase' && (o.box?.[0] ?? 999) <= 20)).toBe(true)
+    expect(ops.some(o => o.op === 'hidden' && (o.rects ?? []).some(r => r[0]! <= 20))).toBe(true)
   })
 })

@@ -4,22 +4,19 @@ import { join } from 'node:path'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
 import { composedDiff } from '../../lab/pdf/spikes/layer-gate/links.mjs'
-import { fromBase64 } from '@/pdf-reader/engine/layer-proto/units.mjs'
 import { annotsOf, freezeLinks, pointsOf } from '@/pdf-reader/engine/layer-proto/links.mjs'
 
 // The links of the CC0 sample paper (tests/fixtures/pdf/sample-1: hyperref with colorlinks, \cite, \ref, \eqref, a footnote, an \href),
-// read by the pinned PDF.js (the 3a design §5, risk 5 and risk 1): arXiv's PDF followed by the add-on's tail, the composed document the
-// reader opens, gives each of its pages the annotations of the PDF alone (the engine reads the composed document's, the left shows the
-// original's: they must be one); and the kinds the engine keeps of them are locked in a golden (no text of the paper in it), so that
-// a PDF.js bump or a change of what a reader carries shows as a difference here. WRITE_GOLDEN=1 records it again
+// read by the pinned PDF.js (the 3a design §5, risk 5 and risk 1): our final pass followed by the wrap's section (tests/fixtures/pdf/ocg/,
+// the composed document the reader opens over a base of ours) gives each of its pages the annotations of the final pass alone (the
+// engine reads the composed document's: the wrap must leave them as they were); and the kinds the engine keeps of them are locked in
+// a golden (no text of the paper in it), so that a PDF.js bump or a change of what a reader carries shows as a difference here.
+// WRITE_GOLDEN=1 records it again
 
-const SAMPLE = join(process.cwd(), 'tests/fixtures/pdf/sample-1')
+const OCG = join(process.cwd(), 'tests/fixtures/pdf/ocg')
 const GOLDEN = join(process.cwd(), 'tests/pdf-reader/golden/sample-links.json')
-const base = new Uint8Array(readFileSync(join(SAMPLE, 'sample-1.pdf')))
-const tail = fromBase64((JSON.parse(readFileSync(join(SAMPLE, 'bundle.json'), 'utf8')) as { addon: { tail: string } }).addon.tail, 1 << 20, 'tail')
-const composed = new Uint8Array(base.length + tail.length)
-composed.set(base)
-composed.set(tail, base.length)
+const base = new Uint8Array(readFileSync(join(OCG, 'sample-1-final.pdf')))
+const composed = new Uint8Array(readFileSync(join(OCG, 'sample-1-wrapped.pdf')))
 
 async function read(data: Uint8Array) {
   const task = getDocument({ data: data.slice(), verbosity: 0 })
@@ -35,7 +32,7 @@ async function read(data: Uint8Array) {
 }
 
 describe('the sample paper\'s links', () => {
-  it('are the same in the composed document (the PDF followed by the add-on\'s tail) as in the PDF alone, rect, destination, url, border, colour, overlaid text and quads', async () => {
+  it('are the same in the composed document (the final pass followed by the wrap\'s section) as in the final pass alone, rect, destination, url, border, colour, overlaid text and quads', async () => {
     const alone = await read(base), both = await read(composed)
     expect(alone.pages).toBe(4)
     expect(both.pages).toBeGreaterThanOrEqual(4)

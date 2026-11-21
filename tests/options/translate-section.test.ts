@@ -58,7 +58,7 @@ import { connectService } from '@/entrypoints/options/connect'
 import type { ConnectResult } from '@/entrypoints/options/connect'
 import { Translate } from '@/entrypoints/options/sections/Translate'
 import { UNDO_MS } from '@/entrypoints/options/ui/UndoRow'
-import { O, S, setLocale } from '@/ui/strings'
+import { O, S, setLocale } from '@readarxiv/ui'
 
 const MINE: Service = { id: 'svc-mine0000', kind: 'openai-compat', name: 'Mine', baseURL: 'https://api.example.com/v1', apiKey: 'sk-old', model: 'm-1', thinking: 'disabled' }
 const OTHER: Service = { ...MINE, id: 'svc-othr0000', name: 'Other', baseURL: 'https://other.example.com/v1' }
@@ -143,10 +143,11 @@ describe('the translation services (§6.3)', () => {
     expect([...card(m.container).querySelectorAll(':scope > button[data-srow]')].at(-1)!.textContent).toBe(O.services.add)
     radios(m.container)[0]!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
     await m.flush()
-    expect(stored().provider).toBe('google-web')
+    // (a pick is recorded: the PDF reader follows it, v22)
+    expect([stored().provider, stored().providerChosen]).toEqual(['google-web', true])
     radios(m.container)[1]!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
     await m.flush()
-    expect(stored().provider).toBe(MINE.id)
+    expect([stored().provider, stored().providerChosen]).toEqual([MINE.id, true])
     await m.unmount()
   })
 
@@ -209,7 +210,7 @@ describe('the translation services (§6.3)', () => {
     await m.flush()
     await m.flush()
     expect(stored().services).toHaveLength(1)
-    expect(stored().provider).toBe(stored().services[0]!.id)
+    expect([stored().provider, stored().providerChosen]).toEqual([stored().services[0]!.id, true])
     expect(wire.log.some(l => l.startsWith('send'))).toBe(false)
     expect(rowNamed(m.container, 'echo').querySelector('.o-status[data-tone="ok"]')!.textContent).toBe(O.services.connected(42))
     await m.unmount()
@@ -397,19 +398,19 @@ describe('the translation services (§6.3)', () => {
     await m.unmount()
   })
 
-  it('deleting the chosen one: Microsoft takes over, the undo row stands in its place, nothing irreversible is done; undone, it comes back chosen', async () => {
-    const m = await mountElement(h(Harness, { start: { ...DEFAULT_CONFIG, services: [MINE, OTHER], provider: MINE.id } }))
+  it('deleting the chosen one: Microsoft takes over, chosen by nobody (the PDF reader follows the website, v22), the undo row stands in its place, nothing irreversible is done; undone, it comes back chosen', async () => {
+    const m = await mountElement(h(Harness, { start: { ...DEFAULT_CONFIG, services: [MINE, OTHER], provider: MINE.id, providerChosen: true } }))
     menuItem(rowNamed(m.container, 'Mine'), O.services.delete).click()
     await m.flush()
     expect(stored().services.map(s => s.id)).toEqual([OTHER.id])
-    expect(stored().provider).toBe('microsoft')
+    expect([stored().provider, stored().providerChosen]).toEqual(['microsoft', false])
     const undoRow = card(m.container).querySelector<HTMLElement>('[data-undo]')!
     expect(undoRow.textContent).toContain(O.undo.deleted('Mine'))
     expect(wire.log).toEqual(['patch'])
     ;[...undoRow.querySelectorAll('button')].find(b => b.textContent === O.undo.undo)!.click()
     await m.flush()
     expect(stored().services.map(s => s.id)).toEqual([MINE.id, OTHER.id])
-    expect(stored().provider).toBe(MINE.id)
+    expect([stored().provider, stored().providerChosen]).toEqual([MINE.id, true])
     expect(wire.log).toEqual(['patch', 'patch'])
     await m.unmount()
   })

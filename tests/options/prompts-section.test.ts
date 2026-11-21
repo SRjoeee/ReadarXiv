@@ -22,7 +22,7 @@ import { Llm } from '@/entrypoints/options/sections/Llm'
 import { PromptText, promptParts, readPrompt } from '@/entrypoints/options/sections/PromptText'
 import { UNDO_MS } from '@/entrypoints/options/ui/UndoRow'
 import { drafts } from '@/ui/drafts'
-import { O, S, setLocale } from '@/ui/strings'
+import { O, S, setLocale } from '@readarxiv/ui'
 
 const SVC = { id: 'svc-mine0000', kind: 'openai-compat' as const, name: 'Mine', baseURL: 'https://api.example.com/v1', apiKey: 'k', model: 'm', thinking: 'disabled' as const }
 const MINE = { id: 'p-mine', name: 'My prompt', systemPrompt: `Translate into ${getTokenCellText('targetLanguage')} carefully.`, prompt: getTokenCellText('input') }

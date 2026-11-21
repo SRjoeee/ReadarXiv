@@ -1,5 +1,8 @@
 # The layout marks on the corpus: the lines they carry and lose (Plan 8b, Task 2)
 
+**Historical since 2026-11-13.** The gate this records is retired, not re-recorded: `lab/pdf/README.md`, "The layout marks
+and the unit marks", says why. What follows is its record as of 2026-10-08.
+
 The record of `spikes/layout-marks-gate.mjs` on the corpus, for whoever changes the layout marks
 (`src/pdf-reader/engine/layout/marks.mjs`) next. The rows, paper by paper, are in `layout-marks.json` (ids, counts, page
 numbers and class names; no paper's content); the details of each run are in `data/runs/layout-marks-gate/` (outside
@@ -215,8 +218,8 @@ The first switch read the preamble for a list of packages. The review found what
 So the switch now asks TeX, in the paper's own preamble, by the general method the maintainer asks for.
 
 **The probe** rides on the font probe's compile (`probeFiles(paper, { marks: true })`): the layout marks' TeX first,
-then, after the width probe, one section per question. Each section writes tagged rows, `LAYOUT-PROBE <schema> <tag>
-<fields…>` (`PROBE_SCHEMA` 1), and `readProbe` reads every row; a section added later (a role probe) adds a tag of its
+then, after the width probe, one section per question. Each section writes tagged rows, `LAYOUT-PROBE 1 <tag>
+<fields…>` (the marker a fixed string: `PROBE_SCHEMA` went with lane r7-identities, the writer and the readers being one build), and `readProbe` reads every row; a section added later (a role probe) adds a tag of its
 own and changes no other. The punctuation section (`punct`) takes each command of the paper's citations, references,
 links and footnote calls once, by its own first source (the keys it cites). For each of the followers `.`, `,`, `;`,
 `:`, `!`, `?`, a word, and (for a call) a second call, it sets four boxes after a word:

@@ -1,0 +1,1113 @@
+import { describe, expect, it } from 'vitest'
+import { CHROME_DIGEST, chrome } from '../../src/adapters/chrome.ts'
+import { google, readTagged, tagsWire } from '../../src/adapters/google.ts'
+import { GLUED_LEAD, GLUED_SPACE, SENTINEL } from '../../src/wire/text.ts'
+import { accept } from '../../src/accept.ts'
+import { chainOf } from '../../src/chain.ts'
+import type { FetchInit, OutPiece, Piece, Result } from '../../src/contract.ts'
+import { echo, NEVER, scriptedFetch } from '../../src/testing/fakes.ts'
+import { fakeClock } from '../../src/testing/ports.ts'
+import { translatorSuite } from '../../src/testing/suite.ts'
+import { el, quiet, span, t, unit } from '../pieces.ts'
+import {
+  DISPLAY_ENDS,
+  FORMULA_BEFORE_BREAK,
+  GOOGLE_REPLIES,
+  HEAD_STOP,
+  LABEL_AFTER_BREAK,
+  GLUED_PAST,
+  SOURCE_LINES,
+  GLUED_STOP,
+  STYLED_OBJECT,
+  TAGS_UNITS,
+  UNITS,
+} from './fixtures.ts'
+
+/** the endpoint giving each item back as its translation */
+export const googleEcho = (_url: string, init: FetchInit) => {
+  const [[items]] = JSON.parse(init.body) as [[string[], string, string], string]
+  return { status: 200, body: JSON.stringify([items]) }
+}
+
+translatorSuite('google', {
+  make: (fetch) => google({ fetch }),
+  target: 'zh-Hans',
+  units: TAGS_UNITS,
+  echo: googleEcho,
+  replies: GOOGLE_REPLIES,
+  faults: [
+    {
+      name: '429',
+      answer: { status: 429, body: '', headers: { 'retry-after': '3' } },
+      remedy: 'cool',
+      code: 'rate',
+      retryAfterMs: 3_000,
+    },
+    { name: '500', answer: { status: 500, body: '' }, remedy: 'again', code: 'network' },
+    { name: 'the network', answer: { network: true }, remedy: 'again', code: 'network' },
+    // a 400 that names no size, whatever it says ("API key not valid" included): the request handed on whole (#636)
+    { name: '400', answer: { status: 400, body: 'bad' }, remedy: 'pass', code: 'malformed' },
+    {
+      name: 'its key refused, a 400',
+      answer: { status: 400, body: 'API key not valid. Please pass a valid API key.' },
+      remedy: 'pass',
+      code: 'malformed',
+    },
+    { name: '413', answer: { status: 413, body: 'Request Entity Too Large' }, remedy: 'pass', code: 'too-large' },
+    { name: '403 of a keyless endpoint', answer: { status: 403, body: '' }, remedy: 'again', code: 'network' },
+    { name: 'not JSON', answer: { status: 200, body: 'nope' }, remedy: 'again', code: 'malformed' },
+    { name: 'the wrong count', answer: { status: 200, body: '[["one"]]' }, remedy: 'again', code: 'malformed' },
+  ],
+})
+
+describe('google: the wire, byte for byte (golden)', () => {
+  const t = google({ fetch: scriptedFetch(googleEcho).fetch })
+  it('writes each fixture unit as tags, with boundary markers where a unit lights by sentence', () => {
+    expect(UNITS.map((u) => t.write(u, 'zh-Hans'))).toEqual([
+      'We study the problem. <x id="1"/>It is hard.',
+      'Let <b translate=no>x1</b> be as in <b translate=no>x2</b>. <x id="4"/>See Section <b translate=no>x3</b> for more.',
+      '<span id="1">Bold words</span> and <span id="2">a link <span id="3">inside</span></span> end.',
+      'We have<b translate=no>x1</b>. <x id="2"/>Then we go on.',
+      'Values <b translate=no>x1</b> <b translate=no>x2</b>, and <b translate=no>x3</b><b translate=no>x4</b> hold.',
+      '<span id="1">Whole bold heading</span>',
+      '<span id="1">Setup:</span> we train the model for 3 epochs.',
+      'a &lt; b &amp; c &gt; d @ home # 95<b translate=no>x1</b> accuracy.',
+      'A link around a formula: <b translate=no>x1</b> done.',
+      'Words<b translate=no>x1</b>. <x id="2"/>More words follow here.',
+      'It matters on seasonal timescales<b translate=no>x1</b>, alters the jet stream<b translate=no>x2</b> and the surface<b translate=no>x3</b>, as the quasi-biennial oscillation and El Ni<b translate=no>x4</b>o southern oscillations do.',
+      'We use the 30 km zonal wind threshold:<b translate=no>x1</b> thresholds<b translate=no>x2</b> hold.',
+      'We can quantify the forecast skill of the emulator using the RMSE: <b translate=no>x1</b>',
+      'The model <b translate=no>x1</b> reads.',
+      'At each step the model is auto-regressive<b translate=no>x1</b>, consuming the previously generated symbols.',
+      'We reach 95<b translate=no>x1</b> accuracy.',
+      'a 3<b translate=no>x1</b>10 speed-up',
+    ])
+  })
+  it('asks the endpoint its own shape: [[items, from, to], client], its public key, the target by region', async () => {
+    const f = scriptedFetch(googleEcho)
+    for await (const _ of google({ fetch: f.fetch }).send(['one'], { target: 'zh-Hans' }, NEVER)) {
+      // drained
+    }
+    expect(JSON.parse(f.requests[0]?.init.body ?? '')).toEqual([[['one'], 'en', 'zh-CN'], 'wt_lib'])
+    expect(f.requests[0]?.init.headers['Content-Type']).toBe('application/json+protobuf')
+  })
+})
+
+// (Google's translateHtml takes an element that holds no text of its own, or one HTML does not know, as a break between two
+// texts it translates apart, each closed with a full stop of its own: "… into a matrix <x/>. The keys …" came back
+// "…矩阵中。<x/> 。键和值…", the owner's report of 2026-11-12 on 1706.03762v7; as HTML's inline element holding a token that
+// HTML's `translate` attribute keeps, the element is a word of its sentence. Lane stray-stop's probe, DESIGN §6.2)
+describe('google: an element is a word of its sentence', () => {
+  const g = google({ fetch: scriptedFetch(googleEcho).fetch })
+  const u = unit(
+    'u',
+    [
+      t('The values are stored in a table '),
+      el('m', 'math'),
+      t('. The rows and columns are kept in '),
+      el('a', 'math'),
+      t(' and '),
+      el('b', 'math'),
+      t('.'),
+    ],
+    true,
+  )
+  it('is written as an inline element holding its token, not to be translated; a boundary marker stays a void', () => {
+    expect(g.write(u, 'zh-Hans')).toBe(
+      'The values are stored in a table <b translate=no>x1</b>. <x id="4"/>The rows and columns are kept in <b translate=no>x2</b> and <b translate=no>x3</b>.',
+    )
+  })
+  it('is read back where the reply sets it, its token not read as text', () => {
+    const r = readTagged(
+      u,
+      '这些值存储在表<b translate=no>x1</b>中。<x id="4"/>行和列保存在<b translate=no>x2</b>和<b translate=no>x3</b>中。',
+    )
+    expect(r?.content).toEqual([
+      { t: 'text', s: '这些值存储在表' },
+      { t: 'el', id: 'm' },
+      { t: 'text', s: '中。行和列保存在' },
+      { t: 'el', id: 'a' },
+      { t: 'text', s: '和' },
+      { t: 'el', id: 'b' },
+      { t: 'text', s: '中。' },
+    ])
+    expect(r?.sentences).toEqual({ src: [36], tr: [10] })
+  })
+  it('a reply to the wire before it, its elements voids, still reads (stored replies are read again)', () => {
+    const r = readTagged(u, '这些值存储在表<x id="1"/>中。<x id="4"/>行和列保存在<x id="2"/>和<x id="3"/>中。')
+    expect(r?.content.filter((p) => p.t === 'el').map((p) => (p as { id: string }).id)).toEqual(['m', 'a', 'b'])
+  })
+  it('an element twice, or lost, refuses the reply as a void does', () => {
+    expect(
+      readTagged(
+        u,
+        '表<b translate=no>x1</b><b translate=no>x1</b>。<x id="4"/>行<b translate=no>x2</b>和<b translate=no>x3</b>。',
+      ),
+    ).toBeNull()
+    expect(readTagged(u, '表。<x id="4"/>行<b translate=no>x2</b>和<b translate=no>x3</b>。')).toBeNull()
+  })
+  it('the tags wire an LLM is sent, and Chrome’s, keep the void', () => {
+    expect(tagsWire.write(u)).toBe(
+      'The values are stored in a table <x id="1"/>. <x id="4"/>The rows and columns are kept in <x id="2"/> and <x id="3"/>.',
+    )
+    expect(chrome({ api: null }).write(u, 'zh-Hans')).toBe(tagsWire.write(u))
+    // (Chrome's codec, so Chrome's behaviour digest: the LLM services' identity moves with it)
+    expect(tagsWire.digest).toBe(CHROME_DIGEST)
+  })
+})
+
+// (the shortest element Google keeps whole, design-performance Q5: HTML's `<b>` with `translate=no`, holding the token, no id;
+// its slot is the token's number, the wire's contract. Lane wire-w's probe of 2026-11-15, 45 requests: on the Q5 probe's 280
+// units, the 48 merged cells of lane hdr-lines and 20 units of the HTML page every class read the same as with
+// `<span id="n" translate="no">xn</span>`, every tag back as sent, 2,169 of 2,169; 12 % fewer characters)
+describe('google: an element is `<b translate=no>` holding its token, read back by its token', () => {
+  const u = unit('q', [t('Let '), el('m', 'math'), t(' be as in '), el('c', 'cite'), t('. It holds.')], true)
+  const g = google({ fetch: scriptedFetch(googleEcho).fetch })
+  const els = (c: OutPiece[] | undefined) => c?.map((p) => (p.t === 'text' ? p.s : `#${p.id}`)).join('')
+  it('is written with no id: the token names its slot; a group stays a span with its id, a boundary marker a void', () => {
+    expect(g.write(u, 'zh-Hans')).toBe(
+      'Let <b translate=no>x1</b> be as in <b translate=no>x2</b>. <x id="3"/>It holds.',
+    )
+    const s = unit('s', [span('i', 'italic', [t('a word')]), t(' and '), el('m', 'math'), t('.')])
+    expect(g.write(s, 'zh-Hans')).toBe('<span id="1">a word</span> and <b translate=no>x2</b>.')
+  })
+  it('a reply read by the token each `<b>` holds, wherever the reply sets it, its attribute kept or not', () => {
+    const r = readTagged(u, '设<b translate=no>x1</b>如<b translate=no>x2</b>所述。<x id="3"/>它成立。')
+    expect(els(r?.content)).toBe('设#m如#c所述。它成立。')
+    expect(r?.sentences).toEqual({ src: [18], tr: [7] })
+    // (the elements in the reply's own order; the attribute's other spellings, or none)
+    expect(els(readTagged(u, '如<b translate="no">x2</b>所述，设<b>x1</b>。<x id="3"/>它成立。')?.content)).toBe(
+      '如#c所述，设#m。它成立。',
+    )
+    expect(
+      els(readTagged(u, '设<b translate=no> x1 </b>如<b translate=no>&#120;2</b>所述。<x id="3"/>它成立。')?.content),
+    ).toBe('设#m如#c所述。它成立。')
+  })
+  it('a `<b>` that holds no token, another text beside its token, or a slot that is no element is unread', () => {
+    // (emptied, its token left as text)
+    expect(readTagged(u, '设<b translate=no></b>x1如<b translate=no>x2</b>所述。<x id="3"/>它成立。')).toBeNull()
+    // (its token and a word of the translation)
+    expect(readTagged(u, '设<b translate=no>x1 值</b>如<b translate=no>x2</b>所述。<x id="3"/>它成立。')).toBeNull()
+    // (a word in it and no token: Google's own bold)
+    expect(
+      readTagged(u, '设<b>注意</b><b translate=no>x1</b>如<b translate=no>x2</b>所述。<x id="3"/>它成立。'),
+    ).toBeNull()
+    // (a token of a slot the unit lacks, of a group's slot, of a boundary marker's)
+    expect(readTagged(u, '设<b translate=no>x1</b>如<b translate=no>x9</b>所述。<x id="3"/>它成立。')).toBeNull()
+    const s = unit('s', [span('i', 'italic', [t('a word')]), t(' and '), el('m', 'math'), t('.')])
+    expect(readTagged(s, '<b translate=no>x1</b>和<b translate=no>x2</b>。')).toBeNull()
+    expect(
+      readTagged(u, '设<b translate=no>x1</b>如<b translate=no>x2</b>所述。<b translate=no>x3</b>它成立。'),
+    ).toBeNull()
+  })
+  it('a `<b>` twice, never closed, closed by another tag’s close, or a close with no open, is unread', () => {
+    expect(
+      readTagged(u, '设<b translate=no>x1</b>如<b translate=no>x1</b><b translate=no>x2</b>所述。<x id="3"/>它成立。'),
+    ).toBeNull()
+    expect(readTagged(u, '设<b translate=no>x1如<b translate=no>x2</b>所述。<x id="3"/>它成立。')).toBeNull()
+    expect(readTagged(u, '设<b translate=no>x1</span>如<b translate=no>x2</b>所述。<x id="3"/>它成立。')).toBeNull()
+    expect(readTagged(u, '设<b translate=no>x1</b>如<b translate=no>x2</b></b>所述。<x id="3"/>它成立。')).toBeNull()
+    const s = unit('s', [span('i', 'italic', [t('a word')]), t(' and '), el('m', 'math'), t('.')])
+    expect(readTagged(s, '<span id="1">一个词</b>和<b translate=no>x2</b>。')).toBeNull()
+  })
+  it('its token left as text beside it, or a token of the form the text lacks, is unread', () => {
+    expect(readTagged(u, '设<b translate=no>x1</b> x1 如<b translate=no>x2</b>所述。<x id="3"/>它成立。')).toBeNull()
+    expect(readTagged(u, '设<b translate=no>x1</b>如<b translate=no>x2</b>所述（x7）。<x id="3"/>它成立。')).toBeNull()
+  })
+  it('a reply in the spelling before it, `<span id="n" translate="no">xn</span>`, still reads (stored replies are read again)', () => {
+    const r = readTagged(
+      u,
+      '设<span id="1" translate="no">x1</span>如<span id="2" translate="no">x2</span>所述。<x id="3"/>它成立。',
+    )
+    expect(els(r?.content)).toBe('设#m如#c所述。它成立。')
+    expect(r?.sentences).toEqual({ src: [18], tr: [7] })
+  })
+  it('the void spelling (Chrome’s, an LLM’s) is unchanged, and reads a `<b>` as Google’s reading does', () => {
+    expect(tagsWire.write(u)).toBe('Let <x id="1"/> be as in <x id="2"/>. <x id="3"/>It holds.')
+    expect(els(tagsWire.read(u, '设<b translate=no>x1</b>如<x id="2"/>所述。<x id="3"/>它成立。')?.content)).toBe(
+      '设#m如#c所述。它成立。',
+    )
+  })
+})
+
+// (rule 3 of the reduction design's 8.11: an element that sets nothing where it stands, `silent`, is not in the sentence; the
+// markers wire has sent it on no wire since 2026-11-09, and the tags wire now does, by the same rule and the same put-back
+// (markers.ts withOff). Google kept no stop before such an element written as a word: `…for MOPD.\ifarxiv{} Code is
+// available at \url{…}.\fi` came back with both stops gone, and the cutter read `\ifarxiv{}` as a word glued to the stop,
+// one sentence where TeX set two; off the wire, 12 of 12 such stops came back, lane reply-dots' probe 3 of 2026-11-13)
+describe('google: an element that sets nothing goes on no wire, and is put back where its group begins or ends', () => {
+  const g = google({ fetch: scriptedFetch(googleEcho).fetch })
+  const w = (n: number) => `<b translate=no>x${n}</b>`
+  const show = (c: OutPiece[] | undefined): string | undefined =>
+    c?.map((p) => (p.t === 'text' ? p.s : p.t === 'el' ? `#${p.id}` : `{${show(p.content)}}#${p.id}`)).join('')
+  it('alone, on no wire: back at the front of its group where nothing of it went out before it, else at its end', () => {
+    const u = unit('s', [quiet('lab'), t('We train an exam'), quiet('hy'), t('ple model. It ends.'), quiet('k')], true)
+    expect(g.write(u, 'zh-Hans')).toBe('We train an example model. <x id="1"/>It ends.')
+    const r = readTagged(u, '我们训练一个示例模型。<x id="1"/>它结束了。')
+    expect(show(r?.content)).toBe('#lab我们训练一个示例模型。它结束了。#hy#k')
+    expect(accept(u, r?.content ?? [])).toEqual({ ok: true })
+    // (the sentences in the unit's own projection, its elements that set nothing counted where they stand)
+    expect(r?.sentences).toEqual({ src: [29], tr: [12] })
+  })
+  it('beside an element that sets something, white space alone between, in that element’s tag, in its place', () => {
+    const after = unit('a', [t('See the table'), el('c', 'cite'), quiet('l'), t('. It ends.')], true)
+    expect(g.write(after, 'zh-Hans')).toBe(`See the table${w(1)}. <x id="2"/>It ends.`)
+    expect(show(readTagged(after, `见表${w(1)}。<x id="2"/>它结束了。`)?.content)).toBe('见表#c#l。它结束了。')
+    const before = unit('b', [t('Values '), quiet('n'), t(' '), el('m', 'math'), t(' hold.')])
+    expect(g.write(before, 'zh-Hans')).toBe(`Values ${w(1)} hold.`)
+    expect(show(readTagged(before, `数值${w(1)}成立。`)?.content)).toBe('数值#n #m成立。')
+  })
+  it('the cutter reads the unit without it: a stop before a conditional of no ink ends its sentence (2611.03953v2’s shape)', () => {
+    const u = unit(
+      'c',
+      [
+        t('It reaches 81% for the baseline.'),
+        quiet('i'),
+        t(' Code is available at '),
+        el('u', 'url'),
+        t('.'),
+        quiet('f'),
+      ],
+      true,
+    )
+    expect(g.write(u, 'zh-Hans')).toBe(`It reaches 81% for the baseline. <x id="2"/>Code is available at ${w(1)}.`)
+    const r = readTagged(u, `它对基线达到 81%。<x id="2"/>代码可在${w(1)}处获取。`)
+    expect(show(r?.content)).toBe('它对基线达到 81%。代码可在#u处获取。#i#f')
+    expect(r?.sentences).toEqual({ src: [34], tr: [11] })
+  })
+  it('riding in a mark glued after a stop: the next sentence starts after both, where the reply keeps them after the marker', () => {
+    const u = unit('m', [t('It ends.'), el('a', 'note-mark'), quiet('l'), t(' Then more words.')], true)
+    expect(g.write(u, 'zh-Hans')).toBe(`It ends.<x id="2"/>${w(1)} Then more words.`)
+    const r = readTagged(u, `它结束了。<x id="2"/>${w(1)}然后更多词。`)
+    expect(show(r?.content)).toBe('它结束了。#a#l然后更多词。')
+    expect(r?.sentences).toEqual({ src: [11], tr: [7] })
+  })
+  it('inside a word it leaves the word whole (`exam\\-ple`), and the white space beside it is one space', () => {
+    expect(
+      g.write(unit('h', [t('An exam'), quiet('hy'), t('ple of a word '), quiet('l'), t(' here.')]), 'zh-Hans'),
+    ).toBe('An example of a word here.')
+  })
+  it('a styled group’s head that sets nothing comes back after the group’s open; where the reply lost the group, in a copy of it', () => {
+    const u = unit('h', [t('We train on '), span('g', 'colour', [quiet('bf'), t('every')]), t(' word.')])
+    expect(g.write(u, 'zh-Hans')).toBe('We train on <span id="1">every</span> word.')
+    const kept = readTagged(u, '我们在<span id="1">每个</span>词上训练。')
+    expect(show(kept?.content)).toBe('我们在{#bf每个}#g词上训练。')
+    expect(accept(u, kept?.content ?? [])).toEqual({ ok: true })
+    // (the group is not `must`: the reply may lose it, and the declaration then comes back in a copy of it, never loose)
+    const lost = readTagged(u, '我们在每个词上训练。')
+    expect(show(lost?.content)).toBe('我们在每个词上训练。{#bf}#g')
+    expect(accept(u, lost?.content ?? [])).toEqual({ ok: true })
+  })
+  it('a group of no word holding only such elements goes on no wire as one piece; one that holds an element that sets something is that element’s tag', () => {
+    const u = unit('z', [
+      t('Short for '),
+      span('1', 'other', [quiet('2')]),
+      t('Bolt-on parts, '),
+      span('3', 'other', [quiet('4'), el('5', 'math')]),
+      t('.'),
+    ])
+    expect(g.write(u, 'zh-Hans')).toBe(`Short for Bolt-on parts, ${w(1)}.`)
+    expect(show(readTagged(u, `螺栓部件的简称，${w(1)}。`)?.content)).toBe('螺栓部件的简称，{#4#5}#3。{#2}#1')
+  })
+  it('the void spelling (Chrome’s, an LLM’s) leaves it off alike; the markers wire as before', () => {
+    const u = unit('s', [quiet('lab'), t('We train an exam'), quiet('hy'), t('ple model. It ends.')], true)
+    expect(tagsWire.write(u)).toBe('We train an example model. <x id="1"/>It ends.')
+  })
+})
+
+// (Google's translateHtml takes a styled group written as an element HTML does not know, `<t id="n">…</t>`, as a break: it
+// translated the text before it alone, wrote "……" where the group's words belong and set the group after ("so the experts act
+// as <t>parameter priors</t> without…" -> "因此专家可以作为……<t>参数先验</t>而不…"), and translated the group's words out of their
+// sentence ("the {order} we take…" -> 命令); as HTML's own inline element the sentence came back whole, "因此专家充当<span>参数先验
+// </span>，而不…". Lane reply-dots' probes, 2026-11-13: dots gone in 61 of 61 units, DESIGN §6.2)
+describe('google: a styled group is a span of its sentence', () => {
+  const g = google({ fetch: scriptedFetch(googleEcho).fetch })
+  const reply = (group: string, el2 = '<b translate=no>x2</b>') =>
+    `该方法使权重保持可训练，因此专家充当${group}，而不将其限制在这个范围内。<x id="5"/>它达到 81%，而基线为 70% ${el2}代码可在<b translate=no>x3</b>处获取<b translate=no>x4</b>`
+  const read = [
+    { t: 'text', s: '该方法使权重保持可训练，因此专家充当' },
+    { t: 'span', id: 'p', content: [{ t: 'text', s: '学习到的先验' }] },
+    { t: 'text', s: '，而不将其限制在这个范围内。它达到 81%，而基线为 70%' },
+    { t: 'el', id: 'i' },
+    { t: 'text', s: '代码可在' },
+    { t: 'el', id: 'u' },
+    { t: 'text', s: '处获取' },
+    { t: 'el', id: 'f' },
+  ]
+  it('is written as HTML’s inline element holding its words; an element as one holding its token, not to be translated', () => {
+    expect(g.write(STYLED_OBJECT, 'zh-Hans')).toBe(
+      'The method keeps the weights trainable, so the experts serve as <span id="1">learned priors</span> without tying it to this range. <x id="5"/>It reaches 81% against 70% for the baseline.<b translate=no>x2</b> Code is available at <b translate=no>x3</b>.<b translate=no>x4</b>',
+    )
+  })
+  it('a returned span is a group or an element by its id, as the unit’s content knows it', () => {
+    const r = readTagged(STYLED_OBJECT, reply('<span id="1">学习到的先验</span>'))
+    expect(r?.content).toEqual(read)
+    expect(r?.sentences).toEqual({ src: [111], tr: [38] })
+  })
+  it('an element’s span is the element whether or not `translate` came back', () => {
+    expect(
+      readTagged(STYLED_OBJECT, reply('<span id="1">学习到的先验</span>', '<span id="2">x2</span>'))?.content,
+    ).toEqual(read)
+  })
+  it('a group’s span holding a token-shaped text is still the group', () => {
+    const u = unit('v', [t('The variable '), span('v', 'italic', [t('x2')]), t(' is set by '), el('m', 'math'), t('.')])
+    expect(g.write(u, 'zh-Hans')).toBe('The variable <span id="1">x2</span> is set by <b translate=no>x2</b>.')
+    expect(readTagged(u, '变量<span id="1">x2</span>由<b translate=no>x2</b>设定。')?.content).toEqual([
+      { t: 'text', s: '变量' },
+      { t: 'span', id: 'v', content: [{ t: 'text', s: 'x2' }] },
+      { t: 'text', s: '由' },
+      { t: 'el', id: 'm' },
+      { t: 'text', s: '设定。' },
+    ])
+  })
+  it('a reply to the wire before it, its group a `<t>`, still reads (stored replies are read again)', () => {
+    expect(readTagged(STYLED_OBJECT, reply('<t id="1">学习到的先验</t>'))?.content).toEqual(read)
+  })
+  it('a group’s span closed by another tag’s close, or never closed, is unread', () => {
+    expect(readTagged(STYLED_OBJECT, reply('<span id="1">学习到的先验</t>'))).toBeNull()
+    expect(readTagged(STYLED_OBJECT, reply('<span id="1">学习到的先验'))).toBeNull()
+    expect(readTagged(STYLED_OBJECT, reply('<t id="1">学习到的先验</span>'))).toBeNull()
+  })
+})
+
+// (Google kept no stop before an element written as a word that the source glues after its sentence's stop: "…to its
+// left.<x1>" -> "…上下文<x1>", 0 of 80 such places of the lab's Google store kept it, Microsoft 0 of 75 note marks, footnotes
+// and breaks lost; with the boundary marker right after the stop, 77 of 80 came back, no stray stop added. Lane reply-dots'
+// probe, 2026-11-13, DESIGN §6.2. The sentence stays the source's: its stop and the element glued after it)
+describe('google: on the wire a sentence ends at its stop', () => {
+  const g = google({ fetch: scriptedFetch(googleEcho).fetch })
+  const w = (n: number) => `<b translate=no>x${n}</b>`
+  it('the boundary marker stands right after the stop, before an element the source glues after it; at the unit’s end too', () => {
+    expect(g.write(GLUED_STOP, 'zh-Hans')).toBe(
+      `Every token attends to its left.<x id="3"/>${w(1)} We report two sizes.<x id="4"/>${w(2)}`,
+    )
+    const one = unit('o', [t('We used other seeds.'), el('n', 'note-mark')], true)
+    expect(g.write(one, 'zh-Hans')).toBe(`We used other seeds.<x id="2"/>${w(1)}`)
+  })
+  it('only where the cutter ends a sentence: an abbreviation’s dot is none', () => {
+    const abbr = unit('a', [t('As shown in Prop.'), el('t', 'other'), el('r', 'ref')], true)
+    expect(g.write(abbr, 'zh-Hans')).toBe(`As shown in Prop.${w(1)}${w(2)}`)
+    const mid = unit('m', [t('See Fig.'), el('t', 'other'), el('r', 'ref'), t(' for the layout. It ends.')], true)
+    expect(g.write(mid, 'zh-Hans')).toBe(`See Fig.${w(1)}${w(2)} for the layout. <x id="3"/>It ends.`)
+  })
+  it('a reply keeping stop, marker and element in order reads today’s pairs: the boundary after the element on both sides', () => {
+    const r = readTagged(GLUED_STOP, `每个标记都关注其左侧。<x id="3"/>${w(1)}我们报告两种规模。<x id="4"/>${w(2)}`)
+    expect(r?.content).toEqual([
+      { t: 'text', s: '每个标记都关注其左侧。' },
+      { t: 'el', id: 'f' },
+      { t: 'text', s: '我们报告两种规模。' },
+      { t: 'el', id: 'g' },
+    ])
+    // (the source's boundary at "We", after the mark; the translation's at 我, after the mark: as a reply with the marker
+    // after the element reads, today's wire; no sentence of the end's mark alone)
+    expect(r?.sentences).toEqual({ src: [34], tr: [12] })
+    expect(
+      readTagged(GLUED_STOP, `每个标记都关注其左侧。${w(1)}<x id="3"/>我们报告两种规模。<x id="4"/>${w(2)}`)?.sentences,
+    ).toEqual({ src: [34], tr: [12] })
+  })
+  it('the end’s marker is the wire’s alone: missing, or after the element, the sentences read the same', () => {
+    expect(
+      readTagged(GLUED_STOP, `每个标记都关注其左侧。<x id="3"/>${w(1)}我们报告两种规模。${w(2)}`)?.sentences,
+    ).toEqual({
+      src: [34],
+      tr: [12],
+    })
+    expect(
+      readTagged(GLUED_STOP, `每个标记都关注其左侧。<x id="3"/>${w(1)}我们报告两种规模${w(2)}<x id="4"/>`)?.sentences,
+    ).toEqual({
+      src: [34],
+      tr: [12],
+    })
+  })
+})
+
+// (an element the source glues after a sentence's stop is that sentence's: on the wire it stands after the boundary marker, the
+// first thing of the next sentence's segment, where Google may carry it into that sentence's words (2111.09276v1 p5: "…search.
+// [9] Then we apply an image encoder[10]", its zh reply setting mark 9 beside mark 10; 7 of 665 such elements over the
+// lab's Google store, every other kept first). The reading sets it back right after that marker, the sentence's end in the
+// reply; one the reply set anywhere in its own sentence stays. Lane glued-mark, 2026-11-13, DESIGN §6.2)
+describe('google: an element glued after a stop goes back to its sentence when the reply carried it into the next', () => {
+  const w = (n: number) => `<b translate=no>x${n}</b>`
+  const show = (c: OutPiece[] | undefined) => c?.map((p) => (p.t === 'text' ? p.s : `#${p.id}`)).join('')
+  it('moved past a word of the next sentence: right after the marker, the white space the reply set after it gone with it', () => {
+    const r = readTagged(GLUED_STOP, `每个标记都关注其左侧。<x id="3"/>我们${w(1)} 报告两种规模。<x id="4"/>${w(2)}`)
+    expect(r?.content).toEqual([
+      { t: 'text', s: '每个标记都关注其左侧。' },
+      { t: 'el', id: 'f' },
+      { t: 'text', s: '我们报告两种规模。' },
+      { t: 'el', id: 'g' },
+    ])
+    // (the boundary after the element, as from a reply that kept it there)
+    expect(r?.sentences).toEqual({ src: [34], tr: [12] })
+  })
+  it('a tie and a mark glued after the stop: the mark the reply moved goes back after the tie it kept; the next mark stays', () => {
+    const u = unit(
+      'tm',
+      [
+        t('We search the web.'),
+        el('s', 'space'),
+        el('a', 'note-mark'),
+        t(' Then we apply an encoder'),
+        el('b', 'note-mark'),
+        t(' to each image.'),
+      ],
+      true,
+    )
+    expect(google({ fetch: scriptedFetch(googleEcho).fetch }).write(u, 'zh-Hans')).toBe(
+      `We search the web.<x id="4"/>${w(1)}${w(2)} Then we apply an encoder${w(3)} to each image.`,
+    )
+    const r = readTagged(u, `我们搜索网络。<x id="4"/> ${w(1)}我们对每幅图像应用编码器${w(2)} ${w(3)}。`)
+    expect(show(r?.content)).toBe('我们搜索网络。#s#a我们对每幅图像应用编码器#b。')
+    expect(r?.sentences).toEqual({ src: [21], tr: [9] })
+  })
+  it('two moved, in the reply’s other order: back in the source’s order', () => {
+    const u = unit('two', [t('It ends.'), el('a', 'note-mark'), el('b', 'note-mark'), t(' Then more words.')], true)
+    expect(show(readTagged(u, `它结束了。<x id="3"/>然后${w(2)}更多${w(1)}词。`)?.content)).toBe(
+      '它结束了。#a#b然后更多词。',
+    )
+  })
+  it('carried past a later marker, into a sentence after the next: back after its own marker', () => {
+    const u = unit('far', [t('One ends.'), el('a', 'note-mark'), t(' Two ends. Three ends.')], true)
+    expect(google({ fetch: scriptedFetch(googleEcho).fetch }).write(u, 'zh-Hans')).toBe(
+      `One ends.<x id="2"/>${w(1)} Two ends. <x id="3"/>Three ends.`,
+    )
+    const r = readTagged(u, `一结束。<x id="2"/>二结束。<x id="3"/>三${w(1)}结束。`)
+    expect(show(r?.content)).toBe('一结束。#a二结束。三结束。')
+  })
+  it('set in its own sentence, before or after its stop (a target that writes a note’s mark before the stop): where the reply set it', () => {
+    expect(
+      show(
+        readTagged(GLUED_STOP, `每个标记都关注其左侧${w(1)}。<x id="3"/>我们报告两种规模。<x id="4"/>${w(2)}`)?.content,
+      ),
+    ).toBe('每个标记都关注其左侧#f。我们报告两种规模。#g')
+    expect(
+      show(
+        readTagged(GLUED_STOP, `每个标记都关注${w(1)}其左侧。<x id="3"/>我们报告两种规模。<x id="4"/>${w(2)}`)?.content,
+      ),
+    ).toBe('每个标记都关注#f其左侧。我们报告两种规模。#g')
+  })
+  it('no sentence known where the markers did not come back once each and in order: where the reply set it', () => {
+    expect(show(readTagged(GLUED_STOP, `每个标记都关注其左侧。我们${w(1)}报告两种规模。${w(2)}`)?.content)).toBe(
+      '每个标记都关注其左侧。我们#f报告两种规模。#g',
+    )
+  })
+  it('an element after the stop and white space is no glued one: where the reply set it', () => {
+    const u = unit('sp', [t('It ends. '), el('a', 'note-mark'), t(' Then more words.')], true)
+    expect(show(readTagged(u, `它结束了。<x id="2"/>然后${w(1)}更多词。`)?.content)).toBe('它结束了。然后#a更多词。')
+  })
+  it('the void spelling (Chrome’s, an LLM’s) reads the same', () => {
+    expect(
+      show(
+        readTagged(GLUED_STOP, '每个标记都关注其左侧。<x id="3"/>我们<x id="1"/> 报告两种规模。<x id="4"/><x id="2"/>')
+          ?.content,
+      ),
+    ).toBe('每个标记都关注其左侧。#f我们报告两种规模。#g')
+  })
+})
+
+// (a tie after a stop is TeX's own statement that the space there is a word space, not a sentence's end: `~` is
+// `\penalty10000\ `, no end-of-sentence space is set at it. Where a word or a number follows the tie, the wire marks no sentence
+// end; a tie and then a mark, which annotates the sentence before (a note's mark, a footnote's call, a citation), keeps it. No
+// word list, no language's case. Over the lab's Google store at RB1, 533 such markers stood after an initial or an abbreviation,
+// none a sentence's end; after "vol." on round B15's wire Google wrote a volume, an issue and pages the paper lacks in 42
+// bibliography units, none on B14's. Lane glued-mark, 2026-11-13, DESIGN §6.2)
+describe('google: a stop followed by a tie and a word or a number ends no sentence', () => {
+  const g = google({ fetch: scriptedFetch(googleEcho).fetch })
+  const w = (n: number) => `<b translate=no>x${n}</b>`
+  it('a one-letter initial, its surname after the tie (`and~M.~Casals`)', () => {
+    const u = unit(
+      'ini',
+      [t('E. Berti and'), el('o', 'other'), t('M.'), el('s', 'space'), t('Casals, Phys. Rev. D.')],
+      true,
+    )
+    expect(g.write(u, 'zh-Hans')).toBe(`E. Berti and${w(1)}M.${w(2)}Casals, Phys. Rev. D.`)
+  })
+  it('"vol." and its number (an element): no marker after "vol.", inside the unit or at its end', () => {
+    const u = unit(
+      'vol',
+      [
+        t('In Advances in Systems, vol.'),
+        el('s', 'space'),
+        el('n', 'number'),
+        t(' pp. '),
+        el('p', 'number'),
+        t('. Then more.'),
+      ],
+      true,
+    )
+    expect(g.write(u, 'zh-Hans')).toBe(`In Advances in Systems, vol.${w(1)}${w(2)} pp. ${w(3)}. <x id="4"/>Then more.`)
+    const end = unit('vol-end', [t('In Advances in Systems, vol.'), el('s', 'space'), el('n', 'number')], true)
+    expect(g.write(end, 'zh-Hans')).toBe(`In Advances in Systems, vol.${w(1)}${w(2)}`)
+  })
+  it('a lower-case initial (`J. a.~P. Cavalcante`)', () => {
+    const u = unit('low', [t('B. da Cunha and J. a.'), el('s', 'space'), t('P. Cavalcante, submitted.')], true)
+    expect(g.write(u, 'zh-Hans')).toBe(`B. da Cunha and J. a.${w(1)}P. Cavalcante, submitted.`)
+  })
+  it('a journal’s abbreviations tied in a chain (`Amer.~Math.~Soc.`)', () => {
+    const u = unit(
+      'soc',
+      [
+        t('Isoparametric hypersurfaces, Amer.'),
+        el('s', 'space'),
+        t('Math.'),
+        el('t', 'space'),
+        t('Soc., Providence, 1990.'),
+      ],
+      true,
+    )
+    expect(g.write(u, 'zh-Hans')).toBe(`Isoparametric hypersurfaces, Amer.${w(1)}Math.${w(2)}Soc., Providence, 1990.`)
+  })
+  it('a reference tied after a stop the author typed in the sentence (`Definition.~\\ref{…}.`)', () => {
+    const u = unit(
+      'def',
+      [t('It is an ingredient in Definition.'), el('s', 'space'), el('r', 'ref'), t('. It holds.')],
+      true,
+    )
+    expect(g.write(u, 'zh-Hans')).toBe(`It is an ingredient in Definition.${w(1)}${w(2)}. <x id="3"/>It holds.`)
+  })
+  it('a tie and then a mark keeps the end: the marker right after the stop (`search.~\\footnote{…}`)', () => {
+    const u = unit('fn', [t('We search the web.'), el('s', 'space'), el('a', 'note-mark'), t(' Then we encode.')], true)
+    expect(g.write(u, 'zh-Hans')).toBe(`We search the web.<x id="3"/>${w(1)}${w(2)} Then we encode.`)
+  })
+  it('a stop and a space, then a word: the end stays', () => {
+    expect(g.write(unit('sp', [t('We search the web. Then we encode.')], true), 'zh-Hans')).toBe(
+      'We search the web. <x id="1"/>Then we encode.',
+    )
+  })
+  // (the tie read past what sets no character, lane glued-mark §5: a skip or a switch, kind `other`; a space or a forced break,
+  // which the cutter reads as white space; what is stated `silent`, off the wire's projection already. The first piece after
+  // the tie that sets something decides)
+  it('a tie, then an element that sets no character, then a mark: the end stays, the marker right after the stop', () => {
+    const u = unit(
+      'om',
+      [t('We search the web.'), el('s', 'space'), el('o', 'other'), el('a', 'note-mark'), t(' Then we encode.')],
+      true,
+    )
+    expect(g.write(u, 'zh-Hans')).toBe(`We search the web.<x id="4"/>${w(1)}${w(2)}${w(3)} Then we encode.`)
+  })
+  it('a tie, then a forced break, then a word: no sentence ends there', () => {
+    const u = unit(
+      'bw',
+      [t('It ends here.'), el('s', 'space'), el('b', 'break'), t('Then more words. Then the rest.')],
+      true,
+    )
+    expect(g.write(u, 'zh-Hans')).toBe(`It ends here.${w(1)}${w(2)}Then more words. <x id="3"/>Then the rest.`)
+  })
+  it('a tie, then an element that sets nothing, then a number: no sentence ends there', () => {
+    const u = unit(
+      'sn',
+      [t('In Systems, vol.'), el('s', 'space'), quiet('q'), el('n', 'number'), t('. Then more.')],
+      true,
+    )
+    expect(g.write(u, 'zh-Hans')).toBe(`In Systems, vol.${w(1)}${w(2)}. <x id="3"/>Then more.`)
+  })
+})
+
+// (F39, the display design's: a bibliography entry's parts are its blocks. BibTeX's styles write `\newblock` between an entry's
+// authors, title and venue, the source's own statement of its parts; inside a bibliography the classes set the stop's space
+// factor code to 1000 (`\sfcode`\.\@m`), no sentence space after any stop, so no stop inside an entry ends a sentence. For an
+// entry (the unit states `entry`: the source reader's `\bibitem`) the cutter is not asked: a boundary marker stands right
+// before each element that states `newblock`, none at the entry's head and no end marker; one with none is one part. Lane
+// glued-mark's probe of 2026-11-13, 9 requests over 85 entries: invented volumes, issues and pages fell from 24 entries to 2,
+// every block's stop kept, 48 of 48, 1 reply refused of 85)
+describe('google: a bibliography entry’s parts are its blocks', () => {
+  const g = google({ fetch: scriptedFetch(googleEcho).fetch })
+  const w = (n: number) => `<b translate=no>x${n}</b>`
+  const nb = (id: string): Piece => ({ t: 'el', id, kind: 'other', newblock: 1 })
+  const entry = (id: string, content: Piece[], o: { entry?: boolean; sentences?: boolean } = {}) => ({
+    id,
+    content,
+    ...(o.sentences === false ? {} : { sentences: true }),
+    ...(o.entry === false ? {} : { entry: true }),
+  })
+  const parts = [
+    t('A. Author and B. Writer. '),
+    nb('n1'),
+    t('A study of things. '),
+    nb('n2'),
+    t('In Proc. of the Conf. on Systems, vol. '),
+    el('v', 'number'),
+    t(', pp. 1--10, 2019.'),
+  ]
+  it('a boundary marker right before each `\\newblock`, and nowhere else: no abbreviation’s or initial’s stop ends a part', () => {
+    expect(g.write(entry('e', parts), 'zh-Hans')).toBe(
+      `A. Author and B. Writer. <x id="4"/>${w(1)}A study of things. <x id="5"/>${w(2)}In Proc. of the Conf. on Systems, vol. ${w(3)}, pp. 1--10, 2019.`,
+    )
+  })
+  it('none at its head, and no end marker after its last stop', () => {
+    const u = entry('h', [nb('n0'), t('A. Author. '), nb('n1'), t('A title, 2019.'), el('f', 'note-mark')])
+    expect(g.write(u, 'zh-Hans')).toBe(`${w(1)}A. Author. <x id="4"/>${w(2)}A title, 2019.${w(3)}`)
+  })
+  it('an entry that states no block is one part, whatever its stops', () => {
+    const u = entry('o', [t('J. Smith. 2018. A title of a paper. Phys. Rev. D 12. Then a note.')])
+    expect(g.write(u, 'zh-Hans')).toBe('J. Smith. 2018. A title of a paper. Phys. Rev. D 12. Then a note.')
+  })
+  it('the parts read back at the markers: each sentence of the row starts at its block', () => {
+    const r = readTagged(
+      entry('e', parts),
+      `作者 A. Author 和 B. Writer。<x id="4"/>${w(1)}关于事物的研究。<x id="5"/>${w(2)}载于系统会议论文集，第 ${w(3)} 卷，第 1--10 页，2019。`,
+    )
+    expect(r?.sentences).toEqual({ src: [25, 45], tr: [25, 34] })
+  })
+  it('a unit that is no entry is cut by the cutter, its `\\newblock` as it was; an entry that lights no sentence has no marker', () => {
+    const strip = (ps: readonly Piece[]): Piece[] =>
+      ps.map((p) =>
+        p.t === 'el' ? { t: 'el', id: p.id, kind: p.kind } : p.t === 'span' ? { ...p, content: strip(p.content) } : p,
+      )
+    expect(g.write(entry('x', parts, { entry: false }), 'zh-Hans')).toBe(
+      g.write(entry('x', strip(parts), { entry: false }), 'zh-Hans'),
+    )
+    expect(g.write(entry('x', parts, { entry: false }), 'zh-Hans')).not.toBe(g.write(entry('e', parts), 'zh-Hans'))
+    expect(g.write(entry('s', parts, { sentences: false }), 'zh-Hans')).toBe(
+      `A. Author and B. Writer. ${w(1)}A study of things. ${w(2)}In Proc. of the Conf. on Systems, vol. ${w(3)}, pp. 1--10, 2019.`,
+    )
+  })
+  it('the void spelling (Chrome’s, an LLM’s) cuts an entry alike', () => {
+    expect(tagsWire.write(entry('e', parts))).toBe(
+      'A. Author and B. Writer. <x id="4"/><x id="1"/>A study of things. <x id="5"/><x id="2"/>In Proc. of the Conf. on Systems, vol. <x id="3"/>, pp. 1--10, 2019.',
+    )
+  })
+})
+
+// (TeX set no space between a word and the mark, the script or the accent it carries: where the source glued an element to
+// the text beside it, the white space a reply sets there is taken back, as the markers reading takes it; text.ts glueOf, one
+// definition for both wires. A space the source has stays; a stop of the text after an element is no glue)
+describe('google: an element the source glued to its word comes back glued', () => {
+  const u = unit('g', [t('The name Smith'), el('n', 'math'), t(' and a size of 3'), el('k', 'math'), t('k units.')])
+  it('the space before a glued element, and after one, taken back; the source’s own spaces kept', () => {
+    const r = readTagged(u, '名字史密斯 <x id="1"/> 和 3 <x id="2"/> k 单位的大小。')
+    expect(r?.content).toEqual([
+      { t: 'text', s: '名字史密斯' },
+      { t: 'el', id: 'n' },
+      { t: 'text', s: ' 和 3' },
+      { t: 'el', id: 'k' },
+      { t: 'text', s: 'k 单位的大小。' },
+    ])
+  })
+  it('read the same from the words Google is sent', () => {
+    const r = readTagged(u, '名字史密斯 <b translate=no>x1</b> 和 3 <b translate=no>x2</b> k 单位的大小。')
+    expect(r?.content.map((p) => (p.t === 'text' ? p.s : `#${p.id}`)).join('')).toBe(
+      '名字史密斯#n 和 3#kk 单位的大小。',
+    )
+  })
+  it('a stop of the text right after an element is no glue: the space before it stays', () => {
+    const q = unit('q', [t('Packed into a matrix '), el('m', 'math'), t('.')])
+    expect(readTagged(q, '打包成一个矩阵<x id="1"/> 。')?.content).toEqual([
+      { t: 'text', s: '打包成一个矩阵' },
+      { t: 'el', id: 'm' },
+      { t: 'text', s: ' 。' },
+    ])
+  })
+})
+
+// (two elements the source sets one right after the other, nothing between, are glued as an element and its word are: TeX
+// sets no space between them, so the white space a reply puts there is taken back; a tie or a forced break between them is
+// the source's own space, and what the reply sets beside it stays. Google spaced 3,384 of 3,493 such pairs over the lab's 90
+// pairs (B14's store), 2111.09276v1's `\hlyellow{high}\hlblue{lighted}` drawn "high lighted")
+describe('google: two elements the source sets side by side come back side by side', () => {
+  const w = (n: number) => `<b translate=no>x${n}</b>`
+  it('the white space a reply puts between them taken back; the source’s own spaces beside them kept', () => {
+    const u = unit('h', [t('The edited tokens are '), el('a', 'macro'), el('b', 'macro'), t(').')])
+    expect(readTagged(u, `编辑过的标记是 ${w(1)} ${w(2)} ）。`)?.content).toEqual([
+      { t: 'text', s: '编辑过的标记是 ' },
+      { t: 'el', id: 'a' },
+      { t: 'el', id: 'b' },
+      { t: 'text', s: ' ）。' },
+    ])
+    // (three in a row, and the void the wire before it wrote)
+    const three = unit('r', [t('See '), el('a', 'cite'), el('b', 'note-mark'), el('c', 'math'), t(' here.')])
+    expect(readTagged(three, `见 <x id="1"/> <x id="2"/>  <x id="3"/> 这里。`)?.content).toEqual([
+      { t: 'text', s: '见 ' },
+      { t: 'el', id: 'a' },
+      { t: 'el', id: 'b' },
+      { t: 'el', id: 'c' },
+      { t: 'text', s: ' 这里。' },
+    ])
+  })
+  it('a tie or a forced break between them in the source: the reply’s white space beside it stays', () => {
+    const show = (c: OutPiece[] | undefined) => c?.map((p) => (p.t === 'text' ? p.s : `#${p.id}`)).join('')
+    const tie = unit('t', [t('Values '), el('a', 'math'), el('s', 'space'), el('b', 'math'), t(' hold.')])
+    expect(show(readTagged(tie, `数值 ${w(1)} ${w(2)} ${w(3)} 成立。`)?.content)).toBe('数值 #a #s #b 成立。')
+    const brk = unit('k', [t('Values '), el('a', 'math'), el('n', 'break'), el('b', 'math'), t(' hold.')])
+    expect(show(readTagged(brk, `数值 ${w(1)} ${w(2)} ${w(3)} 成立。`)?.content)).toBe('数值 #a #n #b 成立。')
+  })
+  it('inside a word: the pair glued to each other and to the word’s letters, every space a reply set there taken back', () => {
+    // (a word the source spells with two elements in it, `Ni\~{n}{\o}s` written here as two escaped characters: 98 such
+    // places in the lab's 90 pairs, 96 of them spaced by Google)
+    const u = unit('w', [t('The Ni'), el('a', 'macro'), el('b', 'macro'), t('os are here.')])
+    expect(readTagged(u, `Ni ${w(1)} ${w(2)} os 在这里。`)?.content).toEqual([
+      { t: 'text', s: 'Ni' },
+      { t: 'el', id: 'a' },
+      { t: 'el', id: 'b' },
+      { t: 'text', s: 'os 在这里。' },
+    ])
+  })
+  it('the boundary marker right after the stop before them keeps its place: the sentences read as from a reply with no space', () => {
+    // (two notes' marks glued after a sentence's stop: the wire's marker stands after the stop, before them, lane reply-dots)
+    const u = unit('m', [t('It ends.'), el('a', 'note-mark'), el('b', 'note-mark'), t(' Then more.')], true)
+    expect(google({ fetch: scriptedFetch(googleEcho).fetch }).write(u, 'zh-Hans')).toBe(
+      `It ends.<x id="3"/>${w(1)}${w(2)} Then more.`,
+    )
+    const tight = readTagged(u, `它结束了。<x id="3"/>${w(1)}${w(2)} 然后更多。`)
+    expect(tight).toEqual({
+      content: [
+        { t: 'text', s: '它结束了。' },
+        { t: 'el', id: 'a' },
+        { t: 'el', id: 'b' },
+        { t: 'text', s: ' 然后更多。' },
+      ],
+      sentences: { src: [11], tr: [8] },
+    })
+    expect(readTagged(u, `它结束了。<x id="3"/> ${w(1)} ${w(2)} 然后更多。`)).toEqual(tight)
+  })
+})
+
+// (the wire's contract: an element written as a word comes back as itself holding its own token and nothing else, once, and
+// no token stands outside its element beyond what the unit's own text holds of it. Google moved one to another word and left
+// its token behind as text (1706.03762v7's Table 1 caption, lane stray-stop's fill): a reader would have seen "x1")
+describe('google: a reply that leaves an element’s token as text is unread, as a lost element is', () => {
+  const u = unit('c', [
+    t('Costs for different layer types. '),
+    el('n', 'math'),
+    t(' is the length, '),
+    el('d', 'math'),
+    t(' the width.'),
+  ])
+  const w = (n: number, s = `x${n}`) => `<b translate=no>${s}</b>`
+  it('moved to another word, its token left behind', () => {
+    expect(readTagged(u, `不同${w(1)}类型的成本。x1 为长度，${w(2)}为宽度。`)).toBeNull()
+  })
+  it('emptied, its token left behind; doubled; another element’s token', () => {
+    expect(readTagged(u, `不同类型的成本。${w(1, '')}x1 为长度，${w(2)}为宽度。`)).toBeNull()
+    expect(readTagged(u, `不同类型的成本。${w(1)}为长度 x1，${w(2)}为宽度。`)).toBeNull()
+    expect(readTagged(u, `不同类型的成本。${w(1, 'x2')}为长度，${w(2)}为宽度。`)).toBeNull()
+  })
+  it('read where each element holds its own token and no token is left; the paper’s own `x1` is its text', () => {
+    expect(readTagged(u, `不同类型的成本。${w(1)}为长度，${w(2)}为宽度。`)?.content).toEqual([
+      { t: 'text', s: '不同类型的成本。' },
+      { t: 'el', id: 'n' },
+      { t: 'text', s: '为长度，' },
+      { t: 'el', id: 'd' },
+      { t: 'text', s: '为宽度。' },
+    ])
+    const own = unit('o', [t('The value x1 is set by '), el('n', 'math'), t('.')])
+    expect(readTagged(own, `值 x1 由${w(1)}设定。`)?.content).toEqual([
+      { t: 'text', s: '值 x1 由' },
+      { t: 'el', id: 'n' },
+      { t: 'text', s: '设定。' },
+    ])
+  })
+})
+
+// (the contract counts the tokens' form, not only the plan's own tokens: Google wrote a number of the text in the tokens' form,
+// "increasing <x4> to 50" -> "将<x4>升级到 x50" (2610.40576v1, lane stray-stop's fill); a paper's own string of that form reads)
+describe('google: a reply that writes a string of the tokens’ form the text does not hold is unread', () => {
+  const w = (n: number) => `<b translate=no>x${n}</b>`
+  it('a number of the text written as a token', () => {
+    const u = unit('n', [t('Raising '), el('k', 'math'), t(' to 50 brings no benefit.')])
+    expect(readTagged(u, `将${w(1)}提高到 x50 没有带来好处。`)).toBeNull()
+    expect(readTagged(u, `将${w(1)}提高到 50 没有带来好处。`)?.content).toEqual([
+      { t: 'text', s: '将' },
+      { t: 'el', id: 'k' },
+      { t: 'text', s: '提高到 50 没有带来好处。' },
+    ])
+  })
+  it('the paper’s own string of that form reads, as often as it writes it', () => {
+    const u = unit('o', [t('The x50 dose and '), el('k', 'math'), t(' differ.')])
+    expect(readTagged(u, `x50 剂量与${w(1)}不同。`)?.content).toEqual([
+      { t: 'text', s: 'x50 剂量与' },
+      { t: 'el', id: 'k' },
+      { t: 'text', s: '不同。' },
+    ])
+    expect(readTagged(u, `x50 剂量与${w(1)}不同（x50）。`)).toBeNull()
+  })
+})
+
+// (the contract counts in the text as the reading keeps it: its entities decoded, its invisible code points out, on both
+// sides. A character reference is one character, never a token: `&#x42;` is "B", though its spelling holds `x42` (a reply the
+// equivalence gate's capture holds, tests/protector/rehydrate.test.ts, read today, refused by the count on the raw reply); and
+// `&#120;1` is "x1", a string of the tokens' form a reader would see)
+describe('google: the tokens’ form is counted in the text as the reading keeps it, not in the wire’s spelling', () => {
+  const g = google({ fetch: scriptedFetch(googleEcho).fetch })
+  const w = (n: number, s = `x${n}`) => `<b translate=no>${s}</b>`
+  const u = unit('h', [t('Letters A and B, then '), el('k', 'math'), t('.')])
+  it('a hex character reference is its character: read', () => {
+    expect(readTagged(u, `字母 &#65; 和 &#x42;，然后${w(1)}。`)?.content).toEqual([
+      { t: 'text', s: '字母 A 和 B，然后' },
+      { t: 'el', id: 'k' },
+      { t: 'text', s: '。' },
+    ])
+    expect(readTagged(u, `字母 A 和 &#X42;&#x5bb6;，然后${w(1)}。`)?.content[0]).toEqual({
+      t: 'text',
+      s: '字母 A 和 B家，然后',
+    })
+  })
+  it('a reference that spells the tokens’ form is that string: unread where the text does not hold it, read where it does', () => {
+    expect(readTagged(u, `字母 A 和 B，然后${w(1)}（&#120;1）。`)).toBeNull()
+    expect(readTagged(u, `字母 A 和 B，然后${w(1)}（&#x78;&#49;）。`)).toBeNull()
+    // (an invisible code point the reading drops does not hide one either)
+    expect(readTagged(u, `字母 A 和 B，然后${w(1)}（x​1）。`)).toBeNull()
+    const own = unit('o', [t('The value x1 is set by '), el('n', 'math'), t('.')])
+    expect(readTagged(own, `值 &#120;1 由${w(1)}设定。`)?.content[0]).toEqual({ t: 'text', s: '值 x1 由' })
+  })
+  it('an element holding its own token spelled with a reference holds its token', () => {
+    expect(readTagged(u, `字母 A 和 B，然后${w(1, '&#120;1')}。`)?.content[1]).toEqual({ t: 'el', id: 'k' })
+    expect(readTagged(u, `字母 A 和 B，然后${w(1, 'x&#x31;')}。`)?.content[1]).toEqual({ t: 'el', id: 'k' })
+    expect(readTagged(u, `字母 A 和 B，然后${w(1, '&#120;2')}。`)).toBeNull()
+  })
+  it('the wire’s own escaping counts alike on both sides: a paper’s literal `&#x42;` is its text, as often as it writes it', () => {
+    const lit = unit('l', [t('Write B as &#x42; in HTML, as '), el('k', 'math'), t(' shows.')])
+    expect(g.write(lit, 'zh-Hans')).toBe('Write B as &amp;#x42; in HTML, as <b translate=no>x1</b> shows.')
+    expect(readTagged(lit, `在 HTML 中把 B 写成 &amp;#x42;，如${w(1)}所示。`)?.content[0]).toEqual({
+      t: 'text',
+      s: '在 HTML 中把 B 写成 &#x42;，如',
+    })
+    expect(readTagged(lit, `在 HTML 中把 B 写成 &amp;#x42;，如${w(1)}所示（&amp;#x42;）。`)).toBeNull()
+  })
+})
+
+describe('google: a glued element’s white space taken back past the wire’s own pair tags and sentence marks', () => {
+  it('into a pair after the element, and from a pair before it; a space the source has kept', () => {
+    const r = readTagged(GLUED_PAST, '设为（<x id="1"/><t id="2"> A34</t>）和<t id="3">单词 </t><x id="4"/> 其余。')
+    expect(r?.content).toEqual([
+      { t: 'text', s: '设为（' },
+      { t: 'el', id: 'a' },
+      { t: 'span', id: 's', content: [{ t: 'text', s: 'A34' }] },
+      { t: 'text', s: '）和' },
+      { t: 'span', id: 'w', content: [{ t: 'text', s: '单词' }] },
+      { t: 'el', id: 'b' },
+      { t: 'text', s: ' 其余。' },
+    ])
+  })
+  it('an element glued after another’s own stop: the reply’s space before that stop is no glue’s either', () => {
+    const u = unit('o', [t('Values '), el('a', 'math', '.'), el('b', 'math'), t(' hold.')])
+    expect(readTagged(u, '数值<x id="1"/> 。<x id="2"/> 成立。')?.content).toEqual([
+      { t: 'text', s: '数值' },
+      { t: 'el', id: 'a' },
+      { t: 'el', id: 'b' },
+      { t: 'text', s: ' 成立。' },
+    ])
+  })
+  it('past a sentence start a reading marks there, the mark kept', () => {
+    expect(`word ${SENTINEL} `.replace(GLUED_SPACE, '')).toBe(`word${SENTINEL}`)
+    expect(` ${SENTINEL} G`.replace(GLUED_LEAD, '')).toBe(`${SENTINEL}G`)
+    expect(`${SENTINEL} G`.replace(GLUED_LEAD, '')).toBe(`${SENTINEL}G`)
+    expect(`word ${SENTINEL}`.replace(GLUED_SPACE, '')).toBe(`word${SENTINEL}`)
+    expect('word '.replace(GLUED_SPACE, '')).toBe('word')
+  })
+})
+
+describe('google: sentences from boundary markers', () => {
+  it("where they came back, once each and in order, are the translation's sentence starts", () => {
+    const r = readTagged(UNITS[0] as never, '我们研究这个问题。<x id="1"/>这很难。')
+    expect(r).toEqual({ content: [{ t: 'text', s: '我们研究这个问题。这很难。' }], sentences: { src: [22], tr: [9] } })
+  })
+  it('a marker reordered or doubled gives no sentences, the translation stays', () => {
+    const u = UNITS[1] as never
+    const r = readTagged(u, '设<x id="1"/>如<x id="2"/>所述。<x id="4"/><x id="4"/>更多内容见第<x id="3"/>节。')
+    expect(r?.sentences).toBeUndefined()
+    expect(r?.content.filter((p) => p.t === 'el').length).toBe(3)
+  })
+})
+
+// (the sentences a unit is asked in, as the source reader states them: a tie is an element of kind `other`, `\ref` one of
+// kind `ref`, `\cite` one of kind `cite`; the text the source's own, its line ends with it. 1512.03385v1's `Fig.~\ref{…}`
+// was translated alone as the fruit by Microsoft, whose own sentences cut there; this wire's cutter is the one asked here)
+describe('google: the sentences a unit is asked in, where a reference or a citation follows a full stop', () => {
+  const g = google({ fetch: scriptedFetch(googleEcho).fetch })
+  /** the wire split at its boundary markers (ids past the unit's own elements and spans), each element `#` */
+  const asked = (content: Piece[]): string[] => {
+    const u = unit('u', content, true)
+    const own = (ps: readonly Piece[]): number =>
+      ps.reduce((n, p) => (p.t === 'el' ? n + 1 : p.t === 'span' ? n + 1 + own(p.content) : n), 0)
+    const n = own(content)
+    return g
+      .write(u, 'zh-Hans')
+      .replace(/<b translate=no>x\d+<\/b>/g, '#')
+      .replace(/<x id="(\d+)"\/>/g, (_, d: string) => (Number(d) > n ? '‖' : '#'))
+      .replace(/<span id="\d+">|<\/span>/g, '')
+      .split('‖')
+      .map((s) => s.trim())
+  }
+  it('an abbreviation’s stop before a reference ends no sentence', () => {
+    expect(
+      asked([
+        span('h', 'bold', [t('Analysis of Layer Responses.')], true),
+        t('\nFig.'),
+        el('tie', 'other'),
+        el('r', 'ref'),
+        t(' shows the standard deviations (std) of the layer responses. The responses are small.'),
+      ]),
+    ).toEqual([
+      'Analysis of Layer Responses.',
+      'Fig.## shows the standard deviations (std) of the layer responses.',
+      'The responses are small.',
+    ])
+    expect(
+      asked([t('We obtain Eq.'), el('tie', 'other'), t('('), el('r', 'ref'), t(') from the bound. It holds.')]),
+    ).toEqual(['We obtain Eq.#(#) from the bound.', 'It holds.'])
+    expect(
+      asked([t('As discussed in Sec.'), el('tie', 'other'), el('r', 'ref'), t(' below, it holds. The rest follows.')]),
+    ).toEqual(['As discussed in Sec.## below, it holds.', 'The rest follows.'])
+    expect(asked([t('As listed in Table'), el('tie', 'other'), el('r', 'ref'), t('. The rest follows.')])).toEqual([
+      'As listed in Table##.',
+      'The rest follows.',
+    ])
+  })
+  it('a citation after an abbreviation’s stop ends no sentence, tied or spaced', () => {
+    expect(
+      asked([t('Eiras et al.'), el('tie', 'other'), el('c', 'cite'), t(' further extended it. Then more.')]),
+    ).toEqual(['Eiras et al.## further extended it.', 'Then more.'])
+    expect(asked([t('Pham et al. '), el('c', 'cite'), t(' classify safety examples. Then more.')])).toEqual([
+      'Pham et al. # classify safety examples.',
+      'Then more.',
+    ])
+  })
+  it('a citation after a sentence’s stop and white space opens the next sentence', () => {
+    expect(asked([t('This is as shown. '), el('c', 'cite'), t(' reports that it fails. Then more.')])).toEqual([
+      'This is as shown.',
+      '# reports that it fails.',
+      'Then more.',
+    ])
+  })
+  it('a line end of the source is a space: no sentence ends there', () => {
+    expect(asked([t('We show the standard\ndeviations of the layer\nresponses.\nThe rest follows.')])).toEqual([
+      'We show the standard deviations of the layer responses.',
+      'The rest follows.',
+    ])
+  })
+  it('the fixture unit the digest holds it by: boundary markers before the citation and before the next sentence alone', () => {
+    expect(g.write(SOURCE_LINES, 'zh-Hans')).toBe(
+      'Sampling remains computationally expensive. <x id="2"/><b translate=no>x1</b> proposes a one-step sampler. <x id="3"/>Then we go on.',
+    )
+  })
+})
+
+// (2608.25210v2's `\topic{…}`: the stop the paper's macro sets after its argument, which its source does not write)
+describe('google: a stop TeX sets at a group’s end', () => {
+  it('is written before the group’s close, and read by the cutter as the sentence’s end', () => {
+    const t = google({ fetch: scriptedFetch(googleEcho).fetch })
+    expect(t.write(HEAD_STOP, 'zh-Hans')).toBe(
+      '<span id="1">Current methods are not reliable.</span> <x id="3"/>To infer the source, one could rank sentences. <x id="4"/>We call it <span id="2">verifiable sources.</span> <x id="5"/>Then we go on.',
+    )
+  })
+})
+
+// (a line end an element states ends its sentence before the stretch of elements it stands in, as a stop of the text ends one
+// before the elements set right after it: the stretch leads the next sentence (wire/text.ts leadsNext). Our cutter ends the
+// sentence at the line end, the boundary marker stands before the stretch's first element, and the stretch is read back as the
+// next sentence's lead; the wire writes no line end of its own, its white space being none. 1810.04805v2 p8 on staging: with the
+// break inside one sentence of our cutter's, Google's Japanese set it mid-sentence, before the macro, as Microsoft's set it
+// when its marker ended the sentence before; the second break, after "task." and so the next
+// sentence's lead, stood before its label in every reply)
+describe('google: a stop that is a line end', () => {
+  it('ends its sentence before the stretch it stands in: the boundary marker before the stretch, no line end written', () => {
+    const t = google({ fetch: scriptedFetch(googleEcho).fetch })
+    expect(t.write(LABEL_AFTER_BREAK, 'zh-Hans')).toBe(
+      'We compare two settings as follows: <x id="8"/><b translate=no>x1</b> <b translate=no>x2</b> <b translate=no>x3</b><span id="4">No XYZ</span>: A model trained without the XYZ task. <x id="9"/><b translate=no>x5</b> <b translate=no>x6</b><span id="7">Only XYZ</span>: A model trained with it alone.',
+    )
+  })
+  it('a formula right before the break stays in the sentence before: the boundary marker between it and the break', () => {
+    const t = google({ fetch: scriptedFetch(googleEcho).fetch })
+    expect(t.write(FORMULA_BEFORE_BREAK, 'zh-Hans')).toBe(
+      'The input is a grid and two constants <b translate=no>x1</b> <x id="4"/><b translate=no>x2</b><span id="3">Output</span>: A binary string. <x id="5"/>Then we stop.',
+    )
+  })
+  it('reads the break before the label, the sentence the label begins after the stretch it leads', () => {
+    const r = readTagged(
+      LABEL_AFTER_BREAK,
+      '我们比较以下两种设置：<x id="8"/><b translate=no>x1</b> <b translate=no>x2</b> <b translate=no>x3</b><span id="4">无 XYZ</span>：一个未经 XYZ 任务训练的模型。<x id="9"/><b translate=no>x5</b> <b translate=no>x6</b><span id="7">仅 XYZ</span>：一个仅用它训练的模型。',
+    )
+    expect(r?.content.slice(0, 6)).toEqual([
+      { t: 'text', s: '我们比较以下两种设置：' },
+      { t: 'el', id: 'v' },
+      { t: 'text', s: ' ' },
+      { t: 'el', id: 'b' },
+      { t: 'text', s: ' ' },
+      { t: 'el', id: 'n' },
+    ])
+    expect(r?.content[6]).toEqual({ t: 'span', id: 'h', content: [{ t: 'text', s: '无 XYZ' }] })
+    expect(accept(LABEL_AFTER_BREAK, r?.content ?? [])).toEqual({ ok: true })
+    expect(r?.sentences?.src[0]).toBe('We compare two settings as follows:\n￼\n￼\n'.length)
+  })
+  it('a stretch the reply carried into the next sentence’s words goes back right after its marker, as a stop’s glued elements do', () => {
+    const r = readTagged(
+      LABEL_AFTER_BREAK,
+      '我们比较以下两种设置：<x id="8"/><span id="4">无 XYZ</span><b translate=no>x1</b> <b translate=no>x2</b> <b translate=no>x3</b>：一个未经 XYZ 任务训练的模型。<x id="9"/><b translate=no>x5</b> <b translate=no>x6</b><span id="7">仅 XYZ</span>：一个仅用它训练的模型。',
+    )
+    expect(r?.content.slice(0, 4)).toEqual([
+      { t: 'text', s: '我们比较以下两种设置：' },
+      { t: 'el', id: 'v' },
+      { t: 'el', id: 'b' },
+      { t: 'span', id: 'h', content: [{ t: 'text', s: '无 XYZ' }] },
+    ])
+  })
+  it('a stretch the reply set inside the sentence before stays where the reply set it: the translator’s order, shown', () => {
+    const r = readTagged(
+      LABEL_AFTER_BREAK,
+      '我们<b translate=no>x1</b> <b translate=no>x2</b>比较以下两种设置：<x id="8"/><b translate=no>x3</b><span id="4">无 XYZ</span>：一个未经 XYZ 任务训练的模型。<x id="9"/><b translate=no>x5</b> <b translate=no>x6</b><span id="7">仅 XYZ</span>：一个仅用它训练的模型。',
+    )
+    expect(r?.content.slice(0, 2)).toEqual([
+      { t: 'text', s: '我们' },
+      { t: 'el', id: 'v' },
+    ])
+    expect(accept(LABEL_AFTER_BREAK, r?.content ?? [])).toEqual({ ok: true })
+  })
+})
+
+// (a display that states no stop of its own, at its sentence's end: the next sentence begins after it, its first letter upper
+// case; the owner's report of 2026-11-09 on 2609.33403v1, one sentence to every translator across both displays)
+describe('google: a display that states no stop of its own', () => {
+  it('ends its sentence where the text after it begins one: a stop after it, and the cutter cuts there; not where it goes on', () => {
+    const g = google({ fetch: scriptedFetch(googleEcho).fetch })
+    expect(g.write(DISPLAY_ENDS, 'zh-Hans')).toBe(
+      'Each part is formalized as: <b translate=no>x1</b>. <x id="3"/>The next field is a list of effects, formalized as a tuple: <b translate=no>x2</b> where kind is its kind.',
+    )
+  })
+  it("reads the reply's stop after it as the one the wire wrote, taken back", () => {
+    const r = readTagged(
+      DISPLAY_ENDS,
+      '每个部分形式化为：<x id="1"/>。<x id="3"/>下一个字段是一组效果，形式化为一个元组：<x id="2"/>其中种类是它的种类。',
+    )
+    expect(r?.content).toEqual([
+      { t: 'text', s: '每个部分形式化为：' },
+      { t: 'el', id: 'd1' },
+      { t: 'text', s: '下一个字段是一组效果，形式化为一个元组：' },
+      { t: 'el', id: 'd2' },
+      { t: 'text', s: '其中种类是它的种类。' },
+    ])
+  })
+})
+
+// (a character TeX writes escaped, `\&`, `\textless`, `\textgreater`, is a character of the text since the source reader sends
+// it as one: on the tags wire it travels as an entity, a bare one fusing with the tags around it (text.ts), and is read back as
+// the character, beside a tag on either side)
+describe('google: a character TeX writes escaped, sent as text', () => {
+  const g = google({ fetch: scriptedFetch(googleEcho).fetch })
+  it('"&", "<" and ">" travel as entities and come back as the characters, beside a tag on either side', () => {
+    const u = unit('u', [t('R&D <'), el('1'), t('> 5% of A&B'), el('2'), t('&.')])
+    const wire = g.write(u, 'zh-Hans')
+    expect(wire).toBe('R&amp;D &lt;<b translate=no>x1</b>&gt; 5% of A&amp;B<b translate=no>x2</b>&amp;.')
+    expect(readTagged(u, wire)?.content).toEqual([
+      { t: 'text', s: 'R&D <' },
+      { t: 'el', id: '1' },
+      { t: 'text', s: '> 5% of A&B' },
+      { t: 'el', id: '2' },
+      { t: 'text', s: '&.' },
+    ])
+  })
+})
+
+describe('google: a 400 to every request through the chain (#636)', () => {
+  it('100 units are one request, handed on whole to the next translator (199 requests when every 400 was halved)', async () => {
+    const f = scriptedFetch(() => ({ status: 400, body: 'API key not valid. Please pass a valid API key.' }))
+    const units = Array.from({ length: 100 }, (_, i) => unit(`u${i}`, [t(`Word ${i}.`)]))
+    const rs: Result[] = []
+    for await (const r of chainOf({ clock: fakeClock() }).translate(units, 'zh-Hans', {
+      translators: [google({ fetch: f.fetch }), echo('fallback:0')],
+    }))
+      rs.push(r)
+    expect(f.requests.length).toBe(1)
+    expect(rs.every((r) => r.ok && r.by === 'fallback:0')).toBe(true)
+  })
+})

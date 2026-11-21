@@ -1,0 +1,101 @@
+// A document made by hand for the back half's tests: each page a list of lines, each line its text set left to right from
+// x 72 at 6 pt a glyph, 12 pt apart from the top, one font unless a glyph says otherwise; boxes placed between glyphs.
+// A space is a glyph of the font's space, whose outline is empty: no extent across or up from its origin (ink.mjs's reading).
+import type { Doc, DocGlyph, DocPage } from '../../src/doc.ts'
+import { PageGlyph } from '../../src/glyph.ts'
+
+/** a page's glyphs as readPdf makes them (read.ts docPageOf), from plain glyphs: their coordinates in one array of the page's */
+export function pageGlyphsOf(list: readonly DocGlyph[]): PageGlyph[] {
+  const c = new Float64Array(8 * list.length)
+  return list.map((g, j) => {
+    const o = 8 * j
+    c[o] = g.x0
+    c[o + 1] = g.x1
+    c[o + 2] = g.y
+    c[o + 3] = g.top
+    c[o + 4] = g.bottom
+    c[o + 5] = g.size
+    c[o + 6] = g.ix0
+    c[o + 7] = g.ix1
+    return new PageGlyph(c, o, g)
+  })
+}
+
+export interface LineSpec {
+  text: string
+  /** the font's name (default CMR10) and the code offset of its glyphs (another font program's codes) */
+  font?: string
+  codeShift?: number
+  x?: number
+  y?: number
+  size?: number
+  /** its glyphs are shown inside a form XObject (an included figure's) */
+  form?: boolean
+  /** the advance of its spaces (a justified line's, stretched to its measure); its glyphs' by default */
+  space?: number
+}
+export interface PageSpec {
+  lines: (string | LineSpec)[]
+  /** boxes: [after glyph index (the boxes before glyph `at`), kind, x0, y0, x1, y1] */
+  boxes?: [at: number, kind: number, x0: number, y0: number, x1: number, y1: number][]
+  points?: [name: string, glyph: number][]
+  view?: [number, number, number, number]
+}
+
+export function docOf(pages: PageSpec[]): Doc {
+  return {
+    pages: pages.map((p): DocPage => {
+      const glyphs: DocGlyph[] = []
+      p.lines.forEach((l0, li) => {
+        const l = typeof l0 === 'string' ? { text: l0 } : l0
+        const size = l.size ?? 10
+        const y = l.y ?? 700 - 12 * li
+        let x = l.x ?? 72
+        for (const ch of l.text) {
+          const font = l.font ?? 'ABCDEF+CMR10'
+          const space = ch === ' '
+          const advance = space && l.space !== undefined ? l.space : 0.6 * size
+          glyphs.push({
+            u: ch,
+            code: (ch.codePointAt(0) as number) + (l.codeShift ?? 0),
+            font,
+            base: font.replace(/^[A-Z]{6}\+/, ''),
+            x0: x,
+            x1: x + advance,
+            y,
+            top: space ? y : y + 0.7 * size,
+            bottom: space ? y : y - 0.2 * size,
+            size,
+            ix0: x,
+            ix1: space ? x : x + 0.6 * size,
+            n: li,
+            k: glyphs.length,
+            form: !!l.form,
+            blank: !/\S/.test(ch),
+            fill: 0,
+          })
+          x += advance
+        }
+      })
+      const boxes: number[] = []
+      const kinds: number[] = []
+      const boxAt = new Array(glyphs.length).fill(0)
+      const sorted = [...(p.boxes ?? [])].sort((a, b) => a[0] - b[0])
+      for (const [at, kind, x0, y0, x1, y1] of sorted) {
+        boxes.push(x0, y0, x1, y1)
+        kinds.push(kind)
+        for (let q = at; q < glyphs.length; q++) boxAt[q]++
+      }
+      return {
+        glyphs,
+        boxes,
+        kinds,
+        boxAt,
+        points: (p.points ?? []).map(([name, glyph]) => ({ name, glyph, box: boxAt[glyph] ?? kinds.length })),
+        view: p.view ?? [0, 0, 612, 792],
+        rotate: 0,
+        unread: null,
+      }
+    }),
+  }
+}

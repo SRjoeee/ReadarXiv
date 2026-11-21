@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
 import { openProto } from '@/pdf-reader/engine/layer-proto/run.mjs'
-import { BUILTIN_RULES, type RuleSet, resolveRules, TARGETS } from '@/pdf-reader/engine/rules/layout.mjs'
+import { BUILTIN_RULES, RULES_SCHEMA, type RuleSet, resolveRules, TARGETS } from '@/pdf-reader/engine/rules/layout.mjs'
+import { fileOfGeometry, unitsOfGeometry } from './helpers/file-of-geometry'
+import { withGroups } from './helpers/groups'
 
-// v0's open reads every choice made for its target from the layout rule set it is given (layer-proto/run.mjs `rules`,
+// The layer's open reads every choice made for its target from the layout rule set it is given (layer-proto/run.mjs `rules`,
 // rules/layout.mjs): none from the target's name. These are the wiring tests: a set passed changes the drawing, no set is
 // the built-in one, the faces, the patterns and the float names are the set's. The set's own contract is
 // rules-layout.test.ts's; the rows are the layer gate's
@@ -46,10 +48,12 @@ function paper(lines: [string, number, number, number?][] = [['Alpha beta gamma'
   const items = lines.map(([str, x, width], i) => ({ str, transform: [10, 0, 0, 10, x, 200 - 12 * rowOf(i)], width, height: 10, fontName: 'f1', dir: 'ltr', hasEOL: false }))
   const page = { view: [0, 0, 300, H], getViewport: ({ scale }: { scale: number }) => viewportOf(scale), getTextContent: async () => ({ items, styles: { f1: { fontFamily: 'serif', ascent: 0.7, descent: -0.2 } } }), render: () => ({ promise: Promise.resolve() }), cleanup() {}, commonObjs: { get: () => ({ name: 'NimbusRomNo9L-Regu' }) } }
   const rects = [...new Set(lines.map((_, i) => rowOf(i)))].map(r => [1, 20, 197.85 - 12 * r, 220, 206.83 - 12 * r])
+  const geometry = { schema: 1, kinds: ['para'], left: { pages: [[0, 0, 300, 300]], units: [[0, 0, rects]] } }
   return {
-    doc: { numPages: 1, getPage: async () => page },
-    geometry: { schema: 1, kinds: ['para'], left: { pages: [[0, 0, 300, 300]], units: [[0, 0, rects]] } },
+    doc: withGroups({ numPages: 1, getPage: async () => page }),
+    geometry,
     units: [{ kind: 'para', src, state: 'whole', pieces: [{ t: 'text', tr: true, s: tr }] }],
+    tex: fileOfGeometry(unitsOfGeometry(geometry)),
   }
 }
 const open = (o: object = {}, p = paper()) => openProto({ ...p, target: 'zh', pages: 1, scale: 1, dpr: 1, copy: false, ...o } as never)
@@ -96,10 +100,10 @@ describe("v0's open takes every choice for its target from the rule set it is gi
 
   it('reports the set it was opened with: its schema and version', async () => {
     const run = await open()
-    expect(run.rules).toEqual({ schema: 4, version: BUILTIN_RULES.version })
+    expect(run.rules).toEqual({ schema: RULES_SCHEMA, version: BUILTIN_RULES.version })
     const set = editable()
     set.version = 4
-    expect((await open({ rules: set })).rules).toEqual({ schema: 4, version: 4 })
+    expect((await open({ rules: set })).rules).toEqual({ schema: RULES_SCHEMA, version: 4 })
   })
 
   it('takes no params option: a host sets a field in the rule set, not on the open (a type test)', () => {
@@ -108,14 +112,12 @@ describe("v0's open takes every choice for its target from the rule set it is gi
     expectTypeOf<Options>().toHaveProperty('rules')
   })
 
-  it("runs on the set's leading rule and fill: leadRel true and no adaptive fill (B) are the set's, not the run's defaults", async () => {
+  it("runs on the set's fill: no adaptive fill (B) is the set's, not the run's default", async () => {
     const set = editable()
-    set.languages.zh = { ...set.languages.zh!, leadRel: true, adaptiveFill: null }
+    set.languages.zh = { ...set.languages.zh!, adaptiveFill: null }
     const run = await open({ rules: set })
-    expect(run.P.leadRel).toBe(true)
     expect(run.P.adaptiveFill).toBeNull()
     const built = await open()
-    expect(built.P.leadRel).toBe(false)
     expect(built.P.adaptiveFill).toEqual({ band: 0.05, track: 0.05, size: 1.1 })
   })
 
@@ -125,16 +127,16 @@ describe("v0's open takes every choice for its target from the rule set it is gi
     const run1 = await import('@/pdf-reader/engine/layer-proto/run.mjs')
     const fonts = await import('@/pdf-reader/engine/layer-proto/fonts.mjs')
     const set = editable()
-    set.languages.zh = { ...set.languages.zh!, latinPatterns: 'de', cjkFaces: { group: 'shs-tc', kai: null, light: ['times', 'cm', 'garamond'] } }
+    set.languages.zh = { ...set.languages.zh!, latinPatterns: 'de', cjkFaces: { group: 'shs-tc' } }
     const run = await run1.openProto({ ...paper(), target: 'zh', pages: 1, scale: 1, dpr: 1, copy: false, rules: set } as never)
-    // (the open's faces: Traditional Chinese's, light beside Times, as the set says; the paper's family read from its first
-    // page keeps the set's family)
-    expect(fonts.bodyFaceId()).toBe('shs-tc-light')
+    // (the open's faces: Traditional Chinese's, as the set says, at Regular; the paper's family read from its first page keeps
+    // the set's family and its weights, Regular and Bold beside every family)
+    expect(fonts.bodyFaceId()).toBe('shs-tc-regular')
     await run.until(1)
-    expect(fonts.roleFaces()?.cjk?.body).toBe('shs-tc-light')
+    expect(fonts.roleFaces()?.cjk).toEqual({ body: 'shs-tc-regular', bold: 'shs-tc-bold' })
     expect(asked.filter(u => u.startsWith('/hyph/')).sort()).toEqual(['/hyph/de.json', '/hyph/en.json'])
     // and the built-in set's patterns, for each target: English's for every target, the language's own, Russian's by rules
-    for (const [t, want] of [['zh', ['en']], ['de', ['de', 'en']], ['fr', ['en']], ['ru', ['en']]] as const) {
+    for (const [t, want] of [['zh', ['en']], ['de', ['de', 'en']], ['fr', ['en', 'fr']], ['es', ['en', 'es']], ['pt', ['en', 'pt']], ['ru', ['en']]] as const) {
       vi.resetModules()
       asked.length = 0
       const again = await import('@/pdf-reader/engine/layer-proto/run.mjs')
@@ -163,17 +165,19 @@ describe("v0's open takes every choice for its target from the rule set it is gi
 })
 
 /** a column of units on a 300 x 300 page, each { kind, rows (its lines, 12 pt apart from y 200), tr }: every line 200 pt
- *  wide in words of Times at 10 pt, the unit's source their text (the leftover switch's page, below) */
+ *  wide in words of Times at 10 pt, the unit's source their text (the page below, drawn as before the leftover switch) */
 function column(units: { kind: string; rows: number[]; tr: string }[]) {
   const H = 300
   const viewportOf = (scale: number) => ({ width: 300 * scale, height: H * scale, scale, transform: [scale, 0, 0, -scale, 0, H * scale], convertToViewportPoint: (x: number, y: number) => [x * scale, (H - y) * scale], convertToPdfPoint: (x: number, y: number) => [x / scale, H - y / scale] })
   const words = (u: number, r: number) => `unit${u} line${r} alpha beta gamma delta`
   const items = units.flatMap((u, ui) => u.rows.map(r => ({ str: words(ui, r), transform: [10, 0, 0, 10, 20, 200 - 12 * r], width: 200, height: 10, fontName: 'f1', dir: 'ltr', hasEOL: false })))
   const page = { view: [0, 0, 300, H], getViewport: ({ scale }: { scale: number }) => viewportOf(scale), getTextContent: async () => ({ items, styles: { f1: { fontFamily: 'serif', ascent: 0.7, descent: -0.2 } } }), render: () => ({ promise: Promise.resolve() }), cleanup() {}, commonObjs: { get: () => ({ name: 'NimbusRomNo9L-Regu' }) } }
+  const geometry = { schema: 1, kinds: units.map(u => u.kind), left: { pages: [[0, 0, 300, 300]], units: units.map((u, i) => [i, i, u.rows.map(r => [1, 20, 197.85 - 12 * r, 220, 206.83 - 12 * r])]) } }
   return {
-    doc: { numPages: 1, getPage: async () => page },
-    geometry: { schema: 1, kinds: units.map(u => u.kind), left: { pages: [[0, 0, 300, 300]], units: units.map((u, i) => [i, i, u.rows.map(r => [1, 20, 197.85 - 12 * r, 220, 206.83 - 12 * r])]) } },
+    doc: withGroups({ numPages: 1, getPage: async () => page }),
+    geometry,
     units: units.map((u, ui) => ({ kind: u.kind, src: u.rows.map(r => words(ui, r)).join(' '), state: 'whole', pieces: [{ t: 'text', tr: true, s: u.tr }] })),
+    tex: fileOfGeometry(unitsOfGeometry(geometry)),
   }
 }
 // A, six lines, translated in two (thirty characters, twenty a line): filled to 2 em of 10 pt over a pitch of 12, 1.667,
@@ -201,47 +205,22 @@ const drawingOf = async (run: Awaited<ReturnType<typeof open>>) => {
 }
 /** SWITCH_PAGE's drawing by the engine before the leftover switch (0be9390d, D6's F6b, built in a scratch directory from
  *  `git archive 0be9390d src`), opened with its built-in set but Chinese's fill top at 2 em as the set is now: what 'foot'
- *  must still draw */
-const BEFORE_THE_SWITCH = '8bbac5fa00176badb835aa6e10bb614e4d00860ad954641f8ae0cec5d8d7a4b6'
+ *  must still draw. Recorded again on 2026-10-23, when a unit's operations became its groups hidden in place of the paper's
+ *  fills (docs/route/ocg-erasure.md §4.2): the same open, 'foot' and the built-in set still drawing one and the same */
+const BEFORE_THE_SWITCH = '633ea126e64f205a311b0cbbdd301c4e3682f60b08ac81912bfd9af1f86c83de'
 
-describe("the leftover switch over a whole run (openProto, D6's F6c): 'pack' moves the paragraphs up under a short one and paints them last, from the top; 'foot' draws as before the switch", () => {
-  const packed = () => { const set = editable(); set.scripts.Hans!.leftover = 'pack'; return set }
+describe("a column of paragraphs over a whole run (openProto): what the page fill leaves stays at each paragraph's foot", () => {
   type Laid = { id: number; layout: { lines: { baseline: number }[] } }
   const linesOf = (run: Awaited<ReturnType<typeof open>>, id: number) => (run.placed.find((p: { id: number }) => p.id === id) as unknown as Laid).layout.lines.map(l => l.baseline)
   /** the units in the order their drawing was made on the page (the audit's first entry of each) */
   const painted = (run: Awaited<ReturnType<typeof open>>) => [...new Set(run.audit.map((a: { unit: number }) => a.unit))]
-  const packOf = (run: Awaited<ReturnType<typeof open>>, id: number) => (run.stats.find(r => r.id === id) as unknown as { pack?: number }).pack
 
-  it("with 'pack', B rises what A leaves and C what B then leaves, each recorded, painted after the others, top first", async () => {
-    const run = await open({ rules: packed() }, SWITCH_PAGE())
-    await run.until(1)
-    const [a0, a1] = linesOf(run, 0)
-    expect([a0, a1!]).toEqual([200, expect.closeTo(180, 2)])
-    // (B keeps the original's distance under A's last drawn line: it rises what A's last line stands over A's original last)
-    const [b0] = linesOf(run, 1), [c0] = linesOf(run, 2)
-    expect(b0! - 128).toBeCloseTo(a1! - 140, 6)
-    // (and C, under B's one line, what B's line then stands over B's original last, 116)
-    expect(c0! - 104).toBeCloseTo(b0! - 116, 6)
-    expect(packOf(run, 1)).toBeCloseTo(40, 1)
-    expect(packOf(run, 2)).toBeCloseTo(52, 1)
-    expect(packOf(run, 0)).toBeUndefined()
-    // (the caption is no paragraph: it stays; the two that moved are painted last, the upper first)
-    expect(linesOf(run, 3)).toEqual([68])
-    expect(painted(run)).toEqual([0, 3, 1, 2])
-    run.dispose()
-  })
-
-  it("with 'foot', nothing moves, the units are painted in their laying order, and the drawing is the one before the switch", async () => {
-    const set = editable()
-    expect(set.scripts.Hans!.leftover).toBe('foot')
-    const foot = await open({ rules: set }, SWITCH_PAGE()), built = await open({}, SWITCH_PAGE()), pack = await open({ rules: packed() }, SWITCH_PAGE())
-    await Promise.all([foot.until(1), built.until(1), pack.until(1)])
-    expect([linesOf(foot, 1), linesOf(foot, 2)]).toEqual([[128], [104]])
-    expect(foot.stats.some(r => 'pack' in r)).toBe(false)
-    expect(painted(foot)).toEqual([0, 1, 2, 3])
-    expect(await drawingOf(foot)).toBe(BEFORE_THE_SWITCH)
+  it('moves nothing, paints the units in their laying order, and draws the page as before the leftover switch', async () => {
+    const built = await open({}, SWITCH_PAGE())
+    await built.until(1)
+    expect([linesOf(built, 1), linesOf(built, 2)]).toEqual([[128], [104]])
+    expect(painted(built)).toEqual([0, 1, 2, 3])
     expect(await drawingOf(built)).toBe(BEFORE_THE_SWITCH)
-    expect(await drawingOf(pack)).not.toBe(BEFORE_THE_SWITCH)
-    for (const r of [foot, built, pack]) r.dispose()
+    built.dispose()
   })
 })

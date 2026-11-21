@@ -1,0 +1,1650 @@
+// lab/release-check/census-lib.mjs: the complexity and debt census's counters (census.mjs runs them on the trees). Generic:
+// a repository is described by a profile (its areas, its aliases, its builds' entry points and what its cut-over cuts:
+// census-profile.mjs for this repository; the private repository's own profile lives with its tree, never here), and
+// every number is defined in one sentence in census.mjs's DEFINITIONS, checkable by hand on a small tree
+// (tests/scripts/census.test.ts holds each on a tree of its own). Reads files only: no process but `git ls-files`, no
+// network. Not shipped.
+import { execFileSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { join, posix } from 'node:path'
+import { parse } from '@babel/parser'
+
+// ---------------------------------------------------------------- files
+
+const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'out', '.output', '.wxt', 'coverage'])
+
+/** a tree's files, repository-relative: what git tracks where the tree is a checkout, else every file under it but
+ *  SKIP_DIRS'; a profile's `exclude` prefixes left out */
+export function listFiles(root, exclude = []) {
+  let files
+  try {
+    const top = execFileSync('git', ['-C', root, 'rev-parse', '--show-toplevel'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
+    if (top !== root.replace(/\/+$/, '')) throw new Error('not the checkout root')
+    files = execFileSync('git', ['-C', root, 'ls-files', '-z'], { encoding: 'utf8', maxBuffer: 1 << 28 }).split('\0').filter(Boolean)
+    files = files.filter(f => {
+      try {
+        return statSync(join(root, f)).isFile()
+      } catch {
+        return false
+      }
+    })
+  } catch {
+    files = []
+    const walk = dir => {
+      for (const n of readdirSync(join(root, dir)).sort()) {
+        if (SKIP_DIRS.has(n)) continue
+        const p = dir ? `${dir}/${n}` : n
+        if (statSync(join(root, p)).isDirectory()) walk(p)
+        else files.push(p)
+      }
+    }
+    walk('')
+  }
+  return files.filter(f => !exclude.some(x => f.startsWith(x))).sort()
+}
+
+const CODE = /\.(?:m|c)?[jt]sx?$/
+const DECL = /\.d\.(?:m|c)?ts$/
+/** a file's kind: `code` (JavaScript or TypeScript), `decl` (a declaration file), `style`, `data`, `html`, `other` */
+export function kindOf(path) {
+  if (DECL.test(path)) return 'decl'
+  if (CODE.test(path)) return 'code'
+  if (path.endsWith('.css')) return 'style'
+  if (path.endsWith('.json')) return 'data'
+  if (path.endsWith('.html')) return 'html'
+  return 'other'
+}
+
+const TEST = /(?:^|\/)(?:tests?|e2e|__tests__|fixtures)\/|\.(?:test|spec)\.(?:m|c)?[jt]sx?$/
+/** a file's area and role by the profile's areas (the first prefix that matches), a test by its path whatever its area */
+export function placeOf(path, profile) {
+  const a = profile.areas.find(x => path.startsWith(x.prefix)) ?? { area: 'other', role: 'other' }
+  const role = TEST.test(path) ? 'test' : a.role
+  return { area: a.area, role }
+}
+
+// ---------------------------------------------------------------- lines
+
+/** each line of `text` as `blank`, `comment` (every character that is not white space is inside a comment) or `code`,
+ *  given the comments' [start, end) offsets */
+export function lineKinds(text, comments) {
+  const masked = text.split('')
+  for (const [s, e] of comments) for (let i = s; i < e; i++) if (masked[i] !== '\n') masked[i] = ' '
+  const original = text.split('\n')
+  const without = masked.join('').split('\n')
+  // (a file's last newline ends its last line: no line after it)
+  if (original.length > 1 && original.at(-1) === '') {
+    original.pop()
+    without.pop()
+  }
+  return original.map((l, i) => (l.trim() === '' ? 'blank' : without[i].trim() === '' ? 'comment' : 'code'))
+}
+
+/** comments of a source the parser could not read, or of a style sheet: `//` (not in a style sheet) and block comments,
+ *  outside quoted strings and template literals (a regular expression literal is not told apart: a fallback) */
+export function commentsByScan(text, css = false) {
+  const out = []
+  let i = 0
+  while (i < text.length) {
+    const c = text[i]
+    const d = text[i + 1]
+    if (c === '/' && d === '*') {
+      const e = text.indexOf('*/', i + 2)
+      const end = e < 0 ? text.length : e + 2
+      out.push([i, end])
+      i = end
+    } else if (!css && c === '/' && d === '/') {
+      const e = text.indexOf('\n', i)
+      const end = e < 0 ? text.length : e
+      out.push([i, end])
+      i = end
+    } else if (c === '"' || c === "'" || c === '`') {
+      let j = i + 1
+      while (j < text.length && text[j] !== c) {
+        if (text[j] === '\\') j++
+        else if (c !== '`' && text[j] === '\n') break
+        j++
+      }
+      i = j + 1
+    } else i++
+  }
+  return out
+}
+
+// ---------------------------------------------------------------- one file's facts
+
+const SKIP_KEYS = new Set(['loc', 'start', 'end', 'leadingComments', 'trailingComments', 'innerComments', 'extra', 'range', 'type', 'tokens', 'comments', 'errors'])
+const FUNCTION = new Set(['FunctionDeclaration', 'FunctionExpression', 'ArrowFunctionExpression', 'ClassMethod', 'ClassPrivateMethod', 'ObjectMethod'])
+const RELATIONAL = new Set(['<', '<=', '>', '>='])
+/** the calls that match a value against a literal */
+const MATCHERS = new Set(['includes', 'has', 'startsWith', 'endsWith', 'test', 'match', 'indexOf', 'get', 'exec', 'search'])
+/** the translators' addresses: a literal that holds one is a request to that translator */
+export const ENDPOINTS = [
+  { kind: 'microsoft', re: /edge\.microsoft\.com\/translate|microsofttranslator\.com/ },
+  { kind: 'google', re: /translate-pa\.googleapis\.com|translate\.googleapis\.com/ },
+  { kind: 'deepl', re: /api(?:-free)?\.deepl\.com/ },
+]
+/** a citation of a definition, in a declaration's comment: TeX's, LaTeX's, a file of a TeX distribution named by its
+ *  extension (cite.sty, article.cls, latex.ltx: a package's name alone is no citation), the PDF's, Unicode's, a font's, a
+ *  standard's; plain.tex by name (`.tex` is every paper's extension) */
+export const CITES_DEFINITION = /\b(?:TeX(?:book)?|LaTeX|[\w@-]+\.(?:sty|cls|clo|def|ltx|bst|bbx|cbx|lbx|fd|cfg|dtx)|plain\.tex|PDF(?:'s| spec| reference)|ISO[ -]32000|Unicode|UAX ?#?\d+|UTS ?#?\d+|CLDR|OpenType|TrueType|PostScript|Type ?1|the font's|font's own|JIS ?X ?4051|W3C|clreq|jlreq|klreq|CSS'?s?|ECMA|RFC ?\d+|IEEE ?754|PDF\.js's|Chromium's)\b/
+/** a citation of evidence: a paper, the corpus, a measurement */
+export const CITES_EVIDENCE = /\b\d{4}\.\d{4,5}(?:v\d+)?\b|\bcorpus\b|\bmeasured\b|\btuned\b|\bempiric|\bon the \d+ papers\b|\bseen on\b/i
+/** the exact factors between units and the bounds of a representation: a literal of one of these values whose name or comment
+ *  names a unit is a conversion, not a rule */
+export const UNIT_FACTORS = new Set([72, 72.27, 65536, 25.4, 2.54, 1000, 1024, 100, 60, 3600, 360, 180, 255, 256, 0.001, 1e6, 1048576, 65535, 65536])
+const UNIT_WORDS = /\b(?:pt|bp|sp|in(?:ch(?:es)?)?|mm|cm|em|ems|px|ms|millisecond|second|seconds|minute|hour|degrees?|KiB|MiB|bytes?|per ?cent|percent|%|units? per em|unitsPerEm)\b|%/i
+const ARXIV_ID = /\b\d{4}\.\d{4,5}(?:v\d+)?\b/
+const TEX_FILE = /^[\w@.-]+\.(?:sty|cls)$/
+const PORTED = /\bported\s+from\s+(?:reference\/|@[a-z0-9][\w.-]*\/)/i
+const COPIED = /\bCOPIED\b|\bcopied (?:as it is )?from\b/
+const GENERATED = /\b(?:Generated by|generated by|@generated|Do not edit|DO NOT EDIT|do not edit by hand)\b/
+const VERSION_NAME = /(?:^|_)(?:VERSION|SCHEMA|FORMAT)$/
+const NOT_VERSION = /^(?:MAX|MIN)_/
+const VERSION_FILE = /(?:^|\/)versions?\.(?:m|c)?[jt]s$/
+/** a comment that says its constant is raised by hand: "raised with every change", "rises only if", "bump it when" */
+const RAISED = /\b(?:raised|rises|bumped|raise it|bump it)\b(?:\s+\w+){0,2}\s+(?:with|when|whenever|if|only|on|for|every)\b|\ba change to (?:it|them|this) is a change of\b/i
+/** a store's schema number (census.mjs DEFINITIONS `versions`): its name says so, or a comment that is its own or names it
+ *  says it numbers the form of what is stored */
+const SCHEMA_NAME = /(?:^|_)(?:SCHEMA|FORMAT)$/
+const STORED_FORM = /\b(?:schema|shape|grammar)\b/i
+/** a comment that says what is computed changed: "raised with any change to what the maker writes", "changes what" */
+const COMPUTED_CHANGED = /\bchanges? (?:to|of|in) what\b|\bchanges what\b/i
+/** a budget's name (census.mjs DEFINITIONS `budgets`): a time, a size or a count the code may spend or hold, by the
+ *  name's last or first word (an UPPER_CASE constant's, or a camelCase property's of a table) */
+const BUDGET_UPPER = /(?:^|_)(?:MS|SECONDS|TIMEOUT|BYTES|KIB|MIB|PX|PIXELS|MAX|CAP|LIMIT|BUDGET)$|^(?:KEEP|MAX)_/
+const BUDGET_CAMEL = /[a-z0-9](?:Ms|Seconds|Timeout|Bytes|KiB|MiB|Px|Pixels|Max|Cap|Limit|Budget)$|^(?:keep|max)[A-Z]/
+/** a document's own measures: a bound in one of these is a reading's rule, not a budget */
+const TYPE_UNITS = /\b(?:em|ems|pt|bp|sp)\b/
+/** a budget's measurement on record: a paper, the corpus, a measurement */
+const BUDGET_MEASURED = /\b\d{4}\.\d{4,5}(?:v\d+)?\b|\bcorpus\b|\bmeasured\b|\bmeasurements?\b|\bon the \d+ papers\b|\bseen on\b/i
+const BUDGET_UNITS = [
+  { unit: 'time', name: /(?:MS|SECONDS|TIMEOUT|Ms|Seconds|Timeout)$/, words: /\b(?:ms|milliseconds?|seconds?|minutes?)\b/i },
+  { unit: 'bytes', name: /(?:BYTES|KIB|MIB|Bytes|KiB|MiB)$/, words: /\b(?:bytes?|KiB|MiB|GiB|KB|MB)\b/ },
+  { unit: 'pixels', name: /(?:PX|PIXELS|Px|Pixels)$/, words: /\b(?:px|pixels?)\b/i },
+]
+/** a platform's limit on record: a definition the census already reads (CITES_DEFINITION), or a platform's limit named */
+const PLATFORM_LIMIT = /\b(?:Chrome|Chromium|V8|Cloudflare|Workers?|Durable Objects?|R2|D1|KV|Node(?:\.js)?|IndexedDB|PDF\.js|WebGL|the browser|the platform)(?:'s)?\b[^.;]{0,60}\b(?:limits?|caps?|maximum|ceiling|quota|allows?)\b/i
+/** a comment line that tells history (census.mjs DEFINITIONS `history`): it says today's, holds a date, names a reviewer, a
+ *  round or a plan (`named`), or holds one of the `forms`, each a kind of history a comment of the packages tells */
+export const HISTORY = {
+  todays: /\btoday['’]s\b/i,
+  dated: /\b20\d\d-\d\d-\d\d\b/,
+  named: /\b(?:Codex|Devin|Copilot|CodeRabbit)\b|\bround (?:[A-Z]{1,2})?\d+\b|\b(?:Plan|Task) \d+[a-z]?\b/,
+  forms: {
+    /** a map to the engine the packages replace: a line map (`L2:3283`, `RUN:2022`, `TEX:120`, `MAKE:382`), a file of it and
+     *  its line (`tex.mjs:269`; never a file a dependency of this repository distributes and none of its own files is named,
+     *  PDF.js's `pdf.worker.mjs:41738`: the library's, cited as the contract the code is written to, DISTRIBUTED), its paths
+     *  (`src/pdf-reader/engine/…`, `today/….mjs`), its commits (`engine 065c1d973`, `at baf2083e0`, `(abe884b5e)`), and a port
+     *  statement: ported, carried, copied or moved from it, the website, the server, a path or a file (never a move the code
+     *  makes: carried from page to page, moved from after it) */
+    ported:
+      /\b(?:RUN|L1|L2|TEX|MAKE)\s?:\s?\d|[\w.-]*\.mjs:\d|\bsrc\/pdf-reader\/engine\b|(?<![\w/.-])today\/[\w./-]+\.mjs\b|\b(?:engine|at) (?=[0-9a-f]*[a-f])(?=[0-9a-f]*\d)[0-9a-f]{7,12}\b|\((?=[0-9a-f]*[a-f])(?=[0-9a-f]*\d)[0-9a-f]{9}\)|\b(?:[Pp]orted|[Cc]arried|COPIED|[Mm]oved)(?: whole| into the engine package)?(?: as it is)? from(?:\s*$| (?:today['’]s\b|the (?:engine|website|server|reader|extension|old)\b|engine\b|src\/|[\w./-]+\.(?:mjs|css|tsx?|js)\b))/,
+    /** "today" without the 's where it names that engine: its path (`today/…`), "as today", "where today decides", "(today",
+     *  "the extension's today session", today doing what the engine did; never the word's own use (TeX's \today, a name in
+     *  code, a file's name, what exists today, a third party's behaviour today, "Today, measured …") */
+    today:
+      /(?<![\w/.-])today\/|\b(?:as|where|what|that|which|so) today\b(?!['’]s)|\(today\b(?!['’]s)|\btoday (?:session|engine|reader|wire|code|then|any)\b|\btoday (?:does|did|decides|reads|keys|makes|made|leaves|pairs|draws|sets|holds|takes|translated|crowded|refuses|writes|puts|sends|asks)\b|\bToday (?:that|both|the)\b|\b(?:file['’]s|segments) today\b(?!['’]s)/,
+    /** a document, a note or a piece of work that is not in this repository: the lab's designs (design-a, design-b,
+     *  design-performance…, the page and host designs A and B, `design §`, the redesign's), its specs, notes, briefs,
+     *  checkpoints, spikes, decisions and moves; never this repository's documents (DESIGN §, docs/…, the reader's design §) */
+    private:
+      /(?<![\w-])design-[a-z]+\b|\b(?:page |host )?design [AB]\b|\bengine-view-host\b|(?<!reader['’]s )\bdesign §|\b(?:dump|tap['’]s) spec\b|(?<![\w-])spec §|\bthe redesign['’]s\b|\bthe checkpoint['’]s\b|\bspike S\d+\b|\bthe brief['’]s\b|\b(?:reduction|performance) design\b|\bthe note['’]s §|\bthe (?:page|host) decision\b|\bDECISION\b|\bthe compile move['’]s\b/,
+    /** a pull request's review: its number's review, a review of it or of a date, a review by its name (the interface,
+     *  the final, the branch review, a wave's), a reviewer on it; never the product's `review` or an issue of the tracker */
+    review:
+      /#\d+(?:['’]s)? (?:re-)?reviews?\b|\breviews? of (?:#\d|20\d\d|round)|\b(?:PR|pull request) #\d+|\bre-review\b|\b(?:interface|final|branch) review\b|\bwave-\d review\b|\b(?:Codex|Devin|Copilot|CodeRabbit) on #\d+/,
+    /** a piece of work by its name: a lane (L7, style-wire, one with its record or its date), a triage, a numbered round,
+     *  a part, a wave, a stage, a design's item (Q7, D6's), a lab option; never a word of the code (its lane, a pass's
+     *  first round), nor a name a document of this repository defines where the file cites that document (DEFINED: DESIGN
+     *  §16's Q1 and Q2, docs/route/orphan-text.md §7's stages) */
+    work: /\blanes? (?:[A-Z]\d*\b|[a-z0-9]+(?:-[a-z0-9]+)+\b)|\blane [a-z0-9-]+(?=['’]s (?:record|probe|fill|spec)\b|, 20\d\d|\))|\btriage-\d|\b[A-Z]\d+ \w+ round\b|\bround-\d|\b(?:Part|wave) \d+\b|\bwave-\d\b|\bstage \d+[a-z]?(?:-\d+)?\b|\bQ\d+\b|\bD\d+['’]s\b|\b(?:lab )?option \((?:i{1,3}|iv|v)\)/,
+    /** a ruling or a decision by its number (ruling 5, decision 1, the coordinator's R7, R1 of a date); never an item of a
+     *  document's section (R1 of PDF-READER §18.72) */
+    ruling: /\b(?:ruling|decision)s? \d+\b|['’]s R\d+\b|\bR\d+(?:, R\d+)* of 20\d\d/,
+    /** who decided: the maintainer, the coordinator, the owner's ruling or word, the owner deciding, his answer; never an
+     *  owner that is a part of the code (told to the owner, a label's owner) */
+    person:
+      /\bthe (?:maintainer|coordinator)\b(?! of\b)|\bthe owner['’]s(?: own)? (?:ruling|rulings|rule|rules|decision|decisions|word|words|choice|answer|report|reports|question|guidance|exception|review|switch|reformulation|amendment|comment|order|code|design)\b|\bthe owner['’]s:|\bthe owner(?: on staging)?, 20\d\d|\bthe owner on staging\b|\bthe owner (?:decided|ruled|approved|chose|asked|has looked|looked|saw|kept|found|reported|plans)\b|\b(?:his|her) (?:answer|ruling|word|words|report|choice|question)\b|\bhe (?:ruled|chose|asked|saw|decided)\b/,
+  },
+}
+/** a date beside it that names a measurement: the one date a comment keeps */
+const MEASUREMENT = /\bmeasured\b|\bmeasurements?\b/i
+/** a date inside a git ref's name (`exp-freeze-2026-10-07:path`, what `git show <ref>:<path>` reads): the ref is a name */
+const REF_DATE = /\b[A-Za-z][\w.-]*-20\d\d-\d\d-\d\d(?=:[\w./-])/g
+/** a licence's statement of where third-party code came from (CLAUDE.md hard rule 6, docs/THIRD_PARTY.md): a sentence that
+ *  names a licence and says the code is ported, copied, adapted or derived from its upstream; counted apart, not as history */
+const LICENCE = /\b(?:A?GPL|LGPL)-\d(?:\.\d)?(?:-only|-or-later)?\b|\bApache-2\.0\b|\bMIT\b|\bBSD-[234]-Clause\b|\bMPL-2\.0\b|\bISC\b/
+const ORIGIN = /\b(?:ported|copied|adapted|derived|taken) from\b/i
+
+/** DEFINED: the names a document of this repository defines, in the shapes the `work` form reads: a design's item it gives
+ *  as the label of a bold statement of the rule it names (DESIGN §16: `**The marked compile is the pass loop** (Q1, …`), a
+ *  part of such a label it names (`Q1's option (i)`), and a stage, a part or a wave as a row of a table whose first column
+ *  names the kind (docs/route/orphan-text.md §7: `| Stage | … |`, `| 2 (built) | … |`: stage 2). A stage in parentheses after
+ *  a bold heading is no definition: PDF-READER writes `**Over the 88** (stage 1a, …)` to say where a measurement was made,
+ *  the lab's stage. Each name as the `work` match reads it */
+export function definedNamesOf(text) {
+  const out = new Set()
+  for (const m of text.matchAll(/\*\*[^*\n]+\*\*\s*\((Q\d+|D\d+)(?=[,;:)\s])/g)) out.add(m[1])
+  for (const m of text.matchAll(/\b(Q\d+)['’]s option \(([ivx]+)\)/g)) out.add(`${m[1]}'s option (${m[2]})`)
+  const lines = text.split('\n')
+  for (let i = 0; i + 1 < lines.length; i++) {
+    const head = /^\|\s*(Stage|Part|Wave)s?\s*\|/i.exec(lines[i])
+    if (!head || !/^\|\s*:?-{3,}/.test(lines[i + 1])) continue
+    for (let j = i + 2; j < lines.length && lines[j].startsWith('|'); j++) {
+      const row = /^\|\s*(\d+[a-z]?)\b/.exec(lines[j])
+      if (row) out.add(`${head[1].toLowerCase()} ${row[1]}`)
+    }
+  }
+  return out
+}
+/** how a file's comments cite a document of this repository: by its file name (`orphan-text.md`, `docs/DESIGN.md`), or an
+ *  upper-case name by itself before its section (`DESIGN §16`, `PDF-READER §18.11`) */
+const citationOf = path => {
+  const base = path.split('/').pop()
+  const stem = base.replace(/\.md$/, '')
+  const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const byStem = /[A-Z]/.test(stem) && stem === stem.toUpperCase() ? `|(?<![\\w.-])${esc(stem)} §` : ''
+  return new RegExp(`(?<![\\w.-])${esc(base)}(?![\\w-])${byStem}`)
+}
+/** DISTRIBUTED: the file names the dependencies of this repository distribute (each package.json's dependencies, their
+ *  files in node_modules four levels down, a package of their own aside) that no file of this repository bears: a third
+ *  party's file a comment cites by its line, the contract the code is written to, not the old engine's */
+export function distributedOf(root, paths) {
+  const own = new Set(paths.map(p => p.split('/').pop()))
+  const out = new Set()
+  const walk = (dir, depth) => {
+    let names = []
+    try {
+      names = readdirSync(dir, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const n of names) {
+      if (n.name === 'node_modules') continue
+      const p = join(dir, n.name)
+      let dirLike = n.isDirectory()
+      if (n.isSymbolicLink()) {
+        try {
+          dirLike = statSync(p).isDirectory()
+        } catch {
+          continue
+        }
+      }
+      if (dirLike) {
+        if (depth < 4) walk(p, depth + 1)
+      } else if (/\.(?:m|c)?js$/.test(n.name) && !own.has(n.name)) out.add(n.name)
+    }
+  }
+  for (const manifest of paths.filter(p => p === 'package.json' || /^packages\/[^/]+\/package\.json$/.test(p))) {
+    let pkg = null
+    try {
+      pkg = JSON.parse(readFileSync(join(root, manifest), 'utf8'))
+    } catch {
+      continue
+    }
+    const at = posix.dirname(manifest)
+    const deps = Object.keys({ ...pkg.dependencies, ...pkg.devDependencies, ...pkg.peerDependencies, ...pkg.optionalDependencies })
+    for (const d of deps) walk(join(root, at, 'node_modules', d), 0)
+  }
+  return out
+}
+/** what the history reading reads of the tree besides a file's own text: each document of this repository with the names it
+ *  defines and how a comment cites it (DEFINED), and the file names only a dependency distributes (DISTRIBUTED) */
+export function historyContextOf(docs, distributed) {
+  return { docs: docs.map(d => ({ path: d.path, names: definedNamesOf(d.text), cites: citationOf(d.path) })), distributed }
+}
+/** a `work` match's name as a document defines it (definedNamesOf's), or null: a design's item, a stage, a part or a wave by
+ *  its number, a label's option by the label it is of on the same line */
+const workKey = (s, line) => {
+  if (/^Q\d+$/.test(s)) return s
+  const d = /^D(\d+)['’]s$/.exec(s)
+  if (d) return `D${d[1]}`
+  const st = /^stage (\d+[a-z]?)/i.exec(s)
+  if (st) return `stage ${st[1]}`
+  const pw = /^(Part|wave) (\d+)$/i.exec(s)
+  if (pw) return `${pw[1].toLowerCase()} ${pw[2]}`
+  const o = /option \(([ivx]+)\)$/.exec(s)
+  if (o) {
+    const q = new RegExp(`(Q\\d+)['’]s option \\(${o[1]}\\)|option \\(${o[1]}\\) of (Q\\d+)`).exec(line)
+    return q ? `${q[1] ?? q[2]}'s option (${o[1]})` : null
+  }
+  return null
+}
+const globalOf = re => new RegExp(re.source, `${re.flags}g`)
+const FORMS_G = new Map()
+/** whether a form counts a line: one of its matches stands that no name of this repository's (DEFINED) and no file of a
+ *  third party's (DISTRIBUTED) answers for */
+function formCounts(k, re, line, defined, distributed) {
+  if (!re.test(line)) return false
+  if ((k !== 'work' || !defined.size) && (k !== 'ported' || !distributed?.size)) return true
+  if (!FORMS_G.has(k)) FORMS_G.set(k, globalOf(re))
+  for (const m of line.matchAll(FORMS_G.get(k))) {
+    if (k === 'work' && defined.has(workKey(m[0], line))) continue
+    if (k === 'ported' && /\.mjs:\d$/.test(m[0]) && distributed.has(m[0].replace(/:\d$/, ''))) continue
+    return true
+  }
+  return false
+}
+const UPPER = /^[A-Z][A-Z0-9_]*$/
+
+const pluginsOf = path => {
+  if (/\.tsx$/.test(path)) return ['typescript', 'jsx']
+  if (/\.(?:m|c)?ts$/.test(path)) return [['typescript', { dts: DECL.test(path) }]]
+  return ['jsx']
+}
+const parseOf = (path, text, tokens) => {
+  const base = { sourceType: 'module', errorRecovery: true, tokens, allowReturnOutsideFunction: true, allowImportExportEverywhere: true, allowAwaitOutsideFunction: true, createImportExpressions: false }
+  const plugins = [...pluginsOf(path), 'importAttributes', 'explicitResourceManagement', 'decorators-legacy']
+  try {
+    return parse(text, { ...base, plugins })
+  } catch (e) {
+    // (a `.js` file is read as JSX first; one whose `<` JSX misreads is read again without it)
+    if (plugins.includes('jsx') && !/\.(?:jsx|tsx)$/.test(path)) return parse(text, { ...base, plugins: plugins.filter(p => p !== 'jsx') })
+    throw e
+  }
+}
+
+const numberOf = n => {
+  if (!n) return null
+  if (n.type === 'NumericLiteral') return n.value
+  if (n.type === 'UnaryExpression' && n.operator === '-' && n.argument.type === 'NumericLiteral') return -n.argument.value
+  if (n.type === 'BinaryExpression' && ['*', '/', '+', '-', '**'].includes(n.operator)) {
+    const a = numberOf(n.left)
+    const b = numberOf(n.right)
+    if (a == null || b == null) return null
+    return n.operator === '*' ? a * b : n.operator === '/' ? a / b : n.operator === '+' ? a + b : n.operator === '-' ? a - b : a ** b
+  }
+  if (n.type === 'TSAsExpression' || n.type === 'TSSatisfiesExpression' || n.type === 'ParenthesizedExpression') return numberOf(n.expression)
+  return null
+}
+const isNumberLiteral = n => n && (n.type === 'NumericLiteral' || (n.type === 'UnaryExpression' && n.operator === '-' && n.argument.type === 'NumericLiteral'))
+const stringOf = n => (n?.type === 'StringLiteral' ? n.value : n?.type === 'TemplateLiteral' && !n.expressions.length ? n.quasis.map(q => q.value.cooked).join('') : null)
+const nameOf = n => (n?.type === 'Identifier' ? n.name : n?.type === 'StringLiteral' ? n.value : null)
+const textOf = (text, n) => text.slice(n.start, n.end)
+
+/**
+ * One file's facts: its lines by kind, what it imports and exports, and what the rule-debt, type and duplication counts read
+ * of it. `tokens`: also each function's token digest (the duplication count's). `nodes`: also, not enumerable (census.json
+ * never holds them), the file's syntax tree (`ast`) and each threshold's and list's own nodes (`nodes`: the literal, its
+ * declaration or the comparison or call it stands in), for the rule ledger's instrument (lab/rules/sites.mjs).
+ */
+export function factsOf(path, text, { tokens = true, nodes = false, history = null } = {}) {
+  const kind = kindOf(path)
+  const head = text.split('\n').slice(0, 12).join('\n')
+  const f = { path, kind, bytes: Buffer.byteLength(text), generated: GENERATED.test(head), ported: PORTED.test(text.split('\n').slice(0, 30).join('\n')), copied: COPIED.test(head), parsed: true }
+  if (kind === 'style' || kind === 'html' || kind === 'data' || kind === 'other') {
+    const comments = kind === 'style' ? commentsByScan(text, true) : kind === 'html' ? [...text.matchAll(/<!--[\s\S]*?-->/g)].map(m => [m.index, m.index + m[0].length]) : []
+    f.lines = countLines(lineKinds(text, comments))
+    if (kind === 'style') f.history = historyIn(text, comments.map(([s, e]) => ({ start: s, value: text.slice(s, e) })), history)
+    f.imports = kind === 'html' ? [...text.matchAll(/<script\b[^>]*\bsrc="([^"]+)"/g)].map(m => ({ spec: m[1].startsWith('.') || m[1].startsWith('/') ? (m[1].startsWith('/') ? `.${m[1]}` : m[1]) : `./${m[1]}`, names: ['*'], type: false, line: 1, whole: "a page's script" })) : kind === 'style' ? [...withoutRanges(text, comments).matchAll(/@import\s+(?:url\()?["']([^"')]+)["']/g)].map(m => ({ spec: m[1], names: ['*'], type: false, line: 1, whole: "a style sheet's import" })) : []
+    return f
+  }
+  let ast
+  try {
+    ast = parseOf(path, text, tokens && kind === 'code')
+  } catch {
+    f.parsed = false
+    f.lines = countLines(lineKinds(text, commentsByScan(text)))
+    f.imports = []
+    f.exports = []
+    return f
+  }
+  const lineAt = []
+  {
+    let n = 1
+    for (let i = 0; i <= text.length; i++) {
+      lineAt[i] = n
+      if (text[i] === '\n') n++
+    }
+  }
+  const kinds = lineKinds(text, ast.comments.map(c => [c.start, c.end]))
+  f.lines = countLines(kinds)
+  // (an item's nodes, kept out of every enumeration)
+  const keep = (item, n) => (nodes ? Object.defineProperty(item, 'nodes', { value: n }) : item)
+  if (nodes) Object.defineProperty(f, 'ast', { value: ast })
+  const commentsOnLine = new Map()
+  for (const c of ast.comments) for (let l = lineAt[c.start]; l <= lineAt[c.end - 1]; l++) commentsOnLine.set(l, [...(commentsOnLine.get(l) ?? []), c.value])
+  f.history = historyIn(text, ast.comments, history)
+  // (a statement's own comments: those that open their line; the parser hands a comment that ends the line before to the
+  // next statement too)
+  const leading = node =>
+    (node?.leadingComments ?? [])
+      .filter(c => /^\s*$/.test(text.slice(text.lastIndexOf('\n', c.start - 1) + 1, c.start)))
+      .map(c => c.value)
+      .join('\n')
+  const sameLine = node => (commentsOnLine.get(lineAt[node.start]) ?? []).join('\n')
+  // (the comment right before a statement (census.mjs DEFINITIONS `comments`): nothing but white space and no blank line between
+  // it and the statement, cut where its kind changes: a block comment there is the statement's alone, else the run of line
+  // comments with no blank line inside; a block that opens the file is the file's: `leading` holds every comment before)
+  const adjacent = node => {
+    const comments = node?.leadingComments ?? []
+    const opensLine = c => /^\s*$/.test(text.slice(text.lastIndexOf('\n', c.start - 1) + 1, c.start))
+    const tight = (c, end) => /^[ \t]*\n?[ \t]*$/.test(text.slice(c.end, end))
+    const last = comments.at(-1)
+    if (!last || !tight(last, node.start) || !opensLine(last)) return ''
+    const block = [last]
+    if (last.type !== 'CommentBlock')
+      for (let i = comments.length - 2; i >= 0; i--) {
+        const c = comments[i]
+        if (c.type === 'CommentBlock' || !tight(c, block[0].start) || !opensLine(c)) break
+        block.unshift(c)
+      }
+    if (/^\s*$/.test(text.slice(0, block[0].start))) return ''
+    return block.map(c => c.value).join('\n')
+  }
+
+  f.imports = []
+  f.exports = []
+  f.reexports = []
+  f.thresholds = []
+  f.lists = []
+  f.papers = []
+  f.texFiles = []
+  f.versions = []
+  f.constants = []
+  f.calls = new Set()
+  f.endpoints = []
+  f.any = 0
+  f.casts = { cast: [], unsafe: [], nonNull: 0 }
+  f.vocabularies = []
+  f.nocheck = ast.comments.some(c => /^\s*@ts-nocheck\b/.test(c.value))
+  f.suppressionLines = ast.comments.filter(c => /^\s*@ts-(?:ignore|expect-error)\b/.test(c.value)).map(c => lineAt[c.start])
+  f.suppressions = f.suppressionLines.length
+  f.functions = []
+  f.llm = false
+  f.barrel = ast.program.body.length > 0 && ast.program.body.every(s => s.type === 'ImportDeclaration' || (s.type === 'ExportNamedDeclaration' && (s.source || !s.declaration)) || s.type === 'ExportAllDeclaration')
+
+  // (an import that takes every export of its module, `names` holding '*': why, for the dead exports' list; a namespace import's
+  // '*' is replaced after the walk by the members its module reads, DEFINITIONS.dead)
+  const addImport = (spec, names, type, node, whole = null) => {
+    if (typeof spec === 'string') f.imports.push({ spec, names, type, line: lineAt[node.start], ...(names.includes('*') && whole ? { whole } : {}) })
+  }
+  const exportName = (name, type, node) => f.exports.push({ name, type, line: lineAt[node.start] })
+  // (each namespace's local name: its imports (a dynamic import's module object may be bound to one name in several
+  // functions: a read is each one's), the members read of it and where it escapes whole)
+  const namespaces = new Map()
+  const addNamespace = (local, im) => {
+    const ns = { im, members: new Set(), escapes: [] }
+    namespaces.set(local, [...(namespaces.get(local) ?? []), ns])
+    return ns
+  }
+  for (const s of ast.program.body) {
+    if (s.type === 'ImportDeclaration') {
+      const allType = s.importKind === 'type' || (s.specifiers.length > 0 && s.specifiers.every(x => x.importKind === 'type'))
+      const names = s.specifiers.map(x => (x.type === 'ImportDefaultSpecifier' ? 'default' : x.type === 'ImportNamespaceSpecifier' ? '*' : nameOf(x.imported)))
+      addImport(s.source.value, names, allType, s)
+      f.imports.at(-1).locals = s.specifiers.filter(x => x.importKind !== 'type' && x.type !== 'ImportNamespaceSpecifier').map(x => [x.local.name, x.type === 'ImportDefaultSpecifier' ? 'default' : nameOf(x.imported)])
+      // (every name it binds, a type's among them: what a type or a `typeof` names is followed through it)
+      f.imports.at(-1).bound = s.specifiers.filter(x => x.type !== 'ImportNamespaceSpecifier').map(x => [x.local.name, x.type === 'ImportDefaultSpecifier' ? 'default' : nameOf(x.imported)])
+      for (const x of s.specifiers)
+        if (x.type === 'ImportNamespaceSpecifier') {
+          f.imports.at(-1).nsLocal = x.local.name
+          addNamespace(x.local.name, f.imports.at(-1))
+        }
+      if (s.source.value === 'ai' && names.some(n => n === 'generateText' || n === 'streamText')) f.llm = true
+    } else if (s.type === 'ExportAllDeclaration') {
+      if (s.exported) {
+        addImport(s.source.value, ['*'], s.exportKind === 'type', s, 'a namespace re-exported')
+        exportName(nameOf(s.exported), s.exportKind === 'type', s)
+      } else {
+        addImport(s.source.value, ['*'], s.exportKind === 'type', s, 'every name re-exported (export *)')
+        f.reexports.push({ star: true, spec: s.source.value })
+      }
+    } else if (s.type === 'ExportNamedDeclaration') {
+      const type = s.exportKind === 'type'
+      if (s.source) {
+        addImport(s.source.value, s.specifiers.map(x => (x.type === 'ExportNamespaceSpecifier' ? '*' : nameOf(x.local))), type || s.specifiers.every(x => x.exportKind === 'type'), s, 'a namespace re-exported')
+        for (const x of s.specifiers) {
+          if (x.type === 'ExportNamespaceSpecifier') exportName(nameOf(x.exported), type, s)
+          else f.reexports.push({ spec: s.source.value, local: nameOf(x.local), exported: nameOf(x.exported), type: type || x.exportKind === 'type' })
+        }
+      } else if (s.declaration) {
+        const d = s.declaration
+        if (d.type === 'VariableDeclaration') for (const v of d.declarations) for (const id of idsOf(v.id)) exportName(id, false, s)
+        else if (d.id) exportName(nameOf(d.id), /^TS/.test(d.type) && d.type !== 'TSEnumDeclaration', s)
+      } else for (const x of s.specifiers) exportName(nameOf(x.exported), type || x.exportKind === 'type', s)
+    } else if (s.type === 'ExportDefaultDeclaration') exportName('default', false, s)
+  }
+
+  // version constants and module constants: the module's top level
+  const opening = ast.comments.filter(c => c.end <= (ast.program.body[0]?.start ?? text.length))
+  const tops = ast.program.body.flatMap(s => (s.type === 'ExportNamedDeclaration' && s.declaration ? [{ s, d: s.declaration }] : [{ s, d: s }]))
+  const constNodes = new Set()
+  // (the module's own values and the types declared for them, `declare const` in a declaration file among them: what a
+  // `typeof` or a schema's enum names, and a JavaScript module's lists as its declaration types them, DEFINITIONS.lists)
+  const values = new Set()
+  const valueTypes = new Map()
+  const enumValues = new Set()
+  for (const { d } of tops) {
+    if (d.type === 'VariableDeclaration')
+      for (const v of d.declarations) {
+        for (const id of idsOf(v.id)) values.add(id)
+        if (v.id?.type === 'Identifier' && v.id.typeAnnotation) valueTypes.set(v.id.name, typeDescOf(v.id.typeAnnotation.typeAnnotation))
+        if (v.id?.type === 'Identifier' && v.init?.type === 'CallExpression' && v.init.callee?.type === 'MemberExpression' && nameOf(v.init.callee.property) === 'enum') enumValues.add(v.id.name)
+      }
+    else if (d.id?.type === 'Identifier' && /^(?:FunctionDeclaration|ClassDeclaration|TSEnumDeclaration|TSDeclareFunction)$/.test(d.type)) values.add(d.id.name)
+  }
+  for (const { s, d } of tops) {
+    if (d.type !== 'VariableDeclaration' || d.kind !== 'const') continue
+    for (const v of d.declarations) {
+      const name = v.id?.type === 'Identifier' ? v.id.name : null
+      if (!name || !v.init) continue
+      // (a rule's comment: the block directly before its declaration, and its own line's; DEFINITIONS.comments)
+      const comment = `${adjacent(s)}\n${sameLine(v)}`
+      const lit = stringOf(v.init) ?? (v.init.type === 'NumericLiteral' ? v.init.value : v.init.type === 'TSAsExpression' ? (stringOf(v.init.expression) ?? (v.init.expression.type === 'NumericLiteral' ? v.init.expression.value : null)) : null)
+      if (lit != null && UPPER.test(name)) f.constants.push({ name, value: lit, line: lineAt[v.start] })
+      if (lit != null && UPPER.test(name) && !NOT_VERSION.test(name) && (VERSION_NAME.test(name) || VERSION_FILE.test(path) || RAISED.test(leading(s).replace(/\n\s*\*?\s*/g, ' ')))) {
+        // (its own comment's first sentence, or a sentence of the file's opening comment that names it: a version's later
+        // sentences, and other comments, are often history, which names the schemas of other things)
+        const naming = new RegExp(`(?<![\\w$])${name}(?![\\w$])`)
+        const own = sentencesOf(`${adjacent(s)}\n${sameLine(v)}`)[0] ?? ''
+        const schema = SCHEMA_NAME.test(name) || (!COMPUTED_CHANGED.test(own) && (STORED_FORM.test(own) || opening.some(c => sentencesOf(c.value).some(t => naming.test(t) && STORED_FORM.test(t)))))
+        f.versions.push({ name, value: lit, line: lineAt[v.start], schema })
+      }
+      if (UPPER.test(name)) {
+        const value = numberOf(v.init)
+        if (value != null) {
+          f.thresholds.push(keep(thresholdOf({ value, raw: textOf(text, v.init), name, comment, line: lineAt[v.start], context: 'constant' }), { literal: v.init, declarator: v, comment }))
+          constNodes.add(v.init)
+        }
+        const obj = v.init.type === 'CallExpression' && v.init.callee?.property?.name === 'freeze' ? v.init.arguments[0] : v.init.type === 'TSAsExpression' ? v.init.expression : v.init
+        if (obj?.type === 'ObjectExpression') {
+          const props = obj.properties.filter(p => p.type === 'ObjectProperty' && isNumberLiteral(p.value))
+          // (three or more distinct integers: an enumeration or a code table, Roman numerals' values, flags: no rule)
+          const values = props.map(p => numberOf(p.value))
+          const enumeration = props.length >= 3 && values.every(Number.isInteger) && new Set(values).size === values.length
+          for (const p of props) {
+            const t = thresholdOf({ value: numberOf(p.value), raw: textOf(text, p.value), name: `${name}.${nameOf(p.key) ?? '?'}`, comment: `${comment}\n${adjacent(p)}\n${sameLine(p)}`, line: lineAt[p.start], context: 'table' })
+            f.thresholds.push(keep(enumeration ? { ...t, class: 'code' } : t, { literal: p.value, declarator: v, property: p, comment: `${comment}\n${adjacent(p)}\n${sameLine(p)}` }))
+            constNodes.add(p.value)
+          }
+        }
+      }
+    }
+  }
+  // a rules registry's citations (DEFINITIONS.lists): a registry is an array literal declared as an array of rule entries
+  // (`RuleSpec[]`, `readonly RuleSpec[]`, `Array<RuleSpec>`: the entry type packages/typeset's registry declares), and an
+  // entry's `ports` is the code it carries, cited by file and line ('RUN:1441-1496 paintFigures'): never names that decide
+  // anything, so no name list whatever its strings' lengths
+  const citationNodes = new Set()
+  const entriesType = t => {
+    const a = t?.type === 'TSTypeOperator' && t.operator === 'readonly' ? t.typeAnnotation : t
+    const elem = a?.type === 'TSArrayType' ? a.elementType : a?.type === 'TSTypeReference' && /^(?:Readonly)?Array$/.test(nameOf(a.typeName) ?? '') ? a.typeParameters?.params?.[0] : null
+    return elem?.type === 'TSTypeReference' && nameOf(elem.typeName) === 'RuleSpec'
+  }
+  for (const { d } of tops) {
+    if (d.type !== 'VariableDeclaration') continue
+    for (const v of d.declarations) {
+      if (!entriesType(v.id?.typeAnnotation?.typeAnnotation) || v.init?.type !== 'ArrayExpression') continue
+      for (const e of v.init.elements)
+        if (e?.type === 'ObjectExpression')
+          for (const p of e.properties) if (p.type === 'ObjectProperty' && !p.computed && nameOf(p.key) === 'ports' && p.value?.type === 'ArrayExpression') citationNodes.add(p.value)
+    }
+  }
+
+  // the walk: comparisons, lists, literals, functions
+  const fnStack = []
+  const stmtStack = []
+  // (the nodes from the program down to the one walked: a list's declaration is read up from its literal)
+  const anc = []
+  // (every list in the order met, each with how it is typed (`typing`, not enumerable): classed by listsByUse)
+  const cands = []
+  // (the module's types: each type it declares, the types it names and how often, the values a `typeof` reads, the values
+  // handed to a schema's enum)
+  const typeDecls = new Map()
+  const typeRefs = new Map()
+  const typeQueries = []
+  const enumArgs = []
+  const refOf = n => (n?.type === 'Identifier' ? [n.name, null] : n?.type === 'TSQualifiedName' && n.left?.type === 'Identifier' ? [n.left.name, n.right.name] : n?.type === 'MemberExpression' && !n.computed && n.object?.type === 'Identifier' ? [n.object.name, nameOf(n.property)] : null)
+  // (a reference to a namespace import's local name: a member read, or the namespace escaping whole, DEFINITIONS.dead)
+  const namespaceUse = (node, parent) => {
+    const all = namespaces.get(node.name)
+    const member = m => all.forEach(ns => ns.members.add(m))
+    const escape = why => all.forEach(ns => ns.escapes.push({ line: lineAt[node.start], why }))
+    // (a declaration of the name: another binding, not a use)
+    if ((parent?.type === 'VariableDeclarator' && parent.id === node) || parent?.params?.includes(node)) return
+    switch (parent?.type) {
+      case 'ImportNamespaceSpecifier':
+      case 'ImportSpecifier':
+      case 'ImportDefaultSpecifier':
+      case 'LabeledStatement':
+      case 'BreakStatement':
+      case 'ContinueStatement':
+        return
+      case 'MemberExpression':
+      case 'OptionalMemberExpression':
+        if (parent.object === node) {
+          const m = !parent.computed ? nameOf(parent.property) : stringOf(parent.property)
+          if (m != null) member(m)
+          else escape('a namespace read by a computed member')
+        } else if (parent.computed) escape('a namespace passed on whole')
+        return
+      case 'TSQualifiedName':
+        if (parent.left === node) member(parent.right.name)
+        return
+      case 'JSXMemberExpression':
+        if (parent.object === node) member(parent.property.name)
+        return
+      case 'ObjectProperty':
+      case 'ObjectMethod':
+      case 'ClassProperty':
+      case 'ClassPrivateProperty':
+      case 'ClassMethod':
+      case 'TSPropertySignature':
+      case 'TSMethodSignature':
+        if (parent.key === node && !parent.computed && !parent.shorthand) return
+        break
+      case 'ExportSpecifier':
+        escape('a namespace re-exported')
+        return
+      case 'TSTypeQuery':
+        escape("a namespace's type taken whole")
+        return
+    }
+    escape('a namespace passed on whole')
+  }
+  // (a dynamic import's or a require's module object, read as a namespace is: the members a declaration destructures of it or
+  // one member read off it; bound to a name, the members read of that name; anything else, every member)
+  const moduleObject = (call, why) => {
+    const spec = stringOf(call.arguments[0])
+    if (typeof spec !== 'string') return
+    const at = anc.length - 1
+    const held = anc[at - 1]?.type === 'AwaitExpression' && anc[at - 1].argument === call ? at - 1 : why === 'a require' ? at : -1
+    const p = held >= 0 ? anc[held - 1] : null
+    const value = anc[held]
+    if (p?.type === 'VariableDeclarator' && p.init === value && p.id?.type === 'ObjectPattern' && p.id.properties.every(x => x.type === 'ObjectProperty' && !x.computed)) return addImport(spec, p.id.properties.map(x => nameOf(x.key)), false, call)
+    if ((p?.type === 'MemberExpression' || p?.type === 'OptionalMemberExpression') && p.object === value && !p.computed) return addImport(spec, [nameOf(p.property)], false, call)
+    addImport(spec, ['*'], false, call, why)
+    if (p?.type === 'VariableDeclarator' && p.init === value && p.id?.type === 'Identifier') {
+      const im = f.imports.at(-1)
+      im.names = []
+      delete im.whole
+      im.nsLocal = p.id.name
+      addNamespace(p.id.name, im)
+    }
+  }
+  const walk = (node, parent, test = false) => {
+    if (!node || typeof node.type !== 'string') return
+    anc.push(node)
+    if ((node.type === 'Identifier' || node.type === 'JSXIdentifier') && namespaces.has(node.name)) namespaceUse(node, parent)
+    const isStmt = /Statement$|Declaration$/.test(node.type)
+    if (isStmt) stmtStack.push(node)
+    let fn = null
+    if (FUNCTION.has(node.type) && node.body) {
+      // (a function's name: its own, else the name it is bound to: a variable, a property, a class field, an assignment's target)
+      const bound = parent?.type === 'VariableDeclarator' ? nameOf(parent.id) : /^(?:ObjectProperty|ClassProperty|ClassPrivateProperty)$/.test(parent?.type ?? '') ? (nameOf(parent.key) ?? parent.key?.id?.name ?? null) : parent?.type === 'AssignmentExpression' ? textOf(text, parent.left).slice(0, 40) : null
+      fn = { line: lineAt[node.start], endLine: lineAt[node.end - 1], start: node.start, end: node.end, parent: fnStack.at(-1) ?? null, name: nameOf(node.id) ?? nameOf(node.key) ?? node.key?.id?.name ?? bound }
+      f.functions.push(fn)
+      fnStack.push(fn)
+    }
+    // (a statement's comment; an exported declaration's is its export statement's, where the parser hangs it)
+    const inner = stmtStack.at(-1)
+    const outer = stmtStack.at(-2)
+    const stmt = (outer?.type === 'ExportNamedDeclaration' || outer?.type === 'ExportDefaultDeclaration') && outer.declaration === inner ? outer : inner
+    const near = n => `${adjacent(stmt)}\n${sameLine(n)}`
+    switch (node.type) {
+      case 'BinaryExpression':
+        if (RELATIONAL.has(node.operator))
+          for (const side of [node.left, node.right])
+            if (isNumberLiteral(side) && !constNodes.has(side)) f.thresholds.push(keep(thresholdOf({ value: numberOf(side), raw: textOf(text, side), name: null, comment: near(node), line: lineAt[side.start], context: 'comparison', other: textOf(text, side === node.left ? node.right : node.left).slice(0, 60) }), { literal: side, site: node, comment: near(node) }))
+        break
+      case 'CallExpression': {
+        const c = node.callee
+        if (c?.type === 'Identifier') f.calls.add(c.name)
+        if (c?.type === 'MemberExpression' && c.object?.name === 'Math' && ['min', 'max'].includes(c.property?.name))
+          for (const a of node.arguments) if (isNumberLiteral(a) && !constNodes.has(a)) f.thresholds.push(keep(thresholdOf({ value: numberOf(a), raw: textOf(text, a), name: null, comment: near(node), line: lineAt[a.start], context: `Math.${c.property.name}` }), { literal: a, site: node, comment: near(node) }))
+        if (c?.type === 'Import' || c?.name === 'require') moduleObject(node, c?.type === 'Import' ? 'a dynamic import' : 'a require')
+        if (c?.type === 'MemberExpression' && ((c.object?.name === 'Translator' && c.property?.name === 'create') || c.property?.name === 'createTranslator')) f.endpoints.push({ kind: 'chrome', line: lineAt[node.start] })
+        // (a list handed to a schema's enum by its name, DEFINITIONS.lists)
+        if (c?.type === 'MemberExpression' && nameOf(c.property) === 'enum' && refOf(node.arguments[0])) enumArgs.push(refOf(node.arguments[0]))
+        break
+      }
+      case 'ImportExpression':
+        addImport(stringOf(node.source), ['*'], false, node, 'a dynamic import')
+        break
+      case 'NewExpression':
+        if (node.callee?.type === 'Identifier') f.calls.add(node.callee.name)
+        if (node.callee?.name === 'URL' && node.arguments[1]?.type === 'MemberExpression' && textOf(text, node.arguments[1]) === 'import.meta.url') {
+          const s = stringOf(node.arguments[0])
+          if (s) addImport(s.startsWith('.') ? s : `./${s}`, ['*'], false, node, 'a file named by its URL')
+        }
+        break
+      case 'TSImportType': {
+        // (`import('./x').T`: the type T of the module; with no member named, the module's every type)
+        let q = node.qualifier
+        while (q?.type === 'TSQualifiedName') q = q.left
+        addImport(stringOf(node.argument?.literal ?? node.argument), q?.type === 'Identifier' ? [q.name] : ['*'], true, node, 'a type import of the whole module')
+        break
+      }
+      case 'TSTypeAliasDeclaration':
+        typeDecls.set(node.id.name, typeDescOf(node.typeAnnotation))
+        break
+      case 'TSInterfaceDeclaration':
+        typeDecls.set(node.id.name, { k: 'obj', p: propsOf(node.body?.body) })
+        break
+      case 'TSEnumDeclaration':
+        typeDecls.set(node.id.name, { k: 'lits', v: [] })
+        break
+      case 'TSTypeReference': {
+        const r = refOf(node.typeName)
+        if (r) typeRefs.set(refKey(r), (typeRefs.get(refKey(r)) ?? 0) + 1)
+        break
+      }
+      case 'TSTypeQuery':
+        if (refOf(node.exprName)) typeQueries.push(refOf(node.exprName))
+        break
+      case 'TSAnyKeyword':
+        f.any++
+        break
+      case 'TSAsExpression':
+      case 'TSTypeAssertion': {
+        // (a cast: `x as T` or `<T>x`, `as const` apart; a cast of a cast is one, counted on the outer; `as never`, `as any`
+        // and a cast through another type are unsafe)
+        if (isConst(node.typeAnnotation) || parent?.type === 'TSAsExpression' || parent?.type === 'TSTypeAssertion') break
+        const line = lineAt[node.start]
+        f.casts.cast.push(line)
+        const t = node.typeAnnotation?.type
+        if (t === 'TSNeverKeyword' || t === 'TSAnyKeyword' || node.expression?.type === 'TSAsExpression' || node.expression?.type === 'TSTypeAssertion') f.casts.unsafe.push(line)
+        break
+      }
+      case 'TSNonNullExpression':
+        f.casts.nonNull++
+        break
+      case 'ArrayExpression': {
+        const strings = node.elements.map(stringOf)
+        // (names: strings of 40 characters at most; a list of longer ones is text, TeX code, a message; a registry entry's
+        // citations are none, citationNodes)
+        if (strings.length >= 3 && strings.every(s => s != null && s.length <= 40) && !citationNodes.has(node)) {
+          const owner = parent?.type === 'VariableDeclarator' ? nameOf(parent.id) : parent?.type === 'NewExpression' ? nameOf(stmtDeclName(stmt)) : nameOf(stmtDeclName(stmt))
+          const l = listOf({ entries: strings, line: lineAt[node.start], name: owner, comment: near(node), form: 'list' })
+          cands.push(Object.defineProperty(keep(l, { literal: node, parent, entries: strings, comment: near(node) }), 'typing', { value: typingOf(anc) }))
+        }
+        break
+      }
+      case 'RegExpLiteral': {
+        const words = alternativesOf(node.pattern)
+        if (words.length >= 3) cands.push(keep(listOf({ entries: words, line: lineAt[node.start], name: nameOf(stmtDeclName(stmt)), comment: near(node), form: 'regex' }), { literal: node, parent, entries: words, comment: near(node) }))
+        if (ARXIV_ID.test(node.pattern.replace(/\\\./g, '.'))) f.papers.push({ id: ARXIV_ID.exec(node.pattern.replace(/\\\./g, '.'))[0], line: lineAt[node.start] })
+        break
+      }
+      case 'StringLiteral':
+      case 'TemplateElement': {
+        const s = node.type === 'StringLiteral' ? node.value : node.value.cooked ?? ''
+        // (an import's specifier and a type's name are no rule)
+        if (parent && (parent.type === 'ImportDeclaration' || parent.type === 'ExportNamedDeclaration' || parent.type === 'ExportAllDeclaration' || parent.type === 'TSLiteralType' || parent.type === 'ImportExpression')) break
+        const id = ARXIV_ID.exec(s)
+        // (a literal that decides: in a branch's test, compared, or matched against)
+        if (test && id && !/\d{4}\.\d{4,5}\.\d/.test(s)) f.papers.push({ id: id[0], line: lineAt[node.start] })
+        if (test && TEX_FILE.test(s)) f.texFiles.push({ name: s, line: lineAt[node.start] })
+        for (const e of ENDPOINTS) if (e.re.test(s)) f.endpoints.push({ kind: e.kind, line: lineAt[node.start] })
+        break
+      }
+    }
+    const decides = key =>
+      test ||
+      (key === 'test' && /^(?:If|While|DoWhile|For)Statement$|^ConditionalExpression$|^SwitchCase$/.test(node.type)) ||
+      (node.type === 'BinaryExpression' && ['===', '!==', '==', '!='].includes(node.operator)) ||
+      (node.type === 'CallExpression' && node.callee?.type === 'MemberExpression' && MATCHERS.has(node.callee.property?.name) && (key === 'arguments' || key === 'callee'))
+    for (const key of Object.keys(node)) {
+      if (SKIP_KEYS.has(key)) continue
+      const v = node[key]
+      if (Array.isArray(v)) for (const x of v) walk(x, node, decides(key))
+      else if (v && typeof v.type === 'string') walk(v, node, decides(key))
+    }
+    if (fn) fnStack.pop()
+    if (isStmt) stmtStack.pop()
+    anc.pop()
+  }
+  walk(ast.program, null)
+  if (f.llm) f.endpoints.push({ kind: 'llm', line: 1 })
+  // (a namespace import imports the members read of it; one that escapes whole, every member: '*', with why)
+  for (const ns of [...namespaces.values()].flat()) {
+    ns.im.names = [...ns.im.names.filter(n => n !== '*'), ...ns.members, ...(ns.escapes.length ? ['*'] : [])]
+    if (ns.escapes.length) ns.im.whole = ns.escapes[0].why
+    ns.im.namespace = { members: [...ns.members].sort(), escapes: ns.escapes }
+  }
+  // (the module's types and lists, kept out of every enumeration: listsByUse reads them; each list classed here by what this
+  // module alone shows of it, and again by scanTree over the whole tree)
+  Object.defineProperties(f, {
+    listCands: { value: cands },
+    types: { value: { decls: typeDecls, refs: typeRefs, queries: typeQueries, enumArgs, values, valueTypes, enumValues } },
+  })
+  listsByUse(new Map([[path, f]]), () => null)
+
+  // each function's token digest: its tokens, comments and white space aside, names and literals as written
+  if (tokens && ast.tokens) {
+    const toks = ast.tokens.filter(t => t.type !== 'CommentLine' && t.type !== 'CommentBlock')
+    let k = 0
+    for (const fn of f.functions.sort((a, b) => a.start - b.start)) {
+      while (k < toks.length && toks[k].start < fn.start) k++
+      const parts = []
+      for (let j = k; j < toks.length && toks[j].end <= fn.end; j++) {
+        const t = toks[j]
+        const label = typeof t.type === 'string' ? t.type : t.type.label
+        parts.push(t.value != null ? `${label}:${typeof t.value === 'object' ? JSON.stringify(t.value) : t.value}` : label)
+      }
+      fn.tokens = parts.length
+      fn.digest = parts.length ? createHash('sha1').update(parts.join('\u0001')).digest('hex').slice(0, 16) : null
+    }
+  }
+  for (const fn of f.functions) {
+    // (a function's length: the code lines from its first line to its last, its nested functions' among them)
+    let code = 0
+    for (let l = fn.line; l <= fn.endLine; l++) if (kinds[l - 1] === 'code') code++
+    fn.code = code
+    delete fn.start
+    delete fn.end
+  }
+  f.calls = [...f.calls]
+  return f
+}
+
+/** the comment lines of a text that tell history (HISTORY), by line number: each comment `{ start, value }` cut at its
+ *  newlines, so that a line's comment text is the part of a comment that stands on it. `context` (historyContextOf): the
+ *  names the documents this file's comments cite define, and the files only a dependency distributes, which no form counts */
+function historyIn(text, comments, context = null) {
+  const breaks = []
+  for (let i = text.indexOf('\n'); i !== -1; i = text.indexOf('\n', i + 1)) breaks.push(i)
+  // (a line's number: one more than the line breaks before the offset)
+  const lineOf = offset => {
+    let lo = 0
+    let hi = breaks.length
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1
+      if (breaks[mid] < offset) lo = mid + 1
+      else hi = mid
+    }
+    return lo + 1
+  }
+  const byLine = new Map()
+  for (const c of comments) {
+    const first = lineOf(c.start)
+    c.value.split('\n').forEach((part, i) => byLine.set(first + i, `${byLine.get(first + i) ?? ''} ${part}`))
+  }
+  const lines = [...byLine].sort((a, b) => a[0] - b[0])
+  const apart = attributionOf(lines)
+  const said = lines.map(([, t]) => t).join('\n')
+  const defined = new Set((context?.docs ?? []).filter(d => d.names.size && d.cites.test(said)).flatMap(d => [...d.names]))
+  const h = { todays: [], dated: [], measuredDates: [], named: [], forms: Object.fromEntries(Object.keys(HISTORY.forms).map(k => [k, []])), attribution: [] }
+  for (const [line, t] of lines) {
+    if (apart.has(line)) {
+      h.attribution.push(line)
+      continue
+    }
+    if (HISTORY.todays.test(t)) h.todays.push(line)
+    const dates = t.replace(REF_DATE, '')
+    if (HISTORY.dated.test(dates)) (MEASUREMENT.test(dates) ? h.measuredDates : h.dated).push(line)
+    if (HISTORY.named.test(t)) h.named.push(line)
+    for (const [k, re] of Object.entries(HISTORY.forms)) if (formCounts(k, re, t, defined, context?.distributed)) h.forms[k].push(line)
+  }
+  return h
+}
+/** the lines of a licence's statement of third-party origin (LICENCE, ORIGIN): over each run of consecutive comment lines,
+ *  cut into sentences at a full stop and at an empty comment line (a statement of change runs on past a colon or a
+ *  semicolon to its full stop, GPL-3.0 §5(a)'s dated notice with it), every line of a sentence that names both */
+function attributionOf(lines) {
+  const out = new Set()
+  let run = []
+  const flush = () => {
+    let sentence = []
+    let text = ''
+    const end = () => {
+      if (sentence.length && LICENCE.test(text) && ORIGIN.test(text)) for (const l of sentence) out.add(l)
+      sentence = []
+      text = ''
+    }
+    for (const [line, t] of run) {
+      const words = t.replace(/^\s*\*+\s?/, '').trim()
+      if (!words) {
+        end()
+        continue
+      }
+      // (a line holding a sentence's end and the next one's start belongs to both)
+      const parts = words.split(/(?<=\.)\s+/)
+      parts.forEach((part, i) => {
+        sentence.push(line)
+        text += ` ${part}`
+        if (i < parts.length - 1 || /\.$/.test(part)) end()
+      })
+    }
+    end()
+    run = []
+  }
+  for (const entry of lines) {
+    if (run.length && entry[0] !== run.at(-1)[0] + 1) flush()
+    run.push(entry)
+  }
+  flush()
+  return out
+}
+/** a comment's sentences: its text with JSDoc's stars and line breaks out, cut after a full stop or a semicolon */
+const sentencesOf = value =>
+  value
+    .replace(/^\s*\*+\s?/gm, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(/(?<=[.;])\s+/)
+    .filter(Boolean)
+const isConst = n => n?.type === 'TSTypeReference' && n.typeName?.type === 'Identifier' && n.typeName.name === 'const'
+const refKey = r => (r[1] ? `${r[0]}.${r[1]}` : r[0])
+
+// ---------------------------------------------------------------- lists by use (DEFINITIONS.lists)
+
+const OPEN_TYPES = new Set(['TSStringKeyword', 'TSNumberKeyword', 'TSBooleanKeyword', 'TSBigIntKeyword', 'TSSymbolKeyword', 'TSObjectKeyword', 'TSAnyKeyword', 'TSUnknownKeyword'])
+/** a type written in the source, as listsByUse reads it: `lits` (string or number literals), `none` (null, undefined, never),
+ *  `open` (a primitive: string, number), `tpl` (a template literal type, its parts' types `u`), `union`, `keyof`, `arr` (an array or a tuple, its element `e`), `ref`
+ *  (a named type, `n`, through a namespace `ns`, its arguments `a`), `idx` (an indexed access: a property's name or
+ *  '[number]'), `query` (`typeof` a value), `obj` (an object type, its properties `p`), `other` */
+const typeDescOf = t => {
+  if (!t) return null
+  switch (t.type) {
+    case 'TSParenthesizedType':
+    case 'TSOptionalType':
+      return typeDescOf(t.typeAnnotation)
+    case 'TSNullKeyword':
+    case 'TSUndefinedKeyword':
+    case 'TSNeverKeyword':
+    case 'TSVoidKeyword':
+      return { k: 'none' }
+    case 'TSLiteralType':
+      // (a template literal type: the types of its parts, `${Role}-${Slant}`; with none, one literal)
+      return t.literal?.type !== 'TemplateLiteral' || !t.literal.expressions?.length ? { k: 'lits' } : { k: 'tpl', u: t.literal.expressions.map(typeDescOf) }
+    case 'TSTemplateLiteralType':
+      return t.types?.length ? { k: 'tpl', u: t.types.map(typeDescOf) } : { k: 'lits' }
+    case 'TSUnionType':
+      return { k: 'union', u: t.types.map(typeDescOf) }
+    case 'TSIntersectionType':
+      return { k: 'inter', u: t.types.map(typeDescOf) }
+    case 'TSTypeOperator':
+      return t.operator === 'keyof' ? { k: 'keyof', of: typeDescOf(t.typeAnnotation) } : typeDescOf(t.typeAnnotation)
+    case 'TSArrayType':
+      return { k: 'arr', e: typeDescOf(t.elementType) }
+    case 'TSTupleType':
+      return { k: 'arr', e: { k: 'union', u: t.elementTypes.map(x => typeDescOf(x.type === 'TSNamedTupleMember' ? x.elementType : x)) } }
+    case 'TSTypeReference': {
+      const r = refOfType(t.typeName)
+      return r ? { k: 'ref', n: r[1] ?? r[0], ns: r[1] ? r[0] : null, a: (t.typeParameters?.params ?? []).map(typeDescOf) } : { k: 'other' }
+    }
+    case 'TSIndexedAccessType':
+      return { k: 'idx', of: typeDescOf(t.objectType), key: t.indexType?.type === 'TSNumberKeyword' ? '[number]' : t.indexType?.type === 'TSLiteralType' ? String(t.indexType.literal?.value) : null }
+    case 'TSTypeQuery': {
+      const r = refOfType(t.exprName)
+      return r ? { k: 'query', n: r[1] ?? r[0], ns: r[1] ? r[0] : null } : { k: 'other' }
+    }
+    case 'TSTypeLiteral':
+      return { k: 'obj', p: propsOf(t.members) }
+    default:
+      return OPEN_TYPES.has(t.type) ? { k: 'open' } : { k: 'other' }
+  }
+}
+const refOfType = n => (n?.type === 'Identifier' ? [n.name, null] : n?.type === 'TSQualifiedName' && n.left?.type === 'Identifier' ? [n.left.name, n.right.name] : null)
+const propsOf = members => {
+  const p = {}
+  for (const m of members ?? []) if (m.type === 'TSPropertySignature' && !m.computed && nameOf(m.key) != null) p[nameOf(m.key)] = typeDescOf(m.typeAnnotation?.typeAnnotation)
+  return p
+}
+/** how a list's literal is typed where it stands, read up from it through what keeps its value (parentheses, Object.freeze, a
+ *  Set) and the arrays and tables it is a row of, to what types it: `asConst`; `enum`, handed to a schema's enum; `type`, the
+ *  type it stands under (a declaration's, a `satisfies`', a Set's type argument), `path` the steps from that type down to
+ *  the list's element ('elem', or a table's property `{ prop }`); `top`, the name it is declared under. A cast (`as T`, not
+ *  `as const`) checks no member of it: no type */
+const typingOf = anc => {
+  let cur = anc.at(-1)
+  const out = { asConst: false, enum: false, type: null, path: ['elem'], top: null }
+  for (let i = anc.length - 2; i >= 0; i--) {
+    const p = anc[i]
+    const arg = (p.type === 'CallExpression' || p.type === 'NewExpression') && p.arguments[0] === cur
+    // (a method's name, or a function's: `Object.freeze(…)`, a module's own `freeze(…)`)
+    const method = arg ? (p.callee?.type === 'MemberExpression' ? nameOf(p.callee.property) : p.callee?.type === 'Identifier' && p.callee.name === 'freeze' ? 'freeze' : null) : null
+    if ((p.type === 'TSAsExpression' || p.type === 'TSTypeAssertion') && p.expression === cur) {
+      if (!isConst(p.typeAnnotation)) return out
+      out.asConst = true
+    } else if (p.type === 'TSSatisfiesExpression' && p.expression === cur) {
+      out.type = typeDescOf(p.typeAnnotation)
+      return out
+    } else if (p.type === 'ParenthesizedExpression' || p.type === 'TSNonNullExpression' || (arg && method === 'freeze')) {
+      // (its value kept as it is)
+    } else if (arg && method === 'enum') {
+      out.enum = true
+      return out
+    } else if (arg && p.type === 'NewExpression' && /^(?:Readonly)?Set$/.test(p.callee?.name ?? '')) {
+      const given = p.typeParameters?.params?.[0]
+      if (given) {
+        out.type = typeDescOf(given)
+        out.path = out.path.slice(1)
+        return out
+      }
+    } else if (p.type === 'ArrayExpression') out.path.unshift('elem')
+    else if (p.type === 'ObjectProperty' && p.value === cur) out.path.unshift({ prop: nameOf(p.key) ?? stringOf(p.key) })
+    else if (p.type === 'ObjectExpression') {
+      // (a table: its property stepped through above)
+    } else if (p.type === 'VariableDeclarator' && p.init === cur) {
+      out.type = typeDescOf(p.id?.typeAnnotation?.typeAnnotation)
+      out.top = p.id?.type === 'Identifier' ? p.id.name : null
+      return out
+    } else return out
+    cur = p
+  }
+  return out
+}
+/** the types that only wrap another: their first argument read in their place */
+const WRAPPERS = new Set(['Exclude', 'Extract', 'NonNullable', 'Readonly', 'Uppercase', 'Lowercase', 'Capitalize', 'Uncapitalize'])
+
+/**
+ * Each list of a tree classed by use (census.mjs DEFINITIONS.lists): a vocabulary where the code types over its members, a
+ * name list otherwise. The code types over a list's members where a type of the code holds them: a type read off the list
+ * (`typeof X`, in its module or another that imports it, its members kept literal: `as const`, or a closed type it is
+ * declared of), a schema's enum made of it (in place or by its name), or a closed type of the code it is declared an array
+ * or a set of (a union of literals, `keyof` a type, a type read off a vocabulary; written in its declaration, a `satisfies`,
+ * a Set's type argument, or a JavaScript module's declaration file) that some other type of the code names too. A regular
+ * expression is a name list. `files`: the facts by key (a path, or `<repo>:<path>` across trees; factsOf's: each list's
+ * `typing`, the module's `types`); `resolve`: (from, spec) -> a key of `files` or null; `only`: the keys whose lists are
+ * classed (all where null). Rewrites each such file's `lists` and `vocabularies` from its list candidates; a vocabulary says
+ * `by` what.
+ */
+export function listsByUse(files, resolve, only = null) {
+  const product = f => (f.role ?? 'product') === 'product'
+  const declFile = p => {
+    const d = p.replace(/\.(m|c)?js$/, (_, m) => `.d.${m ?? ''}ts`)
+    return d !== p && files.has(d) ? d : null
+  }
+  // (a name a module binds -> the module that declares it, a value or a type: through its imports and re-exports, and a
+  // JavaScript module's declaration file)
+  const memo = new Map()
+  const declaring = (path, name, depth = 0) => {
+    const key = `${path}\u0000${name}`
+    if (memo.has(key)) return memo.get(key)
+    memo.set(key, null)
+    const out = find(path, name, depth)
+    memo.set(key, out)
+    return out
+  }
+  const find = (path, name, depth) => {
+    const f = files.get(path)
+    if (!f || depth > 24) return null
+    if (f.types?.decls.has(name) || f.types?.values.has(name)) return { path, name }
+    const d = declFile(path)
+    const fromDecl = d ? declaring(d, name, depth + 1) : null
+    if (fromDecl) return fromDecl
+    for (const im of f.imports ?? [])
+      for (const [local, imported] of im.bound ?? [])
+        if (local === name) {
+          const to = resolve(path, im.spec)
+          return to ? declaring(to, imported, depth + 1) : null
+        }
+    for (const r of f.reexports ?? [])
+      if (!r.star && r.exported === name) {
+        const to = resolve(path, r.spec)
+        return to ? declaring(to, r.local, depth + 1) : null
+      }
+    for (const r of f.reexports ?? [])
+      if (r.star) {
+        const to = resolve(path, r.spec)
+        const x = to ? declaring(to, name, depth + 1) : null
+        if (x) return x
+      }
+    return null
+  }
+  const viaNamespace = (path, ns, member) => {
+    const im = (files.get(path)?.imports ?? []).find(i => i.nsLocal === ns)
+    const to = im ? resolve(path, im.spec) : null
+    return to ? declaring(to, member) : null
+  }
+  const named = (path, root, member) => (member ? viaNamespace(path, root, member) : declaring(path, root))
+  const typeAt = (path, d) => {
+    const at = d.ns ? viaNamespace(path, d.ns, d.n) : declaring(path, d.n)
+    const desc = at ? files.get(at.path)?.types?.decls.get(at.name) : null
+    return desc ? { path: at.path, name: at.name, desc } : null
+  }
+  // (the members a type of the code holds: closed where it is a set of literals the code wrote)
+  const closed = (d, path, depth = 0) => {
+    if (!d || depth > 24) return false
+    switch (d.k) {
+      case 'lits':
+      case 'none':
+      case 'keyof':
+        return true
+      case 'union':
+        return d.u.some(x => x?.k !== 'none') && d.u.every(x => closed(x, path, depth + 1))
+      // (a template holds as few members as its parts do: closed where every part is)
+      case 'tpl':
+        return d.u.every(x => closed(x, path, depth + 1))
+      // (an intersection holds no member its closed part does not)
+      case 'inter':
+        return d.u.some(x => closed(x, path, depth + 1))
+      case 'ref': {
+        if (!d.ns && WRAPPERS.has(d.n)) return closed(d.a[0], path, depth + 1)
+        // (a schema's type, z.infer<typeof S>: closed where S is a schema's enum)
+        if (d.ns && /^(?:infer|input|output)$/.test(d.n) && d.a[0]?.k === 'query') return enumValue(path, d.a[0])
+        const x = typeAt(path, d)
+        return x ? closed(x.desc, x.path, depth + 1) : false
+      }
+      case 'idx': {
+        if (d.key === '[number]' && d.of?.k === 'query') return kept(path, d.of)
+        const o = d.key && d.key !== '[number]' ? objectOf(d.of, path, depth + 1) : null
+        const p = o?.desc.p?.[d.key]
+        return p ? closed(p, o.path, depth + 1) : false
+      }
+      default:
+        return false
+    }
+  }
+  const objectOf = (d, path, depth = 0) => {
+    if (!d || depth > 24) return null
+    if (d.k === 'obj') return { desc: d, path }
+    if (d.k === 'ref') {
+      if (!d.ns && WRAPPERS.has(d.n)) return objectOf(d.a[0], path, depth + 1)
+      const x = typeAt(path, d)
+      return x ? objectOf(x.desc, x.path, depth + 1) : null
+    }
+    if (d.k === 'idx' && d.key && d.key !== '[number]') {
+      const o = objectOf(d.of, path, depth + 1)
+      const p = o?.desc.p?.[d.key]
+      return p ? objectOf(p, o.path, depth + 1) : null
+    }
+    return null
+  }
+  // (a type's element, and a table type's entry: through arrays, sets, Readonly, Record and object types, and aliases)
+  const elemOf = (d, path, depth = 0) => {
+    if (!d || depth > 24) return null
+    if (d.k === 'arr') return { desc: d.e, path }
+    if (d.k === 'union') {
+      const some = d.u.filter(x => x?.k !== 'none')
+      return some.length === 1 ? elemOf(some[0], path, depth + 1) : null
+    }
+    if (d.k !== 'ref') return null
+    if (!d.ns && /^(?:Readonly)?(?:Array|Set)$/.test(d.n)) return d.a[0] ? { desc: d.a[0], path } : null
+    if (!d.ns && d.n === 'Readonly') return elemOf(d.a[0], path, depth + 1)
+    const x = typeAt(path, d)
+    return x ? elemOf(x.desc, x.path, depth + 1) : null
+  }
+  const entryOf = (d, key, path, depth = 0) => {
+    if (!d || depth > 24) return null
+    if (d.k === 'obj') return d.p[key] ? { desc: d.p[key], path } : null
+    if (d.k !== 'ref') return null
+    if (!d.ns && d.n === 'Record') return d.a[1] ? { desc: d.a[1], path } : null
+    if (!d.ns && /^(?:Readonly|Partial|Required)$/.test(d.n)) return entryOf(d.a[0], key, path, depth + 1)
+    const x = typeAt(path, d)
+    return x ? entryOf(x.desc, key, x.path, depth + 1) : null
+  }
+  // (a list's element type: its own typing's, else, for a JavaScript module's list, its declaration file's)
+  const elementOf = (l, path) => {
+    const t = l.typing
+    let at = t.type ? { desc: t.type, path } : null
+    const d = !at && t.top ? declFile(path) : null
+    if (d && files.get(d)?.types?.valueTypes.has(t.top)) at = { desc: files.get(d).types.valueTypes.get(t.top), path: d }
+    for (const step of t.path) at = at && (step === 'elem' ? elemOf(at.desc, at.path) : entryOf(at.desc, step.prop, at.path))
+    return at
+  }
+  const listIn = (path, name) => (files.get(path)?.listCands ?? []).find(l => l.typing?.top === name && l.typing.path.length === 1)
+  // (a value whose members a type read off it holds: a list `as const`, or of a closed type)
+  const kept = (path, q) => {
+    const at = named(path, q.ns ?? q.n, q.ns ? q.n : null)
+    const l = at ? listIn(at.path, at.name) : null
+    if (!l) return false
+    const e = elementOf(l, at.path)
+    return l.typing.asConst || (e ? closed(e.desc, e.path) : false)
+  }
+  const enumValue = (path, q) => {
+    const at = named(path, q.ns ?? q.n, q.ns ? q.n : null)
+    return at ? Boolean(files.get(at.path)?.types?.enumValues.has(at.name)) : false
+  }
+  // (the outermost type of the code an element type names: its declaration's key, '' for a type read off a list)
+  const namedOf = (d, path) => {
+    if (!d) return null
+    if (d.k === 'ref') {
+      if (!d.ns && WRAPPERS.has(d.n)) return namedOf(d.a[0], path)
+      const x = typeAt(path, d)
+      return x ? `${x.path}#${x.name}` : null
+    }
+    if (d.k === 'keyof' || d.k === 'idx') return d.k === 'idx' && d.of?.k === 'query' ? '' : namedOf(d.of, path)
+    if (d.k === 'union' || d.k === 'inter') return d.u.map(x => namedOf(x, path)).find(x => x != null) ?? null
+    return null
+  }
+  // the code's uses, product modules alone: each type's references, the values a type is read off, those a schema's enum is
+  // made of (by their declaration; a name read in its own module also by the name)
+  const refs = new Map()
+  const typeReads = new Set()
+  const enumReads = new Set()
+  for (const [path, f] of files) {
+    if (!f.types || !product(f)) continue
+    for (const [name, n] of f.types.refs) {
+      const [a, b] = name.split('.')
+      const at = named(path, a, b ?? null)
+      if (at) refs.set(`${at.path}#${at.name}`, (refs.get(`${at.path}#${at.name}`) ?? 0) + n)
+    }
+    for (const [into, uses] of [
+      [typeReads, f.types.queries],
+      [enumReads, f.types.enumArgs],
+    ])
+      for (const [root, member] of uses) {
+        if (!member) into.add(`${path}#${root}`)
+        const at = named(path, root, member)
+        if (at) into.add(`${at.path}#${at.name}`)
+      }
+  }
+  const typedOver = (l, path) => {
+    const t = l.typing
+    if (!t || l.form !== 'list') return null
+    if (t.enum) return "a schema's enum"
+    const own = t.top && t.path.length === 1
+    if (own && enumReads.has(`${path}#${t.top}`)) return "a schema's enum"
+    const e = elementOf(l, path)
+    const typed = e ? closed(e.desc, e.path) : false
+    // (a JavaScript module's list: a type read off its declaration file's value is read off it)
+    const read = typeReads.has(`${path}#${t.top}`) || (declFile(path) != null && typeReads.has(`${declFile(path)}#${t.top}`))
+    if (own && (t.asConst || typed) && read) return 'a type read off it'
+    if (!typed) return null
+    const n = namedOf(e.desc, e.path)
+    if (n === '') return 'a type read off a vocabulary'
+    return n && (refs.get(n) ?? 0) >= 2 ? `declared of ${n.slice(n.indexOf('#') + 1)}` : null
+  }
+  for (const [key, f] of files) {
+    if (!f.listCands || (only && !only.has(key))) continue
+    const lists = []
+    const vocabularies = []
+    for (const l of f.listCands) {
+      const by = typedOver(l, key)
+      if (by) vocabularies.push({ ...l, class: 'vocabulary', by })
+      else lists.push(l)
+    }
+    f.lists = lists
+    f.vocabularies = vocabularies
+  }
+}
+
+/** the lists of a tree that pins another (a profile's `pin`: the website's, over this repository's packages), classed again
+ *  with the pinned tree's types in reach (a list the website declares of a package's type): `scans` one checkout of each
+ *  repository, as graphOf takes them; every other tree's lists are as its own scan classed them */
+export function listsAcross(scans) {
+  const others = {}
+  for (const s of scans) {
+    others[s.repo] = new Set(s.files.keys())
+    others[`${s.repo}:packages`] = [...s.files.keys()].filter(f => /^packages\/[^/]+\/package\.json$/.test(f)).map(p => ({ path: p, json: JSON.parse(readFileSync(join(s.root, p), 'utf8')) }))
+  }
+  const all = new Map()
+  for (const s of scans) for (const [p, f] of s.files) all.set(`${s.repo}:${p}`, f)
+  const resolvers = new Map(scans.map(s => [s.repo, resolverOf(s.repo, [...s.files.keys()], { ...s.profile, root: s.root }, others)]))
+  const resolve = (from, spec) => {
+    const i = from.indexOf(':')
+    const r = resolvers.get(from.slice(0, i))?.(from.slice(i + 1), spec)
+    return r?.path && all.has(`${r.repo}:${r.path}`) ? `${r.repo}:${r.path}` : null
+  }
+  for (const s of scans) if (s.profile.pin) listsByUse(all, resolve, new Set([...s.files.keys()].map(p => `${s.repo}:${p}`)))
+}
+const idsOf = p => (!p ? [] : p.type === 'Identifier' ? [p.name] : p.type === 'ObjectPattern' ? p.properties.flatMap(x => idsOf(x.value ?? x.argument)) : p.type === 'ArrayPattern' ? p.elements.flatMap(idsOf) : p.type === 'AssignmentPattern' ? idsOf(p.left) : p.type === 'RestElement' ? idsOf(p.argument) : [])
+const stmtDeclName = s => (s?.type === 'VariableDeclaration' ? s.declarations[0]?.id : (s?.type === 'ExportNamedDeclaration' || s?.type === 'ExportDefaultDeclaration') && s.declaration ? stmtDeclName(s.declaration) : (s?.id ?? null))
+const countLines = kinds => ({ code: kinds.filter(k => k === 'code').length, comment: kinds.filter(k => k === 'comment').length, blank: kinds.filter(k => k === 'blank').length })
+const withoutRanges = (text, ranges) => {
+  const a = text.split('')
+  for (const [s, e] of ranges) for (let i = s; i < e; i++) if (a[i] !== '\n') a[i] = ' '
+  return a.join('')
+}
+
+/** a regular expression's alternatives that are words or TeX names (two letters or more), where it has three or more */
+export function alternativesOf(pattern) {
+  // (the pattern cut at every `|` outside a character class, whatever group it stands in)
+  const parts = []
+  let cur = ''
+  let inClass = false
+  for (let i = 0; i < pattern.length; i++) {
+    const c = pattern[i]
+    if (c === '\\') {
+      cur += c + (pattern[i + 1] ?? '')
+      i++
+    } else if (inClass) {
+      cur += c
+      if (c === ']') inClass = false
+    } else if (c === '[') {
+      inClass = true
+      cur += c
+    } else if (c === '|') {
+      parts.push(cur)
+      cur = ''
+    } else cur += c
+  }
+  parts.push(cur)
+  // the alternatives as words: anchors, word boundaries, a group's opening and closing taken off
+  const words = parts.map(p => p.replace(/^\^|\$$/g, '').replace(/\\b/g, '').replace(/^\(\?:|^\(\?<?[=!]|^\(/, '').replace(/\)+[*+?]?$/, '').replace(/^\\\\/, '\\'))
+  return words.filter(w => /^\\?[A-Za-z@][A-Za-z@*-]+$/.test(w))
+}
+
+/** a numeric literal's class (census.mjs DEFINITIONS `thresholds`, `budgets`): `conversion` (a unit's factor or a
+ *  representation's bound, its name or comment naming the unit), `structural` (0, 1 or -1: a sign, an emptiness, the
+ *  first), `code` (written in hex, octal or binary: a code point or a mask), `budget` (a whole number named as a time, a
+ *  size or a count the code may spend or hold, not in a document's unit: with its `unit` and its `source`, `measured`,
+ *  `platform` or null), `borderline` (its comment cites a definition, which the census cannot hold the value to; or a unit
+ *  factor whose unit is not named), else `tuned` (`evidence`: its comment cites a paper, the corpus or a measurement;
+ *  `reason`: it has a comment at all) */
+export function thresholdOf(t) {
+  // (its comment kept short: the reason the list prints beside it)
+  const why = (t.comment ?? '').replace(/^\s*\*+\s?/gm, '').replace(/\s+/g, ' ').trim().slice(0, 140)
+  const out = { ...t, comment: undefined, why }
+  const words = `${t.name ?? ''}\n${t.comment ?? ''}`
+  const parts = (t.name ?? '').split('.').filter(Boolean)
+  if (/^-?0[xXoObB]/.test(t.raw)) out.class = 'code'
+  else if (t.value === 0 || t.value === 1 || t.value === -1) out.class = 'structural'
+  else if (parts.some(p => (UPPER.test(p) ? BUDGET_UPPER : BUDGET_CAMEL).test(p)) && Number.isInteger(t.value) && !TYPE_UNITS.test(t.comment ?? '')) {
+    // a budget: what the code may spend or hold, its unit by its name or comment, its source a measurement or a platform's limit
+    out.class = 'budget'
+    const first = sentencesOf(t.comment ?? '')[0] ?? ''
+    out.unit = (BUDGET_UNITS.find(u => parts.some(p => u.name.test(p))) ?? BUDGET_UNITS.find(u => u.words.test(first)))?.unit ?? 'count'
+    out.source = BUDGET_MEASURED.test(t.comment ?? '') ? 'measured' : CITES_DEFINITION.test(t.comment ?? '') || PLATFORM_LIMIT.test(t.comment ?? '') ? 'platform' : null
+  } else if (UNIT_FACTORS.has(Math.abs(t.value))) out.class = UNIT_WORDS.test(words) ? 'conversion' : 'borderline'
+  else if (CITES_DEFINITION.test(t.comment ?? '') && !CITES_EVIDENCE.test(t.comment ?? '')) out.class = 'borderline'
+  else out.class = 'tuned'
+  out.evidence = CITES_EVIDENCE.test(t.comment ?? '')
+  out.reason = /\S/.test((t.comment ?? '').replace(/\n/g, ''))
+  out.cites = CITES_DEFINITION.exec(t.comment ?? '')?.[0] ?? null
+  return out
+}
+
+/** a list of names (census.mjs DEFINITIONS `lists`): `defined` where its comment cites a definition, `listed` otherwise */
+function listOf(l) {
+  const cites = CITES_DEFINITION.exec(l.comment ?? '')?.[0] ?? null
+  return { line: l.line, name: l.name ?? null, size: l.entries.length, form: l.form, sample: l.entries.slice(0, 4), class: cites ? 'defined' : 'listed', cites }
+}
+
+// ---------------------------------------------------------------- resolution
+
+const EXTS = ['.ts', '.tsx', '.mts', '.mjs', '.js', '.jsx', '.cjs', '.json', '.css', '.d.ts', '.d.mts']
+const QUERY = /[?#].*$/
+
+/**
+ * A resolver over one repository's files (and, for a repository that holds another as a pin, that one's): `(from, spec)` to
+ * `{ repo, path }`, `{ external: name }` for a package outside the trees or a platform module, or null for nothing found.
+ * The profile's `aliases` (`{ from, to, importerUnder? }`), `workspaces` (directories of packages, each named by its
+ * package.json and reached through its `exports`) and `pin` (`{ prefix, repo }`: a path under it is the other
+ * repository's, at the path after it).
+ */
+export function resolverOf(repo, files, profile, others = {}) {
+  const has = new Set(files)
+  const pin = profile.pin
+  const exists = p => (pin && p.startsWith(pin.prefix) ? others[pin.repo]?.has(p.slice(pin.prefix.length)) : has.has(p))
+  const packages = new Map()
+  for (const dir of profile.workspaces ?? []) {
+    const inPin = pin && dir.startsWith(pin.prefix)
+    const list = inPin ? [...(others[`${pin.repo}:packages`] ?? [])] : files.filter(f => f.startsWith(`${dir}/`) && /^[^/]+\/package\.json$/.test(f.slice(dir.length + 1)))
+    for (const m of list) {
+      const path = inPin ? `${pin.prefix}${m.path}` : m
+      const json = inPin ? m.json : JSON.parse(readFileSync(join(profile.root, m), 'utf8'))
+      if (json?.name) packages.set(json.name, { dir: posix.dirname(path), exports: json.exports })
+    }
+  }
+  const probe = base => {
+    if (exists(base)) return base
+    const js = /\.(?:m|c)?jsx?$/.exec(base)
+    if (js) {
+      const stem = base.slice(0, -js[0].length)
+      for (const e of js[0] === '.mjs' ? ['.mts'] : js[0] === '.cjs' ? ['.cts'] : ['.ts', '.tsx']) if (exists(stem + e)) return stem + e
+    }
+    for (const e of EXTS) if (exists(base + e)) return base + e
+    for (const e of EXTS) if (exists(`${base}/index${e}`)) return `${base}/index${e}`
+    return null
+  }
+  const place = p => (pin && p.startsWith(pin.prefix) ? { repo: pin.repo, path: p.slice(pin.prefix.length) } : { repo, path: p })
+  return (from, rawSpec) => {
+    const spec = rawSpec.replace(QUERY, '')
+    if (spec.startsWith('node:') || spec.startsWith('cloudflare:') || spec.startsWith('virtual:') || spec.startsWith('#') || /^[a-z]+:\/\//.test(spec)) return { external: spec }
+    let local = null
+    if (spec.startsWith('./') || spec.startsWith('../') || spec === '.' || spec === '..') local = posix.normalize(posix.join(posix.dirname(from), spec))
+    else {
+      for (const a of profile.aliases ?? []) {
+        if (a.importerUnder && !from.startsWith(a.importerUnder)) continue
+        if (spec === a.from.replace(/\/$/, '') || spec.startsWith(a.from)) {
+          local = `${a.to}${spec.slice(a.from.length)}`.replace(/\/$/, '')
+          break
+        }
+      }
+      if (local == null) {
+        const name = spec.startsWith('@') ? spec.split('/').slice(0, 2).join('/') : spec.split('/')[0]
+        const pkg = packages.get(name)
+        if (!pkg) return { external: name }
+        const sub = `.${spec.slice(name.length)}`
+        const target = typeof pkg.exports === 'string' ? (sub === '.' ? pkg.exports : null) : pkg.exports?.[sub]
+        const t = typeof target === 'object' && target ? (target.import ?? target.default ?? target.types) : target
+        local = t ? posix.normalize(posix.join(pkg.dir, t)) : posix.join(pkg.dir, sub)
+      }
+    }
+    if (local.startsWith('../')) return null
+    const found = probe(local)
+    return found ? place(found) : null
+  }
+}
+
+// ---------------------------------------------------------------- the graph
+
+/** the edges of the scanned repositories: `id` is `<repo>:<path>`; each edge `{ from, to, names, type, line }` */
+export function graphOf(scans) {
+  const others = {}
+  for (const s of scans) {
+    others[s.repo] = new Set(s.files.keys())
+    others[`${s.repo}:packages`] = [...s.files.keys()].filter(f => /^packages\/[^/]+\/package\.json$/.test(f)).map(p => ({ path: p, json: JSON.parse(readFileSync(join(s.root, p), 'utf8')) }))
+  }
+  const edges = []
+  const unresolved = []
+  for (const s of scans) {
+    const resolve = resolverOf(s.repo, [...s.files.keys()], { ...s.profile, root: s.root }, others)
+    for (const [path, f] of s.files)
+      for (const im of f.imports ?? []) {
+        const r = resolve(path, im.spec)
+        if (r?.path) edges.push({ from: `${s.repo}:${path}`, to: `${r.repo}:${r.path}`, spec: im.spec, names: im.names, type: im.type, line: im.line, ...(im.whole ? { whole: im.whole } : {}), ...(im.namespace ? { namespace: im.namespace } : {}) })
+        else if (!r) unresolved.push({ from: `${s.repo}:${path}`, spec: im.spec })
+      }
+  }
+  const out = new Map()
+  const into = new Map()
+  for (const e of edges) {
+    if (!out.has(e.from)) out.set(e.from, [])
+    out.get(e.from).push(e)
+    if (!into.has(e.to)) into.set(e.to, [])
+    into.get(e.to).push(e)
+  }
+  return { edges, out, into, unresolved }
+}
+
+/** the nodes reached from `roots` by the edges a build keeps (a type-only import is erased: `types` to follow it too),
+ *  never entering `cut` nor leaving `alive`; with each node's first parent (a path back) */
+export function reach(graph, roots, cut = new Set(), alive = null, { types = false } = {}) {
+  const parent = new Map()
+  const queue = []
+  for (const r of roots) if (!cut.has(r) && !parent.has(r) && (!alive || alive.has(r))) {
+    parent.set(r, null)
+    queue.push(r)
+  }
+  for (let i = 0; i < queue.length; i++)
+    for (const e of graph.out.get(queue[i]) ?? []) {
+      if ((e.type && !types) || cut.has(e.to) || parent.has(e.to) || (alive && !alive.has(e.to))) continue
+      parent.set(e.to, queue[i])
+      queue.push(e.to)
+    }
+  return parent
+}
+
+/** the path from a root to `node` in a reach's parents */
+export function pathTo(parents, node) {
+  const p = []
+  for (let n = node; n != null; n = parents.get(n)) p.unshift(n)
+  return p
+}
+
+/** strongly connected components of more than one node among `nodes` (Tarjan's, iterative) */
+export function cyclesOf(graph, nodes) {
+  const index = new Map()
+  const low = new Map()
+  const on = new Set()
+  const stack = []
+  const out = []
+  let next = 0
+  for (const start of nodes) {
+    if (index.has(start)) continue
+    const work = [[start, 0]]
+    index.set(start, next)
+    low.set(start, next++)
+    stack.push(start)
+    on.add(start)
+    while (work.length) {
+      const top = work.at(-1)
+      const [v, i] = top
+      const succ = (graph.out.get(v) ?? []).map(e => e.to).filter(w => nodes.has(w))
+      if (i < succ.length) {
+        top[1]++
+        const w = succ[i]
+        if (!index.has(w)) {
+          index.set(w, next)
+          low.set(w, next++)
+          stack.push(w)
+          on.add(w)
+          work.push([w, 0])
+        } else if (on.has(w)) low.set(v, Math.min(low.get(v), index.get(w)))
+      } else {
+        work.pop()
+        if (work.length) {
+          const u = work.at(-1)[0]
+          low.set(u, Math.min(low.get(u), low.get(v)))
+        }
+        if (low.get(v) === index.get(v)) {
+          const comp = []
+          let w
+          do {
+            w = stack.pop()
+            on.delete(w)
+            comp.push(w)
+          } while (w !== v)
+          if (comp.length > 1) out.push(comp.sort())
+        }
+      }
+    }
+  }
+  return out.sort((a, b) => b.length - a.length || a[0].localeCompare(b[0]))
+}
+
+// ---------------------------------------------------------------- type-checking
+
+/** a tsconfig read as JSON with comments and trailing commas */
+function readJsonc(file) {
+  const text = readFileSync(file, 'utf8')
+  const ranges = commentsByScan(text)
+  return JSON.parse(withoutRanges(text, ranges).replace(/,(\s*[}\]])/g, '$1'))
+}
+
+/** the projects a repository's `typecheck` script runs: `tsc` alone is its root tsconfig.json; `-p <file>` that one; `-b <dir>`
+ *  that one and its references */
+export function projectsOf(root) {
+  const pkg = existsSync(join(root, 'package.json')) ? JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) : {}
+  const script = pkg.scripts?.typecheck ?? ''
+  const out = []
+  for (const cmd of script.split(/&&|;/)) {
+    const m = /\btsc\b(.*)/.exec(cmd)
+    if (!m) continue
+    const p = /(?:-p|--project)\s+(\S+)/.exec(m[1])
+    const b = /(?:-b|--build)\s+(\S+)/.exec(m[1])
+    const at = p ? p[1] : b ? b[1] : 'tsconfig.json'
+    out.push({ path: at.endsWith('.json') ? at : posix.join(at, 'tsconfig.json'), build: Boolean(b) })
+  }
+  return out
+}
+
+const globRe = (base, pattern) => {
+  const full = posix.normalize(posix.join(base, pattern))
+  if (!/[*?]/.test(full)) return { prefix: full }
+  const re = full
+    .split('**/')
+    .map(part => part.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[^/]*').replace(/\?/g, '[^/]'))
+    .join('(?:.*/)?')
+  return { re: new RegExp(`^${re}$`) }
+}
+const matches = (g, f) => (g.prefix != null ? f === g.prefix || f.startsWith(`${g.prefix === '.' ? '' : `${g.prefix}/`}`) || g.prefix === '.' : g.re.test(f))
+
+/** the files each project of the typecheck reads as TypeScript (its include and files, less its exclude, and every
+ *  TypeScript file and declaration their imports reach), and whether any reads JavaScript (`checkJs`) */
+export function typeCheckedOf(scan, graph) {
+  const files = [...scan.files.keys()]
+  const checked = new Set()
+  let checkJs = false
+  const seen = new Set()
+  const project = (path, follow) => {
+    if (seen.has(path) || !scan.files.has(path)) return
+    seen.add(path)
+    let json
+    try {
+      json = readJsonc(join(scan.root, path))
+    } catch {
+      return
+    }
+    let opts = json.compilerOptions ?? {}
+    let ext = json.extends
+    let from = posix.dirname(path)
+    for (let n = 0; ext && n < 5; n++) {
+      const p = posix.normalize(posix.join(from, ext))
+      if (!existsSync(join(scan.root, p))) break
+      const parent = readJsonc(join(scan.root, p))
+      opts = { ...(parent.compilerOptions ?? {}), ...opts }
+      ext = parent.extends
+      from = posix.dirname(p)
+    }
+    const dir = posix.dirname(path)
+    const include = (json.include ?? (json.files ? [] : ['**/*'])).map(i => globRe(dir, i))
+    const exclude = (json.exclude ?? ['node_modules']).map(i => globRe(dir, i))
+    const js = Boolean(opts.allowJs && opts.checkJs)
+    checkJs ||= js
+    const readable = f => /\.(?:m|c)?tsx?$/.test(f) || (js && /\.(?:m|c)?jsx?$/.test(f))
+    for (const f of [...(json.files ?? []).map(x => posix.normalize(posix.join(dir, x))), ...files.filter(f => include.some(g => matches(g, f)) && !exclude.some(g => matches(g, f)))]) if (readable(f)) checked.add(f)
+    if (follow) for (const r of json.references ?? []) project(posix.normalize(posix.join(dir, r.path.endsWith('.json') ? r.path : `${r.path}/tsconfig.json`)), true)
+  }
+  for (const p of projectsOf(scan.root)) project(p.path, p.build)
+  // (what the included files import is read too: a TypeScript file, or a JavaScript module's declaration beside it)
+  const queue = [...checked]
+  for (let i = 0; i < queue.length; i++)
+    for (const e of graph.out.get(`${scan.repo}:${queue[i]}`) ?? []) {
+      const [repo, ...rest] = e.to.split(':')
+      if (repo !== scan.repo) continue
+      let t = rest.join(':')
+      if (/\.(?:m|c)?jsx?$/.test(t) && !checkJs) {
+        const d = t.replace(/\.(m|c)?jsx?$/, (_, m) => `.d.${m ?? ''}ts`)
+        if (!scan.files.has(d)) continue
+        t = d
+      }
+      if (!checked.has(t) && /\.(?:m|c)?tsx?$/.test(t)) {
+        checked.add(t)
+        queue.push(t)
+      }
+    }
+  return { checked, checkJs, projects: [...seen] }
+}
+
+// ---------------------------------------------------------------- scanning a tree
+
+/** a repository's tree read whole: every file's place and facts */
+export function scanTree(repo, root, profile, { tokens = true, nodes = null } = {}) {
+  const files = new Map()
+  const paths = listFiles(root, profile.exclude ?? [])
+  // (what the history reading reads of the tree besides each file: this repository's documents, the files its dependencies
+  // distribute)
+  const docs = paths.filter(p => /\.md$/.test(p) && (p.startsWith('docs/') || !p.includes('/'))).map(p => ({ path: p, text: readFileSync(join(root, p), 'utf8') }))
+  const history = historyContextOf(docs, distributedOf(root, paths))
+  for (const path of paths) {
+    const kind = kindOf(path)
+    if (kind === 'other' || kind === 'data') {
+      if (kind === 'data' && placeOf(path, profile).role === 'product') files.set(path, { path, kind, bytes: statSync(join(root, path)).size, ...placeOf(path, profile), lines: { code: 0, comment: 0, blank: 0 }, imports: [] })
+      else if (path.endsWith('package.json') || path.endsWith('tsconfig.json')) files.set(path, { path, kind, ...placeOf(path, profile), lines: { code: 0, comment: 0, blank: 0 }, imports: [] })
+      continue
+    }
+    const text = readFileSync(join(root, path), 'utf8')
+    // (`nodes`: a test of a path, the files whose syntax trees and items' nodes are kept; the spread copies what is enumerable)
+    const f = factsOf(path, text, { tokens, nodes: Boolean(nodes?.(path)), history })
+    const kept = { ...f, ...placeOf(path, profile) }
+    if (f.ast) Object.defineProperties(kept, { ast: { value: f.ast }, text: { value: text } })
+    if (f.listCands) Object.defineProperties(kept, { listCands: { value: f.listCands }, types: { value: f.types } })
+    files.set(path, kept)
+  }
+  // (each list classed again by the uses the whole tree shows of it: DEFINITIONS.lists)
+  const resolve = resolverOf(repo, [...files.keys()], { ...profile, root })
+  listsByUse(files, (from, spec) => {
+    const r = resolve(from, spec)
+    return r?.path && r.repo === repo && files.has(r.path) ? r.path : null
+  })
+  return { repo, root, profile, files }
+}

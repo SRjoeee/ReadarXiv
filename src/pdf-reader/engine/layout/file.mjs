@@ -36,12 +36,210 @@ export { LayoutRefusal } from './json.mjs'
  *  break read by its own words (pipeline/anchors.mjs: a paragraph and its footnote both going on over a page each keep the
  *  lines their matched words are on, and a formula's row of no word of the unit's is held between its lines, not the walk's
  *  end): over 57 papers 10 LOST rows found and none lost, 5 units' lines changed in 4 papers, the gate pack's 32 outputs
- *  unchanged (the file's schema is 5 still) */
-export const LAYOUT = '11'
+ *  unchanged (the file's schema is 5 still); 12 (layer route step 2): the file's coordinates are our base page's, the final
+ *  pass of the marked original (its marks where the draft has them), no longer arXiv's PDF's: a placeholder's segments are its
+ *  own glyphs and rules between its two marks, looked up on that page with no matching, and the carry is the line check alone
+ *  (the file's schema is 5 still); 13: a placeholder after a control sequence TeX and the kernel define to set no ink and
+ *  read nothing (rules/tex-kernel.mjs: `\@` in "Fig.\@ \ref{x}", `\indent`…) or after a LaTeX text symbol (`\S\ref{x}`) gets its
+ *  marks, where the maker took the one before it for a macro that may look ahead and left it with none: over 177 sources
+ *  19 papers' marked originals gain 359 opening marks, the other 158 and every unit are as they were (the
+ *  file's schema is 5 still; the gate pack's seven papers are among those unchanged); 14: what stands beside a placeholder read
+ *  from what the paper says rather than guessed (marks.mjs MARKS_SCHEMA 9): a call of the paper's own macro that reads nothing past
+ *  its arguments (latex-front.mjs completeMacros, from its definitions) is asked about by the mark probe, last, and a call the
+ *  probe asked about (or one of no arguments) gets the closing mark TeX answered moves nothing, before white space or
+ *  punctuation, and leaves the piece after it, past white space, its marks; a macro glued to a word whose box TeX begins with glue, a kern, a penalty or a whatsit (readInkApart) is marked;
+ *  the kernel's letters but the dotless \i and \j, and \slash, are text symbols; and a unit whose start mark stands at no word is bounded by the nearest
+ *  upright word after it on its baseline in its column (make.mjs reachIn); and a unit's line probe goes past the white space
+ *  that opens it, where its start mark goes, so that a space TeX skips after a control word or by \ignorespaces stays skipped
+ *  (latex-front.mjs patch: paralist's inline `\item Which`, 2610.21098's page re-broken from page 1). Every marked original's
+ *  bytes change where a unit opens with white space. Over the release-route sweep's 35 papers with unanchored rows, 37 of the
+ *  217 rows (31 units) convert, 57 units in all are placed better and no other unit's layout changes; of their 34 base pages
+ *  made again, 19 set every word where the paper's own compile in the same image does (pdftotext), the other 15 as the sweep's
+ *  did or nearer. Of the gate pack's seven papers 2609.26457's marking gains 73 marks, and each base page sets every word as
+ *  before or as the paper's own compile does (2307.16209 and 2608.16117 now as it) (the file's schema is 5 still); 15 (the release sweep's
+ *  fallbacks, 2026-10-22): the layout compile writes a Latin-1 source as the paper's own bytes (live.mjs originalFiles
+ *  `transcode`), sets no mark inside an argument TeX reads verbatim (marks.mjs VERBATIM_ARG), reads no class's fallback that a
+ *  package the paper loads overrides as the command's definition (arg-roles.mjs overriddenFallback), and takes no marked original
+ *  of more pages than arXiv's for the base page (paper.mjs markedOfPaper): over 183 local sources the marked original changes in
+ *  2610.20581 and 2610.19860 alone, the gate pack's 32 outputs unchanged (the file's schema is 5 still; MARKS_SCHEMA 9 still);
+ *  16: a unit is laid only where every page it is on is drawable, its words arXiv's page's (carry.mjs PAGE_SAME: 0.98 in
+ *  order, NFKC and the known text-layer substitutes applied) and none of its lines on another page of arXiv's (make.mjs
+ *  drawable), the others left the original's, in place of the share of the paper's and each part's lines (CARRY_MIN, gone)
+ *  (the file's schema is 5 still); 17 (the marks' coverage, second round): the layout compile marks the front matter's units
+ *  (an author block's names and places, a \\thanks, a \\date: a front unit not a heading nor one a macro only stores) as any unit, but one whose text another's
+ *  equals (latex-front.mjs frontMarks); a page shipped with no column's body bracketed (revtex4-2's ltxgrid makes its columns
+ *  without \\@makecol) has its text block bracketed at \\@outputpage (marks.mjs POINTS_TEX); a complete macro's probed call
+ *  glued to the placeholder after it is asked about that follower (its `call` code) and gets its closing mark where TeX
+ *  answered so; and a unit's own marks keep a letter's italic correction as a cell's do (\\emph{…} at a unit's end). Over
+ *  the release-route sweep's 35 papers with unanchored rows, 68 of the 217 rows (43 units) convert, by the measured per-item
+ *  counts (2610.21098's glued calls 32 rows, revtex4-2's body points 36); of their 34 base pages made again, 33 set every word
+ *  as next's did and 2610.21924 eleven words nearer its own compile; the gate pack's seven base pages are next's, word for
+ *  word, its 15 author units and 5 notes all marked (the file's schema is 5 still; MARKS_SCHEMA 9 still); 18: a start mark
+ *  on a turned run reaches no word (make.mjs reachIn turnedAt): 2602.23285v2's sideways cell in a table set beside a
+ *  paragraph reached the next cell's word, took the paragraph's line and left the paragraph unlaid, as no maker before 14
+ *  did; and why each unit not laid is the original's, a code of UNLAID a unit (`unlaid`, a key held only where a unit is
+ *  not laid, as `colours`: every file of before reads and writes back unchanged; a part holds those of the units it tells),
+ *  so that no unit is left out of the file without its reason (the file's schema is 5 still); 19 (the pin's sweep, 2026-10-24):
+ *  a start mark takes the nearest word it does not stand past (pipeline/anchors.mjs tokenAtMark), so that the word it carries
+ *  from the marked original, read in one text item a line, is the word our wrapped base page, read in items cut at its groups,
+ *  has there (24 units of 11 papers, a caption's or a paragraph's start after its label, were unplaced); a front matter
+ *  unit's placeholder marks are robust (`\\protect` before each: a \\thanks's \\protected@xdef took them off) and a piece after
+ *  `\\protect` is marked before the prefix (rules/tex-kernel.mjs PREFIX_WORDS), so that its ink is its own (5 notes' addresses
+ *  were LOST); and the wrap's decoded streams are held as bytes of their own (layout/remove.mjs readAtMost: 2610.21924's maker
+ *  died of its memory) (the file's schema is 5 still; MARKS_SCHEMA 9 still); 20 (the release sweep of 2026-10-24): a piece's
+ *  ink read as the per-unit erasure reads it (stream.mjs ownedOf, both readings one): the text after a piece, where it runs to
+ *  its unit's next mark, begins where the glyphs to that mark spell it whole, not where its first characters first stand in the
+ *  piece's own ink (a display's \\text{for every} before "For", a URL's dots before the full stop: the display's or the URL's
+ *  segments were cut short, the rest read as the unit's text), and a display that ends a footnote is found to its page's folio
+ *  (it was LOST): the layout file's segments and the wrap's groups are one reading again; and (the units still English
+ *  against production after it) a placeholder at a unit's head is found by the text TeX sets for it, as the probe now reads
+ *  it (marks.mjs readInkTexts, MARKS_SCHEMA 10: ASCII's punctuation, "1,024"; inline code at the head asked about too,
+ *  "max_tokens"; a formula's glyph spelled by no character one glyph, INK_ANY, $d'$), and a front heading (ICML's
+ *  \\icmltitle) is marked as any heading in the layout compile, its title's ink its own (the file's schema is 5 still); 21
+ *  (docs/route/orphan-text.md, stage 2): the ink units' rows, text no source unit owns laid from our own glyphs (layout/ink-units.mjs,
+ *  pipeline/ink-pass.mjs), of the kinds UNIT_KINDS names after the source units'; and in the same unreleased 21 (the content
+ *  class `figures`, stage 5) the layout compile sets a point inside each pgf picture's own box (marks.mjs POINTS_TEX, `zs` and
+ *  `ze`), so that a TikZ or pgfplots picture's text is told apart in our final pass (layout/figure-text.mjs): nothing outside
+ *  the picture's box moves, and no reader of the marks sees the points (ink.mjs keeps them apart, `pictures`) (the file's
+ *  schema is 5 still); 22 (stage 4): a bibliography's entries units of their own, numbered after the source's other units
+ *  (UNIT_KINDS `reference`, and `refnames` for an entry's names, latex-front.mjs bibliography and entriesLast), marked as the
+ *  body's, and an entry's numbers placeholders of their own (PH_KINDS `number`, both marks: MARKS_SCHEMA 11). A maker of 21
+ *  reads neither kind, so a file of 22 is another maker's: the gate pack is made again, each side of the rules gate on its own
+ *  (the file's schema is 5 still); 23 (the release sweep of 2026-10-25, (c)): a label row is its unit's only where its ink is
+ *  no other unit's, as the wrap owns it (layout/own.mjs): the closing punctuation a head sets after the unit before a start is
+ *  that unit's line (make.mjs headTail, MR 5's rule: amsthm's ")." after a note that ends in a citation, which was the body's
+ *  label row and was shown again from the original where it stood, 2610.18513v1 p35), and a label row that meets an ink unit's
+ *  text goes (pipeline/ink-pass.mjs layoutWithInk: a label the wrap left in no group and an ink unit claimed, SIAM's "AMS
+ *  subject classifications.", a theorem's head whose note is a citation, shown again under the ink unit's translation: 39
+ *  rows of 22 papers, 0 after, 30 of the sweep's 32 rows of (c)); and an ink unit's runs in another weight, slant or colour
+ *  than its own are groups of the commands that set them (layout/ink-units.mjs rule 9: the sweep's (d), its text drawn in one
+ *  style); and in the same 23 (2609.20976v1) an opening point alone at its unit's end, no display, owns its lines up to TeX's
+ *  skip before another block, in both readings (stream.mjs lineEnd: the last author's \\orcidlink had owned the affiliations
+ *  and the e-mail below the names; at a bibliography's leading a wrapped \\Eprint keeps every line it held); and in the same 23
+ *  (2610.19274v1) a word a hyphen cuts at a line's end is joined where PDF.js ends the line with an empty item after it, as on
+ *  our wrapped page (pipeline/anchors.mjs tokenizeDocument: the line check read two words against arXiv's one and left the list
+ *  of figures' pages undrawn). The rows of the units they reach change, so a file of 22 is another maker's: the stored layers are made again and
+ *  the gate pack with them; and in the same unreleased 23 (the look-ahead pairs, 2609.20976v1's abstract English) a
+ *  placeholder right after a paper's macro that may look ahead (\\xspace: 2609.20976's \\snr, `\\ac{SNR}\\xspace`, before
+ *  `$\\geq 50$`), past white space alone or none, is marked where the mark probe's look-ahead section says its opening mark there
+ *  moves nothing (marks.mjs aheadSamples, the pair asked as the paper sets it; MARKS_SCHEMA 12), and the macro closed where its
+ *  closing mark does too: that placeholder was LOST with no mark, and the macro with it ('open, an unmarked piece follows'),
+ *  its unit the original's; where no mark may stand there (\\footnote, before which \\xspace sets no space and would before a
+ *  mark), the maker parts the two's ink to the next marked piece by the text TeX sets for the macro (stream.mjs ownedOf,
+ *  marks.mjs followsOf `split`), the piece placed from its own ink (the gate pack's seven papers write no such pair: their
+ *  layout files are 23's rows); 24 (the content classes' coverage, the references and the author names decoupled:
+ *  PDF-READER §19.13): an author block's affiliations, institutions, addresses and e-mail line units of their
+ *  own (UNIT_KINDS `affiliation`, latex-front.mjs frontBlock: the body's, always translated, then the names' toggle's from
+ *  2026-10-30; its names `author` as before),
+ *  every unit at the number it had, the rows cut apart after the source's other units and before the entries (entriesLast);
+ *  and a bibliography's entry one unit, whole (`refnames` kept at its index, made no more): a maker or a reader of 23 reads no
+ *  such kind, so a file of 24 is another maker's, and each side of the rules gate reads its own pack (the file's schema is 5
+ *  still); 25 (the release sweep of 2026-10-29, 24 counted released): a line of ours too short to be evidence, under
+ *  LINE_EVIDENCE letters and digits, is never found on another page of arXiv's (carry.mjs lineCheckOf: 2610.21765v1 p7's axis
+ *  label "q", matched on arXiv's p6, left the page undrawn and 10 units English), and a word a hyphen cuts at a line's end goes on
+ *  in the line below or at the next column's top alone, never in text the stream gives next elsewhere (pipeline/anchors.mjs
+ *  tokenizeDocument: "Sim-" and the next column's axis label "q" read as "simq" since #484); a contents entry, a note or an
+ *  orphan's paragraph is one unit at its own leading, set double too (layout/ink-units.mjs PARA_DY, EDGE, INDENT: 2610.19274v1's list of figures, cut line by
+ *  line and each translated alone), a script a text face sets after a formula's run is that run's placeholder (C_n²'s "2"), and
+ *  a head's or an entry's number is the page's own ink only where it stands apart from the line's text (ink-units.mjs APART: a
+ *  folio, a section number) or is a running head's folio (another number where its words recur), one in its own words the
+ *  unit's (2010.11929v2's head "… at ICLR 2021", its year drawn apart).
+ *  The rows of the units they reach change, so a file of 24 is another maker's (the file's schema is 5 still); and in the same
+ *  unreleased 25 (the mark probe's answers past a sample TeX gives up on, and a .bbl's own definitions): each box of the probe
+ *  ends at the group level it began at, the groups its sample left open closed (marks.mjs PROBE_UNWIND: 2010.11929v2's \\tikz,
+ *  asked alone, opened a picture it never closed, in which pgf's \\selectfont selects \\nullfont, and every box after it set
+ *  no character: its \\natexlab{a} and \\doi{…} read as setting no ink and given no row, 8 of its entries English, and a pair's
+ *  boxes, all empty, read as a mark that moves nothing), a box TeX set a character in \\nullfont in no answer; and the probe
+ *  sets a .bbl's definitions as its styles write them, its conditionals whole (live.mjs bblProvides: natbib's
+ *  `\\expandafter\\ifx\\csname urlstyle\\endcsname\\relax … \\fi`, its \\doi TeX's branch). The rows of the pieces they reach change
+ *  (2010.11929v2's 8 entries); and in the same unreleased 25, the ink section's entries asked in a share of their own past the
+ *  body's INK_MAX, the calls the body's room would have asked first, then the entries' leads (marks.mjs ENTRY_INK_MAX;
+ *  MARKS_SCHEMA 13: 2608.25210v2's body filled INK_MAX, its entries' \\natexlab{} never asked, 54 entries English);
+ *  and in the same unreleased 25: a math face told by its family's names (layer-proto/fonts.mjs classifyFont: Euler's EUEX,
+ *  EURM and EURB, MathTime's MTMI, MTSY and MTEX, XITSMath, and XITS's text face no math face), which the ledger's math lines,
+ *  the ink units' kept runs and the figure runs' words read where a paper sets them; 26 (the maintainer's ruling of
+ *  2026-10-29 on lane B's B2): a unit TeX set flush left or flush right is UNIT_FLAG.FLUSH_LEFT or FLUSH_RIGHT, by TeX's word
+ *  alone (marks.mjs readAlign), and that word is the paragraph's own where a box's close ended it: under a LaTeX that inserts
+ *  no \par there (TeX Live 2023), the probe's hook ran at the next paragraph's \par and told its skips (2608.16117v1's
+ *  elsarticle abstract, boxed with no \par, read as its keywords' \raggedright), now the skips at the unit's end mark
+ *  (LAYOUT_TEX watches the box). A reader of 25 refuses the new flags, so a file of 26 is another maker's (the file's schema
+ *  is 5 still); 27 (the coverage lane of batch 2, the release sweep of staging 4b3c4ae9): a command that sets the punctuation
+ *  mark after it before its own ink (cite.sty's superscripts, fnpct) marked around the pair where TeX answers that moves nothing
+ *  (marks.mjs code 3, MARKS_SCHEMA 14), the mark's glyph its text's (stream.mjs ownedOf `moved`: 2610.19274v1's 19 paragraphs);
+ *  a macro TeX said sets no ink EMPTY, no longer no row, which the layer read as a formula not found where its argument holds
+ *  letters (make.mjs: \\natexlab{a}, \\la{…}, \\papertext{…}, \\cellcolor{…}); a piece alone at its unit's end with its opening
+ *  point alone, owned to the unit's next mark, given the lines it runs onto (make.mjs wrapOf: an entry's \\dodoi{…}, \\doi{…}
+ *  after its end mark, 33 of 2608.12606v1's entries); and a macro whose text the probe showed is one punctuation mark drawn as
+ *  that character (TEXT: apacite's \\BPBI, 39 entries of two papers). The rows of the pieces they reach change, so a file of 26
+ *  is another maker's (the file's schema is 5 still); 28 (batch 2's ink lane, #122-1): a Type 3 glyph's ink is what its
+ *  char procedure paints (layout/ink.mjs type3Box: its paths' extents, a bitmap's mask's outline, through the font's matrix), not its font's declared ascent and
+ *  descent for every glyph, a "." boxed as an "M": matplotlib's labels (2610.17024v1, 2610.20848v1, 2610.22197v1 …, drawn as
+ *  figure units since #476) take their own boxes, their room and the crowding read from them, and a glyph whose procedure
+ *  paints nothing (an invisible text layer, 2610.19159v1's figures) has none; 29 (the owner's case 2610.37668v1): backref's list
+ *  after an entry a row of its own, its list piece's (latex-front.mjs BACKREF_LIST), its segments the list's ink between the marks
+ *  LAYOUT_TEX sets around it, EMPTY where TeX set none: a file of 28 has no row for that piece; 30 (the owner's case
+ *  2610.35877v1): a footnote's call after its unit's last word, which TeX gave no mark, its raised run right after the end mark
+ *  (make.mjs besideMarks), where it was LOST and its unit the original's whole (the abstract); and a biblatex entry's unit, of
+ *  the new kind `inkreferences` (UNIT_KINDS): a reader of 29 refuses that kind's index; 31 (the owner's ruling of 2026-10-30,
+ *  2610.30854v1): a page whose lines moved across its breaks through compile drift is drawable (carry.mjs then: at most 4
+ *  at each end, to or from the page beside it, the rest arXiv's page's words), its units laid where a file of 30 left them
+ *  `undrawn`; 32 (the owner's decision of 2026-11-03): each line of a code environment's body a region the file holds
+ *  (`regions`, the file's schema 6), read from the points the layout compile sets around it (marks.mjs regionsTex); 33 (the owner's
+ *  report of 2026-11-03 on 2610.42112v1): a babel name's row holds the counter TeX set after it on its line where it leads no unit
+ *  (names.mjs counterAfter: IEEEtran's "APPENDIX A" centred over its title, centred so whole; "Appendix A:" in its contents list),
+ *  its width at the row's end in slot 12 (a RUN_IN name's glue; 0 before), which the layer splits off and sets after the name's
+ *  word: a reader of 32 would draw the word over the counter's place and drop the counter, and refuse the slot; 34 (2610.21377v1's
+ *  subject classes, p1): no label where a unit's own text begins (make.mjs headLabel: the line read from the head's first glyph
+ *  spells more of the unit's text than the line read from after it), where jnsao's `49\\textsc{k}20 (primary)` kept "49" as an item's
+ *  number before a line that began at the "k": a file of 33 holds that label and a line's start past it; 35 (with PIPELINE 70):
+ *  the maker anchors each unit where the head's names say its marks stand (pipeline/anchors.mjs searchHead), so that a unit
+ *  numbered after the text is searched between its neighbours by their own pages (2610.17024v1's title, keyword list and 29
+ *  references, laid now): a file of 34 lays fewer units; 36 (with PIPELINE 73): an end mark at no word reaches back to its unit's
+ *  last word (make.mjs reachBackIn), a carried word on either side of the mark's token on the base page is its word (anchors.mjs
+ *  wordAt `either`), and the text after a piece runs through a macro TeX said sets no ink and a text symbol right after it
+ *  (marks.mjs followsOf), so that 2610.21477v1's `\}` paragraph, 2608.25210v2's "DOI:" entries and 2608.28692v1's `\MainRel\%` are
+ *  laid: a file of 35 lays fewer units; 37 (2307.16209v1's title pages, zh, 2026-11-05): a unit's
+ *  alignment is told in four flags, UNIT_FLAG.JUSTIFIED beside CENTRED, FLUSH_LEFT and FLUSH_RIGHT, none where nothing tells it
+ *  (the reader reads its lines); an ink unit's as TeX set the paragraph it is in, read from the marked original's paragraph ends
+ *  (marks.mjs POINTS_TEX `qe<n><code>`, ink-units.mjs alignOf), where a file of 36 held every ink unit but a running head on its
+ *  page's middle not centred: 2307.16209's title, author and examining board drawn from each English line's start. A reader
+ *  of 36 refuses the new flag, so a file of 37 is another maker's (the file's schema is 6 still); 38: a unit's lines over a
+ *  page break are those its pieces' points stand on too, its points its tokens on a page none of its words was kept on
+ *  (pipeline/anchors.mjs withPoints); a line's baseline the one its unit's own mark and its words' glyphs agree on (make.mjs
+ *  rowOf); a part of a broken piece no line's baseline holds on its own point's line (make.mjs atPoint); a picture a piece
+ *  sets, a draft image frame in the marked original, the base page's image on the frame's box (make.mjs ownedOn, stream.mjs
+ *  FRAME); an opening point with a float TeX set right after it read past the float (stream.mjs pastOther): a file of 37 holds
+ *  those pieces LOST and their units the original's; and pages whose lines moved across their breaks drawn as a run, whole or
+ *  not at all (carry.mjs lineCheckOf, the owner's approval of 2026-11-05: 2307.16209v1's pages 68 to 76, a file of 37 leaving
+ *  71 to 76 the original's); 39 (with PIPELINE 74): an ink unit's text reads TeX's spacing accent with its letter and leaves its
+ *  label out, and one that then echoes the author block's place is `inknames` (layout/ink-units.mjs): a file of 38 holds such a
+ *  unit's row under its old kind and count of pieces; 40 (with PIPELINE 98): a paragraph's end point the marked original states
+ *  whatever node its list ends in but an empty list, a glue or a box (marks.mjs `\axt@peat`, PDF-READER §18.66), where a file of
+ *  39 holds only the ends the narrower rule stated; 41 (with PIPELINE 103): a cell's end point `t<i>x` the marked original states
+ *  at a cell's template end (marks.mjs `\axt@tec`, `\axt@cellend`, PDF-READER §18.74), which followsOf names among a cell piece's
+ *  ends and the stream's reading stops at (stream.mjs ownedOf), so that a piece of a cell with its opening point alone owns what
+ *  TeX set in its cell and no later, where a file of 40 holds its ink run to the next unit's start (the row's other entries, the
+ *  rules between the columns and under the row): another maker's for a paper with such a cell, 45 pieces of 11 papers over the
+ *  round's 89, the holdout and the third set (2406.06525v1, 2610.20716v1, 2610.21176v1, 2610.40576v1 …); 42 (with PIPELINE 104):
+ *  the source reader's cut, which this maker reads through @readarxiv/engine/today, takes LaTeX's text symbols as characters of the
+ *  text (F9 (d), PDF-READER §18.83), an entry's start mark before a number it keeps (F29, §18.81) and a box register's tables
+ *  (F18, §18.82), so that a file of 41 holds such a symbol's placeholder row or its paper's units as cut before: the gate pack's
+ *  2609.26457v1-zh, its `\ldots{}` text now, one placeholder row fewer; 43 (with PIPELINE 109): the source reader's cut, which
+ *  this maker reads through @readarxiv/engine/today, ends a unit where one of TeX's vertical commands (`\vskip`, `\hrule`,
+ *  `\vfill`, …) meets it once its text has begun, as TeX's `\par` (PDF-READER §19.10), and a table's cell at `\tabularnewline` as
+ *  at `\\` (§18.75), so that a file of 42 holds a paper holding a vertical command inside a paragraph, or `\tabularnewline`, with
+ *  its units as cut before: of the lab's 245 papers 2608.18502v1, 2610.21765v1, 2610.21106v1, 2610.39068v1, 2501.14787v1 and
+ *  2608.12502v1; the gate pack's seven papers hold neither, their files the same but their version */
+export const LAYOUT = '43'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour
- *  piece's run's fill [unit, k, 0xRRGGBB], a key the file holds only where it has a row */
-export const LAYOUT_SCHEMA = 5
+ *  piece's run's fill [unit, k, 0xRRGGBB], a key the file holds only where it has a row; and, of a maker of 18 on, `unlaid`,
+ *  why each unit it does not lay is the original's [unit, code], a key held only where a unit is not laid; 6 `regions`, each
+ *  region of a kind TeX set on our base page [page, kind, x0, bottom, x1, top] (REGION_KINDS: a code line, by the points the
+ *  layout compile sets around each line of a code environment's body, layout/marks.mjs regionsTex), by page rising, a key held
+ *  only where the file has one: a fact TeX decided, written once where every reader reads it (the one command model the layout
+ *  file grows into, docs/route/architecture-audit.md §2) */
+export const LAYOUT_SCHEMA = 6
 /** a placeholder's fill where no one colour holds more than half its glyphs (the row's last number, schema 5) */
 export const MIXED_FILL = -1
 /** a fill's largest value, 0xFFFFFF */
@@ -51,13 +249,26 @@ export const LAYOUT_VALUES = 1_000_000
 /** the deepest the file nests: its object, then lines, frames or erase (the arrays of entries), then an entry [id, rows],
  *  then its rows (a flat array of numbers): four brackets, and no other field of the schema reaches past three */
 export const LAYOUT_DEPTH = 4
-export const UNIT_KINDS = Object.freeze(['para', 'heading', 'caption', 'footnote', 'cell', 'abstract', 'theorem', 'figure', 'author'])
-export const PH_KINDS = Object.freeze(['math', 'display', 'cite', 'ref', 'eqref', 'footnote', 'macro', 'url', 'code', 'other'])
+/** a unit's kinds, by index: the source units', then the ink units' (layout/ink-units.mjs INK_KIND: a new kind takes the next index,
+ *  so that a file of before reads as it was) */
+export const UNIT_KINDS = Object.freeze(['para', 'heading', 'caption', 'footnote', 'cell', 'abstract', 'theorem', 'figure', 'author', 'inkheads', 'inkcontents', 'inknotes', 'inkorphan', 'inknames', 'reference', 'refnames', 'affiliation', 'inkreferences'])
+/** a region's kinds, by index (the file's `regions`, schema 6): 'code', a line TeX set in the body of an environment the source
+ *  sets as code (latex-front.mjs codeEnvsOf, the listing packages' own), its text kept as the paper has it by every reader. A new
+ *  kind takes the next index and raises the schema */
+export const REGION_KINDS = Object.freeze(['code'])
+export const PH_KINDS = Object.freeze(['math', 'display', 'cite', 'ref', 'eqref', 'footnote', 'macro', 'url', 'code', 'other', 'number'])
 export const LABEL_KINDS = Object.freeze(['number', 'item', 'caption', 'footnote'])
 /** a unit's flags. TITLE: the paper's title; FRONT: its front matter; CENTRED: its lines set centred, as TeX set its
  *  paragraph where the marked original tells it (\centering, a center environment, a class's centred heading), else as
- *  arXiv's lines show it (make.mjs): what the layer sets the translation's lines by (run.mjs) */
-export const UNIT_FLAG = Object.freeze({ TITLE: 1, FRONT: 2, CENTRED: 4 })
+ *  arXiv's lines show it (make.mjs); FLUSH_LEFT, FLUSH_RIGHT: its lines set flush left (\raggedright, a flushleft
+ *  environment, ragged2e's \RaggedRight, a class's ragged heading) or flush right (\raggedleft, flushright), only where the
+ *  marked original tells it (marks.mjs readAlign), never read off arXiv's lines (LAYOUT 26); JUSTIFIED: its lines set
+ *  justified, neither centred nor flush, as TeX set its paragraph, or where TeX does not tell it as the maker reads its
+ *  lines (make.mjs: not centred on its column) (LAYOUT 37). An ink unit's as TeX set the paragraph it is in (ink-units.mjs
+ *  alignOf). A unit of none of the four is one whose alignment nothing tells: the reader reads its lines
+ *  (layer-proto/layer2.mjs blocksOf2). What the layer sets the translation's lines by (run.mjs); a unit holds one of the
+ *  four at most */
+export const UNIT_FLAG = Object.freeze({ TITLE: 1, FRONT: 2, CENTRED: 4, FLUSH_LEFT: 8, FLUSH_RIGHT: 16, JUSTIFIED: 32 })
 /** babel's names (names.mjs), whose occurrences the file locates (`names`) */
 export { NAME_KEYS } from './names.mjs'
 /** a name's flags. CENTRED: centred in its column, as a unit is (UNIT_FLAG.CENTRED); CAPITALS: its glyphs capitals where
@@ -77,10 +288,22 @@ export const NAME_FLAG = Object.freeze({ CENTRED: 1, CAPITALS: 2, RUN_IN: 4 })
 export const PH_FLAG = Object.freeze({ SOURCE_BRACKETS: 1, NUMBERED: 2, RAISED: 4, LOWERED: 8, EMPTY: 16, LOST: 32, TEXT: 64, JOINED: 128, OUTSIDE: 256 })
 
 const KEYS = ['schema', 'layout', 'pdfjs', 'paper', 'left', 'views', 'fonts', 'units', 'lines', 'frames', 'erase', 'ph', 'labels', 'headings', 'pageText', 'held', 'names', 'lineskip']
-/** a key a file or a part holds only where it has a row: each colour piece's fill (`colours`) */
-const COLOURS = 'colours'
-/** the keys `v` must hold: `keys`, and `colours` where it holds that */
-const withColours = (v, keys) => (isObject(v) && Object.hasOwn(v, COLOURS) ? [...keys, COLOURS] : keys)
+/** the keys a file or a part holds only where it has a row: each colour piece's fill (`colours`), and why each unit the maker
+ *  did not lay stays the original's (`unlaid`: not `refused`, which a part's `layout` holds where it has none, format.mjs
+ *  isLayoutRefusal) */
+const COLOURS = 'colours', UNLAID_KEY = 'unlaid', REGIONS = 'regions'
+const OPTIONAL = [COLOURS, UNLAID_KEY, REGIONS]
+/** the keys `v` must hold: `keys`, and each optional key it holds */
+const withOptional = (v, keys) => (isObject(v) ? [...keys, ...OPTIONAL.filter(k => Object.hasOwn(v, k))] : keys)
+/** why the maker laid a unit not (layout/make.mjs: the file's `unlaid`, [id, code] by id rising; a unit laid has none, every
+ *  unit not laid one), for a sweep and a reader to tell, never to draw by: `noAnchor` (no anchor on our base page: its text
+ *  not found there, its own marks giving none), `unplacedMarks` (its own marks set, but not carried to our base page's
+ *  words or bounding none there), `kind` (a kind the file lays none of, or more than PIECES_MAX pieces), `rects` (its anchor's
+ *  tokens give no line, or other lines than its anchor's), `linesUnit` (more than LINES_UNIT lines), `dark` (a line on a
+ *  page whose ink is not read whole), `noLine` (a line with no glyph of its own: none there, or no size), `lineTaken` (a line
+ *  whose glyphs another unit laid before it took), `erase` (a line's erase past ERASE_MAX rectangles, merging covering what
+ *  another keeps), `undrawn` (a line on a page not drawable: carry.mjs lineCheckOf), `fonts` (its faces past FONTS_MAX) */
+export const UNLAID = Object.freeze(['noAnchor', 'unplacedMarks', 'kind', 'rects', 'linesUnit', 'dark', 'noLine', 'lineTaken', 'erase', 'undrawn', 'fonts'])
 /** the placeholders the layer may draw as text in the page's face (Task 9's tokens), whose own text the file may hold */
 export const PAGE_TEXT_KINDS = Object.freeze(['cite', 'ref', 'eqref'])
 /** a page text's code units at most, and a file's in all */
@@ -108,18 +331,27 @@ export const VERSION_MAX = 1000
 const PDFJS_MAX = 32, LEFT_MAX = 128, FONTS_MAX = 512, FONT_MAX = 128
 const PIECES_MAX = 10000, DEPTH_MIN = -1, DEPTH_MAX = 5, DEPTH_NONE = 9
 const LINES_UNIT = 2000, LINES_ALL = 200000, SIZE_MAX = 200
+/** a file's or a part's units not laid at most (`unlaid`), as its lines in all */
+export const UNLAID_ALL = LINES_ALL
+/** the regions a file or a part holds, at most (each line of a code environment's body, every page's) */
+export const REGIONS_ALL = 100_000
 const SHARE_MAX = 1000, ERASE_LINE = 16, SEGS_INLINE = 4, SEGS_DISPLAY = 64, LABELS_UNIT = 4, SRC_MAX = 4000
 /** a file's names at most: a heading a babel name sets is a few a paper, a thesis's some tens */
 export const NAMES_MAX = 10_000
 const NAME_BITS = NAME_FLAG.CENTRED | NAME_FLAG.CAPITALS | NAME_FLAG.RUN_IN
 /** a name's row: its values */
 const NAME_ROW = 15
+/** a region's row: page, kind, x0, bottom, x1, top */
+const REGION_ROW = 6
 /** a skip at most: TeX's \maxdimen in PDF units, which \offinterlineskip sets \lineskiplimit to, as the file writes it
  *  (to a hundredth: 16322.79, over the exact 16322.7895 by the rounding), so that a value the marks file holds is read */
 const SKIP_MAX = Math.round(((16384 * 72) / 72.27) * 100) / 100
 /** a rectangle lies within its page's view by this, PDF units */
 const SLACK = 1
-const UNIT_BITS = UNIT_FLAG.TITLE | UNIT_FLAG.FRONT | UNIT_FLAG.CENTRED
+const UNIT_BITS = UNIT_FLAG.TITLE | UNIT_FLAG.FRONT | UNIT_FLAG.CENTRED | UNIT_FLAG.FLUSH_LEFT | UNIT_FLAG.FLUSH_RIGHT | UNIT_FLAG.JUSTIFIED
+/** a unit's alignment flags, and how many of them each value of those bits holds */
+const ALIGN_BITS = UNIT_FLAG.CENTRED | UNIT_FLAG.FLUSH_LEFT | UNIT_FLAG.FLUSH_RIGHT | UNIT_FLAG.JUSTIFIED
+const ALIGNED = Array.from({ length: ALIGN_BITS + 1 }, (_, v) => [UNIT_FLAG.CENTRED, UNIT_FLAG.FLUSH_LEFT, UNIT_FLAG.FLUSH_RIGHT, UNIT_FLAG.JUSTIFIED].filter(b => (v & b) !== 0).length)
 const PH_BITS = 511
 const HEADING = UNIT_KINDS.indexOf('heading'), DISPLAY = PH_KINDS.indexOf('display'), MACRO = PH_KINDS.indexOf('macro')
 const PAGE_TEXT = new Set(PAGE_TEXT_KINDS.map(k => PH_KINDS.indexOf(k)))
@@ -215,7 +447,7 @@ export function parseLayout(bytes, { sized = true } = {}) {
 export function checkLayout(value, { sized = true } = {}) {
   // (its schema first: a file of another names other fields, and is refused for what it is)
   if (isObject(value) && Object.hasOwn(value, 'schema') && value.schema !== LAYOUT_SCHEMA) throw refuse('schema', `not ${LAYOUT_SCHEMA}`)
-  const f = exactKeys(value, withColours(value, KEYS), '')
+  const f = exactKeys(value, withOptional(value, KEYS), '')
   if (f.schema !== LAYOUT_SCHEMA) throw refuse('schema', `not ${LAYOUT_SCHEMA}`)
   if (!isVersionToken(f.layout)) throw refuse('layout', `not a version, 1 to 32 letters, digits or points (${kindOf(f.layout)})`)
   if (!printable(f.pdfjs, 1, PDFJS_MAX)) throw refuse('pdfjs', `not 1 to ${PDFJS_MAX} printable ASCII characters (${kindOf(f.pdfjs)})`)
@@ -258,7 +490,7 @@ export const PART_KEYS = Object.freeze(['fonts', 'units', 'lines', 'frames', 'er
 export function checkLayoutPart(value, { pages, views, lo, hi }) {
   if (!isInteger(lo, 1, pages) || !isInteger(hi, lo, pages)) throw new RangeError(`not pages lo to hi of ${pages}`)
   if (!Array.isArray(views) || views.length !== 4 * (hi - lo + 1)) throw new RangeError(`not the ${4 * (hi - lo + 1)} numbers of the views of pages ${lo} to ${hi}`)
-  const f = exactKeys(value, withColours(value, PART_KEYS), '')
+  const f = exactKeys(value, withOptional(value, PART_KEYS), '')
   return checkRows(f, { views, lo, hi })
 }
 
@@ -285,6 +517,7 @@ function checkRows(f, { views, lo, hi, sized = true }) {
     if (!isInteger(kind, 0, UNIT_KINDS.length - 1)) throw refuse(`units[${i}][1]`, 'not a kind of UNIT_KINDS')
     if (!isInteger(depth, DEPTH_MIN, DEPTH_MAX) && depth !== DEPTH_NONE) throw refuse(`units[${i}][2]`, `not a depth ${DEPTH_MIN} to ${DEPTH_MAX}, or ${DEPTH_NONE}`)
     if (!isInteger(flags, 0, UNIT_BITS)) throw refuse(`units[${i}][3]`, 'not flags of UNIT_FLAG')
+    if (ALIGNED[flags & ALIGN_BITS] > 1) throw refuse(`units[${i}][3]`, 'more than one of CENTRED, FLUSH_LEFT, FLUSH_RIGHT and JUSTIFIED')
     if (!isInteger(pieces, 0, PIECES_MAX)) throw refuse(`units[${i}][4]`, `not a count 0 to ${PIECES_MAX}`)
     zeroes(u)
     last = u[0]
@@ -478,7 +711,7 @@ function checkRows(f, { views, lo, hi, sized = true }) {
   last = -1
   for (let i = 0; i < names.length; i++) {
     const r = names[i]
-    if (!Array.isArray(r) || r.length !== NAME_ROW) throw refuse(`names[${i}]`, `not [occurrence, key, page, x0, baseline, x1, top, bottom, size, font, flags, unit, glue, column x0, column x1] (${kindOf(r)})`)
+    if (!Array.isArray(r) || r.length !== NAME_ROW) throw refuse(`names[${i}]`, `not [occurrence, key, page, x0, baseline, x1, top, bottom, size, font, flags, unit, glue or counter, column x0, column x1] (${kindOf(r)})`)
     if (!isInteger(r[0], last + 1, ID_MAX)) throw refuse(`names[${i}][0]`, 'not an occurrence above the last')
     if (!isInteger(r[1], 0, NAME_KEYS.length - 1)) throw refuse(`names[${i}][1]`, 'not a key of NAME_KEYS')
     checkBox(r, 2, 1, 3, 2, 4, 5, true, views, span, 'names', i, -1)
@@ -488,7 +721,8 @@ function checkRows(f, { views, lo, hi, sized = true }) {
     if (!isInteger(r[10], 0, NAME_BITS)) throw refuse(`names[${i}][10]`, 'not flags of NAME_FLAG')
     const runIn = (r[10] & NAME_FLAG.RUN_IN) !== 0, v = 4 * (r[2] - lo), width = views[v + 2] - views[v]
     if (runIn ? !(isInteger(r[11], 0, ID_MAX) && slot.has(r[11])) : r[11] !== -1) throw refuse(`names[${i}][11]`, runIn ? 'not a unit of the file' : 'not -1, the name leading no unit')
-    if (!isNumber(r[12]) || r[12] < 0 || r[12] > width || (!runIn && r[12] !== 0)) throw refuse(`names[${i}][12]`, runIn ? 'not a glue 0 to the page\'s width' : 'not 0, the name leading no unit')
+    // (slot 12: a RUN_IN name's glue to its unit; a name leading no unit, its counter's width at the row's end, short of the row)
+    if (!isNumber(r[12]) || r[12] < 0 || r[12] > width || (!runIn && r[12] >= r[5] - r[3])) throw refuse(`names[${i}][12]`, runIn ? 'not a glue 0 to the page\'s width' : 'not a counter 0 to short of the row, the name leading no unit')
     if (!isNumber(r[13]) || !isNumber(r[14]) || r[13] < views[v] - 1 || r[14] > views[v + 2] + 1 || r[13] >= r[14]) throw refuse(`names[${i}][13]`, "not a column's edges on the page")
     zeroes(r)
     last = r[0]
@@ -512,6 +746,45 @@ function checkRows(f, { views, lo, hi, sized = true }) {
       zeroes(r)
     }
   }
+
+  // unlaid: unit, code (UNLAID); by unit rising, none of them a unit of units, a key held only with a row
+  if (Object.hasOwn(f, UNLAID_KEY)) {
+    const unlaid = array(f.unlaid, UNLAID_KEY)
+    if (unlaid.length === 0) throw refuse(UNLAID_KEY, 'empty: a file holds the key only where it has a row')
+    if (sized && unlaid.length > UNLAID_ALL) throw new LayoutRefusal(UNLAID_KEY, `more than ${UNLAID_ALL} units`, 'rows')
+    last = -1
+    for (let i = 0; i < unlaid.length; i++) {
+      const r = unlaid[i]
+      if (!Array.isArray(r) || r.length !== 2) throw refuse(`unlaid[${i}]`, `not [unit, code] (${kindOf(r)})`)
+      if (!isInteger(r[0], last + 1, ID_MAX)) throw refuse(`unlaid[${i}][0]`, 'not an id above the last')
+      if (slot.has(r[0])) throw refuse(`unlaid[${i}][0]`, 'a unit of units: one the file lays')
+      if (!UNLAID.includes(r[1])) throw refuse(`unlaid[${i}][1]`, `not a code of UNLAID (${typeof r[1] === 'string' ? clip(r[1]) : kindOf(r[1])})`)
+      if (r[0] === 0) r[0] = 0
+      last = r[0]
+    }
+  }
+
+  // regions: page, kind (REGION_KINDS), x0, bottom, x1, top; by page rising, each a rectangle within its page's view, a key held
+  // only with a row
+  if (Object.hasOwn(f, REGIONS)) {
+    const regions = array(f.regions, REGIONS)
+    if (regions.length === 0) throw refuse(REGIONS, 'empty: a file holds the key only where it has a row')
+    if (sized && regions.length > REGIONS_ALL) throw new LayoutRefusal(REGIONS, `more than ${REGIONS_ALL} regions`, 'rows')
+    last = span.lo
+    for (let i = 0; i < regions.length; i++) {
+      const r = regions[i]
+      if (!Array.isArray(r) || r.length !== REGION_ROW) throw refuse(`regions[${i}]`, `not [page, kind, x0, bottom, x1, top] (${kindOf(r)})`)
+      if (!isInteger(r[0], last, span.hi)) throw refuse(`regions[${i}][0]`, `not a page ${last} to ${span.hi}: by page rising`)
+      if (!isInteger(r[1], 0, REGION_KINDS.length - 1)) throw refuse(`regions[${i}][1]`, 'not a kind of REGION_KINDS')
+      const v = 4 * (r[0] - span.lo)
+      const xlo = views[v] - SLACK, ylo = views[v + 1] - SLACK, xhi = views[v + 2] + SLACK, yhi = views[v + 3] + SLACK
+      for (let j = 2; j < REGION_ROW; j++) if (!isNumber(r[j]) || r[j] < (j % 2 ? ylo : xlo) || r[j] > (j % 2 ? yhi : xhi)) throw refuse(`regions[${i}][${j}]`, `not a number within its page's view (${kindOf(r[j])})`)
+      if (r[4] <= r[2]) throw refuse(`regions[${i}][4]`, 'not right of x0')
+      if (r[5] <= r[3]) throw refuse(`regions[${i}][5]`, 'not above bottom')
+      zeroes(r)
+      last = r[0]
+    }
+  }
   return f
 }
 
@@ -519,6 +792,7 @@ function checkRows(f, { views, lo, hi, sized = true }) {
 const r2 = v => Math.round(v * 100) / 100
 /** rows of `stride` with the coordinates (offsets `exact` excepted) to a hundredth */
 const rounded = (rows, stride, exact) => rows.map((v, j) => (exact.includes(j % stride) ? v : r2(v)))
+const REGION_EXACT = [0, 1]
 const LINE_EXACT = [0, 7], FRAME_EXACT = [0, 1, 2, 3, 4], ERASE_EXACT = [0], LABEL_EXACT = [0, 1, 2], NAME_EXACT = [0, 1, 2, 9, 10, 11]
 
 /** the rows and tables of a file or a part as written, from `fonts` to `names`: numbers to a hundredth */
@@ -539,6 +813,10 @@ function rowsOf(file) {
     names: names.map(r => rounded(r, NAME_ROW, NAME_EXACT)),
     // (only where a unit has one: a file with no colour piece is the bytes it was)
     ...(file.colours?.length ? { colours: file.colours } : {}),
+    // (only where a unit is not laid)
+    ...(file.unlaid?.length ? { unlaid: file.unlaid } : {}),
+    // (only where the page holds a region: a file of no code is the bytes it was, its schema aside)
+    ...(file.regions?.length ? { regions: file.regions.map(r => rounded(r, REGION_ROW, REGION_EXACT)) } : {}),
   }
 }
 
@@ -574,7 +852,7 @@ export function encodeLayoutPart(part) {
  * font in no row is left out. The parts are not changed
  */
 export function mergeLayout(parts) {
-  const out = { units: [], frames: [], erase: [], ph: [], labels: [], headings: [], pageText: [], held: [], colours: [] }
+  const out = { units: [], frames: [], erase: [], ph: [], labels: [], headings: [], pageText: [], held: [], colours: [], unlaid: [], regions: [] }
   const lineList = [], nameList = []
   for (const p of parts) {
     for (const key of Object.keys(out)) for (const row of p[key] ?? []) out[key].push(row)
@@ -582,10 +860,12 @@ export function mergeLayout(parts) {
     for (const r of p.names) nameList.push([r, p.fonts])
   }
   const byId = (a, b) => a[0] - b[0]
-  for (const key of ['units', 'frames', 'erase', 'headings', 'held', 'labels']) out[key].sort(byId)
+  for (const key of ['units', 'frames', 'erase', 'headings', 'held', 'labels', 'unlaid']) out[key].sort(byId)
   out.ph.sort((a, b) => a[0] - b[0] || a[1] - b[1])
   out.pageText.sort((a, b) => a[0] - b[0] || a[1] - b[1])
   out.colours.sort((a, b) => a[0] - b[0] || a[1] - b[1])
+  // (a part's regions are its pages': by page, in each part's order)
+  out.regions.sort((a, b) => a[0] - b[0])
   const fonts = [], index = new Map()
   const fontAt = (table, i) => {
     const name = table[i]
@@ -605,7 +885,7 @@ export function mergeLayout(parts) {
     out[9] = fontAt(table, r[9])
     return out
   })
-  return { fonts, units: out.units, lines, frames: out.frames, erase: out.erase, ph: out.ph, labels: out.labels, headings: out.headings, pageText: out.pageText, held: out.held, names, ...(out.colours.length ? { colours: out.colours } : {}) }
+  return { fonts, units: out.units, lines, frames: out.frames, erase: out.erase, ph: out.ph, labels: out.labels, headings: out.headings, pageText: out.pageText, held: out.held, names, ...(out.colours.length ? { colours: out.colours } : {}), ...(out.unlaid.length ? { unlaid: out.unlaid } : {}), ...(out.regions.length ? { regions: out.regions } : {}) }
 }
 
 // ---------------------------------------------------------------- the index
@@ -624,7 +904,8 @@ export function indexLayout(file) {
     const [id, kind, depth, flags, pieces] = units[i]
     byId.set(id, {
       id, kind: UNIT_KINDS[kind], depth,
-      title: (flags & UNIT_FLAG.TITLE) !== 0, front: (flags & UNIT_FLAG.FRONT) !== 0, centred: (flags & UNIT_FLAG.CENTRED) !== 0,
+      title: (flags & UNIT_FLAG.TITLE) !== 0, front: (flags & UNIT_FLAG.FRONT) !== 0, centred: (flags & UNIT_FLAG.CENTRED) !== 0 ? true : (flags & ALIGN_BITS) !== 0 ? false : undefined,
+      flush: (flags & UNIT_FLAG.FLUSH_LEFT) !== 0 ? 'left' : (flags & UNIT_FLAG.FLUSH_RIGHT) !== 0 ? 'right' : null,
       pieces, lines: NONE, frames: NONE, erase: [], ph: new Map(), labels: NONE, heading: null, held: NO_HELD, colours: NO_COLOURS,
     })
   }
@@ -676,11 +957,12 @@ export function indexLayout(file) {
     Object.freeze(unit)
   }
   // each page's names, in the file's order
+  const runInOf = r => (r[10] & NAME_FLAG.RUN_IN) !== 0
   const namesOn = new Array(pages + 1).fill(NO_NAMES)
   for (let i = 0; i < names.length; i++) {
     const r = names[i], p = r[2]
     if (namesOn[p] === NO_NAMES) namesOn[p] = []
-    namesOn[p].push(Object.freeze({ occurrence: r[0], key: NAME_KEYS[r[1]], page: p, x0: r[3], baseline: r[4], x1: r[5], top: r[6], bottom: r[7], size: r[8], font: r[9], centred: (r[10] & NAME_FLAG.CENTRED) !== 0, capitals: (r[10] & NAME_FLAG.CAPITALS) !== 0, unit: r[11], glue: r[12], cx0: r[13], cx1: r[14] }))
+    namesOn[p].push(Object.freeze({ occurrence: r[0], key: NAME_KEYS[r[1]], page: p, x0: r[3], baseline: r[4], x1: r[5], top: r[6], bottom: r[7], size: r[8], font: r[9], centred: (r[10] & NAME_FLAG.CENTRED) !== 0, capitals: (r[10] & NAME_FLAG.CAPITALS) !== 0, unit: r[11], glue: runInOf(r) ? r[12] : 0, counter: runInOf(r) ? 0 : r[12], cx0: r[13], cx1: r[14] }))
   }
   for (let p = 1; p <= pages; p++) Object.freeze(namesOn[p])
   const viewOf = new Array(pages + 1)

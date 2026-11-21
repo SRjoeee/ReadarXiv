@@ -1,5 +1,6 @@
 // lab/pdf/spikes/cm-check.mjs
-// CM, converge then mark (layout/paper.mjs layoutMarksOfPaper `converge`), against today's layout compile (L: the marked
+// The pass loop (Q1, layout/paper.mjs layoutMarksOfPaper `converge`: the package's compile/paper.ts convergeThenMark; the
+// rebuilt prepare's identity is lab/pdf/spikes/q1-check.mjs), against today's layout compile (L: the marked
 // original with every pass, `rerun`, latexmk), both in one native TeX Live, on each paper given: the marked PDF's bytes,
 // the marks file's and the layout file's (layout/make.mjs makeLayout over the marks and arXiv's PDF, as
 // spikes/layout-make.mjs makes it), equal or every difference (the pages and lines L has that CM's PDF lost, as the
@@ -7,7 +8,7 @@
 // of the process tree; real beside it) and TeX passes.
 //
 // It is also the reference host of the compile contract's CM fields (live.d.mts CompileRequest `draft`, `files`;
-// Compiled `files`, `passes`), as the web's container sandbox answers them (container/src/sandbox.ts texCommand,
+// Compiled `files`, `passes`), as the web's container sandbox answers them (its TeX command,
 // bibCommand, runCompile): a one-pass compile is `<engine> -no-shell-escape -interaction=nonstopmode ./<main>`, XeLaTeX's
 // through `xdvipdfmx -q -E -z 3`; `draft` adds -draftmode (pdfLaTeX), -no-pdf with no driver (XeLaTeX), --draftmode
 // (LuaLaTeX), -draftmode (latex, arXiv's DVI compiler, whose one-pass compile is made a PDF by `dvipdfmx -q` after its pass);
@@ -44,6 +45,7 @@ import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, st
 import { basename, dirname, join, resolve } from 'node:path'
 import { getDocument, OPS, version } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { LITE } from './lite-pdfjs.mjs'
+import { stampsOf } from './build-stamps.mjs'
 import { latexmkEngine } from './compile-image.mjs'
 import { encodeLayout } from '../../../src/pdf-reader/engine/layout/file.mjs'
 import { makeLayout } from '../../../src/pdf-reader/engine/layout/make.mjs'
@@ -77,13 +79,13 @@ const TEX_ENV = {
 /** each engine's binary and its draft flag (an engine the host does not know is pdfLaTeX's, as the lab's compiles take it); latexmk's
  *  arguments are latexmkEngine's: a latex paper is never checked with pdfLaTeX */
 const ENGINES = { pdflatex: ['pdflatex', '-draftmode'], xelatex: ['xelatex', '-no-pdf'], lualatex: ['lualatex', '--draftmode'], latex: ['latex', '-draftmode'] }
-/** the sandbox's one-pass XeLaTeX driver (sandbox.ts DRAFT_DRIVER) */
+/** the sandbox's one-pass XeLaTeX driver (the sandbox's draft driver) */
 const DRIVER = 'xdvipdfmx -q -E -z 3'
 /** what `files` leaves out: the compile's outputs and the tools' logs */
 const OUTPUTS = /\.(?:pdf|xdv|dvi|log|blg|ilg|glg|fls|fdb_latexmk)$|\.synctex\.gz$/
-/** the host's bound on `files` (the web's: budget.ts FILES_MAX and SMALL_FILES) */
+/** the host's bound on `files` (the web's budget of files) */
 const FILES_MAX = 256, BYTES_MAX = 8 * 2 ** 20
-/** the seeded files' time and the marker's, a minute later (the web's jail.sh in files mode): whatever the clock's
+/** the seeded files' time and the marker's, a minute later (the web's jail in files mode): whatever the clock's
  *  granularity, a file written after the seeding is newer than the marker */
 const SEEDED = 946684800, MARKER = SEEDED + 60
 const WORK = join(OUT, 'work'), BUILD = join(WORK, 'build'), SHIMS = join(WORK, 'bin')
@@ -104,14 +106,7 @@ function timed(argv, out) {
   return { real, us: user + sys, killed: !!r.error || r.signal !== null }
 }
 /** every regular file (no link) under the build folder, by its path there, with its modification time (s) */
-function walk(dir = BUILD, base = '', out = new Map()) {
-  for (const name of readdirSync(dir)) {
-    const path = join(dir, name), rel = base ? `${base}/${name}` : name, st = lstatSync(path)
-    if (st.isDirectory()) walk(path, rel, out)
-    else if (st.isFile()) out.set(rel, st.mtimeMs / 1000)
-  }
-  return out
-}
+const walk = () => stampsOf(BUILD)
 /** written since the seeding: newer than the marker */
 const written = (stamps, p) => stamps.has(p) && stamps.get(p) > MARKER
 
@@ -207,8 +202,8 @@ async function layoutOf(paper, marks, arxivPdf, id) {
   const m = /^(\d{4}\.\d{4,5}|[a-z-]+\/\d{7})(?:v(\d+))?$/.exec(id)
   const task = pdfOf(arxivPdf)
   try {
-    const out = await makeLayout({ units: paper.units, marks: parseLayoutMarks(marks), arxiv: await task.promise, OPS, paper: { id: m?.[1] ?? '0000.00000', version: Number(m?.[2] ?? 1) }, left: '', pdfjs: version })
-    return 'file' in out ? { text: encodeLayout(out.file), timedOut: out.stats.timedOut.length } : { refused: out.refused }
+    const out = await makeLayout({ units: paper.units, texOrder: paper.texOrder, marks: parseLayoutMarks(marks), base: await task.promise, OPS, paper: { id: m?.[1] ?? '0000.00000', version: Number(m?.[2] ?? 1) }, pdfjs: version })
+    return 'file' in out ? { text: encodeLayout(out.file), unread: out.stats.unread.length } : { refused: out.refused }
   } finally { await task.destroy() }
 }
 /** a PDF's text items per page (every one, and those with ink), as the layout-marks gate reads them */
@@ -301,7 +296,7 @@ for (const arg of ids) {
       const arxiv = join(dir, 'arxiv.pdf')
       if (existsSync(arxiv) && (LAYOUT_ALL || !row.pdf.equal || paper.meta.compiler === 'xelatex')) {
         const bytes = readFileSync(arxiv), lay = [await layoutOf(paper, L.made.marks, bytes, id), await layoutOf(paper, CM.made.marks, bytes, id)]
-        row.layout = lay.every(l => l.text) ? { equal: lay[0].text === lay[1].text, bytes: lay.map(l => l.text.length), timedOut: lay.map(l => l.timedOut) } : { refused: lay.map(l => l.refused ?? null) }
+        row.layout = lay.every(l => l.text) ? { equal: lay[0].text === lay[1].text, bytes: lay.map(l => l.text.length), unread: lay.map(l => l.unread) } : { refused: lay.map(l => l.refused ?? null) }
         if (row.layout.equal === false) { mkdirSync(OUT, { recursive: true }); writeFileSync(join(OUT, `${id}.L.layout.json`), lay[0].text); writeFileSync(join(OUT, `${id}.CM.layout.json`), lay[1].text); row.layout.differences = differences(lay[0].text, lay[1].text) }
       }
       if (!row.pdf.equal) row.lost = await lost(L.pdf, CM.pdf)

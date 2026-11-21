@@ -197,10 +197,10 @@ describe('the engine\'s packages', () => {
   it('refuses @cantoo/pdf-lib outside layout/, and in layout/ too: the layout maker is handed it as `PL`, it imports none', () => {
     expect(violationsOf("import * as PL from '@cantoo/pdf-lib'\n", `${E}/pipeline/x.mjs`)).toEqual(['@cantoo/pdf-lib'])
     expect(violationsOf("import * as PL from '@cantoo/pdf-lib'\n", `${E}/view/x.mjs`)).toEqual(['@cantoo/pdf-lib'])
-    expect(violationsOf("import * as PL from '@cantoo/pdf-lib'\n", `${E}/layout/addon.mjs`)).toEqual(['@cantoo/pdf-lib'])
+    expect(violationsOf("import * as PL from '@cantoo/pdf-lib'\n", `${E}/layout/wrap.mjs`)).toEqual(['@cantoo/pdf-lib'])
   })
   it('keeps the layout rules\' validator: zod in rules/ alone, as the rules-as-data plan allowed', () => {
-    expect(ENGINE_PACKAGES).toEqual([{ name: 'zod', under: `${E}/rules/` }])
+    expect(ENGINE_PACKAGES).toEqual([{ name: 'zod', under: `${E}/rules/` }, { name: '@readarxiv/engine', under: `${E}/` }])
     expect(violationsOf("import * as z from 'zod/mini'\n", `${E}/rules/layout.mjs`)).toEqual([])
     expect(violationsOf("import * as z from 'zod/mini'\n", `${E}/layer-proto/run.mjs`)).toEqual(['zod/mini'])
   })
@@ -363,6 +363,19 @@ describe('closureOf', () => {
       'src/unrelated.mjs': 'export const u = 1\n',
     })
     expect([...closureOf(['src/a.mjs'], { root: t.root })].sort()).toEqual(['src/a.mjs', 'src/b.mjs', 'src/c.ts'])
+  })
+  it('follows a transition path to the moved module and on from it, and no other package', () => {
+    const t = tree({
+      'src/pdf-reader/engine/source/old.mjs': "export { x } from '@readarxiv/engine/today/source/old.mjs'\nimport '@readarxiv/engine'\n",
+      'packages/engine/src/source/old.mjs': "import { y } from '../memory.mjs'\nexport const x = y\n",
+      'packages/engine/src/memory.mjs': 'export const y = 1\n',
+      'packages/engine/src/index.ts': 'export const z = 1\n',
+    })
+    expect([...closureOf(['src/pdf-reader/engine/source/old.mjs'], { root: t.root })].sort()).toEqual([
+      'packages/engine/src/memory.mjs',
+      'packages/engine/src/source/old.mjs',
+      'src/pdf-reader/engine/source/old.mjs',
+    ])
   })
 })
 

@@ -2,7 +2,7 @@
 import type { SourceUnit, UnitMark } from '../source/latex-front.mjs'
 import type { NameKey } from './names.mjs'
 
-export type MarkClass = 'math' | 'display' | 'cite' | 'ref' | 'eqref' | 'code' | 'url' | 'footnote' | 'macro'
+export type MarkClass = 'math' | 'display' | 'cite' | 'ref' | 'eqref' | 'code' | 'url' | 'footnote' | 'macro' | 'number'
 /** every class, in this order */
 export declare const MARK_CLASSES: readonly MarkClass[]
 /** the classes the run marks when asked: the global default (Task 2's corpus check); the paper's own switch
@@ -10,40 +10,76 @@ export declare const MARK_CLASSES: readonly MarkClass[]
 export declare const LAYOUT_CLASSES: readonly MarkClass[]
 /** what TeX answered to the mark probe, per command (`\\cite`): a code a follower (FOLLOWERS) — 0 every mark, 1 no
  *  closing mark, 2 no mark, x no answer (an error in the follower's boxes: no mark) (for `call`: 0 a mark may stand
- *  between two calls, 2 none may) */
+ *  between two calls, 2 none may); and per look-ahead pair (aheadKey), one code: 0 every mark, 1 the macro's opening mark
+ *  alone and the placeholder's, 2 none on the placeholder, x no answer */
 export type Switches = Record<string, string>
 /** what the mark probe sets after a placeholder */
 export declare const FOLLOWERS: readonly string[]
 export declare const PROBE_MAX: number
 /** a piece's leading command, or null */
 export declare const commandOf: (p: unknown) => string | null
-/** each command of the asked classes the paper writes, once, with a source TeX can set in a box */
-export declare function probeSamples(units: readonly SourceUnit[]): { command: string; src: string; call: boolean }[]
-/** the probe's schema: a new section adds rows of a tag of its own */
-export declare const PROBE_SCHEMA: number
-/** the TeX that writes one row `LAYOUT-PROBE <schema> <tag> <fields…>` */
+/** a look-ahead pair the probe asks about: a paper's macro (`src`), the white space after it (`gap`, ' ' or ''), the
+ *  placeholder it precedes (`follows`, `math` where it is an inline formula), and their key in the switch */
+export type AheadSample = { key: string; src: string; gap: '' | ' '; follows: string; math: boolean; ahead: true }
+/** each command of the asked classes the paper writes, once, with a source TeX can set in a box; the paper's complete
+ *  macros' calls (`own`); and last the look-ahead pairs (aheadSamples) */
+export declare function probeSamples(units: readonly SourceUnit[], complete?: Complete | ReadonlyMap<string, number> | readonly (readonly [string, number])[] | null): ({ command: string; src: string; call: boolean; own?: true; glued?: string } | AheadSample)[]
+/** the look-ahead pairs the probe asks about at most, a paper */
+export declare const AHEAD_PROBE_MAX: number
+/** a look-ahead pair's key in the switch: the macro's source, the white space after it and the placeholder's, joined by `#` */
+export declare const aheadKey: (src: string, gap: '' | ' ', follows: string) => string
+/** each placeholder of the paper's own macros followed, right after it or past white space alone, by a placeholder of a
+ *  class the maker cannot find unmarked, paired with it, each pair once, in the paper's order */
+export declare function aheadSamples(units: readonly SourceUnit[]): AheadSample[]
+/** the look-ahead section (`ahead`): each pair set as the paper sets it, with every mark and with the openings alone */
+export declare function aheadSection(samples: readonly AheadSample[]): string
+/** the asked classes' commands the probe asks about at most, and the complete macros apart */
+export declare const COMPLETE_PROBE_MAX: number
+/** the TeX that writes one row `LAYOUT-PROBE 1 <tag> <fields…>` (the marker a fixed string) */
 export declare const probeRow: (tag: string, ...fields: (string | number)[]) => string
 /** the probe document's body: its sections' TeX */
 export declare const probeTex: (sections: readonly string[]) => string
 /** every row of a probe's log */
-export declare function readProbe(log: string): { schema: number; tag: string; fields: string[] }[]
+export declare function readProbe(log: string): { tag: string; fields: string[] }[]
 /** the punctuation section (`punct`) */
-export declare function punctuationSection(samples: readonly { src: string; call: boolean }[]): string
+export declare function punctuationSection(samples: readonly { src: string; call: boolean; glued?: string }[], from?: number): string
 /** the layout marks' probe document, after \\begin{document} of the font probe: the punctuation section, then the ink
- *  section where `ink` holds samples */
-export declare function markProbeTex(samples: readonly { src: string; call: boolean }[], ink?: readonly string[]): string
-/** the distinct sources of the paper's macros the ink section asks about, at most */
-export declare const INK_MAX: number
-/** the ink section's samples: each macro's source once, in the paper's order, that TeX can set in a box of its own */
+ *  section where `ink` holds samples, and last an ink section of `leads` (leadSamples), numbered on from `ink` */
+export declare function markProbeTex(samples: readonly ({ src: string; call: boolean; own?: true; glued?: string } | AheadSample)[], ink?: readonly string[], leads?: readonly string[]): string
+/** the code units of the sources the ink section asks about, in all, at most: the probe compile's own bound */
+export declare const INK_BUDGET: number
+/** the ink section's samples: each macro's source once, the body's in the paper's order, then the entries', while they fit INK_BUDGET */
 export declare function inkSamples(units: readonly SourceUnit[]): string[]
-/** the ink section (`ink`): each sample in a box, the box shown in the log */
-export declare function inkSection(samples: readonly string[]): string
+/** the ink section's answers from the probe's log, each the asked source's own: the one reader */
+export declare function readInkAnswers(log: string, units: readonly SourceUnit[]): { inkless: string[]; texts: [string, string][]; decorated: [string, string][]; apart: string[] }
+/** the leads' samples: the placeholders at a unit's head (headEnd) of inline code or a paper's macro that `asked` does not
+ *  hold, once, in the paper's order, that TeX can set in a box of its own, while they fit what INK_BUDGET leaves `asked` */
+export declare function leadSamples(units: readonly SourceUnit[], asked?: readonly string[]): string[]
+/** the ink section (`ink`): each sample in a box, the box shown in the log, its rows numbered from `from` */
+export declare function inkSection(samples: readonly string[], from?: number): string
 /** the samples TeX set no ink for, from the probe's log */
 export declare function readInkProbe(log: string, samples: readonly string[]): string[]
 /** a macro's text as the ink section shows it set, at most */
 export declare const INK_TEXT_MAX: number
-/** each sample's text, where the probe showed it sets letters and digits of text fonts alone: [source, text] */
+/** what a lead's text holds for a glyph of a formula's whose character it does not spell: one glyph, whatever its text */
+export declare const INK_ANY: string
+/** each sample's text, where the probe showed it sets characters a text names: a text font's letters, digits and ASCII's
+ *  punctuation, a formula's, its glyphs it does not spell INK_ANY, one spelled at least: [source, text] */
 export declare function readInkTexts(log: string, samples: readonly string[]): [string, string][]
+/** the text each sample sets beside a decoration of no width of its own (a ground, an underline, a stroke: soul's), [source, text] */
+export declare function readInkDecorated(log: string, samples: readonly string[]): [string, string][]
+/** one glyph of a lead's ink (its text `t`) read against the text `want` up to `end` from its end: the end past it, or -1 */
+export declare function leadStep(want: string, end: number, t: string): number
+/** the samples whose box TeX began with no character (a kern, glue, a box, a formula, a colour): glued to a word, none of its letters */
+export declare function readInkApart(log: string, samples: readonly string[]): string[]
+/** the paper's macros a marking takes for reading nothing past their arguments, at most */
+export declare const COMPLETE_MAX: number
+/** the paper's macros that read nothing past their arguments, by name: their arity */
+export type Complete = Record<string, number>
+/** whether a placeholder is a call of such a macro (name → arity) with all its arguments in it */
+export declare function completeCall(p: unknown, complete: ReadonlyMap<string, number> | null | undefined): boolean
+/** of the front end's complete macros ([name, arity]), those the units call, by name; null for none given */
+export declare function completeCalled(units: readonly SourceUnit[], complete: readonly (readonly [string, number])[] | null | undefined): Complete | null
 /** each babel name's macro, by key (\\refname's `ref`) */
 export declare const NAME_MACROS: Readonly<Record<NameKey, string>>
 /** each babel name's English value (babel's en [captions]) */
@@ -66,7 +102,7 @@ export declare function headEnd(pieces: readonly unknown[], from?: number): numb
 /** LaTeX's text symbols, each the one character it sets, and a symbol's text: the table the layer reads too */
 export { symbolText, TEXT_SYMBOLS } from '../rules/text-symbols.mjs'
 /** TeX's answers from the probe's `punct` rows, per sample's command */
-export declare function readMarkProbe(log: string, samples: readonly { command: string }[]): Switches
+export declare function readMarkProbe(log: string, samples: readonly ({ command: string } | AheadSample)[]): Switches
 /** the commands whose marks the answers take off anywhere but between two calls */
 export declare const switchedOf: (switches: Switches | null) => string[]
 /** the commands of the asked classes a paper writes */
@@ -77,8 +113,13 @@ export declare const INVISIBLE: RegExp
 export declare const DISPLAY: RegExp
 /** a piece's class, or null where it is not marked (text, a group's open or close, an invisible placeholder) */
 export declare function classOf(piece: { t: string; src?: string }): MarkClass | null
+/** whether a piece is the list backref sets after a bibliography entry (latex-front.mjs BACKREF_LIST), its marks LAYOUT_TEX's around the list */
+export declare function backrefPiece(piece: { t?: string; src?: string } | null | undefined): boolean
 /** the TeX that goes after MARK_DEF in the marked original: the gate and the marks' macros, the names, the points last */
 export declare const LAYOUT_TEX: string
+/** \\axtcall{i}: the point `<i>c` before an author's call where TeX is in horizontal mode (latex-front.mjs CALLED_AT); in the
+ *  marked compile's head only where the source states a call */
+export declare const CALL_TEX: string
 /** the control sequences \\axt@unmark takes out of a title's copy with their arguments: the regex's alternation and the
  *  prefilter that keeps it from running on a list holding none of them are both built from this list */
 export declare const UNMARK_CS: readonly string[]
@@ -86,6 +127,8 @@ export declare const NAME_MARK_FILE: RegExp
 export declare function withoutNameMarks(text: string): string
 /** LAYOUT_TEX's names: \\axtnma{<key>} and \\axtnmb{<key>} around each babel name macro's own text */
 export declare const NAMES_TEX: string
+export declare const CLASS_NAMES: readonly { key: string; macro: string; own: string; call: RegExp }[]
+export declare function classNamesTex(texts: readonly string[]): string
 /** LAYOUT_TEX's last part: a point (`/axt-<name> ri`) beside each destination, around each column's body and each
  *  float's box */
 export declare const POINTS_TEX: string
@@ -103,11 +146,11 @@ export declare const MARK_NAME: RegExp
 /** the units with their layout marks as pieces of their own (each unit copied; the paper's units untouched), and each
  *  unit's mark for patch(): MARK_DEF's for a marked unit (with \axtlines when `lines`), a cell's and a heading's own;
  *  marks taken off where `switches` (TeX's answers) says they change what follows */
-export declare function layoutMarking(units: readonly SourceUnit[], classes: readonly MarkClass[], o: { lines: boolean; switches?: Switches | null; inkless?: readonly string[] | null }): { units: SourceUnit[]; mark(u: SourceUnit): UnitMark }
+export declare function layoutMarking(units: readonly SourceUnit[], classes: readonly MarkClass[], o: { lines: boolean; switches?: Switches | null; inkless?: readonly string[] | null; complete?: Complete | ReadonlyMap<string, number> | readonly (readonly [string, number])[] | null; apart?: readonly string[] | null }): { units: SourceUnit[]; mark(u: SourceUnit): UnitMark }
 
 /** the marks file (internal, prep/<mid>/marks-<sha>.json): what the layout maker reads from the marked original */
 export interface LayoutMarks {
-  schema: 8
+  schema: 15
   /** the engine that compiled it (meta.compiler) */
   engine: string
   /** what the marked original was marked with: layoutMarking's classes and the paper's own switch (TeX's answers to the
@@ -116,7 +159,7 @@ export interface LayoutMarks {
   /** `texts`: the probe's texts, flat (source, text, source, text, …), null where no probe ran */
   /** `names`: whether each babel name's own text holds a lowercase letter (readNameProbe), null where no probe ran */
   /** `lineskip`: the paper's \lineskip and \lineskiplimit, PDF units (readSkipProbe), null where the probe gave none */
-  marking: { classes: MarkClass[]; switches: Switches | null; inkless: string[] | null; texts: string[] | null; names: Partial<Record<NameKey, 0 | 1>> | null; lineskip: [number, number] | null }
+  marking: { classes: MarkClass[]; switches: Switches | null; inkless: string[] | null; texts: string[] | null; names: Partial<Record<NameKey, 0 | 1>> | null; lineskip: [number, number] | null; complete: Complete | null; apart: string[] | null }
   pages: number
   /** per page: x0, y0, x1, y1 (stride 4) */
   views: number[]
@@ -162,7 +205,7 @@ export declare function destRect(a: unknown): [x0: number, y0: number, x1: numbe
 export declare const MARKS_CAP: number
 export declare const MARKS_VALUES: number
 export declare const MARKS_DEPTH: number
-export declare const MARKS_SCHEMA: 8
+export declare const MARKS_SCHEMA: 15
 /** a unit's alignment code (readAlign) */
 export type AlignCode = 'c' | 'l' | 'r' | 'j'
 export declare const ALIGN_CODES: readonly AlignCode[]
@@ -180,7 +223,7 @@ export declare const RULES_PIECE: number
 export declare const OWNED_ALL: number
 /** from a PDF.js document of the marked original and its last TeX pass's log; the caller opens and destroys the
  *  document. With the paper's `units` and PDF.js's operator codes, each marked piece's own ink from its operator lists */
-export declare function layoutMarksOf(marked: unknown, log: string, o: { engine: string; classes?: readonly MarkClass[]; switches?: Switches | null; inkless?: readonly string[] | null; texts?: readonly (readonly [string, string])[] | readonly string[] | null; names?: Partial<Record<NameKey, 0 | 1>> | null; lineskip?: readonly [number, number] | null; units?: readonly SourceUnit[] | null; OPS?: Record<string, number> | null }): Promise<LayoutMarks>
+export declare function layoutMarksOf(marked: unknown, log: string, o: { engine: string; classes?: readonly MarkClass[]; switches?: Switches | null; inkless?: readonly string[] | null; texts?: readonly (readonly [string, string])[] | readonly string[] | null; decorated?: readonly (readonly [string, string])[] | null; names?: Partial<Record<NameKey, 0 | 1>> | null; lineskip?: readonly [number, number] | null; complete?: Complete | null; apart?: readonly string[] | null; units?: readonly SourceUnit[] | null; OPS?: Record<string, number> | null }): Promise<LayoutMarks>
 /** the unit marks the left is anchored by: `<id>s` / `<id>e` → the destination's place and the word it stands by (markWords) */
 export type UnitMarks = Map<string, { page: number; x: number; y: number; t: string | null }>
 /** an owned row as a page hands it on: [name, how], or [name, how, n, glyphs (page, x0, y, size, the character itself or its
@@ -188,13 +231,13 @@ export type UnitMarks = Map<string, { page: number; x: number; y: number; t: str
 export type OwnedRow = (string | number)[]
 /** the options of the marked original's reading: layoutMarksOf's, and `paper` (the marks file's paper-wide bounds too) */
 export type MarkedOptions = Parameters<typeof layoutMarksOf>[2] & { paper?: boolean }
-/** why a page of the marked original has no ink (null: it has): its operator list not given within OPS_MS, or its ink's walk
- *  past its backstop ('timedOut'); past OPS_CAP's operations, GLYPHS_PAGE's glyphs or a guard of pageInk's own ('capped');
- *  its boxes past BOXES_PAGE merged ('degraded'); no piece on it is owned */
-export type MarkedDark = 'timedOut' | 'capped' | 'degraded' | null
+/** why a page of the marked original has no ink (null: it has): its operator list failed ('unread'; waited for however long it
+ *  takes); past OPS_CAP's operations, GLYPHS_PAGE's glyphs or a guard of pageInk's own ('capped'); its boxes past BOXES_PAGE
+ *  merged ('degraded'); no piece on it is owned */
+export type MarkedDark = 'unread' | 'capped' | 'degraded' | null
 /** the marked original's head (markedPages' first event): the names read, each page looked up once */
 /** the head's verdict on the paper's links (read before any page): how many its link pages hold and their destinations' names,
- *  or null where it has none (a page's not read within OPS_MS or past MAX_LINKS, or all past LINKS_MAX) */
+ *  or null where it has none (a page's annotations that could not be read or past MAX_LINKS, or all past LINKS_MAX) */
 export interface MarkedLinks { count: number; dests: string[] }
 export interface MarkedHead { pages: number; marking: LayoutMarks['marking']; dropped: string[]; set: Set<string>; named: [string, number | null, number, number][]; destPage: Map<string, number>; pageOf: Map<string, number>; lines: [number, number][]; align: [number, AlignCode][]; colours: [number, number, number][]; unitMarks: UnitMarks | null; links: MarkedLinks | null }
 /** one page of the marked original as it is read: its tokens, the words first seen on it, the pieces found once it was read,
@@ -210,9 +253,12 @@ export declare function markedPages(marked: unknown, log: string, o: MarkedOptio
 /** the marked original read once, a page at a time (markedPages, drained): the marks in memory (as parseLayoutMarks reads their
  *  file; never trimmed to the file's bounds; the paper-wide bounds with `paper` alone) and the unit marks (null: a unit mark's
  *  page could not be looked up), and the pages with no ink, by why */
-export declare function readMarked(marked: unknown, log: string, o: MarkedOptions): Promise<{ marks: LayoutMarks; unitMarks: UnitMarks | null; dark: { timedOut: number[]; capped: number[]; degraded: number[] } }>
+export declare function readMarked(marked: unknown, log: string, o: MarkedOptions): Promise<{ marks: LayoutMarks; unitMarks: UnitMarks | null; dark: { unread: number[]; capped: number[]; degraded: number[] } }>
 /** each opening point's piece as the page stream finds it (layout/stream.mjs Follow): of the units and the destinations' names */
-export declare function followsOf(units: readonly SourceUnit[], names: ReadonlySet<string>): (name: string) => import('./stream.mjs').Follow | null
+export declare function followsOf(units: readonly SourceUnit[], names: ReadonlySet<string>, texts?: readonly string[] | ReadonlyMap<string, string> | null, inkless?: Iterable<string> | null): (name: string) => import('./stream.mjs').Follow | null
+/** the display a unit opens with, which the marking passes over, by the unit's start mark's name (`<i>s`): the opening mark's name
+ *  it would have had and its group's later displays', none of them a destination set (`names`); null for any other */
+export declare function headsOf(units: readonly SourceUnit[], names: ReadonlySet<string>): (start: string) => import('./stream.mjs').Head | null
 /** whether a destination the head names is a mark of the marks file: on a page of the paper, within its page's view (`views`
  *  the pages' read so far, stride 4) */
 export declare function markAt(views: readonly number[], pages: number, page: number | null, x: number, y: number): boolean
@@ -221,7 +267,7 @@ export declare function columnsOf(head: MarkedHead): number[]
 /** the marks of a marked original whose pages are still to be read: its head's marking, columns, dropped names and line counts */
 export declare function marksOfHead(head: MarkedHead, engine: string): LayoutMarks & { linkCount: number; linkDests: string[] }
 /** a point read twice on pages apart: its piece 'a mark set twice', nor the displays of its group, on `rows` in place */
-export declare function vetoTwice(rows: Map<string, OwnedRow>, twice: ReadonlySet<string>, follows: (name: string) => { group?: string[] } | null): void
+export declare function vetoTwice(rows: Map<string, OwnedRow>, twice: ReadonlySet<string>, follows: (name: string) => { group?: string[] } | null, heads?: ((start: string) => import('./stream.mjs').Head | null) | null): void
 /** the marks file as the lab writes it of the marks in memory: encodeLayoutMarks of them as they are, which its parser reads back
  *  as them; marks past one of the file's own bounds throw the parser's LayoutRefusal (no file is trimmed to other marks) */
 export declare function marksFile(m: LayoutMarks): string
@@ -230,3 +276,12 @@ export declare function encodeLayoutMarks(m: LayoutMarks): string
 export declare function parseLayoutMarks(bytes: Uint8Array): LayoutMarks
 /** \\rule's call: what TeX's ink section measures, not the role table (a strut, \\rule{0pt}{2ex}, none; a bar, ink) */
 export declare const RULE: RegExp
+/** the regions' points' TeX for the code environments a paper uses (latex-front.mjs project `codeEnvs`), '' for none */
+export declare function regionsTex(codeEnvs: readonly string[] | null | undefined, bodies?: readonly string[] | null): string
+/** the label a reference element names (classOf's `ref` and `eqref`, one label, no page's), as the marked compile writes it; null
+ *  for any other piece */
+export declare function refKeyOf(piece: unknown): string | null
+/** each label the paper's reference elements name, once, in the order its units name them */
+export declare function refKeysOf(units: readonly { pieces?: readonly unknown[] }[]): string[]
+/** what the marked compile asks TeX about each reference (AXT-REF, AXT-REFNAME at the document's end); '' for none */
+export declare function refsTex(keys: readonly string[]): string

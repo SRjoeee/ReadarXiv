@@ -16,7 +16,7 @@ import { parseHash } from '@/entrypoints/options/hash'
 import { Card } from '@/entrypoints/options/ui/Card'
 import { Row } from '@/entrypoints/options/ui/Row'
 import { applySearch } from '@/entrypoints/options/ui/search'
-import { O, setLocale } from '@/ui/strings'
+import { O, setLocale } from '@readarxiv/ui'
 
 // happy-dom draws nothing: a scroll is nothing to it
 Element.prototype.scrollIntoView ??= () => {}

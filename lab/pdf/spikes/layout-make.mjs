@@ -20,9 +20,9 @@ import { promisify } from 'node:util'
 import { gzipSync } from 'node:zlib'
 import { getDocument, OPS, version } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { keptFor, openPaper, originalFiles, probeFiles } from '../../../src/pdf-reader/engine/pipeline/live.mjs'
-import { classOf, LAYOUT_CLASSES, encodeLayoutMarks, inkSamples, layoutMarksOf, parseLayoutMarks, probeSamples, readInkProbe, readInkTexts, readMarkProbe } from '../../../src/pdf-reader/engine/layout/marks.mjs'
+import { classOf, LAYOUT_CLASSES, encodeLayoutMarks, layoutMarksOf, parseLayoutMarks, probeSamples, readInkAnswers, readMarkProbe } from '../../../src/pdf-reader/engine/layout/marks.mjs'
 import { encodeLayout, PH_FLAG } from '../../../src/pdf-reader/engine/layout/file.mjs'
-import { pageInk, unreadOf } from '../../../src/pdf-reader/engine/layout/ink.mjs'
+import { pageInk, unreadOf } from '@readarxiv/engine'
 import { makeLayout } from '../../../src/pdf-reader/engine/layout/make.mjs'
 import { unpackSource } from '../../../src/pdf-reader/engine/source/tar.mjs'
 import { LITE } from './lite-pdfjs.mjs'
@@ -94,7 +94,7 @@ for (const id of process.argv.slice(2).length ? process.argv.slice(2) : Object.k
     for (const [p, b] of [...all].sort((a, b) => (a[0] < b[0] ? -1 : 1))) hash.update(p).update(b)
     return hash.digest('hex').slice(0, 16)
   }
-  const samples = probeSamples(paper.units), probe = probeFiles(paper, { marks: true }), probeLog = join(dir, `probe-${keyOf(probe)}.log`)
+  const samples = probeSamples(paper.units, paper.project.complete), probe = probeFiles(paper, { marks: true }), probeLog = join(dir, `probe-${keyOf(probe)}.log`)
   if (!existsSync(probeLog)) {
     const pdir = join(dir, 'probe')
     rmSync(pdir, { recursive: true, force: true })
@@ -103,8 +103,9 @@ for (const id of process.argv.slice(2).length ? process.argv.slice(2) : Object.k
     writeFileSync(probeLog, existsSync(join(pdir, `${stem}.log`)) ? readFileSync(join(pdir, `${stem}.log`), 'latin1') : '', 'latin1')
     rmSync(pdir, { recursive: true, force: true })
   }
-  const switches = readMarkProbe(readFileSync(probeLog, 'latin1'), samples), inkless = readInkProbe(readFileSync(probeLog, 'latin1'), inkSamples(paper.units))
-  const shown = readInkTexts(readFileSync(probeLog, 'latin1'), inkSamples(paper.units))
+  // (the macros' answers, the leads' texts and the entries' carried ones, as layout/paper.mjs reads them: readInkAnswers)
+  const ink = readInkAnswers(readFileSync(probeLog, 'latin1'), paper.units)
+  const switches = readMarkProbe(readFileSync(probeLog, 'latin1'), samples), inkless = ink.inkless, shown = ink.texts
   // the layout compile, cached by what it compiles
   const build = join(dir, 'build'), marksFile = join(dir, 'marks.json'), stamp = join(dir, 'marks.key')
   const cached = key => {
@@ -138,7 +139,7 @@ for (const id of process.argv.slice(2).length ? process.argv.slice(2) : Object.k
   const task = open(new Uint8Array(readFileSync(join(dir, 'arxiv.pdf'))))
   const arxiv = await task.promise
   const t0 = performance.now()
-  const out = await makeLayout({ units: paper.units, marks, arxiv, OPS, paper: { id: m[1], version: Number(m[2]) }, left: '', pdfjs: version })
+  const out = await makeLayout({ units: paper.units, texOrder: paper.texOrder, marks, base: arxiv, OPS, paper: { id: m[1], version: Number(m[2]) }, pdfjs: version })
   const wall = performance.now() - t0
   await task.destroy()
   const { stats } = out
@@ -232,7 +233,7 @@ for (const id of process.argv.slice(2).length ? process.argv.slice(2) : Object.k
   console.log(JSON.stringify({
     id, engine: paper.meta.compiler, compileMs, marksMs: marksMs === null ? null : Math.round(marksMs), marksBytes: readFileSync(marksFile).length, owned: marks.owned.length, ownedGlyphs: marks.owned.reduce((n, e) => n + (e.length > 2 ? e[2] : 0), 0), marking: marks.marking, pages: out.file.paper.pages,
     lines: S.lines, units: S.units, translatedCells: [cells.filter(([, i]) => placedIds.has(i)).length, cells.length],
-    ph: S.ph, match: S.match, labels: S.labels, frames: S.frames, capped: S.capped, timedOut: S.timedOut, inkTimedOut: S.inkTimedOut, degraded: S.degraded, over: S.over,
+    ph: S.ph, match: S.match, labels: S.labels, frames: S.frames, capped: S.capped, unread: S.unread, degraded: S.degraded, over: S.over,
     lastBaselines: `${S.baselines.last.filter(d => d <= BASELINE + 1e-9).length}/${S.baselines.last.length} within ${BASELINE}`,
     bytes: { ...S.bytes, gzip9: gzipSync(text, { level: 9 }).length }, ms: Object.fromEntries(Object.entries(S.ms).map(([k, v]) => [k, Math.round(v)])), wallMs: Math.round(wall),
     fonts: out.file.fonts.length,

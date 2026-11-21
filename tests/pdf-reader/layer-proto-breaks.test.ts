@@ -83,3 +83,118 @@ describe('a forced break inside a frame: its room is the unit\'s own, and the pa
     for (const p of ALL) expect((await ask([p])).snaps.get(p), `page ${p} alone`).toEqual(wanted.get(p))
   })
 })
+
+// A group TeX set as a paragraph of its own inside a unit (tex.mjs paragraphBreaks): 2608.25210v2 p3's prompt boxes, each unit an
+// item's text and then `\mypython{…}`, the prompt in a frame at another size and measure. The front end cuts units at the source's
+// paragraph ends, never inside a command's argument, so the unit holds both; laid as one paragraph, the translation ran on from
+// the item's short last line over the frame's top and past its edge. Here: two lines of 10 pt type, the second short, then the
+// box's three at 9 pt, 10 pt further in on both sides; the unit set justified (UNIT_FLAG.JUSTIFIED), as the file has these
+describe('a group TeX set as a paragraph of its own: its text starts on the line TeX set it from, in a block of its own', () => {
+  const ITEM = 'Placeholders hold the two test sentences of the prompt. '
+  const BOX = 'Determine whether the two sentences are equivalent in their meaning and return it.'
+  const OPEN = { t: 'open', id: 1, src: '\\mybox{', k: 1 }, CLOSE = { t: 'close', id: 1, src: '}', k: 3 }
+  const boxed: Paper = {
+    name: 'a box under the text', pages: 1,
+    specs: [{
+      id: 0, kind: 'para', chars: 0, at: 0,
+      lines: [line(1, 250, 'Placeholders hold the two test', 20, 280), line(1, 238, 'sentences of the prompt.', 20, 150), line(1, 222, 'Determine whether the two', 30, 270), line(1, 211, 'sentences are equivalent in', 30, 270), line(1, 200, 'their meaning and return it.', 30, 230)],
+    }],
+  }
+  function boxedBuilt(flags: number): Built {
+    const P = build(boxed)
+    const row = P.rows.get(0) as unknown as { src: string; pieces: unknown[] }
+    // (the source: the item's text, the box's group around its text; the translation: the item's twelve characters, the group's
+    // open piece, the box's thirty, its close)
+    const source = [{ t: 'text', s: ITEM }, OPEN, { t: 'text', s: BOX }, CLOSE]
+    Object.defineProperty(row, 'source', { value: source, enumerable: false })
+    row.src = `${ITEM}${BOX}`.trim()
+    row.pieces = [{ t: 'text', tr: true, s: CJK(12, 0x4e00) }, OPEN, { t: 'text', tr: true, s: CJK(30, 0x5100) }, CLOSE]
+    const layout = P.layout as unknown as { units: number[][]; lines: [number, number[]][]; frames: [number, number[]][] }
+    layout.units = layout.units.map(u => [...u.slice(0, 3), flags, source.length])
+    // (the box's lines at 9 pt; the unit's lines one frame)
+    layout.lines = layout.lines.map(([id, rows]) => [id, rows.map((v, i) => (i % 8 === 6 && i >= 16 ? 9 : v))])
+    layout.frames = layout.frames.map(([id]) => [id, [1, 0, 0, 5, -1, 0]])
+    P.index = indexLayout(parseLayout(new TextEncoder().encode(JSON.stringify(P.layout))))
+    return P
+  }
+
+  it('the item\'s text stays on its lines and the box\'s starts on the box\'s first, within its measure', async () => {
+    const run = await openRun(boxedBuilt(32))
+    await askPage(run, 1)
+    const lines = (run.stats.find(x => x.id === 0)?.lines ?? []) as number[][]
+    expect(lines.length, JSON.stringify(run.skipped)).toBeGreaterThan(1)
+    // (the box's lines a block of their own, the first on the box's first row; none of them past the box's measure)
+    const box = lines.filter(l => l[8] === 1)
+    expect(box.length, `the lines' blocks ${lines.map(l => `${l[1]}:${l[8]}`)}`).toBeGreaterThan(0)
+    expect(box[0]![1]).toBe(222)
+    expect(box.every(l => l[6]! >= 30 - 0.01 && l[7]! <= 270 + 0.01), `the box's lines ${box.map(l => `${l[6]}-${l[7]}`)}`).toBe(true)
+    // (the item's text on its own lines, above the box)
+    const item = lines.filter(l => l[8] === 0)
+    expect(item.length).toBeGreaterThan(0)
+    expect(item.every(l => l[1]! >= 238), `the item's lines ${item.map(l => l[1])}`).toBe(true)
+  })
+
+  it('control: a unit TeX\'s file does not say it set justified is laid as before, one paragraph', async () => {
+    // (a short line of a ragged or centred unit, or one whose alignment nothing tells, may end no paragraph)
+    const run = await openRun(boxedBuilt(0))
+    await askPage(run, 1)
+    const lines = (run.stats.find(x => x.id === 0)?.lines ?? []) as number[][]
+    expect(lines.length).toBeGreaterThan(0)
+    expect(lines.every(l => l[8] === 0)).toBe(true)
+  })
+})
+
+// The review of #603: a justified paragraph beside a wrapped figure, its rows there full at a narrower measure. A row of it ends
+// well before the frame's widest right edge, and a group the source opens on the row after it (`\textbf{…}`) was taken for a
+// paragraph TeX set of its own: the translation broke there, the bold text a block of its own. A line is short of its own
+// measure, the one TeX set at its height as the door lays it (layer2.mjs measureOf, measuresOf's runs), never of the frame's
+describe('a group on the row after a full row of a narrower measure beside a wrapped figure: no paragraph of its own', () => {
+  const ROWS = ['Alpha beta gamma delta', 'epsilon zeta eta theta', 'iota kappa lambda mu', 'nu xi omicron pi rho', 'sigma tau upsilon', 'Phi chi psi omega and', 'more words follow here', 'to the end.']
+  const BOLD = 'Phi chi psi'
+  const OPEN = { t: 'open', id: 1, src: '\\textbf{', k: 1 }, CLOSE = { t: 'close', id: 1, src: '}', k: 3 }
+  // (five rows beside the figure end at 150, those under it at 280, the last at 200; the bold group opens the sixth)
+  const wrapped: Paper = {
+    name: 'a wrapped paragraph', pages: 1,
+    specs: [{ id: 0, kind: 'para', chars: 0, at: 0, lines: ROWS.map((t, i) => line(1, 250 - 12 * i, t, 20, i < 5 ? 150 : i === 7 ? 200 : 280)) }],
+  }
+  it('lays the translation on as one paragraph, the group no break', async () => {
+    const P = build(wrapped)
+    const row = P.rows.get(0) as unknown as { src: string; pieces: unknown[] }
+    const before = ROWS.slice(0, 5).join(' '), after = ROWS.slice(5).join(' ').slice(BOLD.length)
+    const source = [{ t: 'text', s: `${before} ` }, OPEN, { t: 'text', s: BOLD }, CLOSE, { t: 'text', s: after }]
+    Object.defineProperty(row, 'source', { value: source, enumerable: false })
+    row.src = `${before} ${BOLD}${after}`
+    row.pieces = [{ t: 'text', tr: true, s: CJK(20, 0x4e00) }, OPEN, { t: 'text', tr: true, s: CJK(4, 0x5100) }, CLOSE, { t: 'text', tr: true, s: CJK(16, 0x5300) }]
+    const layout = P.layout as unknown as { units: number[][]; frames: [number, number[]][] }
+    layout.units = layout.units.map(u => [...u.slice(0, 3), 32, source.length])
+    layout.frames = layout.frames.map(([id]) => [id, [1, 0, 0, ROWS.length, -1, 0]])
+    P.index = indexLayout(parseLayout(new TextEncoder().encode(JSON.stringify(P.layout))))
+    const run = await openRun(P)
+    await askPage(run, 1)
+    const lines = (run.stats.find(x => x.id === 0)?.lines ?? []) as number[][]
+    expect(lines.length, JSON.stringify(run.skipped)).toBeGreaterThan(1)
+    expect(lines.every(l => l[8] === 0), `the lines' blocks ${lines.map(l => `${l[1]}:${l[8]}`)}`).toBe(true)
+  })
+})
+
+// The review of #603 (its second finding): a unit of two lines whose first ends at an ordinary forced break `\\`, at 20 to 130,
+// its second at 20 to 280. The frame has no pitch of its own besides the break's gap, so forcedBreaks gives it no room and its
+// next line a region (`breakAt`, referenced). A line a region opened started a block of its own, and the first line's block was
+// its own 20 to 130 where the two lines share the measure 20 to 280: a first part longer than the original's first line wrapped or
+// shrank there (unless the door's widening of a one-line block ran it on to its column's edge). Only a paragraph TeX set of a
+// group starts a block (`paraAt`, tex.mjs paragraphBreaks); a forced break's lines keep the unit's measure, as before
+describe('an ordinary forced break in a unit of two lines: both its parts keep the measure the two lines share', () => {
+  const rects = [[1, 20, 248, 130, 257], [1, 20, 236, 280, 245]]
+  const key = (r: number[]) => `${r[0]}|${r.slice(1).join()}`
+  const breakAt = new Map([[key(rects[1]!), 0]]), referenced = new Set([0])
+  let L2: typeof import('@/pdf-reader/engine/layer-proto/layer2.mjs')
+  beforeAll(async () => { L2 = await import('@/pdf-reader/engine/layer-proto/layer2.mjs') })
+  it('splits after the break with the whole block\'s bounds: the first part on to 280, the second after the region', () => {
+    const blocks = L2.blocksOf2(rects as never, [[0, 0, 300, 300]], null, null, referenced, breakAt, null, false)
+    expect(blocks.map(b => [b.x0, b.x1, b.after, b.rects.length, !!(b as { opens?: boolean }).opens])).toEqual([[20, 280, 0, 1, false], [20, 280, 1, 1, false]])
+  })
+  it('control: the same line opened by a paragraph TeX set of a group starts a block of its own, its own measure', () => {
+    const blocks = L2.blocksOf2(rects as never, [[0, 0, 300, 300]], null, null, referenced, breakAt, null, false, new Set([key(rects[1]!)]))
+    expect(blocks.map(b => [b.x0, b.x1, b.after, b.rects.length, !!(b as { opens?: boolean }).opens])).toEqual([[20, 130, 0, 1, false], [20, 280, 1, 1, true]])
+  })
+})

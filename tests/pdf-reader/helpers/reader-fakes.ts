@@ -170,7 +170,7 @@ export const LinkTarget = { NONE: 0, SELF: 1, BLANK: 2, PARENT: 3, TOP: 4 }
 
 /** a page view of the fake viewer: its div sized as PDF.js sizes one, floored to the pixel; its output scale where a test
  *  draws it as PDF.js does (render's `as`) */
-export interface FakeViewerPage { id: number; div: HTMLElement; viewport: FakeViewport; pdfPage: FakePage | null; renderingState: number; canvas: HTMLCanvasElement | null; outputScale?: { sx: number; sy: number }; reset(): void }
+export interface FakeViewerPage { id: number; div: HTMLElement; viewport: FakeViewport; pdfPage: FakePage | null; renderingState: number; canvas: HTMLCanvasElement | null; outputScale?: { sx: number; sy: number }; textLayer?: { div: HTMLElement }; reset(): void }
 /** a page's canvas as PDF.js sizes it for a drawing (pdf_viewer.mjs PDFPageView.draw): its pixels, and the output scale it
  *  leaves (the canvas's size over the floored page's) */
 export interface DrawnAs { width: number; height: number; sx: number; sy: number }
@@ -300,6 +300,17 @@ export class FakePDFViewer {
     pv.renderingState = 1
     this.eventBus.dispatch('pagerender', { source: pv, pageNumber: n })
   }
+  /** page `n`'s text layer rendered, as PDF.js's TextLayerBuilder appends it: a `div.textLayer` in its page, `textlayerrendered` told */
+  renderText(n: number) {
+    const pv = this._pages[n - 1]
+    if (!pv) return
+    const div = document.createElement('div')
+    div.className = 'textLayer'
+    div.textContent = `page ${n}`
+    pv.div.append(div)
+    pv.textLayer = { div }
+    this.eventBus.dispatch('textlayerrendered', { source: pv, pageNumber: n, error: null })
+  }
   /** page `n`'s drawing done: `pagerendered` told */
   finishRender(n: number, error: unknown = null) {
     const pv = this._pages[n - 1]
@@ -321,6 +332,7 @@ export class FakePDFPageView {
   pdfPage: (FakePage & { cleanup(): void }) | null = null
   renderingState = 0
   canvas: HTMLCanvasElement | null = null
+  textLayer: { div: HTMLElement } | null = null
   draws = 0
   updates: { scale: number; drawingDelay: number }[] = []
   // biome-ignore lint/suspicious/noExplicitAny: the options PDF.js's page view takes, as the view passes them
@@ -359,9 +371,11 @@ export class FakePDFPageView {
     this.options.layerProperties?.linkService?.addLinkAttributes(a, 'https://example.invalid/out')
     links.append(a)
     this.div.append(this.canvas, text, links)
+    this.textLayer = { div: text }
     this.options.eventBus?.dispatch('pagerender', { source: this, pageNumber: this.id })
     this.renderingState = 3
     this.options.eventBus?.dispatch('pagerendered', { source: this, pageNumber: this.id, error: null })
+    this.options.eventBus?.dispatch('textlayerrendered', { source: this, pageNumber: this.id, error: null })
   }
   update({ scale, drawingDelay = -1 }: { scale: number; drawingDelay?: number }) {
     this.scale = scale
@@ -382,6 +396,44 @@ export class FakePDFPageView {
 
 /** the kit as the host hands it: the fakes, and the getDocument options the view must pass on */
 export const ASSETS = Object.freeze({ cMapUrl: 'cmaps/', cMapPacked: true, standardFontDataUrl: 'fonts/', wasmUrl: 'wasm/' })
+/** PDF.js's TextLayerBuilder as the layer's text uses it (pdf_viewer's): a `div.textLayer`, rendered from its page's text content
+ *  stream into one span an item (its text as a text node, its direction) and the end of content, its spans told to its highlighter;
+ *  `cancel()` empties it. Every builder made and every one cancelled is kept */
+export class FakeTextLayerBuilder {
+  static made: FakeTextLayerBuilder[] = []
+  static cancelled: FakeTextLayerBuilder[] = []
+  div = document.createElement('div')
+  viewport: unknown = null
+  constructor(readonly o: { pdfPage: { streamTextContent(): ReadableStream }; highlighter?: { setTextMapping(divs: HTMLElement[], strs: string[]): void } }) {
+    this.div.className = 'textLayer'
+    this.div.tabIndex = 0
+    FakeTextLayerBuilder.made.push(this)
+  }
+  async render({ viewport }: { viewport: unknown }) {
+    this.viewport = viewport
+    const reader = this.o.pdfPage.streamTextContent().getReader()
+    const divs: HTMLElement[] = [], strs: string[] = []
+    for (;;) {
+      const { value, done } = await reader.read()
+      if (done) break
+      for (const it of (value as { items: { str: string; dir: string; transform: number[]; hasEOL: boolean }[] }).items) {
+        const span = document.createElement('span')
+        span.textContent = it.str
+        span.dir = it.dir
+        span.dataset.at = it.transform.join(',')
+        divs.push(span)
+        strs.push(it.str)
+        this.div.append(span)
+        if (it.hasEOL) this.div.append(document.createElement('br'))
+      }
+    }
+    this.o.highlighter?.setTextMapping(divs, strs)
+    const end = document.createElement('div')
+    end.className = 'endOfContent'
+    this.div.append(end)
+  }
+  cancel() { FakeTextLayerBuilder.cancelled.push(this); this.div.replaceChildren() }
+}
 export function fakeKit() {
   return {
     lib: { AnnotationMode: { DISABLE: 0, ENABLE: 1, ENABLE_FORMS: 2 } },
@@ -395,6 +447,8 @@ export function resetFakes() {
   FakePDFViewer.made = []
   FakePDFPageView.made = []
   FakePDFPageView.log = []
+  FakeTextLayerBuilder.made = []
+  FakeTextLayerBuilder.cancelled = []
 }
 
 // ---------------------------------------------------------------- the observers

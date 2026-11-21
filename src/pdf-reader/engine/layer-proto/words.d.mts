@@ -32,6 +32,12 @@ export interface PageWords {
   /** the units with lines on the page that have no span on it, rising: skipped, unfit, withheld with their table group, refused,
    *  and untranslated (a row lost, none, kept or never come), all shown as the original's; the view copies their tokens from the left */
   original: number[]
+  /** the rows on the page of each unit the layout lays, [id, [x0, y0, x1, y1, …]] by id rising, our page's PDF units, y up (empty
+   *  for one laid only on other pages): a copy of the left's tokens of a unit shown as the original stands on its own rows alone,
+   *  and a unit laid nowhere none on another's (view/shapes.mjs layerShapes) */
+  rows?: [id: number, rects: number[]][]
+  /** whether the page's lines moved (a unit's pages on the left not its rows' pages here): no copy of a unit laid nowhere */
+  drift?: boolean
 }
 /** the offsets of a unit's text in plainTranslated(pieces) */
 export declare function plainTracker(): { gap(): void; text(s: string): Int32Array; space(): number; next(): number }
@@ -52,9 +58,13 @@ export declare function newWords(): OpenWords
 export declare function tokenBand(t: Token, L: Layout, by: number): { y: number; h: number; top: number; bottom: number }
 /** a unit's tokens on a page appended to the table in its text's order, as one span; `kept`: the original's lines it keeps
  *  (layer2.mjs keptLines), each written where the text passes it; `pieceAt`: each piece's place in the translation (pieceOffsets) */
-export declare function addUnitWords(W: OpenWords, L: Layout, page: number, id: number, wordOf: ((at: number, end: number) => number) | null, kept?: readonly KeptLine[], drawnCrop?: (crop: { page: number }) => boolean, pieceAt?: ArrayLike<number> | null): void
+export declare function addUnitWords(W: OpenWords, L: Layout, page: number, id: number, wordOf: ((at: number, end: number) => number) | null, kept?: readonly KeptLine[], drawnCrop?: (crop: { page: number }) => boolean, pieceAt?: ArrayLike<number> | null, shown?: readonly import('./hide.mjs').ShownInk[]): void
+/** a unit the layer shows as the original's: its layout boxes on the page as its tokens, its displays under their hover ids */
+export declare function addBoxWords(W: OpenWords, page: number, id: number, lu: { lines?: ArrayLike<number>; labels?: ArrayLike<number>; ph?: Map<number, { kind: string; segs: ArrayLike<number> }> } | null, displayIds?: Map<number, number>): void
 /** the record a page keeps */
-export declare function freezeWords(W: OpenWords | null, original: Iterable<number>): PageWords
+/** a drawn thing's tokens (a babel name, a figure's label), one a segment, appended under `id` as a unit's span */
+export declare function addSegWords(W: OpenWords, id: number, segs: readonly { x: number; w: number; y: number; h: number; base: number; size: number }[]): void
+export declare function freezeWords(W: OpenWords | null, original: Iterable<number>, rows?: readonly (readonly [number, readonly number[]])[], drift?: boolean): PageWords
 /** a copy of a kept record */
 export declare function copyWords(w: PageWords): PageWords
 export type { Token }

@@ -58,7 +58,7 @@ describe('answerMessages', () => {
     expect(reply).not.toHaveBeenCalled()
   })
 
-  it('a handler gets the message and the sender\'s tab, its promise is the answer, and the channel stays open for it', async () => {
+  it('a handler gets the message, the sender\'s tab and its URL as the browser reports it, its promise is the answer, and the channel stays open for it', async () => {
     const reply = vi.fn()
     const handler = vi.fn(async () => ({ cancelled: 2 }))
     const listen = answerMessages({ 'axt:cancel-scope': handler })
@@ -71,10 +71,10 @@ describe('answerMessages', () => {
     expect(handler).toHaveBeenLastCalledWith({ type: 'axt:cancel-scope', scope: 's2' }, { tabId: undefined })
     // …nor has one opened in a tab, which Chrome gives `tab` too: its URL is on the extension's own origin
     listen({ type: 'axt:cancel-scope', scope: 's3' }, { tab: { id: 9 }, url: `${location.origin}/pdf-reader.html` }, reply)
-    expect(handler).toHaveBeenLastCalledWith({ type: 'axt:cancel-scope', scope: 's3' }, { tabId: undefined })
+    expect(handler).toHaveBeenLastCalledWith({ type: 'axt:cancel-scope', scope: 's3' }, { tabId: undefined, url: `${location.origin}/pdf-reader.html` })
     // A content script's page is on another origin
     listen({ type: 'axt:cancel-scope', scope: 's4' }, { tab: { id: 7 }, url: 'https://arxiv.org/html/2608.02163' }, reply)
-    expect(handler).toHaveBeenLastCalledWith({ type: 'axt:cancel-scope', scope: 's4' }, { tabId: 7 })
+    expect(handler).toHaveBeenLastCalledWith({ type: 'axt:cancel-scope', scope: 's4' }, { tabId: 7, url: 'https://arxiv.org/html/2608.02163' })
   })
 
   it('a rejection settles the sender\'s request as a failure, and so does a handler that throws before it has a promise', async () => {

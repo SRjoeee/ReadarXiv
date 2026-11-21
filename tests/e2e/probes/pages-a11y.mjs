@@ -1,6 +1,6 @@
 // Axe on the extension's own pages after the redesign (its design, §9): the popup in every state the gallery draws —
 // light and dark side by side — and the settings page's four sections, a search, the service form and the style editor
-// open, in both themes and both languages. `e2e:a11y` audits arXiv's pages, A against B; nothing else audits these. The
+// open, in both themes and every interface language. `e2e:a11y` audits arXiv's pages, A against B; nothing else audits these. The
 // gate is no serious or critical violation inside the popup or on the settings page; the rest are printed for the record.
 // The gallery is a development page:
 //   pnpm exec wxt build --mode development && node tests/e2e/probes/pages-a11y.mjs
@@ -9,6 +9,7 @@ import { rmSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import AxeBuilder from '@axe-core/playwright'
 import { chromium } from 'playwright'
+import { chromiumOptions } from '../lib/chromium.mjs'
 
 const E2E = fileURLToPath(new URL('../', import.meta.url))
 const EXT = process.env.AXT_EXT_DIR ?? fileURLToPath(new URL('../../../.output/chrome-mv3-dev', import.meta.url))
@@ -16,12 +17,12 @@ const PROFILE = `${E2E}.profile-pages-a11y`
 rmSync(PROFILE, { recursive: true, force: true })
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 
-const context = await chromium.launchPersistentContext(PROFILE, {
+const context = await chromium.launchPersistentContext(PROFILE, chromiumOptions({
   ...(process.env.AXT_CHROME ? { executablePath: process.env.AXT_CHROME } : { channel: 'chromium' }),
   headless: true,
   args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
   viewport: { width: 1300, height: 1100 },
-})
+}))
 const [worker] = context.serviceWorkers().length ? context.serviceWorkers() : [await context.waitForEvent('serviceworker')]
 const extensionId = new URL(worker.url()).host
 const page = await context.newPage()
@@ -78,7 +79,7 @@ const open = async hash => {
   await sleep(500)
 }
 
-for (const lang of ['zh-CN', 'en']) {
+for (const lang of ['zh-CN', 'zh-TW', 'ja', 'ko', 'en']) {
   await patch({ uiLanguage: lang })
   await goto(`chrome-extension://${extensionId}/gallery.html`)
   await page.waitForSelector('main.popup')

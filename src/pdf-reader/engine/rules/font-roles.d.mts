@@ -27,19 +27,24 @@ export interface RoleSet {
   cjk: { body: FaceId; bold: FaceId } | null   // an italic run is its weight's face sheared (layer-proto/fonts.mjs CJK_SLANT_DEG)
   fallbacks: Readonly<Record<FaceId, readonly FaceId[]>>
 }
-/** a script's CJK faces: its group, its Kai (kept in the rule set for engines before 2026-10-19, read by none since: an
- *  italic run is the body sheared), the English designs beside which it is light */
-export interface CjkFaces { group: string; kai: string | null; light: readonly string[] }
-/** the English families a paper's body is set in; a rule may name them as the ones a CJK face is light beside */
+/** a script's CJK faces: its group, drawn at Regular and Bold beside every English family (RULES_SCHEMA 6: the Light designs
+ *  and the Kai, which no engine since 2026-10-19 read, gone from the set) */
+export interface CjkFaces { group: string }
+/** whether a face of the catalog is a CJK one (Source Han Serif's, Harano Aji's, a Kai) */
+export declare function isCjkFace(id: string): boolean
+/** the English families a paper's body is set in */
 export declare const ENGLISH_FAMILIES: readonly EnglishFamily[]
 /** what a target draws in, for a paper's English family; `cjkFaces` is the target's CJK family as the layout rule set gives
  *  it (null for an alphabet), and a script of no alphabet's given none throws */
 export declare function rolesFor(target: string, family: EnglishFamily, cjkFaces: CjkFaces | null): RoleSet
+/** whether a face's lowercase letters are its small capitals (Latin Modern's caps face): measured and drawn as they are */
+export declare const capsLetters: (id: string) => boolean
+/** whether a face draws small capitals of its own: by its smcp feature, or by its letters (Latin Modern's caps face) */
+export declare const ownSmallCaps: (id: string) => boolean
 /** the face a run is drawn in */
 export declare function faceFor(roles: RoleSet, run: { script: 'cjk' | 'latin'; cls: FontClass['cls']; design: Design; bold: boolean; italic: boolean; caps: boolean }): FaceId
-/** whether every character of `text` (but white space and the default ignorable) is in one of `faces`' coverage or
- *  their fallbacks' */
-export declare function canDraw(text: string, faces: readonly FaceId[], roles: RoleSet): boolean
+/** each alphabet a face's letters are read by: a language's own, and a script's bare letters (`Latn`, `Cyrl`) */
+export declare const LETTER_SETS: Readonly<Record<string, string>>
 /** whether every character of `text` (but white space and the default ignorable) is in one of `ranges`: a list of range
  *  lists, each [start, end, …] (inclusive), sorted and disjoint as COVERAGE's are. canDraw over what a host serves of the
  *  faces, a slice's code points a list each */

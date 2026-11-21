@@ -47,7 +47,7 @@ function tighten(t: TextToken, lead: boolean, trail: boolean): Pick<TextToken, '
  * after the fragment has been appended and emptied.
  *
  * `alignment` is the engine's sentence boundaries for this translation, when it reported them and
- * they verified (`providers/alignment.ts`). The label restore needs them as evidence for a label
+ * they verified (`protector/alignment.ts`). The label restore needs them as evidence for a label
  * that ends in a period (`label.ts`); the fragment itself does not.
  */
 export function rehydrate(translated: string, block: ProtectedBlock, doc: Document, alignment?: Boundaries): DocumentFragment & { offsets: WireSpan[] } {

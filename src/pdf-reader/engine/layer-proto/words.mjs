@@ -187,8 +187,8 @@ function push(W, l, r, y, h, top, bottom, word, at) {
  * each line's items in theirs (the walk svgOfUnit makes), and each of the original's lines it keeps in place (`kept`,
  * layer2.mjs keptLines) where its text passes that line — a displayed formula between the text before it and the text after it,
  * which the view reads as the unit's reading order (view/highlight.mjs). A kept line of a region the text breaks at (`region`)
- * goes before the first line laid after the text passed the region (a line's `past`: breakLines', where the walk consumed it,
- * also where the text ran on above the display, 'flow'; a slot's `after` for a line laid with none); any other (`block`) before
+ * goes before the first line laid after the text passed the region (a line's `past`: breakLines', where the walk consumed it; a
+ * slot's `after` for a line laid with none); any other (`block`) before
  * the first line of the first block that follows it in the unit's rectangles; a region the page has no later line for, after
  * the lines.
  * A text token is the item's slot, [x, x + the layout's width] (an opening mark a compressed line shifts left of its slot is
@@ -203,12 +203,20 @@ function push(W, l, r, y, h, top, bottom, word, at) {
  * token with none of its own (a lead, a label, a text the layer cannot place, a kept line no placeholder holds) the place of
  * the token before it in the unit's table, else of the one after it; -1 where the unit has none. A space is no token. The unit's
  * tokens are one run of the table, recorded as its span (empty ranges where the unit is painted on the page with no line on
- * it: a paragraph that ran on to a page its text did not reach)
+ * it: a paragraph that ran on to a page its text did not reach).
+ * `shown` (hide.mjs unitHiding's): the unit's own ink the page keeps, a token a box, so that the right lights it with the unit as the
+ * left does (the owner, 2026-10-30: a block lights whole, its label and its kept pieces with it): its label first, at the text's start
+ * (the first sentence's), a kept piece at its piece's place, a kept character by its neighbours; and each display a block of its own,
+ * its segments a span of their own under its hover id after the unit's (a kept line inside a display's segments is the display's)
  */
-export function addUnitWords(W, L, page, id, wordOf, kept = [], drawnCrop = () => true, pieceAt = null) {
+export function addUnitWords(W, L, page, id, wordOf, kept = [], drawnCrop = () => true, pieceAt = null, shown = []) {
   const first = W.n
   const lines = L.lines.filter(line => line.page === page)
   const placeOf = k => (pieceAt && Number.isInteger(k) && k >= 0 && k < pieceAt.length ? pieceAt[k] : -1)
+  const displays = shown.filter(s => s.kind === 'display' && s.id !== null && s.id !== undefined)
+  // (by the file's box of the line where it has one, as the left's inventory tells a display's row: view/shapes.mjs takeInventory)
+  if (displays.length) kept = kept.filter(k => !onDisplay(displays, k.x0, k.fileBottom ?? k.bottom, k.x1, k.fileTop ?? k.top))
+  for (const s of shown) if (s.kind === 'label') pushBox(W, s, 0)
   // (each kept line by the laid line it is written before: lines.length after them all)
   const before = kept.map(k => {
     const j = k.region !== undefined ? lines.findIndex(line => (line.past ?? line.after ?? 0) > k.region) : k.block !== undefined ? lines.findIndex(line => (line.block ?? 0) >= k.block) : -1
@@ -218,30 +226,116 @@ export function addUnitWords(W, L, page, id, wordOf, kept = [], drawnCrop = () =
   lines.forEach((line, j) => {
     keptBefore(j)
     const by = line.baseline
+    // (a line's size and scale its run's, where the unit's runs are laid apart: layer2.mjs layoutRuns)
+    const LL = line.seg ?? L
     for (const it of line.items) {
       const t = it.t
       if (t.space) continue
       const l = it.x - (it.shift ?? 0)
       if (t.crop) {
         if (!drawnCrop(t.crop)) continue
-        const c = t.crop.crop, h = (c[3] - c[1]) * L.scale, top = by + (c[3] - t.crop.baseline) * L.scale
+        const c = t.crop.crop, h = (c[3] - c[1]) * LL.scale, top = by + (c[3] - t.crop.baseline) * LL.scale
         push(W, l, l + it.w, by, h, top, top - h, -1, placeOf(t.crop.k))
         continue
       }
       if (typeof t.s !== 'string') continue
-      const { y, h, top, bottom } = tokenBand(t, L, by)
-      push(W, l, l + it.w - (t.kern ? (t.kernEm ?? 0) * L.f : 0), y, h, top, bottom, t.at === undefined || !wordOf ? -1 : wordOf(t.at, t.end), t.at ?? placeOf(t.k))
+      const { y, h, top, bottom } = tokenBand(t, LL, by)
+      push(W, l, l + it.w - (t.kern ? (t.kernEm ?? 0) * LL.f : 0), y, h, top, bottom, t.at === undefined || !wordOf ? -1 : wordOf(t.at, t.end), t.at ?? placeOf(t.k))
     }
   })
   keptBefore(lines.length)
+  // (a kept piece at its piece's place; a kept character at the place of the unit's token nearest it on its row, so that it is in
+  // the sentence it stands in, never the last one's by its order in the table)
+  const placeBeside = ([x0, y0, x1, y1]) => {
+    const x = (x0 + x1) / 2, y = (y0 + y1) / 2
+    let best = -1, far = Infinity
+    for (let i = first; i < W.n; i++) {
+      if (W.at[i] < 0 || y < W.bottom[i] || y > W.top[i]) continue
+      const d = x < W.l[i] ? W.l[i] - x : x > W.r[i] ? x - W.r[i] : 0
+      if (d < far) { far = d; best = W.at[i] }
+    }
+    return best
+  }
+  // (a kept character that meets a display's segments is that display's ink, lit with it: a limit or a bracket set past its box)
+  const meetsDisplay = ([x0, y0, x1, y1]) => displays.some(({ box: [a0, b0, a1, b1] }) => Math.min(x1, a1) > Math.max(x0, a0) && Math.min(y1, b1) > Math.max(y0, b0))
+  for (const s of shown) if (s.kind === 'piece') pushBox(W, s, placeOf(s.k)); else if (s.kind === 'char' && !meetsDisplay(s.box)) pushBox(W, s, placeBeside(s.box))
   // (a token with no place of its own: the one before it, else the one after it)
   for (let i = first + 1; i < W.n; i++) if (W.at[i] < 0) W.at[i] = W.at[i - 1]
   for (let i = W.n - 2; i >= first; i--) if (W.at[i] < 0) W.at[i] = W.at[i + 1]
   W.spans.push([id, W.n > first ? [first, W.n - first] : []])
+  addDisplayWords(W, displays, placeOf)
 }
 
-/** the record a page keeps: the table's columns cut to its tokens, its spans, and the units left the original's, rising */
-export function freezeWords(W, original) {
+/** whether a line [x0, y0, x1, y1] is a display's (`displays`: shown ink with its box): a display stands on rows of its own, so a line
+ *  whose band meets one of its segments' by more than half the line's height, across any of it, is the display's — its middle may
+ *  fall between two segments (a formula and its number, 2609.26457v1 p3) */
+function onDisplay(displays, x0, y0, x1, y1) {
+  const h = y1 - y0
+  return displays.some(({ box: [a0, b0, a1, b1] }) => Math.min(x1, a1) > Math.max(x0, a0) && Math.min(y1, b1) - Math.max(y0, b0) > 0.5 * h)
+}
+/** a box of ink our page keeps (hide.mjs `shown`, or a line, a label, a segment of the layout file) as a token: across its box, on its
+ *  baseline, `at` its place in the unit's translation (-1: its neighbours') */
+function pushBox(W, { box: [x0, y0, x1, y1], base }, at) {
+  push(W, x0, x1, Number.isFinite(base) ? base : y0, y1 - y0, y1, y0, -1, at)
+}
+/** each display (`displays`: shown ink of kind display, with its hover id) a span of its own, its segments its tokens */
+function addDisplayWords(W, displays, placeOf = () => -1) {
+  const byId = new Map()
+  for (const d of displays) (byId.get(d.id) ?? byId.set(d.id, []).get(d.id)).push(d)
+  for (const [did, ds] of byId) {
+    const from = W.n
+    for (const d of ds) pushBox(W, d, placeOf(d.k))
+    W.spans.push([did, [from, W.n - from]])
+  }
+}
+
+/**
+ * The tokens of a unit the layer shows as the original's on the page (run.mjs freezeWordsOf), from the layout file's unit `lu` (its
+ * lines, its labels, its placeholders' segments on our page: what the page shows of it is all its own ink): a token a box, under its
+ * id, its displays under their hover ids, so that the right lights it where it stands whether or not the left located it (the owner,
+ * 2026-10-30: kept text lights at the same place on both panes). `displayIds` its displays' ids by piece (units.mjs displayIdsOf).
+ * Nothing where it has no box on the page
+ */
+export function addBoxWords(W, page, id, lu, displayIds = new Map()) {
+  const first = W.n, displays = [], pieces = []
+  for (const [k, row] of lu?.ph ?? []) {
+    const S = row.segs ?? []
+    for (let o = 0; o + 5 < S.length; o += 6) {
+      if (S[o] !== page) continue
+      const box = { box: [S[o + 1], S[o + 5], S[o + 3], S[o + 4]], base: S[o + 2] }
+      const did = row.kind === 'display' ? displayIds.get(k) : undefined
+      if (did !== undefined) displays.push({ ...box, kind: 'display', k, id: did })
+      else pieces.push(box)
+    }
+  }
+  // (a line of its own on one of its displays' rows is the display's ink: a kept line)
+  const lb = lu?.labels ?? []
+  for (let o = 0; o + 6 < lb.length; o += 7) if (lb[o + 1] === page) pushBox(W, { box: [lb[o + 2], lb[o + 6], lb[o + 4], lb[o + 5]], base: lb[o + 3] }, 0)
+  const ln = lu?.lines ?? []
+  for (let j = 0; j + 7 < ln.length; j += 8) if (ln[j] === page && !onDisplay(displays, ln[j + 1], ln[j + 5], ln[j + 2], ln[j + 4])) pushBox(W, { box: [ln[j + 1], ln[j + 5], ln[j + 2], ln[j + 4]], base: ln[j + 3] }, 0)
+  for (const box of pieces) pushBox(W, box, 0)
+  // (its span even where none of its boxes is but a display's, empty: the view copies the left's tokens only of a unit given none,
+  // which would light its display as its own too)
+  if (W.n > first || displays.length) W.spans.push([id, W.n > first ? [first, W.n - first] : []])
+  addDisplayWords(W, displays)
+}
+
+/**
+ * The tokens of a drawn thing no unit's layout lays (a babel name, a figure's label: run.mjs paintNames, paintFigures), one a drawn
+ * segment (textlayer.mjs nameSeg's: its box, its baseline, its size), appended to the page's table under `id` as a unit's span, so
+ * that the hover lights it and its original as it does a unit (view/shapes.mjs layerShapes); no word, no place (it lights whole)
+ */
+export function addSegWords(W, id, segs) {
+  const first = W.n
+  for (const s of segs) push(W, s.x, s.x + s.w, s.base, s.size, s.y + s.h, s.y, -1, -1)
+  W.spans.push([id, W.n > first ? [first, W.n - first] : []])
+}
+
+/** the record a page keeps: the table's columns cut to its tokens, its spans, the units left the original's, rising, the rows
+ *  on the page of each unit the layout lays (`rows`, [id, [x0, y0, x1, y1, …]] by id rising, our page's PDF units, y up; an
+ *  empty list for one laid only on other pages), and whether the page's lines moved (`drift`): where a copy of the left's
+ *  tokens may stand (view/shapes.mjs layerShapes) */
+export function freezeWords(W, original, rows = [], drift = false) {
   const n = W?.n ?? 0
   const col = (f, T) => (W ? W[f].slice(0, n) : new T(0))
   return {
@@ -250,6 +344,8 @@ export function freezeWords(W, original) {
     at: col('at', Int32Array),
     spans: W ? W.spans : [],
     original: [...original].sort((a, b) => a - b),
+    rows: rows.map(([id, rs]) => [id, [...rs]]).sort((a, b) => a[0] - b[0]),
+    drift,
   }
 }
 
@@ -262,5 +358,7 @@ export function copyWords(w) {
     at: w.at.slice(),
     spans: w.spans.map(([id, ranges]) => [id, ranges.slice()]),
     original: w.original.slice(),
+    rows: (w.rows ?? []).map(([id, rs]) => [id, rs.slice()]),
+    drift: !!w.drift,
   }
 }

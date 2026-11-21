@@ -171,8 +171,9 @@ SVG 图、2023 年以来的 LaTeXML 输出，以及 arXiv 自己转换失败的�
 最该保持绿色的是三条不变量：恢复后文档必须逐节点相等、每个文本节点必须恰好落在一条规则下、
 每个占位符必须完整地走完一个来回。
 
-欢迎贡献代码。请先读 [`CLAUDE.md`](CLAUDE.md)——它记录着这份代码所遵守的约束，
-违反其中任何一条的改动，写得再好也不会是对的。
+欢迎提交 issue。项目外的 pull request 需要事先商定，并附上作者的许可授权，原因和做法见
+[`CONTRIBUTING.md`](CONTRIBUTING.md)。请先读 [`CLAUDE.md`](CLAUDE.md)——它记录着这份代码所遵守的约束，
+违反其中任何一条的改动，写得再好也不会是对的。安全问题请私下报告（[`SECURITY.md`](SECURITY.md)）。
 
 ## 站在谁的肩膀上
 
@@ -190,6 +191,8 @@ Read arXiv 移植了三个 GPL-3.0 翻译扩展的代码，在此一并致谢：
 ## 许可证
 
 Copyright © 2026 SRjoeee。采用 [GPL-3.0](LICENSE)，与它所移植的项目相同。
+版权所有者也在闭源的 Read arXiv 网站中使用他在这里写的代码；两者如何与 GPL 相容，见
+[`docs/THIRD_PARTY.md`](docs/THIRD_PARTY.md)（"Who holds the copyright"）。
 
 本程序是自由软件：你可以依据自由软件基金会发布的 GNU 通用公共许可证第 3 版重新发布和修改它。发布本程序是希望它能有用，但**不附带任何担保**，甚至不包含对适销性或特定用途适用性的
 默示担保。详见[许可证全文](LICENSE)。

@@ -1,7 +1,8 @@
 // HTTP status → ProviderError kind. Shared by every HTTP engine (google-web, microsoft, openai-compat): each needs this
 // judgement, and it carries a piece of reasoning that cannot be re-derived (below), so it lives in one place.
+// Kept at this path for the website's Worker (readarxiv-web, through @vendor/providers/google-web) until its cut-over; nothing in the extension imports it. See tests/contract/website-imports.test.ts.
 
-import type { ProviderErrorKind } from './types'
+import type { ProviderErrorKind } from './compat/types'
 
 /**
  * **4xx must not be classified `network` across the board** (Codex on #17): retry-policy's

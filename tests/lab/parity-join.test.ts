@@ -1,0 +1,574 @@
+// @vitest-environment node
+// The parity's join of v2's members to today's units (lab/typeset/parity/join.mjs, written by v2.mjs into its file's `today`):
+// every member the entry's Pages carry, whatever gate-l1's runner did with it, joined by its own unit's id and its rank among
+// the part's members of that id, as today's units of that id by their order (the baseline's rule); an ink unit's placement
+// whose text names the source unit it echoes (a contents line its heading, a note its source footnote: bundle.ts placedOf)
+// joined by the ink unit's own id, the format's unitId over its kind and the echoed content. Synthetic parts and units.
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { describe, expect, it } from 'vitest'
+// @ts-expect-error — a plain node module of the lab
+import { HOLDER_JOIN } from '../../lab/pdf/prepare-back/stated.mjs'
+// @ts-expect-error — a plain node module of the lab
+import { candidateAddress, candidateKept, candidateKeptElements, candidateKeptToday, candidatePitch, heldJoin, joinedJoin, joinedPlan, piecesJoin, todayJoin } from '../../lab/typeset/parity/join.mjs'
+import { unitId } from '../../packages/format/src/ids.ts'
+
+type Content = { t: 'text'; s: string }[]
+const text = (s: string): Content => [{ t: 'text', s }]
+/** a part member: its ord, kind and text (a unit's id), on a page, with whatever else the test gives it */
+const member = (ord: number, kind: string, id: string, o: object = {}) => ({ ord, kind, text: id, lines: [[1]], ...o })
+/** a paper's bundle as l1Paper reads it: its parts by page (one flow each here) and its units by id */
+const bundle = (pages: Record<number, ReturnType<typeof member>[]>, units: { id: string; kind: string; content: Content }[]) => ({
+  parts: new Map(Object.entries(pages).map(([pg, ms]) => [Number(pg), { flows: [ms] }])),
+  units: new Map(units.map((u) => [u.id, u])),
+})
+/** the entry's Pages as v2.mjs keeps them: each page's members with their states */
+const pagesOf = (pages: Record<number, [number, string][]>) =>
+  Object.fromEntries(Object.entries(pages).map(([pg, ms]) => [pg, { members: ms.map(([ord, state]) => ({ ord, page: Number(pg), state })) }]))
+const H = 'a'.repeat(64),
+  P = 'b'.repeat(64),
+  Q = 'c'.repeat(64),
+  R = 'd'.repeat(64),
+  F = 'e'.repeat(64),
+  G = 'f'.repeat(64)
+
+describe("every member the entry's Pages carry is joined, whatever the runner did with it", () => {
+  // (a heading, a paragraph whose element ends a line (gate-l1's runner stops it, 'breaks (U.breaks not adapted)', and never
+  // records its join; the entry lays it), a paragraph the entry leaves unproven, and a running head on two pages)
+  const part = bundle(
+    {
+      1: [
+        member(5, 'heading', H),
+        member(8, 'para', P, { els: [['0', { kind: 'math', ends: [1] }]] }),
+        member(9, 'para', Q),
+        member(20, 'inkheads', R),
+      ],
+      2: [member(21, 'inkheads', R)],
+    },
+    [
+      { id: H, kind: 'heading', content: text('Introduction') },
+      { id: P, kind: 'para', content: text('A paragraph.') },
+      { id: Q, kind: 'para', content: text('Another one.') },
+      { id: R, kind: 'inkheads', content: text('A RUNNING HEAD') },
+    ],
+  )
+  const today = [
+    { ord: 5, id: H },
+    { ord: 7, id: P },
+    { ord: 9, id: Q },
+    { ord: 30, id: R },
+    { ord: 31, id: R },
+  ]
+  const pages = pagesOf({ 1: [[5, 'laid'], [8, 'laid'], [9, 'unproven'], [20, 'laid']], 2: [[21, 'laid']] })
+
+  it("joins the member the runner stops and the entry lays, by its unit's id", () => {
+    expect(todayJoin(pages, part, today)[8]).toEqual({ today: 7 })
+  })
+  it('joins a member the entry does not lay too: its state then names why v2 leaves it', () => {
+    expect(todayJoin(pages, part, today)[9]).toEqual({ today: 9 })
+  })
+  it("joins equal ids by their order among the part's members, as today's units of that id by theirs", () => {
+    const got = todayJoin(pages, part, today)
+    expect([got[20], got[21]]).toEqual([{ today: 30 }, { today: 31 }])
+  })
+  it("joins only the members the entry's Pages carry", () => {
+    expect(Object.keys(todayJoin(pagesOf({ 2: [[21, 'laid']] }), part, today))).toEqual(['21'])
+  })
+})
+
+describe('a member is joined first by what a reader sees: today\'s unit set on the same lines of A, one to one', () => {
+  // (2111.09276v1 p6: a header cell of the shape `\textbf{\# of items}`: today's front end holds `\#` as a placeholder, v2's
+  // as the text "#", so the two units' ids, the format's hash of their kind and content, differ; both dumps state the cell's one
+  // line on A at the same place, page 6, baseline 712.36, its glyphs from 112.04 to 145.26)
+  const cell = (ord: number, x0: number, x1: number, id = P) => member(ord, 'cell', id, { lines: [[6, 0, x0, x1, 712.36]] })
+  const prepared = (units: { ord: number; x0: number; x1: number; baseline?: number }[]) =>
+    new Map(units.map((u) => [u.ord, { ord: u.ord, id: null, kind: 'cell', text: '', pieces: [], lines: [{ page: 6, baseline: u.baseline ?? 712.36, x0: u.x0, x1: u.x1 }] }]))
+  const part = (ms: ReturnType<typeof member>[]) => bundle({ 6: ms }, [{ id: P, kind: 'cell', content: text('# of items') }])
+  const pages = pagesOf({ 6: [[89, 'laid']] })
+  it("joins the cell to today's unit on its line whatever either front end spelled its characters as", () => {
+    expect(todayJoin(pages, part([cell(89, 112.04, 145.26)]), [{ ord: 89, id: Q }], prepared([{ ord: 89, x0: 112.04, x1: 145.26 }]))[89]).toEqual({ today: 89 })
+  })
+  it("joins nothing so to a unit of another extent or baseline, where two of today's stand on those lines, or without today's dump", () => {
+    const one = part([cell(89, 112.04, 145.26)])
+    expect(todayJoin(pages, one, [{ ord: 89, id: Q }], prepared([{ ord: 89, x0: 112.04, x1: 150 }]))[89]).toBeUndefined()
+    expect(todayJoin(pages, one, [{ ord: 89, id: Q }], prepared([{ ord: 89, x0: 112.04, x1: 145.26, baseline: 700 }]))[89]).toBeUndefined()
+    const two = prepared([
+      { ord: 89, x0: 112.04, x1: 145.26 },
+      { ord: 90, x0: 112.04, x1: 145.26 },
+    ])
+    expect(todayJoin(pages, one, [{ ord: 89, id: Q }, { ord: 90, id: R }], two)[89]).toBeUndefined()
+    expect(todayJoin(pages, one, [{ ord: 89, id: Q }])[89]).toBeUndefined()
+  })
+  it("joins only a unit of the kind the member's own id names: an ink unit that echoes a source unit is not that unit", () => {
+    // (2608.08481v1 p1: v2's names ink unit over an affiliation, its own id today's names ink unit's (the echo rule, below); today's
+    // affiliation, a source unit, stands on exactly its line, today's ink unit a little wider: the member stays today's ink unit's)
+    const note = text('Department of Physics.')
+    const echo = bundle({ 1: [member(106, 'inknames', F, { lines: [[1, 0, 100, 300, 727.55]] })] }, [{ id: F, kind: 'affiliation', content: note }])
+    const today = [
+      { ord: 2, id: F },
+      { ord: 106, id: unitId('inknames', note) },
+    ]
+    const at = new Map([
+      [2, { ord: 2, id: F, kind: 'affiliation', text: '', pieces: [], lines: [{ page: 1, baseline: 727.55, x0: 100, x1: 300 }] }],
+      [106, { ord: 106, id: null, kind: 'inknames', text: '', pieces: [], lines: [{ page: 1, baseline: 727.55, x0: 99, x1: 301 }] }],
+    ])
+    expect(todayJoin(pagesOf({ 1: [[106, 'laid']] }), echo, today, at)[106]).toEqual({ today: 106 })
+  })
+  it('joins only units the ledger holds', () => {
+    expect(todayJoin(pages, part([cell(89, 112.04, 145.26)]), [{ ord: 70, id: Q }], prepared([{ ord: 89, x0: 112.04, x1: 145.26 }]))[89]).toBeUndefined()
+  })
+  it('joins a repeated text by its lines before its rank: a member whose own occurrence today spelled otherwise takes no other page\'s', () => {
+    // (2111.09276v1: a figure's step label on p1 and the same words on p3; today's p1 label is no unit of that id (spelled
+    // otherwise), so by rank alone v2's p3 member took today's p1 unit and the p1 member nothing of its own)
+    const fig = (ord: number, page: number, x0: number) => member(ord, 'figure', G, { lines: [[page, 0, x0, x0 + 40, 500]] })
+    const both = bundle({ 1: [fig(270, 1, 380)], 3: [fig(345, 3, 100)] }, [{ id: G, kind: 'inkfigures', content: text('Step one') }])
+    const today = [
+      { ord: 120, id: R },
+      { ord: 326, id: G },
+    ]
+    const at = new Map([
+      [120, { ord: 120, id: R, kind: 'inkfigures', text: '', pieces: [], lines: [{ page: 1, baseline: 500, x0: 380, x1: 420 }] }],
+      [326, { ord: 326, id: G, kind: 'inkfigures', text: '', pieces: [], lines: [{ page: 3, baseline: 500, x0: 100, x1: 140 }] }],
+    ])
+    const got = todayJoin(pagesOf({ 1: [[270, 'laid']], 3: [[345, 'laid']] }), both, today, at)
+    expect([got[270], got[345]]).toEqual([{ today: 120 }, { today: 326 }])
+  })
+})
+
+describe("an ink unit that echoes a source unit is joined by what it is: the ink unit's own id", () => {
+  // (a contents line, the ink unit 40 whose text the part names as its heading's (5), and a note set as its source footnote,
+  // 110, the footnote no member of its own; today's units: the heading and its contents line, the footnote and its note's ink)
+  const content = text('Introduction'),
+    note = text('Supported by a grant.')
+  const part = bundle(
+    { 1: [member(5, 'heading', H), member(40, 'inkcontents', H), member(110, 'inknotes', F)] },
+    [
+      { id: H, kind: 'heading', content },
+      { id: F, kind: 'footnote', content: note },
+    ],
+  )
+  const today = [
+    { ord: 5, id: H },
+    { ord: 6, id: F },
+    { ord: 37, id: unitId('inkcontents', content) },
+    { ord: 101, id: unitId('inknotes', note) },
+  ]
+  const pages = pagesOf({ 1: [[5, 'laid'], [40, 'laid'], [110, 'laid']] })
+
+  it("a contents line laid under its heading's id is today's contents line, the heading today's heading", () => {
+    const got = todayJoin(pages, part, today)
+    expect(got[40]).toEqual({ today: 37 })
+    expect(got[5]).toEqual({ today: 5 })
+  })
+  it("a note set as its source footnote is today's note, not today's footnote", () => {
+    expect(todayJoin(pages, part, today)[110]).toEqual({ today: 101 })
+  })
+  it("a figure text's placement (kind 'figure', its unit 'inkfigures') echoes nothing: joined by its text", () => {
+    const label = text('Encoder')
+    const fig = bundle({ 1: [member(50, 'figure', G)] }, [{ id: G, kind: 'inkfigures', content: label }])
+    // (today also holds a source unit of kind 'figure' with that text: a figure placement is not it)
+    const got = todayJoin(pagesOf({ 1: [[50, 'laid']] }), fig, [
+      { ord: 27, id: unitId('figure', label) },
+      { ord: 60, id: G },
+    ])
+    expect(got[50]).toEqual({ today: 60 })
+  })
+  it("a figure text whose glyphs set a run apart is today's unit of its text alone: today's figure reading states no run", () => {
+    // (2608.25210v2 p2: "Data Extraction Task" a group of its own, set in its family's bold (locate/ink.ts); today's unit is the
+    // one text of the line, its id the format's unitId over 'inkfigures' and that text)
+    const runs = [
+      { t: 'span', id: '0', style: 'bold', must: 1, content: text('Answer') },
+      { t: 'text', s: ': Officer Anderson' },
+    ] as unknown as Content
+    const fig = bundle({ 1: [member(50, 'figure', G)] }, [{ id: G, kind: 'inkfigures', content: runs }])
+    const got = todayJoin(pagesOf({ 1: [[50, 'laid']] }), fig, [{ ord: 61, id: unitId('inkfigures', text('Answer: Officer Anderson')) }])
+    expect(got[50]).toEqual({ today: 61 })
+  })
+})
+
+describe("a unit whose kept runs v2 holds as elements is today's unit of the same glyphs, read as today's read them", () => {
+  // (2609.36054v2 p1 #28: v2's note holds each e-mail address as an element `\url{…}` (wire-tail), a content today's prepare
+  // never made, so its id is no unit's of today; today's unit of those glyphs holds the addresses as text)
+  const url = (a: string, id: string) => ({ t: 'el', id, kind: 'url', src: `\\url{${a}}` })
+  const note = [
+    { t: 'text', s: '*Correspondence to: ' },
+    url('alan@gov.ai', '1'),
+    { t: 'text', s: ' and ' },
+    url('soren@casp.ac', '3'),
+    { t: 'text', s: '. The views are ours.' },
+  ] as unknown as Content
+  const said = '*Correspondence to: alan@gov.ai and soren@casp.ac. The views are ours.'
+  const lines = [[1, 0, 45.65, 473.09, 45.6], [1, 0, 46.99, 460.71, 34.64]]
+  const at = (...ys: number[]) => ys.map((baseline) => ({ page: 1, baseline }))
+  const prepared = (o: { text?: string; pieces?: object[]; lines?: object[] } = {}) =>
+    new Map([
+      [
+        107,
+        { ord: 107, id: Q, kind: 'inknotes', text: said, pieces: [{ kind: 'text', s: o.text ?? said }], lines: at(45.6, 34.64), ...o },
+      ],
+    ])
+  const part = (kind = 'inknotes') => bundle({ 1: [member(108, kind, P, { lines })] }, [{ id: P, kind, content: note }])
+  const pages = pagesOf({ 1: [[108, 'none']] })
+
+  it("joins it to today's unit of its text, its addresses as their text, set on the same lines of A", () => {
+    expect(todayJoin(pages, part(), [{ ord: 107, id: Q }], prepared())[108]).toEqual({ today: 107 })
+  })
+  it('joins it whatever kind each reading gave those glyphs (2610.21313 p1: an inknotes of today, an inknames of v2)', () => {
+    expect(todayJoin(pages, part('inknames'), [{ ord: 107, id: Q }], prepared())[108]).toEqual({ today: 107 })
+  })
+  it('joins nothing to a unit of another text, or of the same text on other lines', () => {
+    expect(todayJoin(pages, part(), [{ ord: 107, id: Q }], prepared({ text: `${said} More.` }))[108]).toBeUndefined()
+    expect(todayJoin(pages, part(), [{ ord: 107, id: Q }], prepared({ lines: at(45.6, 30) }))[108]).toBeUndefined()
+  })
+  it('joins nothing to a unit of today another member is joined to by its id', () => {
+    // (another member of v2's part of today's id Q, joined to it first)
+    const both = bundle(
+      { 1: [member(100, 'inknotes', Q), member(108, 'inknotes', P, { lines })] },
+      [
+        { id: Q, kind: 'inknotes', content: text(said) },
+        { id: P, kind: 'inknotes', content: note },
+      ],
+    )
+    const got = todayJoin(pagesOf({ 1: [[100, 'laid'], [108, 'none']] }), both, [{ ord: 107, id: Q }], prepared())
+    expect(got).toEqual({ 100: { today: 107 } })
+  })
+  it('a unit holding no element read otherwise is joined by its id alone; one of another element, where today’s holds it too', () => {
+    const plain = bundle({ 1: [member(108, 'inknotes', P, { lines })] }, [{ id: P, kind: 'inknotes', content: text(said) }])
+    expect(todayJoin(pages, plain, [{ ord: 107, id: Q }], prepared())[108]).toBeUndefined()
+    const math = [...note, { t: 'el', id: '5', kind: 'math', src: '$x$' }] as unknown as Content
+    const withMath = bundle({ 1: [member(108, 'inknotes', P, { lines })] }, [{ id: P, kind: 'inknotes', content: math }])
+    // (today's placeholder of the same source: the same element; of another, no reading of v2's)
+    const mathOf = (src: string) => prepared({ text: `${said}￼`, pieces: [{ kind: 'text', s: said }, { kind: 'ph', src }] })
+    expect(todayJoin(pages, withMath, [{ ord: 107, id: Q }], mathOf('$x$'))[108]).toEqual({ today: 107 })
+    expect(todayJoin(pages, withMath, [{ ord: 107, id: Q }], mathOf('$y$'))[108]).toBeUndefined()
+  })
+  it("joins a unit whose scripts v2 holds as elements to today's unit that held them as text, or part text, part placeholder", () => {
+    // (2610.20967v1 p1 t123: the names' marks under Times, today's text but for the math-italic comma's placeholder ",2")
+    const math = (src: string, id: string) => ({ t: 'el', id, kind: 'math', src })
+    const names = [
+      { t: 'text', s: 'Song-Ze Yu' },
+      math('$^{1}$', '1'),
+      { t: 'text', s: ', Fang-Duo Tsai' },
+      math('$^{1,2}$', '3'),
+      { t: 'text', s: ', Yi-Hsuan Yang' },
+      math('$^{1}$', '5'),
+    ] as unknown as Content
+    const v = bundle({ 1: [member(124, 'inknotes', P, { lines })] }, [{ id: P, kind: 'inknotes', content: names }])
+    const t123 = (pieces: object[]) =>
+      new Map([[123, { ord: 123, id: Q, kind: 'inknotes', text: '', pieces, lines: at(45.6, 34.64) }]])
+    const split = [{ kind: 'text', s: 'Song-Ze Yu1, Fang-Duo Tsai1' }, { kind: 'ph', src: '$,2$' }, { kind: 'text', s: ', Yi-Hsuan Yang1' }]
+    const p124 = pagesOf({ 1: [[124, 'none']] })
+    expect(todayJoin(p124, v, [{ ord: 123, id: Q }], t123(split))[124]).toEqual({ today: 123 })
+    expect(todayJoin(p124, v, [{ ord: 123, id: Q }], t123([{ kind: 'text', s: 'Song-Ze Yu1, Fang-Duo Tsai1,2, Yi-Hsuan Yang1' }]))[124]).toEqual({ today: 123 })
+    // (another mark: no join)
+    expect(todayJoin(p124, v, [{ ord: 123, id: Q }], t123([{ kind: 'text', s: 'Song-Ze Yu1, Fang-Duo Tsai1,3, Yi-Hsuan Yang1' }]))[124]).toBeUndefined()
+    // (and a unit of today's the dump states no lines of, one it drew nothing of, joins nothing)
+    const unlined = new Map<number, object>([...t123(split), [122, { ord: 122, id: R, kind: 'inknotes', text: '', pieces: split }]])
+    expect(todayJoin(p124, v, [{ ord: 122, id: R }, { ord: 123, id: Q }], unlined)[124]).toEqual({ today: 123 })
+  })
+})
+
+describe("a member no id joined to today's unit stage 1a states its unit holds whole ((f), (b'), (f'): its kind moved)", () => {
+  // (2610.21106v1 p1's AND: today's inkorphan, v2's inknames, an ink unit's id naming its kind, so no id of today's is the
+  // member's; stage 1a's statement of today's t98 names v2's unit holding it whole, which the parity joins by)
+  const and = text('AND')
+  const part = bundle({ 1: [member(107, 'inknames', P)] }, [{ id: P, kind: 'inknames', content: and }])
+  const pages = pagesOf({ 1: [[107, 'left']] })
+  const prepared = new Map([[98, { ord: 98, id: Q, kind: 'inkorphan', text: 'AND', pieces: [{ kind: 'text', s: 'AND' }], lines: [] }]])
+  const stated = (cause: string, holder = P, ord = 98) => ({ id: Q, kind: 'inkorphan', replaced: true, stated: { ord, cause, holder } })
+
+  it('joins it by the holder the statement names, for each cause of holding whole', () => {
+    for (const c of ['held', 'names', 'heldBlock'])
+      expect(todayJoin(pages, part, [{ ord: 98, id: Q }], prepared, [stated(c)])[107]).toEqual({ today: 98 })
+  })
+  it('joins it by the holder of a group kept for its pitch, today’s unit written as v2’s with that group an element, never its row (lane b5-fixes)', () => {
+    // (stage 1a's (k) by group, stated.mjs `pitchGroup`: 1810.04805v2's `{\tt [CLS]}` and 2608.25210v2 p3's box, the unit's id moved
+    // with its content; unjoined, today's translated unit read as missing on v2's pane, 7 pages of 1810.04805v2-zh newly worse.
+    // The two contents differ, so today's row is not laid in v2's unit: `same` false)
+    expect(todayJoin(pages, part, [{ ord: 98, id: Q }], prepared, [stated('pitchGroup')])[107]).toEqual({ today: 98 })
+    const free = [...(part.parts.get(1)?.flows[0] ?? [])]
+    const other = new Map([[98, { ...prepared.get(98)!, pieces: [{ kind: 'text', s: 'and' }] }]])
+    expect([...heldJoin(free, part.units, [stated('pitchGroup')], [98], other)]).toEqual([[107, { today: 98, same: false }]])
+  })
+  it('joins it by the holder of (o), today’s unit written as v2 writes it with its escaped characters text and the groups that carry nothing their content, never its row (lane style-wire)', () => {
+    // (stage 1a's (o), stated.mjs `characters`, PDF-READER §18.30-18.33: 1810.04805v2 p16's t263 with `\%`, 2608.25210v2's
+    // `\techreport{…}`, 2610.21880v1's bare groups; the unit's id moved with its content. Unjoined (round 8 B8's first parity),
+    // today's translated unit read as missing on v2's pane ("no member of v2's part joined to it", 5 pages newly worse) and a
+    // table's grid group of such cells as kept (2 pages). The two contents differ, so today's row is not laid in v2's unit)
+    expect(todayJoin(pages, part, [{ ord: 98, id: Q }], prepared, [stated('characters')])[107]).toEqual({ today: 98 })
+    const free = [...(part.parts.get(1)?.flows[0] ?? [])]
+    const other = new Map([[98, { ...prepared.get(98)!, pieces: [{ kind: 'text', s: 'and' }] }]])
+    expect([...heldJoin(free, part.units, [stated('characters')], [98], other)]).toEqual([[107, { today: 98, same: false }]])
+  })
+  it('joins one for one by every cause stage 1a declares held whole (HOLDER_JOIN), and by none it declares an element of the holder', () => {
+    // (one table, stated.mjs's, so that a lane's new cause is joined as it declares it: round 8 B8's `characters` was stated with
+    // a holder this join did not read; (l')'s `seen` likewise, outside the parity's pairs)
+    for (const [cause, how] of Object.entries(HOLDER_JOIN))
+      expect(todayJoin(pages, part, [{ ord: 98, id: Q }], prepared, [stated(cause)])[107]).toEqual(how === 'whole' ? { today: 98 } : undefined)
+    expect(Object.entries(HOLDER_JOIN).filter(([, how]) => how === 'whole').map(([c]) => c)).toEqual(expect.arrayContaining(['held', 'names', 'heldBlock', 'order', 'pitchGroup', 'characters', 'seen']))
+  })
+  it("joins it by the holder a names unit's stand-in of its ledger class names, its characters today's in another order (2610.30034v1)", () => {
+    expect(todayJoin(pages, part, [{ ord: 98, id: Q }], prepared, [stated('order')])[107]).toEqual({ today: 98 })
+  })
+  it('joins none where the holder holds two of today\'s units, the cause is another, or today\'s unit is joined already', () => {
+    expect(todayJoin(pages, part, [{ ord: 98, id: Q }, { ord: 99, id: R }], prepared, [stated('held'), stated('held', P, 99)])[107]).toBeUndefined()
+    expect(todayJoin(pages, part, [{ ord: 98, id: Q }], prepared, [stated('trail')])[107]).toBeUndefined()
+    const both = bundle({ 1: [member(100, 'inkorphan', Q), member(107, 'inknames', P)] }, [{ id: P, kind: 'inknames', content: and }, { id: Q, kind: 'inkorphan', content: and }])
+    expect(todayJoin(pagesOf({ 1: [[100, 'laid'], [107, 'left']] }), both, [{ ord: 98, id: Q }], prepared, [stated('held')])[107]).toBeUndefined()
+  })
+  it("tells whether the two units' contents are one, so that today's row may be laid in v2's (heldJoin's `same`)", () => {
+    const free = [...(part.parts.get(1)?.flows[0] ?? [])]
+    expect([...heldJoin(free, part.units, [stated('held')], [98], prepared)]).toEqual([[107, { today: 98, same: true }]])
+    const other = new Map([[98, { ...prepared.get(98)!, pieces: [{ kind: 'text', s: 'and' }] }]])
+    expect([...heldJoin(free, part.units, [stated('held')], [98], other)]).toEqual([[107, { today: 98, same: false }]])
+  })
+})
+
+describe("the members the candidate's prepare keeps as a line of e-mail addresses (the coordinator's ruling of 2026-11-10)", () => {
+  // (stage 1a's run: its dump marks a kept block of addresses alone `keptBy: 'address'` (dump ords), and its located file joins
+  // each dump ord to its member's ord, `dumpOrds`; the parity reads the members by them, nothing else)
+  it("are the dump's units so marked, by their members' ords; none where the run holds no located file", () => {
+    const run = mkdtempSync(join(tmpdir(), 'axt-address-'))
+    try {
+      mkdirSync(join(run, 'prepare'))
+      mkdirSync(join(run, 'located'))
+      const units = [
+        { ord: 0, kind: 'affiliation', text: 'Institute of Things' },
+        { ord: 1, kind: 'inknotes', kept: true, keptBy: 'address', text: '' },
+        { ord: 2, kind: 'inkorphan', kept: true, text: '' },
+        { ord: 3, kind: 'inknotes', kept: true, keptBy: 'pitch', text: '' },
+      ]
+      writeFileSync(join(run, 'prepare', 'p1.prepare.json'), JSON.stringify({ units }))
+      writeFileSync(join(run, 'located', 'p1.json'), JSON.stringify({ dumpOrds: [[0, 10], [1, 11], [2, 12], [3, 13]] }))
+      expect(candidateAddress('p1', join(run, 'prepare'))).toEqual([11])
+      writeFileSync(join(run, 'prepare', 'p2.prepare.json'), JSON.stringify({ units }))
+      expect(candidateAddress('p2', join(run, 'prepare'))).toEqual([])
+    } finally {
+      rmSync(run, { recursive: true, force: true })
+    }
+  })
+})
+
+describe("the members the candidate's prepare keeps for their text set wholly in a face of one pitch (Rule 1)", () => {
+  // (stage 1a's run: its dump marks a unit so kept `keptBy: 'pitch'` (dump ords), and its located file joins each dump ord to
+  // its member's ord, `dumpOrds`; the parity reads the members by them, nothing else)
+  it("are the dump's units so marked, by their members' ords; none where the run holds no located file", () => {
+    const run = mkdtempSync(join(tmpdir(), 'axt-pitch-'))
+    try {
+      mkdirSync(join(run, 'prepare'))
+      mkdirSync(join(run, 'located'))
+      const units = [
+        { ord: 0, kind: 'para', text: 'a body paragraph' },
+        { ord: 1, kind: 'para', kept: true, keptBy: 'pitch', text: '{ "key": 1 }' },
+        { ord: 2, kind: 'code', kept: true, text: 'kept by its environment' },
+        { ord: 3, kind: 'inkfigures', keptBy: 'pitch', text: 'x = f(y)' },
+      ]
+      writeFileSync(join(run, 'prepare', 'p1.prepare.json'), JSON.stringify({ units }))
+      writeFileSync(join(run, 'located', 'p1.json'), JSON.stringify({ dumpOrds: [[0, 10], [1, 11], [2, 12], [3, 40]] }))
+      expect(candidatePitch('p1', join(run, 'prepare'))).toEqual([11, 40])
+      writeFileSync(join(run, 'prepare', 'p2.prepare.json'), JSON.stringify({ units }))
+      expect(candidatePitch('p2', join(run, 'prepare'))).toEqual([])
+    } finally {
+      rmSync(run, { recursive: true, force: true })
+    }
+  })
+})
+
+describe("what the candidate's prepare keeps by a rule's mark: its members, and today's units it states so (the coordinator's ruling of 2026-11-10)", () => {
+  // (lane literal-fixes: a figure text kept for an identifier, `keptBy: 'identifier'`, is a member of its own; a cell of
+  // identifiers alone is no unit of the candidate's, its statement of today's unit carrying the mark: today's ord, `stated.ord`)
+  it("are the members each mark names, and today's ords the statements so marked name; none where the run holds no file", () => {
+    const run = mkdtempSync(join(tmpdir(), 'axt-kept-'))
+    try {
+      mkdirSync(join(run, 'prepare'))
+      mkdirSync(join(run, 'located'))
+      const units = [
+        { ord: 0, kind: 'para', text: 'a body paragraph' },
+        { ord: 1, kind: 'inkfigures', keptBy: 'identifier', text: 'niah_single_1' },
+        { ord: 2, kind: 'para', kept: true, keptBy: 'pitch', text: '{ "key": 1 }' },
+        { ord: 3, kind: 'cell', keptBy: 'identifier', text: 'llm_equal_human', state: 'unlaid', replaced: true, stated: { ord: 72, cause: 'identifier' } },
+        { ord: 4, kind: 'cell', text: 'x', state: 'unlaid', replaced: true, stated: { ord: 73, cause: 'held', holder: 'b' } },
+      ]
+      writeFileSync(join(run, 'prepare', 'p1.prepare.json'), JSON.stringify({ units }))
+      writeFileSync(join(run, 'located', 'p1.json'), JSON.stringify({ dumpOrds: [[0, 10], [1, 11], [2, 12]] }))
+      expect(candidateKept('p1', 'identifier', join(run, 'prepare'))).toEqual([11])
+      expect(candidateKept('p1', 'pitch', join(run, 'prepare'))).toEqual([12])
+      expect(candidateKeptToday('p1', join(run, 'prepare'))).toEqual([[72, 'identifier']])
+      expect(candidateKeptToday('p9', join(run, 'prepare'))).toEqual([])
+    } finally {
+      rmSync(run, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('joinedPlan: several of today’s units saying one of v2’s, by the exact text (lane fig-text)', () => {
+  it('pairs a word joined across a size change: today’s two pieces, v2’s one text (2608.06701v1 p1)', () => {
+    expect(joinedPlan(['and retry viewing th', 'e file.'], [{ t: 'text', s: 'and retry viewing the file.' }])).toEqual([
+      { t: 'today', i: 0 },
+      { t: 'today', i: 1 },
+    ])
+  })
+  it('pairs a label and its address, the address v2’s element (F0, 2611.03178v1 p1)', () => {
+    const content = [{ t: 'text', s: 'Project Page: ' }, { t: 'el', id: '1', kind: 'code', src: 'site.io' }]
+    expect(joinedPlan(['Project Page:', 'site.io'], content)).toEqual([
+      { t: 'today', i: 0 },
+      { t: 'el', id: '1' },
+    ])
+  })
+  it('joins a word TeX broke at a line’s end, today’s hyphen left out', () => {
+    expect(joinedPlan(['the foun-', 'dation models'], [{ t: 'text', s: 'the foundation models' }])).toEqual([
+      { t: 'today', i: 0 },
+      { t: 'today', i: 1 },
+    ])
+  })
+  it('none where the texts are not one, or a piece of today’s straddles an element’s edge', () => {
+    expect(joinedPlan(['and retry', 'the file.'], [{ t: 'text', s: 'and retry viewing the file.' }])).toBeNull()
+    const content = [{ t: 'text', s: 'Page: ' }, { t: 'el', id: '1', kind: 'code', src: 'site.io' }]
+    expect(joinedPlan(['Page: site', '.io'], content)).toBeNull()
+  })
+})
+
+describe('joinedJoin: today’s run of one pitch stage 1a states kept as an element of v2’s line, (k) on elements (lane fig-text)', () => {
+  // (2608.06701v1 p1's "Action:" and its typewriter command, today's two units; F0's one figure text, the command its element:
+  // stage 1a states "Action:" held whole and the command kept for its pitch, each naming the text as its holder)
+  const content = [
+    { t: 'text', s: 'Action: ' },
+    { t: 'el', id: '1', kind: 'code', src: 'view x.py' },
+  ]
+  const part = bundle({ 1: [member(107, 'figure', P)] }, [{ id: P, kind: 'inkfigures', content: content as unknown as Content }])
+  const prepared = new Map([
+    [98, { ord: 98, id: Q, kind: 'inkfigures', text: 'Action:', pieces: [{ kind: 'text', s: 'Action:' }], lines: [] }],
+    [99, { ord: 99, id: R, kind: 'inkfigures', text: 'view x.py', pieces: [{ kind: 'text', s: 'view x.py' }], lines: [] }],
+  ])
+  const stated = (cause: string, ord: number) => ({ id: Q, kind: 'inkfigures', replaced: true, stated: { ord, cause, holder: P } })
+  it('joins both to the line by the holder named, the command the element', () => {
+    const free = [...(part.parts.get(1)?.flows[0] ?? [])]
+    expect([...joinedJoin(free, part.units, [stated('held', 98), stated('pitch', 99)], [98, 99], prepared)]).toEqual([
+      [107, { todays: [98, 99], plan: [{ t: 'today', i: 0 }, { t: 'el', id: '1' }] }],
+    ])
+    // (kept as an element of a decoration's, (n), alike; another cause none)
+    expect(joinedJoin(free, part.units, [stated('held', 98), stated('decoration', 99)], [98, 99], prepared).size).toBe(1)
+    expect(joinedJoin(free, part.units, [stated('held', 98), stated('trail', 99)], [98, 99], prepared).size).toBe(0)
+  })
+})
+
+describe("the ink of the elements the candidate's prepare keeps as the original's, by member (the coordinator's ruling 1 on F0, 2026-11-10)", () => {
+  // (rebuild/fig-text F0: the dump marks an element of a figure text `keptBy` 'pitch' (its run of one pitch) or 'decoration' (a
+  // stretch a frame, an underline or a tone holds); the verdict reads the original's style without their ink)
+  it("are each marked element's segments as boxes [page, x0, y0, x1, y1], by the member its unit is joined to; none else", () => {
+    const run = mkdtempSync(join(tmpdir(), 'axt-kept-els-'))
+    try {
+      mkdirSync(join(run, 'prepare'))
+      mkdirSync(join(run, 'located'))
+      const seg = (x0: number, x1: number) => ({ page: 1, x0, x1, baseline: 300, top: 307, bottom: 297 })
+      const units = [
+        { ord: 0, kind: 'inkfigures', text: 'Action: view x.py', elements: [{ k: 1, kind: 'code', flags: [], keptBy: 'pitch', segs: [seg(145, 200)] }] },
+        { ord: 1, kind: 'inkfigures', text: 'a name on a tone', elements: [{ k: 1, kind: 'other', flags: [], keptBy: 'decoration', segs: [seg(10, 40), seg(42, 60)] }] },
+        { ord: 2, kind: 'para', text: 'a formula', elements: [{ k: 1, kind: 'math', flags: [], segs: [seg(5, 9)] }] },
+        { ord: 3, kind: 'inkfigures', text: 'x', state: 'unlaid', replaced: true, elements: [{ k: 1, kind: 'code', flags: [], keptBy: 'pitch', segs: [seg(1, 2)] }] },
+      ]
+      writeFileSync(join(run, 'prepare', 'p1.prepare.json'), JSON.stringify({ units }))
+      writeFileSync(join(run, 'located', 'p1.json'), JSON.stringify({ dumpOrds: [[0, 10], [1, 11], [2, 12], [3, 13]] }))
+      expect(candidateKeptElements('p1', join(run, 'prepare'))).toEqual([
+        [10, [[1, 145, 297, 200, 307]]],
+        [11, [[1, 10, 297, 40, 307], [1, 42, 297, 60, 307]]],
+      ])
+      expect(candidateKeptElements('p9', join(run, 'prepare'))).toEqual([])
+    } finally {
+      rmSync(run, { recursive: true, force: true })
+    }
+  })
+})
+
+describe("a unit of today cut into several members of v2, and several of today's units one member: joined by their pieces' words", () => {
+  // (2608.25210v2-zh p3 after S1: today's t55 a lead sentence with its prompt box; v2's part sets them apart, member 55 the lead
+  // and 56 the box. A table cell set on two lines after S2: today's two line units, v2's one member. No id joins them: the
+  // words their pieces hold do, in order, every one of each side's; a member or a unit of today the one-to-one join took is no
+  // part of a group)
+  const today = (ord: number, page: number, ...texts: string[]) => ({
+    ord,
+    kind: 'para',
+    lines: [{ page }],
+    pieces: texts.flatMap((t, k) => (k ? [{ kind: 'ph', src: '\\_' }, { kind: 'text', s: t }] : [{ kind: 'text', s: t }])),
+  })
+  const on3 = { lines: [[3]] }
+  const v2Part = bundle(
+    { 3: [member(55, 'para', H, on3), member(56, 'para', P, on3), member(70, 'cell', Q, on3), member(80, 'para', R, on3), member(81, 'para', F, on3)] },
+    [
+      { id: H, kind: 'para', content: text(': [sentence_1] and [sentence_2] are placeholders for two test sentences.') },
+      { id: P, kind: 'para', content: text('llm_equal_human: Are the following two sentences semantically equivalent?') },
+      { id: Q, kind: 'cell', content: [{ t: 'text', s: 'Error rate' }, { t: 'el', id: 'b' } as never, { t: 'text', s: 'on test set' }] },
+      { id: R, kind: 'para', content: text('A paragraph joined one to one.') },
+      { id: F, kind: 'para', content: text('Unrelated words of another member.') },
+    ],
+  )
+  const units = [
+    today(55, 3, ': [sentence', '1] and [sentence', '2] are placeholders for two test sentences.', 'llm', 'equal', 'human: Are the following two sentences semantically equivalent?'),
+    today(70, 3, 'Error rate'),
+    today(71, 3, 'on test set'),
+    today(80, 3, 'A paragraph joined one to one.'),
+    today(90, 3, 'Some other text of today.'),
+  ]
+  it('joins one unit of today to the members that hold its words in order, and the units of today one member holds', () => {
+    expect(piecesJoin(v2Part, units, new Map([[80, 80]]))).toEqual([
+      { today: [55], members: [55, 56], pages: { 55: [3], 56: [3] } },
+      { today: [70, 71], members: [70], pages: { 70: [3] } },
+    ])
+  })
+  it('never one already joined one to one, nor units whose words no member holds whole', () => {
+    expect(piecesJoin(v2Part, units, new Map([[55, 55], [70, 70], [80, 80]]))).toEqual([])
+  })
+  // (2611.03953v2-zh p8 after S2: today's t118, a paragraph the one-to-one join leaves (v2 holds `\method{}` as an element, so
+  // their ids differ), v2's member 118 its words whole; the next member the one-to-one join left on the page, 137, a merged cell
+  // `\makecell{Time to\\target}` whose rows are today's t137 and t138. The paragraph's few hundred words and the cell's four
+  // were within a tenth of today's paragraph's: the paragraph was joined to members 118 and 137, and the cell to nothing)
+  const many = Array.from({ length: 60 }, (_, k) => `word${k}`).join(' ')
+  const box = (s1: string, s2: string) => [{ t: 'span', open: '\\makecell{', close: '}', content: [{ t: 'text', s: s1 }, { t: 'el', id: 'b', src: '\\\\' }, { t: 'text', s: s2 }] }]
+  const on8 = { lines: [[8]] }
+  const cellPart = bundle({ 8: [member(118, 'para', H, on8), member(137, 'cell', Q, on8), member(138, 'cell', R, on8)] }, [
+    { id: H, kind: 'para', content: text(many) },
+    { id: Q, kind: 'cell', content: box('Time to', 'target') as never },
+    { id: R, kind: 'cell', content: box('Recovery', 'at budget') as never },
+  ])
+  const cellUnits = [today(118, 8, many), today(137, 8, 'Time to'), today(138, 8, 'target'), today(139, 8, 'Recovery'), today(140, 8, 'at budget')]
+  it("never extends a run past a member that alone holds the unit's words: one member is no group of pieces", () => {
+    expect(piecesJoin(cellPart, cellUnits, new Map()).filter((g: { today: number[] }) => g.today.includes(118))).toEqual([])
+  })
+  it("joins a merged cell to its rows though its box's macro is no word of theirs (today's rows hold no group round them)", () => {
+    expect(piecesJoin(cellPart, cellUnits, new Map())).toEqual([
+      { today: [137, 138], members: [137], pages: { 137: [8] } },
+      { today: [139, 140], members: [138], pages: { 138: [8] } },
+    ])
+  })
+  // (a unit of today's set over a page break, which v2 cuts there: member 20 its lines on page 1, member 21 on page 2, one flow.
+  // A part holds whole flows (packages/engine/src/bundle/bundle.ts: every flow with a line on its page, and for a member of one
+  // whose first line is on an earlier page every flow with a line there), so both pages' parts hold both members: the pages a
+  // member stands on are those the part states a line of it on, never the parts that carry it)
+  const brokenPart = bundle({ 1: [member(20, 'para', H, { lines: [[1]] }), member(21, 'para', P, { lines: [[2]] })], 2: [member(20, 'para', H, { lines: [[1]] }), member(21, 'para', P, { lines: [[2]] })] }, [
+    { id: H, kind: 'para', content: text('The first half of a sentence set at the foot of a page') },
+    { id: P, kind: 'para', content: text('and its second half set at the head of the next one.') },
+  ])
+  const broken = { ord: 40, kind: 'para', lines: [{ page: 1 }, { page: 2 }], pieces: [{ kind: 'text', s: 'The first half of a sentence set at the foot of a page and its second half set at the head of the next one.' }] }
+  it('states with each group the pages each member stands on: those the part states a line of it on, not those whose parts carry it', () => {
+    expect(piecesJoin(brokenPart, [broken], new Map())).toEqual([{ today: [40], members: [20, 21], pages: { 20: [1], 21: [2] } }])
+  })
+  // (M9, 2610.21084v1 p1: today's three author units (7 words) and the abstract (87 words) before v2's abstract member, which
+  // holds none of the names; the run's 94 words within a tenth of the member's, the names' all among the tenth: the three were
+  // joined to v2's abstract, and the toggles measure read v2's translated abstract as the names drawn translated. Every unit of
+  // a run says words of the other side's: one whose words the tenth's tolerance alone takes is none of it)
+  const abstract = Array.from({ length: 87 }, (_, k) => `term${k}`).join(' ')
+  const namesPart = bundle({ 1: [member(596, 'para', H, { lines: [[1]] })] }, [{ id: H, kind: 'para', content: text(`${abstract} extra1 extra2`) }])
+  const author = (ord: number, names: string) => ({ ord, kind: 'author', lines: [{ page: 1 }], pieces: [{ kind: 'text', s: names }] })
+  const front = [author(1, 'Ann Bee, Cy'), author(2, 'Dee Eve'), author(3, 'Fay Gus'), { ...today(4, 1, abstract), kind: 'abstract' }]
+  it('joins no unit to a run whose words the tolerance alone takes: author units before the abstract are none of v2\'s abstract (M9)', () => {
+    expect(piecesJoin(namesPart, front, new Map())).toEqual([])
+  })
+  it("still joins a run whose short unit's words the other side holds: a lead of three words before a box", () => {
+    const lead = bundle({ 1: [member(30, 'para', H, { lines: [[1]] }), member(31, 'para', P, { lines: [[1]] })] }, [
+      { id: H, kind: 'para', content: text('For example consider:') },
+      { id: P, kind: 'para', content: text(abstract) },
+    ])
+    expect(piecesJoin(lead, [today(30, 1, `For example consider: ${abstract}`)], new Map())).toEqual([{ today: [30], members: [30, 31], pages: { 30: [1], 31: [1] } }])
+  })
+})

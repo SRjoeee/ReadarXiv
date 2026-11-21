@@ -1,5 +1,5 @@
 // Batch planning (DESIGN §8.2 / §6.2): batches cut by section and character budget; a formula-dense block on its own; a table whole in one batch.
-import { type RenderPath, wireFormatOf } from '@/cache/key'
+import type { WireFormat } from '@/core/protector'
 import type { Block, Cell, TableBlock } from '@/core/extractor'
 import { VOID_DENSE_THRESHOLD, serialize, type ProtectedBlock } from '@/core/protector'
 import { squash } from '@/core/text'
@@ -44,10 +44,10 @@ export function sectionTitles(blocks: Block[]): Map<Block, string> {
 /** Without sectionOf, sections are inferred from the block sequence given (a heading block opens a new batch); with it, batches are cut where the section changes */
 export function planBatches(
   blocks: Block[],
-  options: { maxBatchChars: number; maxBatchItems: number; renderPath?: RenderPath },
+  options: { maxBatchChars: number; maxBatchItems: number; renderPath?: WireFormat },
   sectionOf?: (block: Block) => string | undefined,
 ): Batch[] {
-  const format = wireFormatOf(options.renderPath ?? 'tags')
+  const format = options.renderPath ?? 'tags'
   const batches: Batch[] = []
   let current: Segment[] = []
   let currentChars = 0

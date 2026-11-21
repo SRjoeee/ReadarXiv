@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { PIPELINE_CARRIES } from '@/pdf-reader/engine/pipeline/live.mjs'
-import { boundaryChanges, plainTranslated, rehydrate, rehydrateTags, serialize, serializeTags, translateUnits } from '@/pdf-reader/engine/translate/mt.mjs'
+import { PIPELINE_CARRIES } from '../../lab/pdf/spikes/carries.mjs'
+import { boundaryChanges, plainTranslated, readsBack, rehydrate, rehydrateTags, serialize, serializeTags, translateUnits } from '@/pdf-reader/engine/translate/mt.mjs'
 
 // The markers wire the PDF reader sends a machine translator (mt.mjs): what an engine reads as part of a word
 
@@ -53,8 +53,9 @@ describe('rehydrate: the space the wire set beside a digit is taken off again', 
   })
   it('before a piece a space never goes before, whatever the engine left before it', () => {
     const tied = unit({ t: 'text', s: 'Stage 2' }, { t: 'ph', src: '~' }, { t: 'ph', src: '\\cite{x}' }, { t: 'text', s: ' trains it.' })
-    expect(serialize(tied).wire).toBe('Stage 2 @a#@b# trains it.')
-    expect(back(tied, 'Stufe 2 @a#@b# trainiert es.')).toBe('Stufe 2~\\cite{x} trainiert es.')
+    // (the tie and the citation one marker, read by the tie: the rules audit's T5)
+    expect(serialize(tied).wire).toBe('Stage 2 @a# trains it.')
+    expect(back(tied, 'Stufe 2 @a# trainiert es.')).toBe('Stufe 2~\\cite{x} trainiert es.')
   })
   it('a word\'s space stays as it was (#254): a letter before a marker keeps the space the engine left', () => {
     const word = unit({ t: 'text', s: 'as reported for BERT' }, { t: 'ph', src: '\\cite{x}' }, { t: 'text', s: ' on larger corpora.' })
@@ -73,16 +74,18 @@ describe('rehydrate: a marker\'s `#` doubled or displaced is read with its marke
   it('doubled, `@e##` (unit 13: El Ni{\\~n}o, a group around an accent inside the word): read strictly, no `#` left', () => {
     // (the group's two ends as placeholders, as the wire sent them then: a group of placeholders alone is one marker now)
     const u = unit({ t: 'text', s: 'It matters on seasonal timescales' }, { t: 'ph', src: '\\citep{a}' }, { t: 'text', s: ', alters the jet stream' }, { t: 'ph', src: '\\citep{b}' }, { t: 'text', s: ' and the surface' }, { t: 'ph', src: '\\citep{c}' }, { t: 'text', s: ', as the quasi-biennial oscillation and El Ni' }, { t: 'ph', src: '{' }, { t: 'ph', src: '\\~n' }, { t: 'ph', src: '}' }, { t: 'text', s: 'o southern oscillations do.' })
-    expect(serialize(u).wire).toBe('It matters on seasonal timescales @a#, alters the jet stream @b# and the surface @c#, as the quasi-biennial oscillation and El Ni @d#@e#@f# o southern oscillations do.')
-    const reply = '尤其是在亚季节到季节性的时间尺度@a#中，改变对流层喷射气流@b#，并可能引发地表@c#持续的极端寒爆发（如准两年振荡和El Ni @d#@e##@f#）等。'
+    // (and its three placeholders, side by side, one marker now: the rules audit's T5. The reply as it came, `@d#@e##@f#`, with
+    // its three markers that one, the doubled `#` on it)
+    expect(serialize(u).wire).toBe('It matters on seasonal timescales @a#, alters the jet stream @b# and the surface @c#, as the quasi-biennial oscillation and El Ni @d# o southern oscillations do.')
+    const reply = '尤其是在亚季节到季节性的时间尺度@a#中，改变对流层喷射气流@b#，并可能引发地表@c#持续的极端寒爆发（如准两年振荡和El Ni @d##）等。'
     expect(back(u, reply)).toBe('尤其是在亚季节到季节性的时间尺度\\citep{a}中，改变对流层喷射气流\\citep{b}，并可能引发地表\\citep{c}持续的极端寒爆发（如准两年振荡和El Ni {\\~n}）等。')
     expect(text(rehydrate(reply, serialize(u), true))).not.toContain('#')
   })
 
-  it('doubled after the second of two markers, `@c#@d##` (unit 85: Fig.~\\ref, "Figure 10#")', () => {
+  it('doubled after the marker of a tie and its reference, `@c##` (unit 85: Fig.~\\ref, "Figure 10#", whose reply to the wire as it was held `@c#@d##`)', () => {
     const u = unit({ t: 'text', s: 'From the' }, { t: 'ph', src: '$10^5$' }, { t: 'text', s: '-day timeseries we encode each input state' }, { t: 'ph', src: '$x$' }, { t: 'text', s: ' (the PC1/PC2 coordinates shown in Fig.' }, { t: 'ph', src: '~' }, { t: 'ph', src: '\\ref{fig:pca}' }, { t: 'text', s: ') per model.' })
-    expect(serialize(u).wire).toBe('From the @a#-day timeseries we encode each input state @b# (the PC1/PC2 coordinates shown in Fig. @c#@d#) per model.')
-    expect(back(u, '从@a#天时间序列中，我们将输入状态@b#编码（因此如图@c#@d##所示的PC1/PC2坐标）。')).toBe('从$10^5$天时间序列中，我们将输入状态$x$编码（因此如图~\\ref{fig:pca}所示的PC1/PC2坐标）。')
+    expect(serialize(u).wire).toBe('From the @a#-day timeseries we encode each input state @b# (the PC1/PC2 coordinates shown in Fig. @c#) per model.')
+    expect(back(u, '从@a#天时间序列中，我们将输入状态@b#编码（因此如图@c##所示的PC1/PC2坐标）。')).toBe('从$10^5$天时间序列中，我们将输入状态$x$编码（因此如图~\\ref{fig:pca}所示的PC1/PC2坐标）。')
   })
 
   it('doubled with a space between, `@d# #` (its Japanese, unit 26)', () => {
@@ -183,18 +186,18 @@ describe('styled runs on the markers wire (2610.19159)', () => {
   })
 
   it('a reply that lost every letter is no translation: never whole, sent again as runs (unit 372\'s reply to the old wire)', async () => {
-    // the old wire's shape, its eight markers placeholders: Microsoft gave the markers back and dropped the word, and the
-    // reply read as whole, its text one space: the label drawn as an empty box
+    // the old wire's shape, its eight markers placeholders (each stretch of them one marker now, the rules audit's T5): Microsoft
+    // gave the markers back and dropped the word, and the reply read as whole, its text one space: the label drawn as an empty box
     const eight = unit(...Array.from({ length: 5 }, (_, i) => ({ t: 'ph', src: `\\mark{${i}}` })), { t: 'text', s: 'Before' }, ...Array.from({ length: 3 }, (_, i) => ({ t: 'ph', src: `\\mark{${5 + i}}` })))
     const ser = serialize(eight)
-    expect(ser.wire).toBe('@a#@b#@c#@d#@e# Before @f#@g#@h#')
-    expect(rehydrate('@a#@b#@c#@d#@e# @f#@g#@h#', ser)).toEqual({ error: 'lost text' })
-    expect(rehydrate('@a#@b#@c#@d#@e# @f#@g#@h#', ser, true)).toEqual({ error: 'lost text' })
+    expect(ser.wire).toBe('@a# Before @b#')
+    expect(rehydrate('@a# @b#', ser)).toEqual({ error: 'lost text' })
+    expect(rehydrate('@a# @b#', ser, true)).toEqual({ error: 'lost text' })
     expect(rehydrate('', serialize(BEFORE))).toEqual({ error: 'lost text' })
     const asked: string[][] = []
-    const send = async (texts: string[]) => { asked.push(texts); return texts.map(t => ({ text: t === 'Before' ? REPLY.before : '@a#@b#@c#@d#@e# @f#@g#@h#', by: 'microsoft' })) }
+    const send = async (texts: string[]) => { asked.push(texts); return texts.map(t => ({ text: t === 'Before' ? REPLY.before : '@a# @b#', by: 'microsoft' })) }
     const { results, how } = await translateUnits([eight], send, 'markers')
-    expect(asked).toEqual([['@a#@b#@c#@d#@e# Before @f#@g#@h#'], ['Before']])
+    expect(asked).toEqual([['@a# Before @b#'], ['Before']])
     expect(how).toMatchObject({ whole: 0, tolerant: 0, runs: 1 })
     expect(plainTranslated(results.get(eight)?.pieces as never)).toBe(REPLY.before)
     // a run's reply with no letter is none either: the run stays the source's
@@ -222,6 +225,27 @@ describe('styled runs on the markers wire (2610.19159)', () => {
     expect(serialize(unit({ t: 'text', s: 'Many, e.g. ' }, ...pairs(1, '\\emph{', 'this one.'), { t: 'text', s: ' Then more.' })).wire).toBe('Many, e.g. this one. Then more.')
     // a colon or a semicolon inside a sentence is a clause's end, not a sentence's
     expect(serialize(unit({ t: 'text', s: 'Options: ' }, ...pairs(1, '\\emph{', 'fast'), { t: 'text', s: '; and safe.' })).wire).toBe('Options: fast; and safe.')
+  })
+
+  it('a run-in label where a sentence begins past the unit\'s head keeps its markers too: its colon in it or right after it (2010.11929v2\'s Figure 7, "Center:" and "Right:" bold no more)', () => {
+    // (the owner's case: the first label at the head kept, the two after a full stop flat, their bold back empty at the unit's end)
+    const fig7 = unit(...pairs(1, '\\textbf{', 'Left:'), { t: 'text', s: ' Filters of the embedding of ' }, { t: 'ph', src: '\\oursabbrv' }, { t: 'text', s: '-L/32.\n        ' }, ...pairs(2, '\\textbf{', 'Center:'), { t: 'text', s: ' Similarity of position embeddings.\n        ' }, ...pairs(3, '\\textbf{', 'Right:'), { t: 'text', s: ' Size of attended area by head.' })
+    expect(serialize(fig7).wire).toBe('@a# Left:@b# Filters of the embedding of @c#-L/32. @d# Center:@e# Similarity of position embeddings. @f# Right:@g# Size of attended area by head.')
+    // (its colon right after it: `\\textbf{Right}: Largest …`, unit 259)
+    expect(serialize(unit({ t: 'text', s: 'Timings of models. ' }, ...pairs(1, '\\textbf{', 'Right'), { t: 'text', s: ': Largest batch size.' })).wire).toBe('Timings of models. @a# Right @b#: Largest batch size.')
+    // (right after a forced break, past a switch that sets no ink: 2610.10069v1's `\\\\[1ex] \\noindent \\textit{JEL:}`)
+    expect(serialize(unit({ t: 'text', s: 'The class is larger than the others.' }, { t: 'ph', src: '\\\\[1ex]' }, { t: 'text', s: '\n' }, { t: 'ph', src: '\\noindent' }, { t: 'text', s: ' ' }, ...pairs(1, '\\textit{', 'JEL:'), { t: 'text', s: ' C25, C26.' })).wire).toBe('The class is larger than the others. @a# @b# JEL:@c# C25, C26.')
+    // and read back: each label's pair around its own words, none back empty at the end (Microsoft's reply to unit 84's wire, 2026-10-29)
+    const ser = serialize(fig7)
+    expect(shape(read(rehydrate('@a# \u5de6\uff1a@b# @c#-L/32 \u5d4c\u5165\u7684\u6ee4\u6ce2\u5668\u3002@d# \u4e2d\u5fc3\uff1a@e# \u4f4d\u7f6e\u5d4c\u5165\u7684\u76f8\u4f3c\u6027\u3002@f# \u53f3\uff1a@g# \u6309\u5934\u90e8\u7684\u5173\u6ce8\u533a\u57df\u5927\u5c0f\u3002', ser)))).toMatch(/<2\| \u4e2d\u5fc3\uff1a\|2>.*<3\| \u53f3\uff1a\|3>/)
+  })
+
+  it('…but none inside a sentence, nor a semicolon\'s, nor a bare group that sets nothing (BibTeX\'s case protection)', () => {
+    expect(serialize(unit({ t: 'text', s: 'We use three settings, ' }, ...pairs(1, '\\textbf{', 'namely'), { t: 'text', s: ': fast and safe.' })).wire).toBe('We use three settings, namely: fast and safe.')
+    expect(serialize(unit({ t: 'text', s: 'It ends here. ' }, ...pairs(1, '\\emph{', 'First'), { t: 'text', s: '; then the rest.' })).wire).toBe('It ends here. First; then the rest.')
+    expect(serialize(unit({ t: 'text', s: 'A. Agrawal and O. Khattab. 2026. ' }, ...pairs(1, '{', 'GEPA'), { t: 'text', s: ': Reflective prompt evolution.' })).wire).toBe('A. Agrawal and O. Khattab. 2026. GEPA: Reflective prompt evolution.')
+    // (a bare group that opens with a font switch is a style: `{\\bf Batch size}:` after a sentence)
+    expect(serialize(unit({ t: 'text', s: 'It ends here. ' }, { t: 'open', id: 1, src: '{' }, { t: 'ph', src: '\\bf' }, { t: 'text', s: ' Batch size' }, { t: 'close', id: 1, src: '}' }, { t: 'text', s: ': 16, 32.' })).wire).toBe('It ends here. @a# Batch size @b#: 16, 32.')
   })
 
   it('the boundary rule (E1): a styled pair whose two ends stand where the wire has a marker anyway is kept; one end alone, not', () => {
@@ -259,11 +283,15 @@ describe('styled runs on the markers wire (2610.19159)', () => {
   })
 
   it('only a pair that sets a style goes flat: any other keeps its two markers, as before (the review of #404, M1)', () => {
-    // a cell's wrapper after its rule (2607.24653's tables: `\midrule \multicolumn{7}{@{}l}{\textbf{}}`, Misplaced \omit)
+    // a cell's wrapper after its rule (2607.24653's tables: `\midrule \multicolumn{7}{@{}l}{\textbf{}}`, Misplaced \omit): the rule
+    // on no wire (a table's row rule sets nothing in the cell's line, the rules audit's T6), the wrapper and the bold round the
+    // whole translation, the rule before them
     const cell = { kind: 'cell', pieces: [{ t: 'ph', src: '\\midrule' }, { t: 'open', id: 1, src: '\\multicolumn{7}{@{}l}{' }, ...pairs(2, '\\textbf{', 'Text'), { t: 'close', id: 1, src: '}' }] }
     const ser = serialize(cell)
-    expect(ser.wire).toBe('@a#@b#@c# Text @d#@e#')
-    expect(shape(read(rehydrate('@a#@b#@c#\u6587\u672c@d#@e#', ser)))).toBe('\\midrule|<1|<2|\u6587\u672c|2>|1>')
+    expect(ser.wire).toBe('Text')
+    expect(shape(read(rehydrate('\u6587\u672c', ser)))).toBe('\\midrule|<1|<2|\u6587\u672c|2>|1>')
+    // (one that holds less than the cell's whole text keeps its two markers, as any pair that sets more than a style)
+    expect(serialize({ pieces: [{ t: 'open', id: 1, src: '\\multicolumn{7}{@{}l}{' }, ...pairs(2, '\\textbf{', 'Text'), { t: 'close', id: 1, src: '}' }, { t: 'text', s: ' and more' }] }).wire).toBe('@a#@b# Text @c#@d# and more')
     // a macro with a prose argument (2607.24653's \kimi{3}, `Kimi K#1`, printed thrice when it came back empty)
     expect(serialize(unit({ t: 'text', s: 'We compare ' }, ...pairs(1, '\\kimi{', '3'), { t: 'text', s: ' with the others.' })).wire).toBe('We compare @a# 3 @b# with the others.')
     // a box that draws (2608.12333's \colorbox swatches, drawn empty)
@@ -317,5 +345,145 @@ describe('styled runs on the markers wire (2610.19159)', () => {
     // no unit given: by the translation's own pieces
     expect(carry([{ t: 'text', tr: true, s: '\u4e4b\u524d' }])).toBe(true)
     expect(carry([{ t: 'open', id: 1, src: '\\textbf{' }, { t: 'text', tr: true, s: '\u4e4b\u524d' }, { t: 'close', id: 1, src: '}' }])).toBe(false)
+  })
+})
+
+// backref's list after a bibliography entry (latex-front.mjs BACKREF_LIST): no word of the entry's sentence. On the wire Microsoft's
+// Chinese read it as a page number and wrote the character for "page" (U+9875) before it (2610.37668v1); it goes on no wire, and comes back after the
+// translation with an en space before it, the \enspace backref sets (a kern, no ink of the list's)
+describe('backref\'s list: on no wire, after the translation, an en space before it', () => {
+  const list = { t: 'ph', src: '\\axtbackref' }
+  const entry = (...pieces: { t: string; s?: string; src?: string; id?: number }[]) => ({ kind: 'reference', pieces: [...pieces, list] })
+  const plainEntry = entry({ t: 'text', s: 'A. Author. A title of the work, ' }, { t: 'ph', src: '2022.' })
+  const styledEntry = entry({ t: 'text', s: 'A. Author. ' }, { t: 'open', id: 1, src: '\\emph{' }, { t: 'text', s: 'A title' }, { t: 'close', id: 1, src: '}' }, { t: 'text', s: ', ' }, { t: 'ph', src: '2022.' })
+  it('is on neither wire, nor the runs\'', async () => {
+    for (const u of [plainEntry, styledEntry]) {
+      expect(serialize(u).slots.some(s => JSON.stringify(s).includes('axtbackref')), JSON.stringify(u)).toBe(false)
+      expect(serializeTags(u).slots.some(s => JSON.stringify(s).includes('axtbackref'))).toBe(false)
+      expect(serialize(u).wire).toBe(serialize({ ...u, pieces: u.pieces.slice(0, -1) }).wire)
+    }
+    // (a unit with no list is serialised as before)
+    expect(serialize({ ...plainEntry, pieces: plainEntry.pieces.slice(0, -1) }).back).toBeUndefined()
+  })
+  it('comes back last, the en space before it, on both wires and as runs', async () => {
+    for (const u of [plainEntry, styledEntry]) {
+      const m = serialize(u), back = rehydrate(m.wire.replace('A title of the work', 'Der Titel des Werks').replace('A title', 'Ein Titel'), m)
+      expect('pieces' in back && back.pieces.slice(-2), JSON.stringify(u)).toEqual([{ t: 'text', tr: true, s: ' ' }, list])
+      const t = serializeTags(u), backT = rehydrateTags(t.wire, t)
+      expect('pieces' in backT && backT.pieces.slice(-2)).toEqual([{ t: 'text', tr: true, s: ' ' }, list])
+    }
+    // (as runs, where the markers cannot come back: the list after the runs too)
+    const { results } = await translateUnits([plainEntry], async texts => texts.map((t: string) => ({ text: t.includes('@') ? '' : 'Das Werk', by: 'x' })), 'markers')
+    const r = results.get(plainEntry) as { pieces?: unknown[] }
+    expect(r.pieces?.slice(-2)).toEqual([{ t: 'text', tr: true, s: ' ' }, list])
+  })
+  it('is the front end\'s own source, written once in each module', async () => {
+    const [{ BACKREF_LIST: front }, { BACKREF_LIST: wire }] = await Promise.all([import('@/pdf-reader/engine/source/latex-front.mjs'), import('@/pdf-reader/engine/translate/mt.mjs')])
+    expect(wire).toBe(front)
+  })
+})
+
+// What the wire tells read from TeX's own tables (rules/tex-kernel.mjs), and one marker where several stood side by side
+// (TRANSLATE_VERSION 10)
+describe('fewer markers, each read from TeX', () => {
+  const ph = (src: string) => ({ t: 'ph', src })
+  const text = (s: string) => ({ t: 'text', s })
+  const flat = (r: ReturnType<typeof rehydrate>) => ('pieces' in r ? r.pieces.map(p => (p.t === 'text' ? p.s : p.t === 'open' ? `<${p.id}` : p.t === 'close' ? `${p.id}>` : `[${p.src}]`)).join('|') : r.error)
+  it('a tie or a control space right before a kept pair\'s open, or after its close, rides in that edge\'s marker', () => {
+    const u = unit(text('See Fig.'), ph('~'), ...pairs(1, '\\href{u}{', 'the plot'), ph('\\ '), text('for more.'))
+    const ser = serialize(u)
+    expect(ser.wire).toBe('See Fig. @a# the plot @b# for more.')
+    expect(flat(rehydrate('Siehe Abb. @a# die Grafik @b# für mehr.', ser))).toBe('Siehe Abb.|[~]|<1| die Grafik |1>|[\\ ]| für mehr.')
+  })
+  it('what sets no ink among a unit\'s words goes on no wire: a key for an auxiliary file, a penalty, a discretionary hyphen, a table\'s row rule', () => {
+    expect(serialize(unit(ph('\\label{sec:x}'), text('We study flows here.'))).wire).toBe('We study flows here.')
+    expect(serialize(unit(text('Pages (S1):'), ph('\\penalty0 '), text('S19--S40, 1993.'))).wire).toBe('Pages (S1):S19--S40, 1993.')
+    // (a word cut by `\-` is one word on the wire: `Der @a# Simonian` had sent it as two)
+    expect(serialize(unit(text('a Der'), ph('\\-'), text('Simonian synthesis'))).wire).toBe('a DerSimonian synthesis')
+    expect(serialize({ pieces: [ph('\\cmidrule(lr){2-3}'), text('Accuracy')] }).wire).toBe('Accuracy')
+    // (a skip and a fill still set where the words fall)
+    expect(serialize(unit(text('One.'), ph('\\smallskip'), text(' Two.'))).wire).toBe('One. @a# Two.')
+  })
+  it('every display breaks the text for the boundary rule, `subequations` as `equation`', () => {
+    const wireWith = (env: string) => serialize(unit(...pairs(1, '\\textbf{', 'Pretrained backbone'), ph(`\\begin{${env}} x = y \\end{${env}}`), text('We use a model here.'))).wire
+    expect(wireWith('subequations')).toBe(wireWith('equation'))
+    expect(wireWith('subequations')).toBe('@a# Pretrained backbone @b#@c# We use a model here.')
+  })
+  it('a pair\'s end whose other end the unit does not hold goes on no wire, where it stands, and the reading takes it (2610.19159\'s transcripts: every reply refused before)', () => {
+    const u = unit({ t: 'open', id: 1, src: '\\role{' }, text('Step 2149'), { t: 'close', id: 1, src: '}' }, text(' Tool Output'), text('\n'), { t: 'open', id: 2, src: '{' }, ph('\\color{blue}'), text('\n'))
+    const ser = serialize(u)
+    expect(ser.wire).toBe('@a# Step 2149 @b# Tool Output')
+    // (the space before the close's marker the wire's: it set one beside the digit)
+    expect(flat(rehydrate('@a# 第 2149 步 @b# 工具输出', ser))).toBe('<1| 第 2149 步|1>| 工具输出|<2|[\\color{blue}]|\n')
+  })
+  it('one inside the unit\'s words keeps its place: the unit goes as one whose pairs do not nest, its style where it began (Codex on #581)', () => {
+    // a group the cut ends inside a paragraph: `Normal words {\bfseries bold words.`, its close the next unit's
+    const u = unit(text('Normal words '), { t: 'open', id: 1, src: '{' }, ph('\\bfseries'), text('bold words.'))
+    const ser = serialize(u)
+    expect(ser.wire).toBe('Normal words @a# bold words.')
+    expect(flat(rehydrate('Des mots normaux @a# des mots gras.', ser))).toBe('Des mots normaux |<1|[\\bfseries]| des mots gras.')
+    expect(readsBack('Des mots normaux @a# des mots gras.', ser)).toBe(true)
+  })
+})
+
+// The one reading of a reply (readsBack), handed to the send with each text (`accepts`), so that a chain falls through to its
+// next engine exactly where this reading would not take an answer, and nowhere else: the web's chain read the markers by a reader
+// of its own, which refused a bare marker this one reads and took a pair reversed this one refuses
+describe('readsBack, and the send told it', () => {
+  const u = unit({ t: 'text', s: 'We use' }, { t: 'ph', src: '\\cite{a}' }, { t: 'text', s: ' and ' }, ...pairs(1, '\\href{u}{', 'the site'), { t: 'text', s: ' here.' })
+  const ser = serialize(u)
+  it('takes what rehydrate takes, strictly or tolerantly, and nothing else', () => {
+    expect(ser.wire).toBe('We use @a# and @b# the site @c# here.')
+    expect(readsBack('我们用 @a# 和 @b# 该网站 @c# 这里。', ser)).toBe(true)
+    // (a bare marker, `@a` before a Han character: the tolerant reading's)
+    expect(readsBack('我们用@a和 @b# 该网站 @c# 这里。', ser)).toBe(true)
+    // (a pair reversed, a marker lost, every letter lost: refused)
+    expect(readsBack('我们用 @a# 和 @c# 该网站 @b# 这里。', ser)).toBe(false)
+    expect(readsBack('我们用和 @b# 该网站 @c# 这里。', ser)).toBe(false)
+    expect(readsBack('@a# @b# @c#', ser)).toBe(false)
+    expect(readsBack(null, ser)).toBe(false)
+  })
+  it('is what translateUnits hands the send for each text, a run\'s its letter', async () => {
+    const asked: { texts: string[]; ok: boolean[] }[] = []
+    const replies: Record<string, string> = { [ser.wire]: '我们用 @a# 和 @c# 该网站 @b# 这里。' }
+    const send = async (texts: string[], _cuts?: unknown, accepts?: ((r: string) => boolean)[]) => {
+      asked.push({ texts, ok: texts.map((t, i) => !!accepts?.[i]?.(replies[t] ?? `${t}`)) })
+      return texts.map(t => ({ text: replies[t] ?? t, by: 'microsoft' }))
+    }
+    const { how } = await translateUnits([u], send, 'markers')
+    expect(how).toMatchObject({ whole: 0, runs: 1 })
+    expect(asked[0]).toEqual({ texts: [ser.wire], ok: [false] })
+    // (the runs: each its text, a reply with a letter taken)
+    expect(asked[1]?.ok.every(Boolean)).toBe(true)
+  })
+})
+
+// A character TeX writes escaped (`\#`, `\%`, `\&`, `\textless`, `\textgreater`) is a character of the text since the source
+// reader sends it as one, its source beside it (latex-front.mjs textSymbol): on either wire it travels escaped and comes back
+// as the character; on the markers wire a text "@" or "#" beside a marker is the text's, never part of the marker
+describe('a character TeX writes escaped, sent as text', () => {
+  const sym = (s: string, src: string) => ({ t: 'text', s, src })
+  it('the markers wire: a text "#" before a marker and after one, and elsewhere, comes back', () => {
+    const u = unit(sym('Task #', 'Task \\#'), { t: 'ph', src: '$n$' }, { t: 'text', s: ' sets ' }, { t: 'ph', src: '$k$' }, sym('# of runs, the # of seeds.', '\\# of runs, the \\# of seeds.'))
+    const wire = serialize(u).wire
+    expect(back(u, wire)).toBe('Task \\#$n$ sets $k$\\# of runs, the \\# of seeds.')
+    expect(back(u, wire, true)).toBe('Task \\#$n$ sets $k$\\# of runs, the \\# of seeds.')
+    // (white space between: a prompt's headings after a list's mark, "## Root Goal", as 2610.21098v1 sets them)
+    const heads = unit(sym('## Root Goal ', '\\#\\# Root Goal '), { t: 'ph', src: '\\item' }, sym(' ## Prior Context', ' \\#\\# Prior Context'))
+    expect(serialize(heads).wire).toBe('## Root Goal @a# ## Prior Context')
+    expect(back(heads, '## Root Goal @a# ## Prior Context')).toBe('\\#\\# Root Goal \\item \\#\\# Prior Context')
+    // (a `#` after a marker the text does not follow with one is Microsoft's doubled closer or a `#` moved: refused)
+    expect(back(u, 'Task #@a## sets @b## of runs, the # of seeds.')).toBe('doubled closer')
+  })
+  it('the markers wire: a text "@" before a marker and after one comes back', () => {
+    const u = unit({ t: 'text', s: 'write to x@' }, { t: 'ph', src: '$y$' }, { t: 'text', s: '@z today.' })
+    expect(back(u, serialize(u).wire)).toBe('write to x@$y$@z today.')
+  })
+  it('the tags wire: "&", "<" and ">" travel as entities and come back as the characters, beside a tag on either side', () => {
+    const u = unit(sym('R&D <', 'R\\&D \\textless{}'), { t: 'ph', src: '$x$' }, sym('> 5% of A&B', '\\textgreater{} 5\\% of A\\&B'), { t: 'ph', src: '$y$' }, sym('&.', '\\&.'))
+    const tags = serializeTags(u)
+    expect(tags.wire).toBe('R&amp;D &lt;<x id="1"/>&gt; 5% of A&amp;B<x id="2"/>&amp;.')
+    const r = rehydrateTags(tags.wire, tags)
+    expect('pieces' in r ? r.pieces.map(p => (p.t === 'text' ? p.s : p.src)).join('') : r.error).toBe('R\\&D <$x$> 5\\% of A\\&B$y$\\&.')
   })
 })

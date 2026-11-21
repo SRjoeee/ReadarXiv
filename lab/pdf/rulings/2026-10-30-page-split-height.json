@@ -1,0 +1,11 @@
+{
+ "date": "2026-10-30",
+ "by": "the maintainer",
+ "quote": "整个段落级语块在高度上覆盖得自不自然、有没有填满…最后一行有没有 100% 占满、是一个字还是一整句话，其实并不重要（the rule and its costs laid before him:）把这个也部署到测试站，然后我们一起试一下效果。没有问题的话，我们再部署主站吧",
+ "english": "What matters is whether the paragraph-level block covers its height naturally and is filled; whether the last line is 100% full, a single character or a whole sentence, does not really matter. (Shown the rule and its costs:) Deploy this to staging too, and we will try it together; if there is no problem, then we deploy production.",
+ "on": "a unit over a frame break (a page's or a column's) splits its translation by the paragraph's height share on each frame, at the nearest natural line end (pull request 519, fix/page-split-height); the sentence share and its alignment removed",
+ "measures": ["frames with a blank line", "paragraph gaps tighter than the lines beside them"],
+ "targets": ["zh", "ko"],
+ "scope": "the rules gate on the pack 608b7e87 against next f98fa527, at 9bdd9f30: zh frames with a blank line 23.3 % to 23.6 %, zh paragraph gaps tighter than the lines beside them 45 to 46 (0.17 to 0.174 per 1,000 cells); ko frames with a blank line 6.3 % to 6.8 %, ko paragraph gaps tighter 12 to 13 (0.17 to 0.18); better: paragraph gaps a pitch or more wider zh 22.7 % to 22.0 %, ko 4.3 % to 2.4 %, ja 2.9 % to 2.4 %; de, es, fr and ru unchanged; 42 pages and 55 units drawn otherwise. Accepted for a trial on staging before production; a reverted reader layout costs no paper a prepare",
+ "why": "the owner's rule for a paragraph over a break is block-level coverage by height, sentences free to move inside the block: each frame takes the share of the translation its height holds, the break at a natural line end as TeX sets it, so the two parts are laid at one density (1810.04805v2's MRPC paragraph two lines and two, where it was three and a fragment). The blank lines and the tighter gaps that grow are where a line end cannot fall on the exact share"
+}

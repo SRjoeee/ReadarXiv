@@ -2,10 +2,9 @@
 // interface's language — the prompt library, the core's, names them in English and may import no pack — and one's own
 // as it was given, even when it reads like a built-in's
 import { afterEach, describe, expect, it } from 'vitest'
-import { LOCALES } from '@/locales'
+import { LOCALES, setLocale } from '@readarxiv/ui'
 import { BUILT_IN_PROMPTS, DEFAULT_PROMPT_ID, PRECISION_REWRITE_PROMPT_ID } from '@/providers/prompt-library'
 import { promptName } from '@/ui/prompt-name'
-import { setLocale } from '@/ui/strings'
 
 const DEFAULT = BUILT_IN_PROMPTS[DEFAULT_PROMPT_ID]!
 const REWRITE = BUILT_IN_PROMPTS[PRECISION_REWRITE_PROMPT_ID]!

@@ -2,9 +2,7 @@
 // (S-P-51), P9's pair (the neutral twin without one), P17's two entries (one disabled), a form's bar with a button
 // connecting, a row's small ones (one disabled), a note's raised ones on the group, and labels alone
 import { FileText, Globe } from 'lucide'
-import { Button } from '@/ui/controls/Button'
-import { Kbd } from '@/ui/controls/Kbd'
-import { O, S } from '@/ui/strings'
+import { Button, Kbd, O, S } from '@readarxiv/ui'
 
 export function Buttons() {
   return (

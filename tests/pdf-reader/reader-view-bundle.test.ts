@@ -3,8 +3,8 @@
 // and the layer entry built by esbuild for the browser, and every file the build read listed by its metafile. Nothing may
 // come from outside the engine but the three core modules and the one package the engine's rule allows
 // (scripts/check-boundary.mjs ENGINE_ALLOW, ENGINE_PACKAGES: the layout rules' validator); no pdfjs-dist (PDF.js is the
-// host's kit); and nothing of the server's: the paper's source, its pipeline, the layout maker, the remover and the add-on's
-// maker. The pipeline's anchors, versions and memory are leaves every reader takes (the view's floats read the anchors'
+// host's kit); and nothing of the server's: the paper's source, its pipeline, the layout maker, the content walk and the wrap
+// (layout/remove.mjs, own.mjs, wrap.mjs: the maker child's). The pipeline's anchors, versions and memory are leaves every reader takes (the view's floats read the anchors'
 // helpers; the layer its versions and memory errors), as engine-contract.test.ts holds them
 import { relative, resolve } from 'node:path'
 import { build } from 'esbuild'
@@ -14,17 +14,27 @@ import { ENGINE_ALLOW, ENGINE_PACKAGES } from '../../scripts/check-boundary.mjs'
 
 const ROOT = resolve(__dirname, '../..')
 const ENGINE = 'src/pdf-reader/engine/'
-const SERVER = [/^src\/pdf-reader\/engine\/pipeline\/(?!(?:anchors|versions|memory)\.mjs$)/, /^src\/pdf-reader\/engine\/source\//, /^src\/pdf-reader\/engine\/layout\/(?:make|remove|addon)\.mjs$/]
+/** the engine's modules a reader takes that moved into packages/engine with the front half, read through their transition
+ *  paths, and the served faces' tables, read through `@readarxiv/engine/fonts`: the engine's own code at its new place (the
+ *  source reader beside them stays the server's); the served faces' tables held once in @readarxiv/text since (TABLES), which
+ *  those fonts re-export */
+const MOVED = /^packages\/engine\/src\/(?:source\/(?:arg-roles|latexml-args|tex-kernel|tex-names|text-piece|text-symbols)|instrument\/(?:mt|format|layer1|units)|marks\/names|fonts\/(?:index|font-roles|font-letters|font-coverage|script|hyph))\.(?:mjs|ts|json)$/
+const TABLES = /^packages\/text\/src\/(?:index|font-faces|font-letters|font-classes|font-names)\.ts$/
+const SERVER = [/^packages\/engine\/src\/(?!(?:ink|ink-args|bounded-reads|memory|delta-wire|tail)\.)(?!(?:source\/(?:arg-roles|latexml-args|tex-kernel|tex-names|text-piece|text-symbols)|instrument\/(?:mt|format|layer1|units)|marks\/names|fonts\/(?:index|font-roles|font-letters|font-coverage|script|hyph))\.(?:mjs|ts|json)$)/, /^src\/pdf-reader\/engine\/pipeline\/(?!(?:anchors|versions|memory)\.mjs$)/, /^src\/pdf-reader\/engine\/source\//, /^src\/pdf-reader\/engine\/layout\/(?:make|remove|own|wrap|wrap-final)\.mjs$/]
 
-/** the files a browser build of `entries` reads, repository-relative */
+/** the files a browser build of `entries` reads, repository-relative: of the engine package (packages/engine, today's
+ *  modules the rebuild moved into it, read through its one entry) and of the packages it names (format), those whose code the
+ *  build keeps (its bytes in the output), since its entry names the prepare's modules too and the build shakes off what the
+ *  reader does not take */
 async function inputsOf(entries: string[]): Promise<string[]> {
   const r = await build({ entryPoints: entries.map(e => resolve(ROOT, e)), bundle: true, write: false, metafile: true, platform: 'browser', format: 'esm', target: 'es2022', outdir: resolve(ROOT, '.reader-view-bundle'), logLevel: 'silent' })
-  return Object.keys(r.metafile.inputs).map(f => relative(ROOT, resolve(ROOT, f)).split('\\').join('/')).sort()
+  const kept = new Set(Object.values(r.metafile.outputs).flatMap(o => Object.entries(o.inputs).filter(([, v]) => v.bytesInOutput > 0).map(([f]) => f)))
+  return Object.keys(r.metafile.inputs).filter(f => !/(?:^|\/)packages\//.test(f) || kept.has(f)).map(f => relative(ROOT, resolve(ROOT, f)).split('\\').join('/')).sort()
 }
 /** the package a file of node_modules belongs to (pnpm's layout: …/node_modules/<name>/…, the last one) */
 const packageOf = (f: string) => /(?:^|\/)node_modules\/((?:@[^/]+\/)?[^/]+)\/(?!.*\/node_modules\/)/.exec(f)?.[1] ?? null
 const PACKAGES = (ENGINE_PACKAGES as { name: string }[]).map(p => p.name)
-const allowed = (f: string) => f.startsWith(ENGINE) || (ENGINE_ALLOW as string[]).some(c => f === `${c}.ts` || f === `${c}/index.ts`) || PACKAGES.includes(packageOf(f) ?? '')
+const allowed = (f: string) => f.startsWith(ENGINE) || MOVED.test(f) || TABLES.test(f) || /^packages\/engine\/src\/(?:ink|ink-args|bounded-reads|memory|delta-wire|tail)\.(?:mjs|ts|types\.ts)$/.test(f) || (ENGINE_ALLOW as string[]).some(c => f === `${c}.ts` || f === `${c}/index.ts`) || PACKAGES.includes(packageOf(f) ?? '')
 
 describe('the reading view, bundled for the browser', () => {
   it('reads nothing outside the engine and the allowlist, no package, and nothing of the server\'s', async () => {
@@ -41,8 +51,9 @@ describe('the reading view, bundled for the browser', () => {
     const inputs = await inputsOf(['src/pdf-reader/engine/pipeline/live.mjs', 'src/pdf-reader/engine/view/figures.mjs'])
     expect(inputs.filter(f => SERVER.some(r => r.test(f))).length).toBeGreaterThan(0)
     expect(SERVER.some(r => r.test(`${ENGINE}pipeline/anchors.mjs`))).toBe(false)
-    expect(SERVER.some(r => r.test(`${ENGINE}layout/addon-manifest.mjs`))).toBe(false)
-    expect(SERVER.some(r => r.test(`${ENGINE}layout/addon.mjs`))).toBe(true)
+    expect(SERVER.some(r => r.test(`${ENGINE}layout/cell-rules.mjs`))).toBe(false)
+    expect(SERVER.some(r => r.test(`${ENGINE}layout/wrap-final.mjs`))).toBe(true)
+    expect(SERVER.some(r => r.test('packages/engine/src/wrap.ts'))).toBe(true)
     expect(allowed('node_modules/.pnpm/pdfjs-dist@6.3.289/node_modules/pdfjs-dist/build/pdf.mjs')).toBe(false)
     expect(allowed('src/pdf-reader/session/session.mjs')).toBe(false)
   }, 60_000)

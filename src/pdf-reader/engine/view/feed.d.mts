@@ -25,6 +25,9 @@ export interface FeedState {
 export interface Feed {
   tell(refs: Told): void
   index(): Promise<LayerIndex | null>
+  /** the units' kinds by id before the index (the chunks told from id 0, read as the index reads them), for an early wave of the
+   *  faces; the index's once read; null where no chunk from 0 is told or one is refused */
+  kinds(): Promise<readonly (string | null)[] | null>
   state(): FeedState
   dispose(): void
 }

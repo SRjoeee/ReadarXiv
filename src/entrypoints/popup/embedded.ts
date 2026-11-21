@@ -1,7 +1,9 @@
 // The popup framed by the floating button as its control panel (DESIGN §4.0c): the same page, in a frame beside the
 // button instead of under the toolbar. A frame has no size of its own and cannot close itself, so the page tells its
 // owner two things by `postMessage`: how tall its content is, and when it wants to go. The owner believes a message
-// only when its source is the frame it made (core/floating/button.ts), so nothing here needs to be secret.
+// only when its source is the frame it made (core/floating/button.ts), so nothing here needs to be secret. What the
+// popup does rests on more than an origin: it starts only once the content script that made its frame vouches for it,
+// and then acts on that script's tab (shared/frame-owner.ts, main.tsx).
 
 /** Framed at all: a toolbar popup is its own top window */
 export const EMBEDDED = window.parent !== window

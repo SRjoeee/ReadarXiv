@@ -94,7 +94,7 @@ async function makeRealDoor(s: DoorSetup): Promise<DoorHarness> {
   const M = s.paper
   const docFor = docsOf(textOf(M), { fail: () => s.failPages ?? [], hold: n => s.hold?.(n) ?? null }) as unknown as (r: number) => LayerDocument
   const parts = M.readParts.slice(0, s.parts)
-  const layer = await openLayer({ index: M.index, doc: docFor(parts.at(-1)?.chain.r ?? 0), parts, target: 'zh', faceSources, hyphUrl, leftPart: s.leftPart, onRetired: s.onRetired })
+  const layer = await openLayer({ index: M.index, doc: docFor(0), parts, target: 'zh', faceSources, hyphUrl, leftPart: s.leftPart, onRetired: s.onRetired })
   const rows = rowsOfIndex(M.index)
   let given = false
   return {
@@ -136,11 +136,11 @@ const CASCADE: PaperSpec = {
   ]).flat(),
 }
 
-interface Seen { pages: string[]; links: string[]; ops: string[]; log: string[] }
+interface Seen { pages: string[]; links: string[]; texts: string[]; ops: string[]; log: string[] }
 /** a door's pages asked one at a time, 1 to N, each awaited: their SVG markup, the run's operations, and the log of what the
  *  run waited for and what the door told */
 async function askEvery(layer: Layer, N: number, feed: (p: number) => Promise<void> = async () => {}): Promise<Seen> {
-  const pages: string[] = [], links: string[] = []
+  const pages: string[] = [], links: string[] = [], texts: string[] = []
   layer.onPage((p, state: PageEvent) => seen.log.push(`${state}:${p}`))
   for (let p = 1; p <= N; p++) {
     let done = false
@@ -151,8 +151,10 @@ async function askEvery(layer: Layer, N: number, feed: (p: number) => Promise<vo
     pages.push(laid.svg.outerHTML)
     links.push(JSON.stringify(laid.links))
   }
+  // (each page's text layer, once every page is ready: pure of the order the pages were asked and laid in)
+  for (let p = 1; p <= N; p++) texts.push(JSON.stringify(await layer.textOf(p)))
   const run = seen.runs.at(-1) as Run
-  return { pages, links, ops: run.rows.map(r => JSON.stringify(r?.ops ?? null)), log: seen.log.slice() }
+  return { pages, links, texts, ops: run.rows.map(r => JSON.stringify(r?.ops ?? null)), log: seen.log.slice() }
 }
 /** Q1 at the door: between a page's `laying` and its `ready` the run waited for no part */
 function q1Of(log: readonly string[]): string[] {
@@ -174,14 +176,20 @@ describe('the door: three opens, the same pages', () => {
       const N = SPEC.pages
       const docFor = docsOf(SPEC) as unknown as (r: number) => LayerDocument
       const rows = rowsOfIndex(c.index)
-      const open = (parts: readonly ReadPart[]) => openLayer({ index: c.index, doc: docFor(parts.at(-1)?.chain.r ?? 0), parts, target: 'zh', faceSources, hyphUrl, leftPart: async () => new Uint8Array(), onRetired: () => {} })
+      const open = (parts: readonly ReadPart[]) => openLayer({ index: c.index, doc: docFor(0), parts, target: 'zh', faceSources, hyphUrl, leftPart: async () => new Uint8Array(), onRetired: () => {} })
       // BUNDLE 3's open of the whole
       seen.log.length = 0
-      const whole = await openLayer({ bundle: mergeParts(c.index, c.parts), doc: docFor(c.parts.at(-1)!.chain.r), target: 'zh', faceSources, hyphUrl })
+      const whole = await openLayer({ bundle: mergeParts(c.index, c.parts), doc: docFor(0), target: 'zh', faceSources, hyphUrl })
       whole.take(rows)
       const want = await askEvery(whole, N)
       // (the pages carry links: each page's margin link at least, in place)
       expect(want.links.every(l => JSON.parse(l).length > 0), `${ends}: links`).toBe(true)
+      // (each page's text layer: the drawn units' lines translated, each with its unit's id, in the composed page's text order; the
+      // units left the original's (the table's cells withheld) kept as the page gives them; no erased text of the original; unit 1,
+      // a line on page 1 and one on page 2 in the source, laid in one line, split between them by its height: on both)
+      const layers = want.texts.map(t => JSON.parse(t) as { items: { str: string; from: string; unit?: number }[] })
+      expect(layers.map(l => l.items.map(i => `${i.from[0]}${i.unit ?? ''}`)), `${ends}: texts`).toEqual([['t0', 't1'], ['t1', 't3', 'k', 't8'], ['t2', 'k', 't6', 't7']])
+      expect(layers.map(l => l.items.filter(i => i.from === 'kept').map(i => i.str)), `${ends}: kept`).toEqual([[], ['Upper'], ['Lower']])
       whole.dispose()
       // warm
       seen.log.length = 0
@@ -189,7 +197,7 @@ describe('the door: three opens, the same pages', () => {
       warm.take(rows)
       const hot = await askEvery(warm, N)
       warm.dispose()
-      expect({ pages: hot.pages, links: hot.links, ops: hot.ops }, `${ends}: warm`).toEqual({ pages: want.pages, links: want.links, ops: want.ops })
+      expect({ pages: hot.pages, links: hot.links, texts: hot.texts, ops: hot.ops }, `${ends}: warm`).toEqual({ pages: want.pages, links: want.links, texts: want.texts, ops: want.ops })
       // in parts: told when the run waits for one (each page asked first), so that every part comes late
       for (const feed of ['starved', 'eager'] as const) {
         seen.log.length = 0
@@ -201,18 +209,17 @@ describe('the door: three opens, the same pages', () => {
         const cold = await askEvery(door, N, async p => { if (feed === 'eager') while (next < c.parts.length && c.parts[next]!.pages[0] <= p + 1) add() })
         seen.starved = null
         door.dispose()
-        expect({ pages: cold.pages, links: cold.links, ops: cold.ops }, `${ends}: ${feed}`).toEqual({ pages: want.pages, links: want.links, ops: want.ops })
+        expect({ pages: cold.pages, links: cold.links, texts: cold.texts, ops: cold.ops }, `${ends}: ${feed}`).toEqual({ pages: want.pages, links: want.links, texts: want.texts, ops: want.ops })
         expect(q1Of(cold.log), `${ends}: ${feed}`).toEqual([])
         expect(cold.log.filter(e => e === 'wait:part').length > 0 || feed === 'eager').toBe(true)
       }
     }
   })
 
-  it('draws a paper with no add-on (M20) told in parts as BUNDLE 3\'s open of it with none, its table groups not withheld', async () => {
+  it('draws a paper told in parts as BUNDLE 3\'s open of it whole, at every cut', async () => {
     const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
     for (const ends of [[1], [1, 2], []]) {
-      const c = await cutSpec(SPEC, ends, { addon: false })
-      expect(c.parts.every(p => p.addon === null)).toBe(true)
+      const c = await cutSpec(SPEC, ends)
       const docFor = docsOf(SPEC) as unknown as (r: number) => LayerDocument
       const rows = rowsOfIndex(c.index)
       seen.log.length = 0
@@ -222,7 +229,6 @@ describe('the door: three opens, the same pages', () => {
       whole.end()
       const wantLeft = (seen.runs.at(-1) as Run).skipped.map(x => `${x.id}:${x.why}`).sort()
       whole.dispose()
-      expect(wantLeft.filter(x => x.includes('its page not removed'))).toEqual([])
       seen.log.length = 0
       const door = await openLayer({ index: c.index, doc: docFor(0), target: 'zh', faceSources, hyphUrl, leftPart: async () => new Uint8Array(), onRetired: () => {} })
       door.take(rows)
@@ -296,6 +302,48 @@ describe('the door: three opens, the same pages', () => {
     layer.dispose()
     return out
   }
+
+  it('lays a page once the rows it reads are in, whatever order the rows come in: after rows of higher-numbered units, with no end()', async () => {
+    const want = await cascadeInOrder()
+    const strip = (svg: string) => svg.replace(' lang="zh"', '')
+    // The rows as our server's translation run tells them: deltas, each one's rows rising by id, the
+    // deltas in any order. (a) Page 1's paragraph, unit 0, after every other row (a retried batch, a row a delta had no room for);
+    // (b) by pages' closures, the page in view first, page 6, then pages 1 to 5 (the run's batches by page): the rows of units 5 to
+    // 10 first. Pages 6, 2 and 1 asked, page 1 last, as the side asks the pages near the view (page 1 in view)
+    for (const order of ['unit 0 last', 'page 6 first'] as const) {
+      const { layer, told, run } = await cascadeDoor({ end: false, rows: false })
+      try {
+        const byId = new Map(cascadeRows.map(r => [r[0], r]))
+        // (page 6's closure reads units 5 to 10, page 1's units 0 to 3 (its paragraph running on to page 2 is ranked there among
+        // page 2's), page 2's units 0 to 5)
+        expect([6, 1, 2].map(p => run.rowsFor(p))).toEqual([[5, 6, 7, 8, 9, 10], [0, 1, 2, 3], [0, 1, 2, 3, 4, 5]])
+        const told0 = new Set<number>(), byPage: number[][] = []
+        for (const q of [6, 1, 2, 3, 4, 5]) {
+          const mine = run.rowsFor(q).filter(id => !told0.has(id))
+          for (const id of mine) told0.add(id)
+          if (mine.length) byPage.push(mine)
+        }
+        const deltas = order === 'unit 0 last' ? [[7, 8, 9, 10], [3, 4, 5, 6], [1, 2], [0]] : byPage
+        if (order === 'page 6 first') expect(deltas).toEqual([[5, 6, 7, 8, 9, 10], [0, 1, 2, 3], [4]])
+        const asked = [6, 2, 1].map(p => layer.pageOf(p, { lang: 'zh' }).then(page => [p, page.svg.outerHTML] as const))
+        const states: string[] = []
+        for (const [i, d] of deltas.entries()) {
+          layer.take(d.map(id => byId.get(id)!))
+          // (after each delta, each page asked is laid where every row it reads is in, and only there: each complete page awaited,
+          // within a bound, since the run draws the pages its closure reads over more than a few macrotasks)
+          for (const p of [1, 2, 6]) for (let k = 0; k < 2000 && run.complete(p) && layer.pageState(p) !== 'ready'; k++) await tick()
+          await settleDown(layer, CASCADE.pages)
+          states.push([1, 2, 6].map(p => layer.pageState(p)[0]).join(''))
+          for (const p of [1, 2, 6]) expect(layer.pageState(p) === 'ready', `${order}, delta ${i + 1}, page ${p}`).toBe(run.complete(p))
+        }
+        // (pages 1, 2 and 6 by state after each delta: page 6 laid by its closure's rows, pages 1 and 2 by theirs, whichever came
+        // first; every page laid by the last delta, with no end(), each drawn as with every row in at once: no provisional fit)
+        expect(states, order).toEqual(order === 'unit 0 last' ? ['www', 'wwr', 'wwr', 'rrr'] : ['wwr', 'rwr', 'rrr'])
+        expect(told.slice(0, 2), order).toEqual(['laying:6', 'ready:6'])
+        for (const [p, svg] of await Promise.all(asked)) expect(strip(svg), `${order}: page ${p}`).toBe(strip(want[p - 1]!))
+      } finally { layer.dispose() }
+    }
+  })
 
   it('A1: an ask aborted before the drive turns to it commits nothing: never told, nothing of its closure drawn', async () => {
     const { layer, doc, told, run } = await cascadeDoor()
@@ -423,6 +471,67 @@ describe('the door: three opens, the same pages', () => {
     } finally { delete g.scheduler; performance.now = was; layer.dispose() }
   })
 
+  it('holds the drive while its host puts a page answered in place (hold): no other page read or told until the hold settles, then laid as with none', async () => {
+    const want = await cascadeInOrder()
+    const { layer, doc, told } = await cascadeDoor({ end: false, rows: false })
+    try {
+      let release = () => {}
+      const commit = new Promise<void>(ok => { release = ok })
+      // (page 6 asked, then page 1, the newest, laid first once the rows are in; its host holds the drive in its answer's reaction,
+      // as the side does)
+      const six = layer.pageOf(6, { lang: 'zh' })
+      const one = layer.pageOf(1, { lang: 'zh' }).then(p => { layer.hold(commit); return p })
+      layer.take(cascadeRows)
+      layer.end()
+      await one
+      await settleDown(layer, CASCADE.pages)
+      // (a page asked during the hold waits as well, never told laying meanwhile)
+      const four = layer.pageOf(4, { lang: 'zh' })
+      await settleDown(layer, CASCADE.pages)
+      expect(doc.reads.every(n => n <= 2)).toBe(true)
+      expect(told.filter(e => /:[3-6]$/.test(e))).toEqual([])
+      expect([4, 6].map(p => layer.pageState(p))).toEqual(['waiting', 'waiting'])
+      release()
+      const [p6, p4] = await Promise.all([six, four])
+      // (then the newest ask first, as the door lays with no hold, each page as laid in order)
+      expect(told.indexOf('ready:4')).toBeLessThan(told.indexOf('ready:6'))
+      const strip = (svg: string) => svg.replace(' lang="zh"', '')
+      expect([strip(p4.svg.outerHTML), strip(p6.svg.outerHTML)]).toEqual([strip(want[3]!), strip(want[5]!)])
+    } finally { layer.dispose() }
+  })
+
+  it('ends a hold 2 s after it at most: a host whose promise never settles keeps the next page waiting no longer', async () => {
+    const real = globalThis.setTimeout
+    // (the bound's timer, the one set by the hold, run at once: no test waits for it)
+    const long: (number | undefined)[] = []
+    let holding = false
+    const spy = vi.spyOn(globalThis, 'setTimeout').mockImplementation(((fn: () => void, ms?: number, ...rest: unknown[]) => {
+      if (!holding) return real(fn, ms, ...rest)
+      long.push(ms)
+      return real(fn, 0, ...rest)
+    }) as typeof setTimeout)
+    const { layer, told } = await cascadeDoor()
+    try {
+      const six = layer.pageOf(6, { lang: 'zh' })
+      await layer.pageOf(1, { lang: 'zh' }).then(p => { holding = true; try { layer.hold(new Promise(() => {})) } finally { holding = false } return p })
+      await six
+      expect(told).toContain('ready:6')
+      expect(long).toEqual([2000])
+    } finally { spy.mockRestore(); layer.dispose() }
+  })
+
+  it('lets a hold go at dispose: the pages waiting behind it rejected, nothing more read; a hold asked after it is nothing', async () => {
+    const { layer, doc } = await cascadeDoor()
+    const six = layer.pageOf(6, { lang: 'zh' }).then(() => 'value', (e: Error) => e.message)
+    await layer.pageOf(1, { lang: 'zh' }).then(p => { layer.hold(new Promise(() => {})); return p })
+    await settleDown(layer, CASCADE.pages)
+    layer.dispose()
+    expect(await six).toMatch(/let go/)
+    for (let i = 0; i < 5; i++) await tick()
+    expect(doc.reads.every(n => n <= 2)).toBe(true)
+    expect(() => layer.hold(Promise.resolve())).not.toThrow()
+  })
+
   it('F2: a page asked that fails rejects its asks, and the next page asked is laid', async () => {
     const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
     const c = await cutSpec(SPEC)
@@ -447,10 +556,10 @@ describe('the door: three opens, the same pages', () => {
 
   it('F4: a page of a closure no part covers once the parts end fails, and the page asked is laid without it', async () => {
     const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
-    const M = await made()
+    const M = await made({ ours: true })
     const docFor = docsOf(textOf(M)) as unknown as (r: number) => LayerDocument
     // (page 1's closure draws page 2, a paragraph running on to it: only the first part, page 1, is ever told)
-    const layer = await openLayer({ index: M.index, doc: docFor(1), parts: M.readParts.slice(0, 1), target: 'zh', faceSources, hyphUrl, leftPart: async () => new Uint8Array(), onRetired: () => {} })
+    const layer = await openLayer({ index: M.index, doc: docFor(0), parts: M.readParts.slice(0, 1), target: 'zh', faceSources, hyphUrl, leftPart: async () => new Uint8Array(), onRetired: () => {} })
     try {
       layer.take(rowsOfIndex(M.index))
       layer.end()
@@ -527,7 +636,7 @@ describe('the door: three opens, the same pages', () => {
     const layer = await openLayer({ index: M.index, doc: docFor(0), target: 'zh', faceSources, hyphUrl, leftPart: () => transport, onRetired: () => {} })
     const c = new AbortController()
     const asked = layer.leftPageOf(1, { signal: c.signal }).then(() => 'value', (e: Error) => e.name)
-    layer.addPart(M.readParts[0]!, { doc: docFor(1) })
+    layer.addPart(M.readParts[0]!)
     await tick()
     c.abort()
     // (at once, not when the transport answers)
@@ -538,14 +647,14 @@ describe('the door: three opens, the same pages', () => {
     layer.dispose()
   })
 
-  it('reads a part with no layout as BUNDLE 3 reads a bundle with none: through the proof that nothing proves (#352\'s fail-closed rule)', async () => {
+  it('reads a part with no layout as BUNDLE 3 reads a bundle with none: it draws nothing, every unit the original\'s (the layer draws only from the file)', async () => {
     const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
-    // (a paragraph with a citation, located by the original's side alone: with no layout file nothing proves its rendering)
+    // (a paragraph with a citation, located by the original's side alone: with no layout file the layer has no position for it)
     const spec: PaperSpec = { pages: 3, units: [...SPEC.units, { ...para('Cited here', 2, 150, { stream: 40, file: false }), cite: true }] }
     const cited = spec.units.length - 1
     for (const ends of [[1], []]) {
       const c = await cutSpec(spec, ends, { layout: false })
-      expect(c.parts.every(p => p.layout === null && p.addon === null)).toBe(true)
+      expect(c.parts.every(p => p.layout === null && p.rules === null)).toBe(true)
       const docFor = docsOf(spec) as unknown as (r: number) => LayerDocument
       const rows = rowsOfIndex(c.index)
       seen.log.length = 0
@@ -555,7 +664,8 @@ describe('the door: three opens, the same pages', () => {
       const want = await askEvery(whole, spec.pages)
       const wantLeft = (seen.runs.at(-1) as Run).skipped.map(x => `${x.id}:${x.why}`).sort()
       whole.dispose()
-      expect(wantLeft).toContain(`${cited}:unproven`)
+      expect(wantLeft).toContain(`${cited}:unanchored`)
+      expect((seen.runs.at(-1) as Run).placed).toEqual([])
       seen.log.length = 0
       const door = await openLayer({ index: c.index, doc: docFor(0), parts: c.parts, target: 'zh', faceSources, hyphUrl, leftPart: async () => new Uint8Array(), onRetired: () => {} })
       door.take(rows)
@@ -567,6 +677,38 @@ describe('the door: three opens, the same pages', () => {
       expect({ pages: got.pages, links: got.links, ops: got.ops }, `${ends}`).toEqual({ pages: want.pages, links: want.links, ops: want.ops })
       expect(left, `${ends}`).toEqual(wantLeft)
     }
+  })
+
+  // (the two opens of one paper agree: the parts' (the door's) and the whole's (BUNDLE 3's, mergeParts))
+  it.each(['parts', 'whole'] as const)('draws nothing of a part whose layout is refused ({ refused, why }), nor of a head whose base is arXiv\'s though its parts carry layouts: the %s open', async open => {
+    const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
+    const placedOf = async (o: Parameters<typeof cutSpec>[2]) => {
+      const c = await cutSpec(SPEC, [1], o)
+      const doc = (docsOf(SPEC) as unknown as (r: number) => LayerDocument)(0)
+      const layer = open === 'parts'
+        ? await openLayer({ index: c.index, doc, parts: c.parts, target: 'zh', faceSources, hyphUrl, leftPart: async () => new Uint8Array(), onRetired: () => {} })
+        : await openLayer({ bundle: mergeParts(c.index, c.parts), doc, target: 'zh', faceSources, hyphUrl })
+      layer.take(rowsOfIndex(c.index))
+      layer.end()
+      layer.endParts()
+      await askEvery(layer, SPEC.pages)
+      const run = seen.runs.at(-1) as Run
+      const out = { placed: run.placed.length, refusals: c.parts.map(p => p.noLayout?.refused ?? null), layouts: c.parts.map(p => p.layout !== null), base: c.index.head.base.source }
+      layer.dispose()
+      return out
+    }
+    // (the control: our base and the parts' layouts: the layer draws)
+    const drawn = await placedOf({})
+    expect(drawn.placed).toBeGreaterThan(0)
+    expect([drawn.base, drawn.layouts.every(Boolean)]).toEqual(['ours', true])
+    // a layout refused, as the maker records why (the final pass moved a mark): the part holds no layout, the layer no unit
+    const refused = await placedOf({ layout: false, noLayout: { refused: 'final', why: 'the final pass moved a mark' } })
+    expect(refused.refusals.every(r => r === 'final')).toBe(true)
+    expect([refused.placed, refused.layouts.some(Boolean)]).toEqual([0, false])
+    // arXiv's base (a paper whose compile was no base page, or a head of 7), its parts' layouts told: the layer draws none
+    const arxiv = await placedOf({ source: 'arxiv' })
+    expect([arxiv.base, arxiv.layouts.every(Boolean)]).toEqual(['arxiv', true])
+    expect(arxiv.placed).toBe(0)
   })
 
   it('ends an aborted ask\'s wait for rows after its page is drawn: the page is not laid, nothing is told of it (PR #359)', async () => {
@@ -717,31 +859,31 @@ describe('the door: three opens, the same pages', () => {
     layer.dispose()
   })
 
-  it('draws the format test\'s paper (tails, a part with no layout) told in parts as opened warm, swapping its documents', async () => {
+  it('draws the format test\'s paper (a part with no layout) told in parts as opened warm, over its one document', async () => {
     const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
     const M = await made()
     const docFor = docsOf(textOf(M)) as unknown as (r: number) => LayerDocument
     const rows = rowsOfIndex(M.index)
     seen.log.length = 0
     const retiredWarm: LayerDocument[] = []
-    const warm = await openLayer({ index: M.index, doc: docFor(M.readParts.at(-1)!.chain.r), parts: M.readParts, target: 'zh', faceSources, hyphUrl, leftPart: async () => new Uint8Array(), onRetired: d => retiredWarm.push(d) })
+    const warm = await openLayer({ index: M.index, doc: docFor(0), parts: M.readParts, target: 'zh', faceSources, hyphUrl, leftPart: async () => new Uint8Array(), onRetired: d => retiredWarm.push(d) })
     warm.take(rows)
     const want = await askEvery(warm, 4)
     warm.dispose()
-    expect(retiredWarm).toEqual([docFor(2)])
+    expect(retiredWarm).toEqual([docFor(0)])
     seen.log.length = 0
     const retired: LayerDocument[] = []
     const door = await openLayer({ index: M.index, doc: docFor(0), target: 'zh', faceSources, hyphUrl, leftPart: async () => new Uint8Array(), onRetired: d => retired.push(d) })
     door.take(rows)
     let next = 0
-    seen.starved = () => { if (next < M.readParts.length) { const part = M.readParts[next++]!; door.addPart(part, part.addon?.tail ? { doc: docFor(part.chain.r) } : undefined) } }
+    seen.starved = () => { if (next < M.readParts.length) { const part = M.readParts[next++]!; door.addPart(part) } }
     const cold = await askEvery(door, 4)
     seen.starved = null
     expect(cold.pages).toEqual(want.pages)
     expect(cold.ops).toEqual(want.ops)
     expect(q1Of(cold.log)).toEqual([])
     door.dispose()
-    expect(retired).toEqual([docFor(0), docFor(1), docFor(2)])
+    expect(retired).toEqual([docFor(0)])
   })
 })
 
@@ -756,7 +898,7 @@ describe('the door: the draw of a left part, handed to the run', () => {
     const leftPart = async (page: number) => { fetched.push(page); return o.leftPart ? o.leftPart(page, M) : (M.lefts[page] as { bytes: Uint8Array }).bytes }
     const before = seen.drawOfs.length
     const parts = M.readParts.slice(0, o.parts ?? 0)
-    const doc = docFor(parts.at(-1)?.chain.r ?? 0)
+    const doc = docFor(0)
     const layer = await openLayer({ index: M.index, doc: o.doc ? o.doc(doc) : doc, parts, target: 'zh', faceSources, hyphUrl, leftPart, onRetired: () => {}, ...(o.drawsHeld !== undefined ? { drawsHeld: o.drawsHeld } : {}) } as never)
     const drawOf = seen.drawOfs[before]
     return { layer, M, docFor, fetched, drawOf }
@@ -782,7 +924,7 @@ describe('the door: the draw of a left part, handed to the run', () => {
     for (let i = 0; i < 10; i++) await tick()
     expect(settled).toBe('pending')
     expect(fetched).toEqual([])
-    layer.addPart(M.readParts[0]!, { doc: docFor(1) })
+    layer.addPart(M.readParts[0]!)
     expect(await asked).toEqual(DRAW)
     expect(fetched).toEqual([1])
     // (handed once: the door keeps no draw after it)

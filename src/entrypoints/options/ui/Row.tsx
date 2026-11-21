@@ -7,9 +7,7 @@
 // menu, an add row), a radio row (the radio and the words are the control; buttons at its end stay their own)
 import { ChevronDown, CircleAlert, CircleCheck, type IconNode, LoaderCircle } from 'lucide'
 import { type ButtonHTMLAttributes, type CSSProperties, type MouseEvent, type ReactNode, type Ref, useId, useRef } from 'react'
-import { Icon } from '@/ui/controls/Icon'
-import { Radio } from '@/ui/controls/radio'
-import { PREVIEW_LANG } from '@/ui/strings'
+import { Icon, Radio, PREVIEW_LANG } from '@readarxiv/ui'
 import { Marked } from './search'
 
 interface RowBase {

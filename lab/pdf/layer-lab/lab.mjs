@@ -6,7 +6,7 @@
 // browser (localStorage) and exported as JSON. The early engine (Task 11's from-scratch entry, layer.mjs; retired by the
 // 10-06 change of direction) is off the menus, and an old link's `layer` still opens it, with no settings of its own. Its
 // words are strings.mjs's, in Chinese (the default) or English. The state is in the address (#f=<fixture>&a=<view>&b=<view>&p=<page>&z=<zoom>&s=<scroll>, the quick view's:
-// v0tex, v0rm, v0=roles|prototype, rules=<git ref> (the rule set read from that commit or branch); the page's: ui=en,
+// v0rm, v0=roles|prototype, rules=<git ref> (the rule set read from that commit or branch); the page's: ui=en,
 // panel=0) so that a view can be reopened or scripted. Unsaved edits to the rule set are not in the address.
 import * as pdfjs from 'pdfjs-dist'
 import { createDocLoads } from './doc-loads.mjs'
@@ -70,22 +70,27 @@ const state = {
   v0faces: (hash.v0 ?? saved.v0faces) === 'prototype' ? 'prototype' : 'roles',
   /** the v0 view drawn over the text-removed PDF (#v0rm=0: erased and put back, as before) */
   v0removal: (hash.v0rm ?? saved.v0removal ?? '1') !== '0',
-  /** the v0 view as the hybrid, each unit the layout file locates whole by its geometry (#v0tex=0: v0 alone) */
-  v0tex: (hash.v0tex ?? saved.v0tex ?? '1') !== '0',
   /** the interface's language (#ui=en; Chinese by default) and whether the settings are shown (#panel=0: hidden) */
   ui: (hash.ui ?? saved.ui) === 'en' ? 'en' : 'zh',
   panel: (hash.panel ?? saved.panel ?? '1') !== '0',
+  /** how the quick view is drawn: as the readers draw it (the default: its copy and SVG in engine.css's .axt-layer, the SVG
+   *  scaled by its viewBox, its text rendered as text-rendering.mjs's probe says, layer-side.mjs drawingOf), or as the lab
+   *  drew it before (#look=lab: no viewBox, a transform, none of engine.css's rendering; the layer gate's own drawing) */
+  look: hash.look === 'lab' ? 'lab' : 'product',
 }
 L = STRINGS[state.ui]
+/** the engine's text-rendering module (view/text-rendering.mjs), which the quick view drawn as the readers draw it decides by */
+const layerText = import('/src/pdf-reader/engine/view/text-rendering.mjs').catch(e => { console.warn('text-rendering.mjs:', e); return null })
 /** the layout rule set v0 is opened with: the panel's (the worktree's file, or what the panel loaded, and the edits made
  *  to it). Null while there is none, and v0 then takes the engine's built-in set */
 const v0Rules = () => rules?.set() ?? null
 function remember() {
-  store.set('layer-lab:ui', { fixture: state.fixture, a: state.views[0], b: state.views[1], zoom: state.zoom, scroll: state.scroll, sync: state.sync, v0faces: state.v0faces, v0removal: state.v0removal ? '1' : '0', v0tex: state.v0tex ? '1' : '0', ui: state.ui, panel: state.panel ? '1' : '0' })
-  const q = new URLSearchParams({ f: state.fixture ?? '', a: state.views[0], b: state.views[1], p: String(state.page), z: state.zoom, s: state.scroll, v0: state.v0faces, v0rm: state.v0removal ? '1' : '0', v0tex: state.v0tex ? '1' : '0' })
+  store.set('layer-lab:ui', { fixture: state.fixture, a: state.views[0], b: state.views[1], zoom: state.zoom, scroll: state.scroll, sync: state.sync, v0faces: state.v0faces, v0removal: state.v0removal ? '1' : '0', ui: state.ui, panel: state.panel ? '1' : '0' })
+  const q = new URLSearchParams({ f: state.fixture ?? '', a: state.views[0], b: state.views[1], p: String(state.page), z: state.zoom, s: state.scroll, v0: state.v0faces, v0rm: state.v0removal ? '1' : '0' })
   if (rules?.from()?.kind === 'ref') q.set('rules', rules.from().ref)
   if (state.ui === 'en') q.set('ui', 'en')
   if (!state.panel) q.set('panel', '0')
+  if (state.look === 'lab') q.set('look', 'lab')
   history.replaceState(null, '', `#${q}`)
 }
 const status = text => { $('status').textContent = text }
@@ -281,6 +286,10 @@ class Pane {
         if (token !== div._token || !parts) return
         for (const c of [...div.children]) if (!c.classList.contains('num')) c.remove()
         div.append(...parts)
+        // (drawn as the readers draw it: the layer's text rendering decided, as the readers decide it, from the first page whose
+        // words tell; text-rendering.mjs, its answer on <html> for engine.css. Each source of faces decides apart: the role
+        // table's served faces, and the prototype's system faces, which a system may lay out otherwise)
+        if (this.kind === 'v0' && state.look === 'product') (await layerText)?.applyLayerText(div.querySelector('.axt-layer > svg'), document, state.v0faces)
         div.dataset.rendered = '1'
       })
     } catch (e) {
@@ -325,7 +334,7 @@ function headOf(kind) {
   const warn = text => h('span', { class: 'not-ready' }, icon('alert'), text)
   if (kind === 'original') return [t('headOriginal')]
   if (kind === 'final') return [!f.final ? t('headFinalNone') : f.final.ok ? `${t('headFinalOk', f.final.strategy, f.final.typeset)}${finalOlder() ? ` · ${t('finalOlder')}` : ''}` : warn(t('headFinalFailed'))]
-  if (kind === 'v0') return proto?.ready ? [t('headV0', { fill: rules?.resolved()?.params.adaptiveFill === null ? 'B' : 'D', tex: state.v0tex, removal: state.v0removal, faces: state.v0faces })] : [warn(t('headNotLoaded'))]
+  if (kind === 'v0') return proto?.ready ? [t('headV0', { fill: rules?.resolved()?.params.adaptiveFill === null ? 'B' : 'D', removal: state.v0removal, faces: state.v0faces })] : [warn(t('headNotLoaded'))]
   if (!open.layer) return [warn(engine.ready ? t('headNotDrawn') : t('headNotReady'))]
   return []
 }
@@ -368,7 +377,7 @@ async function protoPage(p, source, vp, token, div, renderMs) {
   const at = open
   if (!open.proto) {
     // (the run's choices are taken now, as the reader has them; it starts when the run before it is gone)
-    const options = { V: proto.V, rules: v0Rules(), name: open.f.name, target: open.f.target, faces: state.v0faces, removal: state.v0removal && open.f.files.includes('layout.json'), tex: state.v0tex && open.f.files.includes('layout.json'), status: k => status(t(k)) }
+    const options = { V: proto.V, rules: v0Rules(), name: open.f.name, target: open.f.target, faces: state.v0faces, removal: state.v0removal && open.f.files.includes('layout.json'), tex: open.f.files.includes('layout.json'), status: k => status(t(k)) }
     open.proto = protoSlot.start(() => ProtoRun.open(options))
   }
   const runP = open.proto
@@ -398,13 +407,28 @@ async function protoPage(p, source, vp, token, div, renderMs) {
   // (the SVG at its own size, v0's CSS px, scaled to the pane's by a transform: not stretched to the page box, whose size
   // is the canvas's whole device pixels, and with no viewBox, which rasterizes the text otherwise than the gate's)
   const svg = holder.firstElementChild, css = vp.scale / devicePixelRatio / 1.25
+  const drawn = { render: renderMs, copy: performance.now() - t0, k: vp.scale }
+  if (state.look === 'product') {
+    // (as the readers draw a laid page, layer-side.mjs drawingOf and engine.css: the copy and the SVG in the copy's frame, the
+    // page's size at the pane's scale, the SVG scaled to it by its viewBox)
+    svg.setAttribute('viewBox', `0 0 ${done.w} ${done.h}`)
+    svg.setAttribute('preserveAspectRatio', 'none')
+    svg.setAttribute('aria-hidden', 'true')
+    copy.className = 'axt-layer-copy'
+    const wrap = h('div', { class: 'axt-layer' })
+    wrap.style.setProperty('--axt-frame-w', `${done.w * css}px`)
+    wrap.style.setProperty('--axt-frame-h', `${done.h * css}px`)
+    wrap.append(copy, svg)
+    ;(open.v0ms ??= new Map()).set(p, drawn)
+    if (p === state.page || !open.v0ms.has(state.page)) v0Summary(p)
+    return [wrap]
+  }
   svg.style.width = `${done.w}px`
   svg.style.height = `${done.h}px`
   svg.style.transformOrigin = '0 0'
   if (Math.abs(css - 1) > 1e-9) svg.style.transform = `scale(${css})`
   // what the page cost here: the pane's rendering of arXiv's page, v0's step (once a page), its drawing at this pane's
   // resolution (every time the page is drawn)
-  const drawn = { render: renderMs, copy: performance.now() - t0, k: vp.scale }
   ;(open.v0ms ??= new Map()).set(p, drawn)
   if (p === state.page || !open.v0ms.has(state.page)) v0Summary(p)
   return [copy, svg]
@@ -421,7 +445,7 @@ function tech(name, rows) {
   return d
 }
 const engineRows = () => [
-  [t('techEngine'), info.proto ? t('techEngine1', info.proto.root === 'this worktree' ? (info.branch ?? info.proto.root) : info.proto.root, protoCommit ?? '-', info.proto.remover ?? '-') : '-', 'mono'],
+  [t('techEngine'), info.proto ? t('techEngine1', info.proto.root === 'this worktree' ? (info.branch ?? info.proto.root) : info.proto.root, protoCommit ?? '-') : '-', 'mono'],
   [t('techInputs'), t('techInputs1', info.inputs ?? {}), 'mono'],
   rules?.from() ? [t('rules.current'), `${t('rules.setFrom', rules.from().label, rules.from().version)}${rules.dirty() ? ` · ${t('rules.src.edit')}` : ''}`, 'mono'] : null,
 ]
@@ -432,13 +456,12 @@ function v0Summary(p) {
   const el = $('v0-summary')
   const done = open?.protoRun?.done.get(p)
   if (!done) { el.replaceChildren(...(open?.protoRun ? [h('h3', {}, t('thisPage', p)), h('p', { class: 'hint' }, t('notDrawnYet'))] : []), ...(proto?.ready ? [tech('v0', engineRows())] : [])); return }
-  const run = open.protoRun, texIds = new Set(run.run.sources?.tex ?? []), knob = {}
+  const run = open.protoRun, knob = {}
   for (const r of done.recs) knob[r.knob] = (knob[r.knob] ?? 0) + 1
-  const byTex = done.recs.filter(r => texIds.has(r.id)).length
   const skipped = run.run.skipped.filter(x => open.layout?.index.onPage(p)?.includes(x.id))
   const tm = done.times, drawn = open.v0ms?.get(p)
-  const units = t('v0Units', done.recs.length, byTex, done.recs.length - byTex, skipped.length)
-  const removal = !done.removal ? t('removalOff') : done.removal.removed ? t('removalDone', done.removal.tex ?? 0, done.removal.v0 ?? 0) : t('removalNone')
+  const units = t('v0Units', done.recs.length, skipped.length)
+  const removal = !done.removal ? t('removalOff') : done.removal.removed ? t('removalDone', done.removal.units ?? 0) : t('removalNone')
   const time = drawn && done.ms != null ? t('v0Time', done.ms + drawn.copy, done.ms, drawn.copy) : t('v0TimeAhead')
   el.replaceChildren(
     h('h3', {}, t('thisPage', p)),
@@ -536,15 +559,14 @@ function showInspect() {
     tech('inspect', [[t('rowLayout'), t('layout1', u.lines.length / 8, u.frames.length / 6, u.ph.size, lost, empty)]]),
   )
 }
-/** what the v0 view did with a unit: its record (drawn, by which geometry, its fit and D's fill), or why it was left */
+/** what the v0 view did with a unit: its record (drawn, its fit and D's fill), or why it was left */
 function v0Of(id) {
   const run = open.protoRun.run, r = run.stats.find(x => x.id === id)
-  const by = (run.sources?.tex ?? []).includes(id) ? 'tex' : 'v0'
   // (drawn, its record not made: the error, never a record's numbers)
   const failed = run.recordErrors?.find(x => x.id === id)
-  if (failed) return t('v0Drawn', by, `no record (${failed.error})`)
+  if (failed) return t('v0Drawn', `no record (${failed.error})`)
   if (!r) { const sk = run.skipped.find(x => x.id === id); return sk ? t('v0Left', sk.why) : t('v0NotLaid') }
-  return t('v0Drawn', by, `${r.knob}, size ${fmt(r.fitScale, 3)} (${fmt(r.sizeRatio, 3)} of the original's), lead ${fmt(r.lead, 2)}${r.track ? `, track ${fmt(r.track, 3)}` : ''}${r.fill ? `; D's fill: page target ${fmt(r.fill.target, 3)}, its own ${fmt(r.fill.lead, 3)}` : ''}`)
+  return t('v0Drawn', `${r.knob}, size ${fmt(r.fitScale, 3)} (${fmt(r.sizeRatio, 3)} of the original's), lead ${fmt(r.lead, 2)}${r.track ? `, track ${fmt(r.track, 3)}` : ''}${r.fill ? `; D's fill: page target ${fmt(r.fill.target, 3)}, its own ${fmt(r.fill.lead, 3)}` : ''}`)
 }
 let trTextOf = pieces => pieces.map(p => (p[0] === 0 ? p[1] : ' ')).join('').replace(/\s+/g, ' ').trim()
 
@@ -671,7 +693,7 @@ if (proto.ready) {
   try {
     const { FACES, ENGLISH_FAMILIES } = await import('/proto-engine/rules/font-roles.mjs')
     const ids = Object.keys(FACES)
-    catalog = { groups: ids.filter(id => id.endsWith('-light')).map(id => id.slice(0, -6)).filter(g => ['light', 'regular', 'semibold', 'bold'].every(w => ids.includes(`${g}-${w}`))), faces: ids, families: [...ENGLISH_FAMILIES] }
+    catalog = { groups: [...new Set(Object.values(proto.R.BUILTIN_RULES.scripts).map(s => s.cjkFaces?.group).filter(Boolean))], faces: ids, families: [...ENGLISH_FAMILIES] }
   } catch {}
   rules = createRulesPanel({ root: $('rules-root'), h, icon, t, R: proto.R, names: ENDONYMS, catalog, onChange: () => { if (open) again() } })
   await rules.start(hash.rules)
@@ -680,7 +702,7 @@ if (proto.ready) {
 // draws its panes again
 function setV0Controls() {
   const layoutHere = !open || open.f.files.includes('layout.json')
-  for (const [id, on, needsLayout, desc] of [['v0-tex', state.v0tex, true, 'texDesc'], ['v0-removal', state.v0removal, true, 'removalDesc'], ['v0-faces', state.v0faces === 'prototype', false, 'facesDesc']]) {
+  for (const [id, on, needsLayout, desc] of [['v0-removal', state.v0removal, true, 'removalDesc'], ['v0-faces', state.v0faces === 'prototype', false, 'facesDesc']]) {
     const off = needsLayout && !layoutHere
     $(id).disabled = off
     switchOf($(id), on && !off)
@@ -700,7 +722,6 @@ async function again() {
 setV0Controls()
 $('v0-faces').addEventListener('click', () => { state.v0faces = state.v0faces === 'prototype' ? 'roles' : 'prototype'; again() })
 $('v0-removal').addEventListener('click', () => { if (!$('v0-removal').disabled) { state.v0removal = !state.v0removal; again() } })
-$('v0-tex').addEventListener('click', () => { if (!$('v0-tex').disabled) { state.v0tex = !state.v0tex; again() } })
 try { const P = await import('/src/pdf-reader/engine/layer/pieces.mjs'); if (P.trText) trTextOf = P.trText } catch {}
 fixtures = (await fetchJson('/api/fixtures')) ?? []
 window.__lab = { state, panes, engine: () => engine, open: () => open, CAPS_SCALE }

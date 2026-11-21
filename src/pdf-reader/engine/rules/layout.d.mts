@@ -3,15 +3,24 @@ import type { ZodMiniType } from 'zod/mini'
 import type { CjkFaces } from './font-roles.mjs'
 import type { Params } from '../layer-proto/layer2.mjs'
 import type { NameKey } from '../layout/names.mjs'
+/** TeX's hyphenation patterns the engine reads (layer-proto/hyph.mjs TEX_PATTERN_FILES), each with its minimums in the set's `hyphenation` */
+export type PatternLanguage = 'en' | 'de' | 'fr' | 'es' | 'pt' | 'it' | 'nl' | 'pl' | 'tr' | 'id' | 'cs' | 'sv' | 'uk' | 'bg'
+/** those languages, in the set's `hyphenation` order */
+export declare const PATTERNS: readonly PatternLanguage[]
+/** the patterns a Latin word may use */
+export type LatinPatterns = Exclude<PatternLanguage, 'uk' | 'bg'>
+/** what a Cyrillic word is hyphenated by: Russian's rules (Khmelev's, no patterns), or a language's own patterns */
+export type CyrillicPatterns = 'ru' | 'uk' | 'bg'
 
 /** the schema's number: the shape and how the engine reads it */
-export declare const RULES_SCHEMA: 4
+export declare const RULES_SCHEMA: 10
 /** a set's bytes at most, as received */
 export declare const RULES_CAP: 65536
 /** a set's JSON values at most, counted before JSON.parse */
 export declare const RULES_VALUES: 20000
-/** the targets either reader offers (the web's eight and the extension's Portuguese): every one must resolve, or the set is refused */
-export declare const TARGETS: readonly ['zh', 'zh-TW', 'ja', 'ko', 'de', 'fr', 'es', 'ru', 'pt']
+/** the targets either reader offers (the web's first eight, Portuguese, and the languages of a script the engine set that 2026-10-29
+ *  added): every one must resolve, or the set is refused */
+export declare const TARGETS: readonly ['zh', 'zh-TW', 'ja', 'ko', 'de', 'fr', 'es', 'ru', 'pt', 'it', 'nl', 'pl', 'tr', 'id', 'ms', 'cs', 'sv', 'uk', 'bg']
 export declare const SCRIPTS: readonly ['Hans', 'Hant', 'Jpan', 'Kore', 'Latn', 'Cyrl']
 export type Script = (typeof SCRIPTS)[number]
 
@@ -20,26 +29,21 @@ export type Script = (typeof SCRIPTS)[number]
 export interface ScriptRules {
   // the fit (layer2.mjs layoutUnit2; run.mjs fitFurther, fillPage)
   order: ('track' | 'borrow' | 'lead' | 'shrink')[]
-  leadBase: number; leadFloor: number; leadRel: boolean
+  leadBase: number; leadFloor: number
   trackMin: number
-  /** em; null: the face's size correction given back (run.mjs cjkAdvance) */
-  trackStart: number | null
   compressMax: 0 | 1 | 2
   /** centred: no mark is compressed or hung (Traditional Chinese) */
   centredPunct: boolean
   borrow: 0 | 1; borrowGap: number
   floor: number; step: number
-  further: ('widen' | 'flow' | 'shrink')[]; floorMin: number
+  further: ('widen' | 'shrink')[]; floorMin: number
   cjkJust: number; spaceMin: number; spaceMax: number; autospace: number
-  even: 0 | 1 | 2
-  /** 0: off */
-  fillSize: number
   /** the page fill (D6); null: B */
   adaptiveFill: { band: number; track: number; size: number } | null
   /** em of the size drawn: the loosest pitch the fill spreads a unit to; null: the original's own pitch */
   fillLead: number | null
-  /** what the fill leaves over: at each unit's foot, or packed to its run's end */
-  leftover: 'foot' | 'pack'
+  /** × the original's own pitch (scaled by the fit's size): the loosest pitch the fill spreads a unit to where that is looser than fillLead's; null: fillLead's alone */
+  fillLeadRel: number | null
   // breaking (layer2.mjs tokensOf2, layer1.mjs kinsokuOf)
   /** break only at spaces (Korean, the alphabets) */
   keepAll: boolean
@@ -49,10 +53,12 @@ export interface ScriptRules {
   noStart: string; noEnd: string
   hyphen: 0 | 1
   /** a Latin word's hyphenation patterns */
-  latinPatterns: 'en' | 'de'
+  latinPatterns: LatinPatterns
+  /** a Cyrillic word's: Russian's rules, or a language's own patterns */
+  cyrillicPatterns: CyrillicPatterns
   // table cells (layer2.mjs cellBands)
   cellClear: number; cellCapMin: number
-  // faces (font-roles.mjs rolesFor): the CJK group, its Kai, the English designs beside which it takes light weights
+  // faces (font-roles.mjs rolesFor): the CJK group, drawn at Regular and Bold beside every English family
   cjkFaces: CjkFaces | null
 }
 /** a language's babel names: a float's label (figure, table) and each generated heading's (abstract, ref, …); an empty
@@ -64,12 +70,12 @@ export type LanguageRules = Partial<ScriptRules> & {
   labels: Labels | null
 }
 export interface RuleSet {
-  schema: 4
+  schema: 9
   /** an integer ≥ 1, one more than the set it replaces */
   version: number
   /** at most 1,000 characters: what changed and why */
   note: string
-  hyphenation: { minWord: number; en: { left: number; right: number }; de: { left: number; right: number } }
+  hyphenation: { minWord: number } & Record<PatternLanguage, { left: number; right: number }>
   scripts: Record<Script, ScriptRules>
   /** BCP 47 tags; every TARGETS member present, others allowed (the language wave) */
   languages: Record<string, LanguageRules>
@@ -85,8 +91,8 @@ export interface TargetRules {
   /** v0's own: every ScriptRules fit, breaking and cell field, `cjk` from the script, and the set's hyphenation */
   params: Params
   labels: Labels | null
-  /** the patterns to load: en, latinPatterns, and ru for Cyrl */
-  patterns: readonly ('en' | 'de' | 'ru')[]
+  /** the patterns to load: en, latinPatterns, and cyrillicPatterns for Cyrl */
+  patterns: readonly (PatternLanguage | 'ru')[]
   hyphenation: RuleSet['hyphenation']
   cjkFaces: CjkFaces | null
   version: number

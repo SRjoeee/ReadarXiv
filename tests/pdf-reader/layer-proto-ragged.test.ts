@@ -44,16 +44,6 @@ describe('a line that TeX ends with a display or a forced break is set ragged', 
     expect(l.lines[1]!.used).toBeCloseTo(97.5, 6)
   })
 
-  it('sets it so where the text runs on past the display (flowPast): the line the display breaks', () => {
-    // one line's room before the display, three after it, the original's one line below it: the text after the display runs
-    // on into the slots above it, the display breaking the line once (layer-proto-step3's case)
-    const tokens = [...words(8), { blockTo: 0, w100: 0 }, ...words(24)]
-    const l = L2.layoutUnit2(tokens as never, [block(500, 4, 0), block(300, 1, 1)] as never, 10, { ...P('de'), flowPast: true } as never)
-    expect(l.clipped).toBe(false)
-    expect(l.lines.map(x => x.mode)).toEqual(['last', 'just', 'just', 'last'])
-    expect(l.lines[0]!.used).toBeCloseTo(97.5, 6)
-  })
-
   it('sets the line a forced break ends at its natural width', () => {
     const tokens = [...words(16), { newline: 0, room: 0, w100: 0 }, ...words(2)]
     const l = L2.layoutUnit2(tokens as never, [block(500, 3, 0)] as never, 10, P('de') as never)
@@ -63,15 +53,16 @@ describe('a line that TeX ends with a display or a forced break is set ragged', 
   })
 
   it("keeps the fit's tracking on it: a CJK line before a display drops its justification, not the unit's letter spacing", () => {
-    // ten characters of 10.1 pt overrun the 100 pt lines until the fit tracks them in by 0.01 em: the state holds for every
-    // line, the one the display ends too; its nine characters stand 10 pt apart, not spread over the line's 10 pt of slack
-    const tokens = [...Array.from({ length: 19 }, () => han()), { blockTo: 0, w100: 0 }, ...Array.from({ length: 10 }, () => han())]
+    // ten characters of 10.2 pt overrun the 100 pt lines by more than a line squeezes (layer2.mjs squeezeTakes: 0.02 em a
+    // gap, 1.8 pt over nine) until the fit tracks them in by 0.01 em, 101 pt: the state holds for every line, the one the
+    // display ends too; its nine characters stand 10.1 pt apart, not spread over the line's 9.1 pt of slack
+    const tokens = [...Array.from({ length: 19 }, () => han(102)), { blockTo: 0, w100: 0 }, ...Array.from({ length: 10 }, () => han(102))]
     const l = L2.layoutUnit2(tokens as never, [block(500, 2, 0), block(300, 1, 1)] as never, 10, P('zh') as never)
     expect(l.clipped).toBe(false)
     expect(l.state.track).toBeCloseTo(-0.01, 9)
     expect(l.lines.map(x => x.items.length)).toEqual([10, 9, 10])
     expect(l.lines.map(x => x.mode)).toEqual(['just', 'last', 'last'])
-    expect(xs(l.lines[1]!)).toEqual([0, 10, 20, 30, 40, 50, 60, 70, 80])
+    expect(xs(l.lines[1]!)).toEqual([0, 10.1, 20.2, 30.3, 40.4, 50.5, 60.6, 70.7, 80.8])
   })
 })
 

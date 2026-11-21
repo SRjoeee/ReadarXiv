@@ -2,21 +2,23 @@
 import type { Compiled, CompileRequest, Paper } from '../pipeline/live.mjs'
 import type { LayoutMarks, MarkedOptions, UnitMarks } from './marks.mjs'
 
-/** CM's record (converge then mark): the unmarked original's draft passes, the marked original's passes, whether the
- *  last marked pass wrote the files it was given (else the bound of five TeX passes was reached and its PDF kept), and
- *  why today's compile was asked instead, where it was: a host that returned no files, a draft that did not run
- *  through, a bibliography job beside the main one's (aux-jobs), a .bib the project lacks (bib-missing), or files to carry past the host's bound (files-bound, treated like an absent `files`). Pass counts enter no key and no file */
-export interface ConvergeRecord { drafts: number; marked: number; settled: boolean; fallback?: 'no-files' | 'draft-failed' | 'aux-jobs' | 'bib-missing' | 'files-bound' }
+/** the pass loop's record (`converge`, Q1: the package's compile/paper.ts convergeThenMark): its draft pass (pass 1), its full
+ *  passes, whether one wrote back the files it was given (else the bound of five TeX passes was reached and the final pass made
+ *  over the last), and why today's compile was asked instead, where it was: a host that returned no files, a pass 1 that did
+ *  not run through (draft-failed), a bibliography job beside the main one's (aux-jobs), a .bib the project lacks (bib-missing),
+ *  files to carry past the host's bound (files-bound, treated like an absent `files`), a full pass that did not run through
+ *  (pass-failed), a main file without graphicx's draft line (no-draft-line). Pass counts enter no key and no file */
+export interface ConvergeRecord { drafts: number; marked: number; settled: boolean; fallback?: 'no-files' | 'draft-failed' | 'aux-jobs' | 'bib-missing' | 'files-bound' | 'pass-failed' | 'no-draft-line' }
 
-/** markedOfPaper's and layoutMarksOfPaper's compile options: the host's compile and CM's bounds */
+/** markedOfPaper's and layoutMarksOfPaper's compile options: the host's compile and the pass loop's bounds */
 export interface MarkedCompileOptions {
   compile(req: CompileRequest): Promise<Compiled>
   converge?: boolean
   /** with `converge`: the host's compile budget for the paper, in ms of its wall (each answer's `ms`, else the time the
-   *  compile took) across the probe and the passes; a bet (the second draft, a marked pass after the first) is not
-   *  started with less left than 1.2 times the longest pass so far. Absent: unlimited */
+   *  compile took) across the probe and the passes; a full pass after the first is not started with less left than 1.2 times
+   *  the longest pass so far. Absent: unlimited */
   compileBudgetMs?: number | null
-  /** with `converge`: the host's bound on the files of one compile, { count, bytes } (the web's 256 and 8 MiB). The files CM carries
+  /** with `converge`: the host's bound on the files of one compile, { count, bytes } (the web's 256 and 8 MiB). The files the loop carries
    *  back accumulate across passes: before each pass that would carry them (carried + the previous pass's returned, the pass's
    *  own overrides aside) they are held to it, and past it today's compile is asked (`files-bound`). Absent: unlimited */
   filesBound?: { count: number; bytes: number } | null
@@ -31,7 +33,28 @@ export interface MarkedCompileOptions {
    *  names each before the box's year ("on TeX Live 2023 or 2025") and is 'texlive' only where the paper declares a year none
    *  of them is. Absent, null or empty: the box's year alone, the whys as before */
   tried?: readonly string[] | null
+  /** the base page (layer route step 2, default true): every marked compile asks for the files it wrote (`files`), and once
+   *  one stands the final pass is made over them (the result's `base`). false: no final pass, and no `base` */
+  final?: boolean
+  /** the day every compile after the probe is made on, seconds since the epoch (CompileRequest `sourceDate`; arXiv's PDF's
+   *  day, its /CreationDate or else its XMP's: base.mjs creationEpochOf), or a function asked once for it after the probe. Absent, null, or not such a
+   *  number: the host's clock */
+  sourceDate?: number | (() => number | null | Promise<number | null>) | null
+  /** each page's text of a compile's PDF (its text items' strings joined: base.mjs pageTextOf), or null where it cannot be
+   *  read: no mark of ours may stand as text on a marked original's pages (design §3.3.2, the guard's 'text'). Absent: not
+   *  checked here (the page pass checks the base page's own text) */
+  textOf?: ((pdf: Uint8Array) => Promise<string[] | null>) | null
+  /** the compiler arXiv's PDF says made it (guard.mjs compilerOfPdf), asked once before the probe where the package names none
+   *  (`paper.meta.compilerGuessed`): `latex`, `pdflatex`, `xelatex` or `lualatex` becomes the paper's compiler (`meta.compiler`,
+   *  `compilerFrom` 'pdf'); null, another word, or a failure leaves the guess. Absent: the guess stands */
+  compilerOf?: (() => Promise<string | null>) | null
 }
+/** the final pass of the marked original (markedOfPaper `base`): its PDF and its log (lastTexLog), or why there is none
+ *  ('final': no files of the compile that stands, no compile left in the budget, a pass that did not run through) */
+/** the host's limit or the compile budget a refusal was caused by (limitOf's name, or 'budget'): the one kind of refusal that
+ *  may be transient (format.mjs baseRefusalRetryable); absent on every other */
+export type RefusalLimit = string
+export type FinalPass = { pdf: Uint8Array; log: string } | { refused: 'final'; why: string; limit?: RefusalLimit }
 
 /** the unmarked original's verdict, which a refusal after its compile names (`own`): whether it ran through (live.mjs
  *  ranThrough, with a PDF); whether it did with fewer pages than arXiv's (`pages` given, a paper of one toplevel source);
@@ -41,9 +64,10 @@ export interface OwnVerdict { ran: boolean; short: boolean; limit: string | null
 
 /** the layout guard's record (layout/guard.mjs, markedOfPaper), where it did anything: the compiles it asked past the marked
  *  original's (`extra`, GUARD_EXTRA at most, the unmarked original's among them), the units left the paper's own, whether
- *  the babel names stayed marked, the checks the marked original failed ('braces' before its compile; 'ran', 'pages', 'aux',
+ *  the babel names stayed marked, the checks the marked original failed ('preamble' and 'braces' before its compile: TeX's errors
+ *  at our marks where the mark probe read the marked preamble, a unit's writing against its braces; 'ran', 'pages', 'aux', 'text',
  *  'errors' after), and why a check was left as it stood (`judged`) */
-export interface GuardRecord { extra: number; unmarked: number[]; names: boolean; failed: ('braces' | 'ran' | 'pages' | 'aux' | 'errors')[]; judged?: string }
+export interface GuardRecord { extra: number; unmarked: number[]; names: boolean; failed: ('preamble' | 'braces' | 'ran' | 'pages' | 'aux' | 'text' | 'errors')[]; judged?: string }
 /** why a paper's marked original is refused: its probe (no log); TeX's own ('compile': the paper's own source does not make
  *  arXiv's pages here, a host's limit, a compile that threw or ran no TeX, or a fault nothing told the guard was ours;
  *  'texlive', as 'compile' with the paper declaring another TeX Live year than the box's; 'engine', a compiler the host does
@@ -62,8 +86,24 @@ export type MarkedRefusal = 'probe' | 'compile' | 'texlive' | 'engine' | 'marks'
  * paper's), which goes on as itself
  */
 export declare function markedOfPaper(paper: Paper, o: MarkedCompileOptions): Promise<
-  | { pdf: Uint8Array; log: string; options: Omit<MarkedOptions, 'units' | 'OPS'>; ms: { probe: number; compile: number; guard?: number }; cm?: ConvergeRecord; guard?: GuardRecord }
-  | { refused: MarkedRefusal; why?: string; own?: OwnVerdict; ms: Record<string, number>; cm?: ConvergeRecord; guard?: GuardRecord }
+  | { pdf: Uint8Array; log: string; options: Omit<MarkedOptions, 'units' | 'OPS'>; ms: { probe: number; compile: number; guard?: number; final?: number }; cm?: ConvergeRecord; guard?: GuardRecord; base?: FinalPass; probeLog: string }
+  | { refused: MarkedRefusal; why?: string; limit?: RefusalLimit; own?: OwnVerdict; ms: Record<string, number>; cm?: ConvergeRecord; guard?: GuardRecord }
+>
+
+/** why madeBibliography made no entries (paper.mjs madeBibliography's comment) */
+export type BibliographyKept = 'shipped' | 'none' | 'biblatex' | 'bib-missing' | 'engine' | 'compile' | 'no-files' | 'aux-jobs' | 'biber' | 'no-bbl' | 'moved' | 'entries'
+/**
+ * The bibliography BibTeX makes of a paper that ships none (PDF-READER §19.13): one draft pass of the unmarked original with
+ * BibTeX, its files asked, and the paper opened again with the job's .bbl it wrote (`made`, its path and bytes, which the
+ * host's every later compile and every opening of the paper must hold as the package's own file), its entries units after
+ * every other, every other unit and name the bundle's byte for byte as before; else why not (`kept`) and the paper as it was.
+ * `ms`, the call's wall. Never throws, but a failed allocation
+ */
+/** why madeBibliography would make no .bbl of a paper before any compile, or null where it asks its pass */
+export declare function bibliographyKept(paper: Paper): Extract<BibliographyKept, 'shipped' | 'none' | 'biblatex' | 'bib-missing'> | null
+export declare function madeBibliography(paper: Paper, o: { compile(req: CompileRequest): Promise<Compiled>; compilerOf?: (() => Promise<string | null>) | null; engines?: readonly string[] | null }): Promise<
+  | { paper: Paper; made: { path: string; bytes: Uint8Array }; ms: number }
+  | { kept: BibliographyKept; ms: number }
 >
 
 /**
@@ -85,17 +125,18 @@ export declare function handoverOf(own: OwnVerdict | null | undefined, o: { decl
  * and `unitMarks`, the unit marks the left is anchored by (null: by its text alone). `ms` times each stage. A stage that fails
  * gives { refused } naming it, with the times of the stages that ran: the probe where its compile gave no log, the
  * compile where the original's gave no PDF or did not run through (live.mjs ranThrough: stopped short, or its last pass
- * short of AXT-END; today's compile and CM's fallback alike), the marks where `open` or the reading failed. `open` is called once, on the
+ * short of AXT-END; today's compile and the loop's fallback alike), the marks where `open` or the reading failed. `open` is called once, on the
  * original's PDF, and its `close` is called whatever the reading did. The compile and the PDF opening are the caller's
  * (a native TeX Live and PDF.js in Node, the TeX page and a worker in a browser): this module imports neither. Never throws but a failed allocation, as markedOfPaper.
- * Without `converge` (the default), the original is one compile with every pass (`rerun`). With it (CM), the unmarked
- * original (originalFiles(paper, { lines: true })) is compiled in one or two drafts (`draft`, `files`), then the marked
- * original one pass at a time (`files`) in the files the passes before returned (in place of the paper's own, never of
- * the pass's), until a pass writes the bytes it was given or five TeX passes have run; `ms.compile` is all of them, `cm`
- * their record. A pass that returns no `files`, a draft that did not run through (a timeout too), a bibliography job beside the
- * main one's or a missing .bib gets today's compile; a marked pass that did not run through, or a compile that throws, is the compile's refusal
+ * Without `converge` (the default), the original is one compile with every pass (`rerun`). With it (Q1, the pass loop), the
+ * marked original is compiled one pass at a time (`files`) in the files the passes before returned (in place of the paper's
+ * own, never of the pass's): pass 1 a draft (`draft`), every later one the final pass's files in full, until a pass writes
+ * back the bytes it was given (that pass's PDF the marks' and the base page) or five TeX passes have run (the final pass made
+ * over the last); `ms.compile` is all of them, `cm` their record. A pass that returns no `files`, a pass that did not run
+ * through (a timeout too), a bibliography job beside the main one's, a missing .bib or files past the host's bound get
+ * today's compile, judged by the guard as today's; a compile that throws is the compile's refusal
  */
 export declare function layoutMarksOfPaper(paper: Paper, o: MarkedCompileOptions & {
   open(pdf: Uint8Array): Promise<{ doc: unknown; close(): Promise<void> }>
   OPS: Record<string, number>
-}): Promise<{ marks: LayoutMarks; unitMarks: UnitMarks | null; ms: { probe: number; compile: number; marks: number; guard?: number }; cm?: ConvergeRecord; guard?: GuardRecord } | { refused: MarkedRefusal; why?: string; own?: OwnVerdict; ms: Record<string, number>; cm?: ConvergeRecord; guard?: GuardRecord }>
+}): Promise<{ marks: LayoutMarks; unitMarks: UnitMarks | null; ms: { probe: number; compile: number; marks: number; guard?: number; final?: number }; cm?: ConvergeRecord; guard?: GuardRecord; base?: { pdf: Uint8Array; log: string; check: { marks: number } } | { refused: 'final'; why: string; limit?: RefusalLimit } } | { refused: MarkedRefusal; why?: string; limit?: RefusalLimit; own?: OwnVerdict; ms: Record<string, number>; cm?: ConvergeRecord; guard?: GuardRecord }>

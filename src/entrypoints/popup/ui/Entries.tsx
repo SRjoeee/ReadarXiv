@@ -2,7 +2,7 @@
 // buttons side by side, equal widths; the one that cannot be used greyed. An entry page draws them, and P0 for a paper
 // it names
 import { FileText, Globe } from 'lucide'
-import { Button } from '@/ui/controls/Button'
+import { Button } from '@readarxiv/ui'
 
 export interface EntryButton { label: string; disabled: boolean; run: () => void }
 

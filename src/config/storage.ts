@@ -139,6 +139,28 @@ export const configItem = storage.defineItem<Config>(CONFIG_KEY, {
       }
       return out
     },
+    // v20 -> v21: the PDF reader's "What to translate" (`pdfReader.classes`, docs/PDF-READER.md §9.1), each toggle as the
+    // reader had it in effect: until v21 the reader gave the layer its figures from the image switch, which the HTML page
+    // shares, and the engine's defaults for the rest (heads and tables shown, references and names not). Written here as
+    // they were then, not as DEFAULT_PDF_CLASSES may say later. A `pdfReader` that is not an object, or an `image` whose
+    // switch is no boolean, passes through for the schema to name, as every migration here does
+    21: (v20: (Omit<Config, 'version' | 'pdfReader' | 'image'> & { version: 20; pdfReader?: unknown; image?: unknown }) | null) => {
+      if (typeof v20 !== 'object' || v20 === null) return v20
+      const out: Record<string, unknown> = { ...v20, version: 21 as const }
+      const reader = v20.pdfReader
+      if (reader !== null && typeof reader === 'object' && !Array.isArray(reader)) {
+        const figures = (v20.image as { enabled?: unknown } | null | undefined)?.enabled
+        out.pdfReader = { ...reader, classes: { figures, tables: true, heads: true, references: false, names: false } }
+      }
+      return out
+    },
+    // v21 -> v22: the mark of a translator chosen (`providerChosen`; the owner's ruling of 2026-11-19). A stored provider says
+    // who wrote it: the install writes Microsoft (the default since 2026-09-10, before the first release), so a stored
+    // `microsoft` cannot be told from a pick and is nobody's; Google's and Chrome's ids were never a default, and a service's
+    // id is written by an add or a pick (migration 12's from v11's `openai-compat`, a default of no released build), so each
+    // is the reader's pick, kept. A provider that is no string is passed on for the schema to name, as every migration here does
+    22: (v21: (Omit<Config, 'version' | 'provider' | 'providerChosen'> & { version: 21; provider?: unknown }) | null) =>
+      typeof v21 !== 'object' || v21 === null ? v21 : { ...v21, version: 22 as const, providerChosen: v21.provider !== 'microsoft' },
   },
 })
 

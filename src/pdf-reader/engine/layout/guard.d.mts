@@ -1,4 +1,5 @@
 // guard.mjs's types: the layout guard's checks of a marked original (markedOfPaper's), for its tests
+import type { PdfLike } from './base.mjs'
 import type { Compiled, Paper } from '../pipeline/live.mjs'
 import type { UnitLines } from '../pipeline/tex-errors.mjs'
 
@@ -13,12 +14,25 @@ export declare function unbalancedUnits(paper: Paper, files: Map<string, Uint8Ar
 export declare function marksOutOfPlace(text: string): string[]
 /** the units those marks name, in the files a compile returned (`files`), else its main aux (`aux`), ids below `count` */
 export declare function auxUnits(c: Compiled | null | undefined, count: number, job: string): Set<number>
+/** the units the mark probe's errors stand at where TeX read the marked preamble: an error on a line from `first` to `last` whose
+ *  text holds a mark of ours names its unit, ids below `count` */
+export declare function preambleUnits(log: string | null | undefined, count: number, range: { first: number; last: number }): Set<number>
+/** whether a compile's last pass wrote its PDF itself, so that its log names every destination of ours set twice */
+export declare const tellsTwice: (log: string | null | undefined) => boolean
+/** auxUnits' units judged by what TeX did with each: none where the compile is otherwise the paper's and its log tells twice */
+export declare const copiesOutOfPlace: (units: Set<number>, o: { clean: boolean; log: string | null | undefined }) => Set<number>
+/** the units whose TeX of ours a class's verbatim copy of our source (a file the compile wrote) lost: a line of it begun inside a
+ *  mark of ours (cas-common's abstract) */
+export declare function cutCopyUnits(c: Pick<Compiled, 'files'> | null | undefined, files: ReadonlyMap<string, Uint8Array> | null | undefined, count: number): Set<number>
 /** the TeX errors of a compile's last pass */
 export declare const errorCount: (log: string | null | undefined) => number
 /** the pages the last pass wrote, as TeX says, else null */
 export declare const pagesOfLog: (log: string | null | undefined) => number | null
 /** the TeX Live year of the engine's banner, else null */
 export declare const texLiveOf: (log: string | null | undefined) => string | null
+/** the TeX Live year of the build arXiv's PDF says: the `PTEX.Fullbanner` of the Info dictionary PDF.js resolves, else null */
+export declare const texLiveOfPdf: (doc: PdfLike) => Promise<string | null>
+export declare const compilerOfPdf: (doc: PdfLike) => Promise<'latex' | 'pdflatex' | 'xelatex' | 'lualatex' | null>
 /** whether TeX ran: its banner in the log */
 export declare const texRan: (log: string | null | undefined) => boolean
 /** the host's limit a compile met, else null */
@@ -29,5 +43,8 @@ export declare function firstError(log: string | null | undefined): string | nul
 export declare const ownErrors: (log: string | null | undefined) => Set<string>
 /** the units a marked compile's errors stand in, less the paper's own (`own`), and those at the line TeX ignored all text after */
 export declare function errorUnits(paper: Paper, log: string | null | undefined, files: Map<string, Uint8Array>, lines: UnitLines<unknown>[], own?: Set<string> | null): Set<number>
+/** the units the marked compile's errors stand in where no unit's line does: the mark of ours nearest before each error's place in
+ *  the innermost level of TeX's context that shows one, but the paper's own errors (`own`) and those a name mark of ours stands in */
+export declare function contextUnits(log: string | null | undefined, count: number, own?: Set<string> | null): Set<number>
 /** the unmarked original's files: the main one with graphicx's draft and END_TEX on one line before its first */
 export declare const unmarkedFiles: (paper: Paper) => Map<string, Uint8Array>

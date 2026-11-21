@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
 import { copyWithGrants } from './ext-copy.mjs'
 import { serveOffline } from './lib/offline-arxiv.mjs'
+import { chromiumOptions } from './lib/chromium.mjs'
 
 const HERE = fileURLToPath(new URL('.', import.meta.url))
 const SRC = process.env.AXT_EXT_DIR ?? fileURLToPath(new URL('../../.output/chrome-mv3', import.meta.url))
@@ -37,12 +38,12 @@ rmSync(PROFILE, { recursive: true, force: true })
 mkdirSync(SHOTS, { recursive: true })
 const site = await serveOffline()
 copyWithGrants(SRC, EXT, { contentMatches: { 'https://arxiv.org/html/*': ['http://127.0.0.1/html/*'] } })
-const context = await chromium.launchPersistentContext(PROFILE, {
+const context = await chromium.launchPersistentContext(PROFILE, chromiumOptions({
   ...(process.env.AXT_CHROME ? { executablePath: process.env.AXT_CHROME } : { channel: 'chromium' }),
   headless: !process.env.AXT_HEADED,
   viewport: { width: 1280, height: 860 },
   args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
-})
+}))
 await context.route('**/*', route => {
   const { protocol, hostname } = new URL(route.request().url())
   return hostname === '127.0.0.1' || !/^https?:$/.test(protocol) ? route.continue() : route.abort()

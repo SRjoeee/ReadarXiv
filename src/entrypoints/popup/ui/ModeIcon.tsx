@@ -1,8 +1,7 @@
 // The display's three icons, the reader's family (its design, §6.2): the reader's pane of 24 × 18, split down the middle
 // for side by side, across for stacked, its wen glyph for the translation alone
 import type { Mode } from '@/core/renderer'
-import { GLYPH_WEN } from '@/pdf-reader/ui/display-glyphs'
-import { WEN_GAIN } from '@/pdf-reader/ui/icons'
+import { GLYPH_WEN, WEN_GAIN } from '@readarxiv/ui'
 
 export function ModeIcon({ mode }: { mode: Mode }) {
   return (

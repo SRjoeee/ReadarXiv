@@ -1,3 +1,4 @@
+// Kept at this path for the website's reader (readarxiv-web, @vendor/pdf-reader/ui/PagePill) until its cut-over; nothing in the extension imports it. See tests/contract/website-imports.test.ts.
 // A pane's page pill (the reader's design, §6.4): at the pane's bottom centre, ‹ · the page (an input, all of it
 // selected on focus) · / total · ›. Shown while its pane scrolls and 2.5 s after, and while hovered or focused
 // (reader.css); the page is PDF.js's as it reports it, never read ahead of it
@@ -6,7 +7,7 @@ import { forwardRef, useState } from 'react'
 import { R } from '@/ui/strings'
 import type { ReaderController, Side } from '../controller'
 import { Icon } from '@/ui/controls/Icon'
-import { TippedButton } from './TippedButton'
+import { TippedButton } from '../../../packages/reader/src/chrome/TippedButton.tsx'
 import { useReader } from './use-reader'
 
 export const PagePill = forwardRef<HTMLDivElement, { controller: ReaderController; side: Side }>(function PagePill({ controller, side }, ref) {

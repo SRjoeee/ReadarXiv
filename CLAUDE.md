@@ -1,12 +1,14 @@
 # CLAUDE.md — Read arXiv
 
-Chrome extension (MV3) that translates `https://arxiv.org/html/*` in place: structure-preserving, reversible, made for long bilingual reading sessions. Display name **Read arXiv**; repository `ReadarXiv`; everything the extension injects is prefixed `axt-` / `data-axt-` / `--axt-`.
+Read arXiv is a bilingual arXiv reader. This repository holds the Chrome extension (MV3): the in-place translator of `https://arxiv.org/html/*` (structure-preserving, reversible, made for long reading sessions) and the bilingual PDF reader. The PDF reader's engine is the rebuilt one in the workspace packages (`packages/engine`, the prepare, beside `packages/format`, `packages/typeset`, `packages/translate` and `packages/reader`), with today's engine in `src/pdf-reader/engine/` until the cut-over and the gates of both in `lab/`; the website (readarxiv.com, the private repository `readarxiv-web`) pins this repository as a submodule. Display name **Read arXiv**; repository `ReadarXiv`; everything the extension injects is prefixed `axt-` / `data-axt-` / `--axt-`.
 
 ## Where the truth lives
 
+- `ARCHITECTURE.md` — the map, read before changing anything: the packages and which may import which, the four shapes of a paper's data, the life of a paper from the prepare to a drawn page on both hosts, every invariant with the gate that holds it, where a change belongs and what moving a version or a digest costs, and where the build differs from the approved design.
 - `docs/DESIGN.md` — the current design: what the extension does, how it is built, why each non-obvious choice was made, with the measurements beside the decisions. Cite it by section (`DESIGN §7.2`). A decision that changes goes into its section in the same pull request as the code.
 - `docs/UI.md` — the interface contract: every control and string of the popup and the settings page, by id (`S-P-80`), with the reasons behind them.
 - `docs/PDF-READER.md` — the PDF reader's interface design: every control, state and motion with the reason behind it, the maintainer's words where a decision rests on them, and the measurements; §17 is the highlight. The reader's engine is held by the gates of `lab/pdf/README.md`; the experiment it grew in (its running record and plans) is read from the tag: `git show exp-freeze-2026-10-07:experiments/pdf-bilingual/REPORT.md`, `git show exp-freeze-2026-10-07:experiments/pdf-bilingual/plans/<file>`.
+- `docs/route/` — the PDF layer route's working designs (the route, the delta, erasure by optional content, the text layer, the audits): live notes while the work lands; each pull request folds its decisions into `docs/PDF-READER.md` and deletes what it settled.
 - `docs/RELEASE.md` — how a version is cut, and the store listing.
 - `docs/THIRD_PARTY.md` — what was ported from which project, under which licence.
 - `CHANGELOG.md` — reader-facing changes.
@@ -20,11 +22,11 @@ Each is a product promise, a legal requirement, or a contract with something out
 1. **DOM invariants** (DESIGN §7.1, guarded by tests): a translation node is inserted only as the next sibling of its original block; an original node gains `data-axt-*` attributes and nothing else; global state lives only on `<html>`; after restore the DOM equals the pre-translation DOM node by node.
 2. **Prefixes**: every injected class, data attribute and CSS variable starts with `axt-` / `data-axt-` / `--axt-`. The one exception is `data-readarxiv-extension` on the Read arXiv website's own `<html>`: a contract with the website, not a mark of the extension's work (DESIGN §4.0d).
 3. **Free and built-in translation APIs are unreliable by assumption**: their failure must be recoverable and must trigger the fallback chain; it must never take the extension down.
-4. **Cache key** carries every input that changes a translation — today `CACHE_KEY_VERSION | providerId | model | PROMPT_VERSION | promptKey | context | rules | target | renderPath | normalizedText | cuts`, and `marked-over-cap` for a segment marked over its engine's batch cap (`src/cache/key.ts`, DESIGN §9). The `rules` slot is the caller's: `RULES_VERSION` for a block of the HTML page, none for a text read from a PDF (its units are cut by the reader's engine, and the cache holds the translator's raw answer to a text, which no rule of reading changes). Bump the matching version whenever a prompt, a rule or the request shape changes meaning: `PROMPT_VERSION` for an LLM prompt (`src/providers/prompt.ts`); `RULES_VERSION` for the HTML page's rule file; `PIPELINE_VERSION` for what the PDF reader's units are; `TRANSLATE_VERSION` for how the PDF engine serialises a unit for a translator and reads the reply back (PDF-READER §18) — and, until the rows cache replaces the stored copies, `PIPELINE_VERSION` with it (§18.2); `CACHE_KEY_VERSION` for the background's shared request shaping or a provider's reply handling (the per-text key, `src/cache/key.ts`).
-5. **Secrets**: API keys live only in WXT storage — never in logs, cache keys, fixtures or git. A third party's public client constant (the Google web translator's key in `providers/google-web.ts`) is not a secret.
+4. **Cache key** carries every input that changes a translation. The extension's translations go through the one chain of `packages/translate` (DESIGN §8, §9): its store key is `t1 | translator identity | target | sha256 of the wire the translator is sent | the context's digest` (the context only for a translator whose replies depend on it), and a stored value is the translator's raw reply, judged again on every read; a page's row is keyed `r1 | identityOf(the chain's translators) | target | sha256 of the unit | the context's digest` (`src/providers/transport.ts`). A translator's identity names its endpoint, model and prompt, never a key (hard rule 5). No number is raised for what a translator is sent or how its reply is read: the wire's bytes are in the key, and replies are read again. No number is raised for an LLM prompt either: its identity (`PROMPT_DIGEST`, `src/providers/prompt.ts`) stands inside an LLM translator's identity, the hash of its data's bytes taken at load (the protocol block, the built-in prompts, the targets' English names) and of `buildPrompts`' behaviour digest (`BUILD_PROMPTS_DIGEST`), so any change to what the model is sent is another identity and an answer stored before it is never reached again. A behaviour digest (the acceptance rule's, each package adapter's, the chain's own rules', `buildPrompts`') moves with its golden outputs, held by a test; `pnpm digests --write` writes the literals, and their diff says which rows are asked again. For the PDF engine's own wire, still the website's and the extension's old reader's: `PIPELINE_VERSION` for what the PDF reader's units are, `TRANSLATE_VERSION` for how the PDF engine serialises a unit for a translator and reads the reply back (PDF-READER §18), and `PIPELINE_VERSION` with it while a stored copy is judged by it (§18.2).
+5. **Secrets**: API keys live only in WXT storage — never in logs, cache keys, fixtures or git. A third party's public client constant (the Google web translator's key in `packages/translate/src/adapters/google.ts`) is not a secret.
 6. **Attribution**: code ported from the reference projects (KISS Translator, Read Frog, FluentRead — GPL-3.0) keeps the header `// Ported from reference/<repo>/<path>@<commit> (GPL-3.0), <YYYY-MM-DD>, modified` and an entry in `docs/THIRD_PARTY.md`.
 7. **External contracts** get migration or compatibility handling, never silent replacement: the saved configuration schema (`CONFIG_VERSION` and a migration, DESIGN §9), and whatever a reader's machine or another program holds that a new version must still meet.
-8. **The platform boundary** (DESIGN §4.2, checked by `pnpm lint` through `scripts/check-boundary.mjs`): `src/core`, `src/providers` and `src/cache` import nothing from `wxt`, the entry points, the UI, the locale packs, the WXT configuration store or runtime messaging; what the core needs from the host enters as a dependency, and what it shows a reader is a code the host turns into a sentence.
+8. **The platform boundary** (DESIGN §4.2, checked by `pnpm lint` through `scripts/check-boundary.mjs`): `src/core`, `src/providers` and `src/cache` import nothing from `wxt`, the entry points, the UI, the locale packs, the WXT configuration store or runtime messaging; what the core needs from the host enters as a dependency, and what it shows a reader is a code the host turns into a sentence. The same gate holds `packages/**` (the workspace packages, `packages/README.md`): they import nothing from `src/`, `wxt` or its virtual modules, only the packages `PACKAGES` allows, and only through their entry.
 9. **No `:has()` in the injected style sheets** (DESIGN §7.2, gate `tests/styles/no-has.test.ts`): Chrome answers a `:has()` in an author sheet by recalculating the whole document's styles on every DOM insertion. Every structural condition the layout needs is a `data-axt-*` mark written by the code that creates the structure; `:has()` stays available to TypeScript queries.
 
 Two defaults, open to re-evaluation with evidence: `ltx_*` selectors live only in `src/core/rules/latexml.ts` (style sheets may use them for layout only); the wire format (tags / markers / runs) is negotiated from the provider's declared `wireFormats`, never chosen by provider identity in the renderer.
@@ -35,26 +37,27 @@ WXT + React + TypeScript with pnpm · Vercel AI SDK for LLM providers (structure
 
 ## Working rules
 
-- **A pull request is one complete, explainable, verifiable change.** Cross-module changes update the interface and every caller together; unrelated changes stay out; a coherent change is not split to look small.
-- **Gate before every pull request** — the same four steps CI runs: `pnpm typecheck && pnpm lint && pnpm test && pnpm build`, judged by the exit code, plus the e2e scripts relevant to the change. `pnpm test` is vitest and does not type-check.
+- **A pull request is one complete, explainable, verifiable change.** Cross-module changes update the interface and every caller together; small changes, related or not, batch into one pull request per cycle and are tested once as a batch; a coherent change is not split to look small.
+- **Gate before every pull request** — the same four steps CI runs: `pnpm typecheck && pnpm lint && pnpm test && pnpm build`, judged by the exit code, plus the e2e scripts relevant to the change. `pnpm test` is vitest and does not type-check. Before a test build or a release the batch also runs the engine's speed check and the random fresh-paper sweep (`lab/pdf/README.md`).
 - **Self-review before asking for review**: after adding a constraint, grep for everyone else on that path; read your own diff as someone else's code and ask what used to work and now does not.
-- **Wait for CI and the review's terminal signal before merging**; verify every review comment against a fixture, a probe or the code before adopting it, and write down what was declined and why. Merge with a merge commit, never squash. Nothing merges into `main` and no version is released without the maintainer's explicit request.
+- **Wait for CI and every reviewer's terminal signal before merging**: Codex and CodeRabbit review each pull request on open; a terminal signal is a 👍 reaction, a review with comments, or a usage-limit notice (👀 means still reviewing); after a fix round, comment `@codex review` once (`docs/agents/review.md`). Verify every review comment against a fixture, a probe or the code before adopting it, and write down what was declined and why. Merge with a merge commit, never squash. Nothing merges into `main` and no version is released without the maintainer's explicit request; for Claude Code the merge gate holds the first half (`.claude/settings.json`, `scripts/merge-gate.mjs`) wherever a shell command line shows the merge: a merge into `main` asks the person at the keyboard, and a merge into another base passes without a prompt when it is one plain `gh pr merge …`, chained to nothing. What a script the line runs or another tool merges is past the gate, and the rule binds there as it always did.
 - **Measure before deciding**: a performance claim comes with a probe or a measurement (`tests/e2e/probes/`, `AXT_MEASURE=1 pnpm vitest run tests/perf`); a claim in a document or an old comment is a hypothesis until checked.
 - **Ported code**: keep only what is called; when a ported module is touched, its unused parts go.
+- **UI copy**: avoid unnecessary secondary labels and descriptions. Let the layout do the explaining.
 
 ## Language
 
-Everything written for developers is English: identifiers, comments, docs, test names, scripts, commit messages (`type(scope): summary`), pull requests, issues. `pnpm check:english` (`scripts/check-english.mjs`, part of `pnpm lint`) is the gate: a file may hold no more lines with CJK characters than `scripts/english-allowlist.txt` grants it — lower an entry freely, raise one only with a reason.
+Everything written for developers is English: identifiers, comments, docs, test names, scripts, commit messages (`type(scope): summary`), pull requests, issues. `pnpm check:english` (`scripts/check-english.mjs`, part of `pnpm lint`) is the gate: a file may hold no more lines with CJK characters (Han, kana or Hangul) than `scripts/english-allowlist.txt` grants it — lower an entry freely, raise one only with a reason.
 
-Chinese that is product data stays: the locale packs (`src/locales/*`, `public/_locales`) and the few reader-facing strings marked as such outside them; the language table (`config/languages.ts`); multilingual test inputs and expectations, and the Chinese labels the e2e scripts locate controls by; an observed machine-translation output quoted as evidence.
+Chinese, Japanese and Korean that is product data stays: the locale packs (`src/locales/*`, `public/_locales`) and the few reader-facing strings marked as such outside them; the language table (`config/languages.ts`); multilingual test inputs and expectations, and the Chinese labels the e2e scripts locate controls by; an observed machine-translation output quoted as evidence.
 
 ## Commands
 
 ```
 pnpm install
 pnpm dev                 # WXT dev mode; load .output/chrome-mv3-dev unpacked
-pnpm typecheck           # tsc --noEmit — vitest does not type-check
-pnpm lint                # Biome linter, the English gate, the boundary gate, the review-citation gate (src/pdf-reader names no reviewer; the rest of src/ is counted); pnpm lint:fix applies safe fixes
+pnpm typecheck           # tsc --noEmit, then tsc -b packages (each workspace package under its own tsconfig) — vitest does not type-check
+pnpm lint                # Biome linter, the English gate, Biome's formatter over packages/, the boundary gate, the review-citation gate (src/pdf-reader names no reviewer; the rest of src/ is counted), the machine-path gate (no tracked file outside parked/ names a home directory or a mounted volume); pnpm lint:fix applies safe fixes
 pnpm test                # vitest; pnpm test:watch
 pnpm build               # wxt build + scripts/check-output.mjs
 pnpm exec wxt build --mode development   # the dev pages too: the gallery (every popup state) and the controls sheet
@@ -64,6 +67,7 @@ pnpm e2e:a11y            # A/B axe audit, offline (fixture + vendored arXiv shee
 pnpm e2e:local-endpoint  # an http endpoint without CORS headers can translate a whole page
 pnpm e2e:pdf             # arXiv's PDF page: the button is drawn there, it and the popup open the bilingual version
 pnpm e2e:reader          # the PDF reader on a paper of our own, no network: a route table guards every request; the stand-in of the layer API serves the sample's bundle (tests/fixtures/pdf/sample-1/; pnpm build first)
+pnpm e2e:framing         # the reader and the popup framed: every way the extension opens them works, a page that frames them gets nothing; offline (pnpm build first)
 pnpm e2e:floating        # the floating button on the abstract, PDF and full-text pages: rest, hover, drag, hide, toggle, tick
 pnpm e2e:popup           # the popup: finding a paper, the menus under their rows, the entries, the panel growing
 pnpm e2e:viewer          # the figure viewer's control under a header the page pins, offline (AXT_CHROME=<Chrome 131> for the floor)
@@ -73,14 +77,17 @@ pnpm fixtures:fetch      # download and verify the fixtures the repository may n
 pnpm fixtures:stats      # rule coverage audit over the fixtures
 pnpm zip                 # the store archive; pnpm icons regenerates the icons
 pnpm tokens              # src/styles/tokens.css from src/shared/tokens.ts; a test fails while the two differ
-pnpm exec tsx lab/pdf/spikes/highlight-gate.mjs     # the PDF reader's highlight in Node, on this machine's data (lab/pdf/data and lab/pdf/out, never in the repository): the ten papers' runs and the ground truth (data/runs/highlight-ten, highlight-gt), their sources and arXiv's PDFs (data/corpus), and the Microsoft answers their sentences are made again from (out/highlight/B3/ms-cache-zh-auto.json, ms-cache-zh-en.json; a set missing fails the gate); WRITE_BASELINE=1 records a change meant; the lab's other gates: lab/pdf/README.md
-pnpm exec tsx lab/pdf/spikes/highlight-papers.mjs lab/pdf/out/highlight/papers   # the browser gate's demo papers, their units carrying their sentences
-node lab/pdf/spikes/highlight-gate-browser.mjs checks  # the highlight in a real browser (pnpm build first; PAPERS defaults to those demo papers); floats, resting, tokens: those checks alone; costs: BASE_BUILD=<a build to compare with>
+pnpm digests             # every behaviour digest (packages/translate's, buildPrompts') recomputed against its literal; --write writes those that moved (rows are asked again)
+# the PDF engine's lab gates and their commands: lab/pdf/README.md
 AXT_MEASURE=1 pnpm vitest run tests/perf       # the cost measurements (readings, not assertions)
 AXT_CHROME=<binary> pnpm e2e                   # the e2e suite on a chosen Chrome; probes live in tests/e2e/probes/
 ```
 
 ## Agent skills
+
+### Review
+
+Codex and CodeRabbit review every pull request; a merge waits for their terminal signals, and findings are verified before they are adopted. See `docs/agents/review.md`.
 
 ### Issue tracker
 

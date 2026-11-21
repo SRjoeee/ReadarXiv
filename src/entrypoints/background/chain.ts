@@ -1,5 +1,5 @@
 import type { Config } from '@/config/schema'
-import { chainConfigChanged } from '@/config/revision'
+import { chainConfigChanged, readerChainChanged } from '@/config/revision'
 import type { TranslationTransport } from '@/providers/transport'
 
 export interface Built {
@@ -155,7 +155,8 @@ export function createChainHolder(deps: ChainHolderDeps): ChainHolder {
       if (!active) return
       const previous = requested
       requested = next
-      if (previous === null || failed || chainConfigChanged(previous, next)) take(build(next))
+      // (a field of the PDF reader's chain alone too: a transport holds both chains, the page's as it was, v22)
+      if (previous === null || failed || chainConfigChanged(previous, next) || readerChainChanged(previous, next)) take(build(next))
     },
     async cancelScope(scope) {
       let cancelled = 0

@@ -6,17 +6,18 @@ import { rmSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
 import { openSection } from '../options-page.mjs'
+import { chromiumOptions } from '../lib/chromium.mjs'
 
 const E2E = fileURLToPath(new URL('../', import.meta.url))
 const CHROME = process.argv[2]
 const EXT = fileURLToPath(new URL('../../../.output/chrome-mv3', import.meta.url))
 const PROFILE = `${E2E}.profile-floor`
 rmSync(PROFILE, { recursive: true, force: true })
-const context = await chromium.launchPersistentContext(PROFILE, {
+const context = await chromium.launchPersistentContext(PROFILE, chromiumOptions({
   executablePath: CHROME, headless: true,
   args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
   viewport: { width: 1100, height: 900 },
-})
+}))
 let [worker] = context.serviceWorkers()
 if (!worker) worker = await context.waitForEvent('serviceworker')
 const extId = worker.url().split('/')[2]

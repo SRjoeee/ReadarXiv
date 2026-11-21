@@ -1,5 +1,5 @@
 // engine.mjs's types (JavaScript until the engine's port), as session.d.mts gives the session's
-import type { RenderPath } from '@/cache/key'
+import type { WireFormat } from '@/core/protector/tokens'
 import type { ProviderErrorKind } from '@/providers/types'
 
 type Translated = { text: string; by: string | null; alignment?: { source: number[]; target: number[] } } | null
@@ -11,7 +11,7 @@ export declare class EngineError extends Error {
 export declare function paperContext(units: unknown[]): { paperTitle?: string; abstract?: string }
 export declare function openEngine(options: { paper: string }): Promise<{
   lang: string
-  format: RenderPath
+  format: WireFormat
   readonly engine: string
   identity: string
   now(): Promise<string>

@@ -13,28 +13,21 @@
 //   - per fixture and table, the cells whose state the decision changes (translated → kept), with --threshold=<share>
 //     in place of NAMES_SHARE to see another;
 //   - with --show=<fixture>:<table>,…, a table's cells before and after, in their grid's order.
-// --captions: what names each fixture's floats, as the pipeline reads it from a compile of the translation
-// (live.mjs CAPTIONS_PROBE, captionsOf): the fixture's translation set by its final's strategy, one pass natively in
-// Docker (texlive/texlive:latest, no network), in out/table-groups/work/, deleted after; then each float label of arXiv's
-// PDF ("Table 2:") looked for in the final the fixture holds (final.pdf, by pdftotext: PDF.js reads no text from the
-// finals' CJK faces), named as the probe says — the target's name from the layout rules' labels (rules/layout-rules.json) where `target`, the
-// original's where `source` —, with the original's number and punctuation. Written to out/table-groups/captions.json.
 // --write=<dir> writes each fixture again as the pipeline now records it — record.json from the decided results through
-// cache.mjs unitsOf, with every cell's group, and the captions where --captions read them —, beside links to the
+// cache.mjs unitsOf, with every cell's group, and its captions (lab/pdf/fixture-captions.json, committed fixture data: which
+// floats each of the 29 fixtures' finals named in the target, read on 2026-10-07 by --captions, a compile of each fixture's
+// translation, live.mjs captionsOf, which went with the compiled translation on 2026-11-04; the records and units of the gate
+// pack hold the same, field for field. The reader reads no paper's own: it names figures and tables in the target alike,
+// layer-proto/reader.mjs CAPTIONS, so a fixture made since carries none) —, beside links to the
 // fixture's other files; and units.json, the translation as the layer takes it, where the engine has the layer's
 // pieces (layer/pieces.mjs): the layer gate's --fixtures folder. Every file it writes is outside the repository's
 // tracked files (out/ is git-ignored).
 // --of=<folder> decides another folder's fixtures (a new cut's, made by spikes/layer-fixtures.mjs with --engine), their
 // sources read by the engine given (--engine), and links to that folder's files.
-//   pnpm exec tsx lab/pdf/spikes/table-groups.mjs [--threshold=<share>] [--show=…] [--captions] [--write=<dir>] [--engine=<worktree>] [--of=<folder>]
-import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+//   pnpm exec tsx lab/pdf/spikes/table-groups.mjs [--threshold=<share>] [--show=…] [--write=<dir>] [--engine=<worktree>] [--of=<folder>]
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { checkCompileImage, COMPILE_IMAGE, PLATFORM } from './compile-image.mjs'
-
-// (the image of the pin or COMPILE_IMAGE, here as the compile cache keys name it)
-await checkCompileImage()
 
 const root = new URL('..', import.meta.url).pathname
 const REPO = resolve(root, '../..')
@@ -42,9 +35,7 @@ const argOf = name => process.argv.find(a => a.startsWith(`--${name}=`))?.slice(
 const ENGINE = resolve(argOf('engine') ?? REPO)
 const engine = path => import(pathToFileURL(join(ENGINE, 'src/pdf-reader/engine', path)).href)
 const { sourceHash, unitsOf, seedFrom } = await engine('pipeline/cache.mjs')
-const { captionsOf, openPaper, translationFiles } = await engine('pipeline/live.mjs')
-const { strategiesFor } = await engine('pipeline/scripts.mjs')
-const { BUILTIN_RULES, resolveRules } = await engine('rules/layout.mjs')
+const { openPaper } = await engine('pipeline/live.mjs')
 const { unpackSource } = await engine('source/tar.mjs')
 const { plainSource, plainTranslated, rehydrate, serialize, texEscape } = await engine('translate/mt.mjs')
 const G = await engine('translate/groups.mjs')
@@ -184,53 +175,9 @@ for (const want of SHOW) {
   }
 }
 
-// ---- what names the floats: the pipeline's probe, against the finals
-const captions = new Map()
-if (process.argv.includes('--captions')) {
-  console.log('\n# what names the floats: the probe of a compile of the translation, and the labels of the final the fixture holds')
-  const work = join(OUT, 'work')
-  const text = file => execFileSync('pdftotext', ['-layout', file, '-'], { encoding: 'utf8', maxBuffer: 1 << 26 })
-  const quote = x => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  // a float's label where a line or a column of it starts: its name, its number, its punctuation
-  const labelsIn = (t, names) => [...t.matchAll(new RegExp(`(?:^|\\s{2,})(${names.map(quote).join('|')})[ \\t]*([0-9]+|[IVXL]+)[ \\t]*([.:\\uff1a\\uff0e])`, 'gmu'))].map(m => ({ name: m[1], n: m[2], sep: m[3] }))
-  const ORIGINAL = ['Figure', 'Fig.', 'FIGURE', 'FIG.', 'Table', 'TABLE']
-  let failed = 0
-  for (const f of fixtures) {
-    const meta = JSON.parse(readFileSync(join(FIXTURES, f.name, 'final.json'), 'utf8'))
-    const target = /-([A-Za-z-]+)$/.exec(f.name)[1]
-    const strategy = strategiesFor(f.paper.meta, target).find(x => x.name === meta.strategy)
-    if (!strategy) { console.log(`FAIL ${f.name}: no strategy ${meta.strategy}`); failed++; continue }
-    const dir = join(work, f.name)
-    rmSync(dir, { recursive: true, force: true })
-    const files = translationFiles(f.paper, new Map(), { strategy, fonts: { rm: 'cmr', sf: 'cmss', tt: 'cmtt', body: 'cmr' }, draft: true })
-    for (const [p, b] of [...f.paper.fsys.list().map(p => [p, f.paper.fsys.read(p)]), ...files]) { const file = join(dir, p); mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, b) }
-    const main = f.paper.project.main
-    // (Docker's file sharing takes the folder by its real path: out/ may be a link to another tree's)
-    execFileSync('docker', ['run', ...PLATFORM, '--rm', '--network', 'none', '-v', `${realpathSync(dir)}:/work`, '-w', '/work', COMPILE_IMAGE, 'sh', '-c', `timeout 300 ${strategy.engine} -interaction=nonstopmode ${main} >/dev/null 2>&1; true`])
-    const logFile = join(dir, main.replace(/\.tex$/, '.log').split('/').pop())
-    const said = existsSync(logFile) ? captionsOf(readFileSync(logFile, 'latin1')) : null
-    rmSync(dir, { recursive: true, force: true })
-    captions.set(f.name, said)
-    const c = resolveRules(BUILTIN_RULES, target).labels
-    const orig = labelsIn(text(join(FIXTURES, f.name, 'arxiv.pdf')), ORIGINAL)
-    const kindOf = l => (/^t/i.test(l.name) ? 'table' : 'figure')
-    const want = orig.map(l => ({ ...l, name: said?.[kindOf(l)] === 'target' ? c[kindOf(l)] : l.name }))
-    const got = labelsIn(text(join(FIXTURES, f.name, 'final.pdf')), [...new Set([c.figure, c.table, ...ORIGINAL])])
-    const key = l => `${l.name} ${l.n}${l.sep}`
-    const finals = new Set(got.map(key)), missing = want.filter(l => !finals.has(key(l)))
-    // a float whose label the final prints otherwise, under another name or punctuation: one not found as expected,
-    // found so (a body's "Fig. 4." at a column's start is the prose's, beside the caption's label found as expected)
-    const kindGot = l => (l.name === c.table || /^t/i.test(l.name) ? 'table' : 'figure')
-    const other = got.filter(l => !want.some(w => key(w) === key(l)) && missing.some(m => m.n === l.n && kindOf(orig[want.indexOf(m)]) === kindGot(l)))
-    const ok = !!said && !other.length
-    if (!ok) failed++
-    console.log(`${ok ? 'ok  ' : 'FAIL'} ${f.name}: the probe says figure ${said?.figure}, table ${said?.table}; ${new Set(orig.map(key)).size} labels in the original, ${new Set(want.map(key)).size - new Set(missing.map(key)).size} found so in the final${missing.length ? ` (not found by pdftotext: ${[...new Set(missing.map(key))].join(', ')})` : ''}${other.length ? `; printed otherwise: ${[...new Set(other.map(key))].join(', ')}` : ''}; e.g. ${[...new Set(got.map(key))].slice(0, 3).join(' | ')}`)
-  }
-  console.log(`captions: ${fixtures.length - failed} of ${fixtures.length} fixtures as their finals print them`)
-  mkdirSync(OUT, { recursive: true })
-  writeFileSync(join(OUT, 'captions.json'), JSON.stringify(Object.fromEntries(captions), null, 1))
-}
-
+// ---- what names the floats: a fixture's captions as its final printed them, kept since the compile that read them went with the
+// compiled translation (2026-11-04): lab/pdf/fixture-captions.json
+const CAPTIONS = JSON.parse(readFileSync(join(root, 'fixture-captions.json'), 'utf8'))
 mkdirSync(OUT, { recursive: true })
 writeFileSync(join(OUT, 'measure.json'), JSON.stringify({ threshold: THRESHOLD, fixtures: fixtureShares, sample: sampleShares, changes, samplePapers: sample.map(s => ({ name: s.name, answered: s.answered, cells: s.cells })) }, null, 1))
 
@@ -241,7 +188,7 @@ if (WRITE) {
     rmSync(dir, { recursive: true, force: true })
     mkdirSync(dir, { recursive: true })
     const units = f.paper.units
-    // the record's results as runLive would leave them: a group kept whole kept, with its translation; one waiting set
+    // the record's results as the compiled translation's run left them: a group kept whole kept, with its translation; one waiting set
     // in the source (its translation the next run's)
     const results = new Map()
     f.record.units.forEach((r, i) => {
@@ -250,7 +197,7 @@ if (WRITE) {
       if (f.d.keep.has(units[i])) { const { sentences: _, inSource: __, ...rest } = res; results.set(i, { ...rest, state: 'kept' }) }
       else results.set(i, f.d.wait.has(units[i]) ? { ...res, inSource: true } : res)
     })
-    const said = captions.get(f.name) ?? (existsSync(join(OUT, 'captions.json')) ? JSON.parse(readFileSync(join(OUT, 'captions.json'), 'utf8'))[f.name] : null)
+    const said = CAPTIONS[f.name] ?? null
     const record = { ...(said ? { captions: said } : {}), units: unitsOf(units, f.kept, f.hashes, results) }
     writeFileSync(join(dir, 'record.json'), JSON.stringify(record))
     if (pieces) {

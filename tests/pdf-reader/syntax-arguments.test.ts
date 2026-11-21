@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { openPaper, originalFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
-import { LAYOUT_CLASSES, NAMES_TEX } from '@/pdf-reader/engine/layout/marks.mjs'
-import { paperParams, readArgs, textless } from '@/pdf-reader/engine/rules/arg-roles.mjs'
+import { openPaper, originalFiles } from '../../packages/engine/src/compile/live.ts'
+import { LAYOUT_CLASSES, NAMES_TEX } from '../../packages/engine/src/marks/marks.ts'
+import { paperParams, readArgs, textless } from '../../packages/engine/src/source/arg-roles.ts'
 
 // A unit, and a mark, are made only of text TeX typesets where it stands: an argument TeX reads as syntax — a length or
 // a number, a key, a label or a file name, a loop's variables and list — is never walked as text and never takes a mark.
@@ -28,7 +28,7 @@ describe('a value in TeX\'s own syntax is never a command that reads arguments o
     const params = paperParams(name, null)
     if (!params) throw new Error(`no parameters for ${name}`)
     const r = readArgs(src, 0, params)
-    return r.complete ? r.args.map(a => src.slice(a.start, a.end).trim()) : null
+    return r.complete ? r.args.map((a: { start: number; end: number }) => src.slice(a.start, a.end).trim()) : null
   }
   it('\\hrule\\n\\vspace{0.5mm}: the rule takes no dimension, the space is its own call (2610.21765)', () => {
     expect(read('\n\\vspace{0.5mm}', 'hrule')).toEqual([])
@@ -97,7 +97,8 @@ describe('a declaration that takes no argument takes no value: the digits after 
     expect(texts(doc('\\noindent = 40 by the count.'))).toEqual(['= 40 by the count.'])
   })
   it('nor a command the table knows to take no parameter: \\S4 in (2608.15334); one it does not know may be a register, and keeps it', () => {
-    expect(texts(doc('As in \\S4 in the paper, and \\S6.1 in the appendix.'))).toEqual(['As in 4 in the paper, and 6.1 in the appendix.'])
+    // (the section sign is its character in the text since F9 (d), latex-front.ts TEXT_CHARACTERS: the text's Latin-1 view decoded)
+    expect(texts(doc('As in \\S4 in the paper, and \\S6.1 in the appendix.')).map(t => new TextDecoder().decode(Uint8Array.from([...t].map(c => c.charCodeAt(0)))))).toEqual(['As in §4 in the paper, and §6.1 in the appendix.'])
     expect(paper(doc('\\mylength 2pt Words of the paragraph.')).units.map(u => (u as unknown as Unit).pieces[0])).toEqual([{ t: 'ph', src: '\\mylength 2pt' }])
   })
   it('a register or a primitive that reads a value keeps it', () => {

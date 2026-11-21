@@ -4,8 +4,7 @@
 // at once, wherever the focus is (R82). Done, the owner's words stand in its place with the success icon arriving
 import { CircleCheck, Trash2 } from 'lucide'
 import { useEffect, useRef, useState } from 'react'
-import { Button } from '@/ui/controls/Button'
-import { Icon } from '@/ui/controls/Icon'
+import { Button, Icon } from '@readarxiv/ui'
 
 export const DISARM_MS = 3000
 

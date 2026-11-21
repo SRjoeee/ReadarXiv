@@ -2,14 +2,16 @@ import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
-import { ENGLISH_FAMILIES, FACES, rolesFor } from '@/pdf-reader/engine/rules/font-roles.mjs'
+import { FACES, rolesFor } from '@/pdf-reader/engine/rules/font-roles.mjs'
 import { scriptOf } from '@/pdf-reader/engine/rules/script.mjs'
 import { BUILTIN_RULES, type FrozenRuleSet, parseRules, RULES_CAP, RULES_FIELDS, RULES_SCHEMA, RULES_VALUES, RulesRefusal, readRules, resolveRules, SCRIPTS, TARGETS, writeRules } from '@/pdf-reader/engine/rules/layout.mjs'
-import { babelTags } from '@/pdf-reader/engine/pipeline/scripts.mjs'
 import { toBcp47 } from '@/config/languages'
-import { READER_LANGUAGES } from '@/pdf-reader/ui/languages'
+import { READER_LANGUAGES } from '@/pdf-reader/host/languages'
+/** the tags the final's babel tried for a target's locale, in order (the TeX path's scripts.mjs babelTags, which went with the
+ *  compiled translation on 2026-11-04): the language's own tag, then its language and script, then its language alone */
+const babelTags = (lang: string) => { const l = new Intl.Locale(lang); return [...new Set([lang, `${l.language}-${l.maximize().script}`, l.language])] }
 
-/** the languages the extension's reader offers, as tags (its menu, ui/languages.ts) */
+/** the languages the extension's reader offers, as tags (its menu, host/languages.ts) */
 const VERIFIED = READER_LANGUAGES.map(toBcp47)
 
 // The layout rule set (rules/layout.mjs, the rules-as-data plan §2): its built-in copy, its resolution to the fields v0 reads,
@@ -29,16 +31,35 @@ const bytesOf = (s: string) => new TextEncoder().encode(s)
 // biome-ignore lint/suspicious/noExplicitAny: a set under edit has no fixed shape
 type Edit = any
 /** the fields each schema since the first removed and added (schema 2, D6: `grid` gone, every script's lines on the
- *  original's pitch while the size shrinks; `fillLead`, the page fill's top; `leftover`, where what it leaves goes); and
- *  the labels schema 3 added (D1a: every babel name, at the built-in set's words) */
-const REMOVED = ['grid'], ADDED = ['fillLead', 'leftover']
+ *  original's pitch while the size shrinks; `fillLead`, the page fill's top; schema 5's `fillLeadRel`; schema 9's
+ *  `cyrillicPatterns`, a Cyrillic word's hyphenation; schema 10's switches no set turned the other way gone, `leadRel`,
+ *  `trackStart`, `even` and `fillSize`, with schema 2's `leftover` and schema 7's `evenPitch` and `keepAlign`, which were
+ *  added and went); the labels
+ *  schema 3 added (D1a: every babel name, at the built-in set's words); and the members of `cjkFaces` schema 6 took out (its
+ *  `light` designs and its `kai`: Regular and Bold beside every English family, the ruling of 2026-10-29) */
+/** the values schema 10 changed: `further` took no 'flow' step (the text run past a display: it set no unit of the release
+ *  sweep's or of the gate pack's that the steps around it had not) */
+const CHANGED: Record<string, (v: never) => unknown> = { further: (v: string[]) => v.filter(k => k !== 'flow') }
+const REMOVED = ['grid', 'leadRel', 'trackStart', 'even', 'fillSize'], ADDED = ['fillLead', 'fillLeadRel', 'cyrillicPatterns'], FACES_REMOVED = ['light', 'kai']
+/** the languages whose hyphenation minimums schema 8 added (#121-4: French, Spanish and Portuguese their own patterns) and schema 9
+ *  (the languages of the owner's ruling of 2026-10-29) */
+const HYPHENATION_ADDED = ['fr', 'es', 'pt', 'it', 'nl', 'pl', 'tr', 'id', 'cs', 'sv', 'uk', 'bg'] as const
+/** the targets schema 9's set added, the languages of a script the engine already set (the owner's ruling of 2026-10-29): the
+ *  frozen first version has none of them, and is lifted with the built-in set's */
+const LANGUAGES_ADDED = ['it', 'nl', 'pl', 'tr', 'id', 'ms', 'cs', 'sv', 'uk', 'bg'] as const
 const LABELS_ADDED = ['abstract', 'ref', 'bib', 'contents', 'listfigure', 'listtable', 'appendix', 'index', 'proof', 'preface', 'glossary']
 /** the frozen first version lifted to the current schema: its values as they were, less the fields removed since, the fields
  *  added since at the built-in set's values for each script */
 const lift = (s: Edit): Edit => {
   s.schema = RULES_SCHEMA
+  for (const k of HYPHENATION_ADDED) s.hyphenation[k] = structuredClone(BUILTIN_RULES.hyphenation[k])
+  for (const k of LANGUAGES_ADDED) s.languages[k] = structuredClone(BUILTIN_RULES.languages[k])
   for (const r of [...Object.values(s.scripts), ...Object.values(s.languages)] as Record<string, unknown>[]) for (const k of REMOVED) delete r[k]
+  for (const r of [...Object.values(s.scripts), ...Object.values(s.languages)] as Record<string, unknown>[]) for (const [k, f] of Object.entries(CHANGED)) if (k in r) r[k] = f(r[k] as never)
   for (const [script, r] of Object.entries(s.scripts) as [keyof typeof BUILTIN_RULES.scripts, Record<string, unknown>][]) for (const k of ADDED) r[k] = structuredClone((BUILTIN_RULES.scripts[script] as Record<string, unknown>)[k])
+  for (const r of [...Object.values(s.scripts), ...Object.values(s.languages)] as { cjkFaces?: Record<string, unknown> | null }[]) {
+    if (r.cjkFaces) for (const k of FACES_REMOVED) delete r.cjkFaces[k]
+  }
   // (in the schema's field order, as the frozen file has it)
   for (const [script, r] of Object.entries(s.scripts)) s.scripts[script] = Object.fromEntries(RULES_FIELDS.filter(f => f.scope === 'script').map(f => [f.path, (r as Record<string, unknown>)[f.path]]))
   for (const [tag, l] of Object.entries(s.languages) as [string, { labels: Record<string, string> | null }][]) {
@@ -51,6 +72,8 @@ const V1 = parseRules(v1())
 const PARAMS_V1 = JSON.parse(text(resolve('tests/pdf-reader/rules/params-v1.json'))) as Record<string, Record<string, unknown>>
 /** the targets the engine had before the migration, which params-v1.json holds the Params of (the web's eight) */
 const MIGRATED = ['zh', 'zh-TW', 'ja', 'ko', 'de', 'fr', 'es', 'ru']
+/** the targets the frozen first version holds: the migrated and Portuguese */
+const FROZEN = [...MIGRATED, 'pt']
 
 /** the refusal parseRules gives a set, or a failure where it is read */
 function refusal(json: unknown): RulesRefusal {
@@ -66,20 +89,26 @@ afterEach(() => { vi.restoreAllMocks() })
 
 describe('the built-in set', () => {
   it('parses, is canonical (writeRules gives the file\'s bytes) and has a version of at least 1', () => {
-    expect(RULES_SCHEMA).toBe(4)
-    expect(BUILTIN_RULES.schema).toBe(4)
+    expect(RULES_SCHEMA).toBe(10)
+    expect(BUILTIN_RULES.schema).toBe(10)
     expect(BUILTIN_RULES.version).toBeGreaterThanOrEqual(1)
     expect(BUILTIN_RULES.note.length).toBeGreaterThan(0)
     expect(writeRules(BUILTIN_RULES)).toBe(text(BUILTIN_FILE))
     expect(parseRules(JSON.parse(text(BUILTIN_FILE)))).toEqual(BUILTIN_RULES)
     // (the frozen first version is schema 1's, refused by its schema; lifted to this one it is canonical, and its version 1)
     expect(refusal(JSON.parse(text(V1_FILE))).field).toBe('schema')
-    const kept = text(V1_FILE).split('\n').filter(l => !l.startsWith('  "schema"') && !REMOVED.some(k => l.trim().startsWith(`"${k}":`)))
+    const kept = text(V1_FILE).split('\n').filter(l => !l.startsWith('  "schema"') && ![...REMOVED, ...Object.keys(CHANGED)].some(k => l.trim().startsWith(`"${k}":`)))
     const lifted = writeRules(V1).split('\n')
     const labelled = Object.values(V1.languages).filter(l => l.labels).length
-    expect(lifted.filter(l => !kept.includes(l)).map(l => l.trim().split(':')[0]).sort()).toEqual(['"schema"', ...ADDED.flatMap(k => Object.keys(V1.scripts).map(() => `"${k}"`)), ...Array.from({ length: labelled }, () => '"labels"')].sort())
-    // (every line of the frozen file kept but its labels, which schema 3 lengthened)
-    expect(kept.filter(l => !l.trim().startsWith('"labels":')).every(l => lifted.includes(l))).toBe(true)
+    const faced = Object.values(V1.scripts).filter(r => r.cjkFaces).length
+    // (and schema 8's and 9's hyphenation minimums after German's, whose line takes a comma, and the languages schema 9's set added:
+    // each its key's line and its fields' but the labels, counted above)
+    const added = LANGUAGES_ADDED.flatMap(k => [k, ...Object.keys(BUILTIN_RULES.languages[k]!).filter(f => f !== 'labels')].map(f => `"${f}"`))
+    expect(lifted.filter(l => !kept.includes(l)).map(l => l.trim().split(':')[0]).sort()).toEqual(['"schema"', ...[...ADDED, ...Object.keys(CHANGED)].flatMap(k => Object.keys(V1.scripts).map(() => `"${k}"`)), ...Array.from({ length: labelled }, () => '"labels"'), ...Array.from({ length: faced }, () => '"cjkFaces"'), '"de"', ...HYPHENATION_ADDED.map(k => `"${k}"`), ...added].sort())
+    // (every line of the frozen file kept but its labels, which schema 3 lengthened, its CJK faces, which schema 6 cut to
+    // their group, and German's minimums, which schema 8's follow)
+    expect(kept.filter(l => !l.trim().startsWith('"labels":') && !l.trim().startsWith('"cjkFaces":') && !l.trim().startsWith('"de": { "left"')).every(l => lifted.includes(l))).toBe(true)
+    expect(lifted.filter(l => l.trim().startsWith('"cjkFaces":')).every(l => /^ {6}"cjkFaces": (?:\{ "group": "[a-z-]+" \}|null),?$/.test(l))).toBe(true)
     expect(V1.version).toBe(1)
     expect(V1.note).toBe('migrated from the engine\'s code')
   })
@@ -102,13 +131,13 @@ describe('the built-in set', () => {
   })
 
   it('holds every target and every script, and the languages beside them the language wave will add to', () => {
-    expect(TARGETS).toEqual([...MIGRATED, 'pt'])
+    expect(TARGETS).toEqual([...FROZEN, ...LANGUAGES_ADDED])
     expect(SCRIPTS).toEqual(['Hans', 'Hant', 'Jpan', 'Kore', 'Latn', 'Cyrl'])
     expect(RULES_CAP).toBe(65_536)
     expect(RULES_VALUES).toBe(20_000)
     for (const t of TARGETS) expect(Object.keys(BUILTIN_RULES.languages), t).toContain(t)
     expect(Object.keys(BUILTIN_RULES.scripts)).toEqual([...SCRIPTS])
-    // (the file is about 8 KB: well within the cap, with room for the language wave)
+    // (the file is about 16 KB with the nineteen targets: well within the cap)
     expect(text(BUILTIN_FILE).length).toBeLessThan(RULES_CAP / 4)
   })
 
@@ -130,7 +159,7 @@ describe('resolving a target (resolveRules)', () => {
     for (const t of MIGRATED) {
       const params = resolveRules(V1, t).params as unknown as Record<string, unknown>
       // (but the fields the schema has removed since, which no Params holds now)
-      const old = Object.fromEntries(Object.entries(PARAMS_V1[t]!).filter(([k]) => !REMOVED.includes(k)))
+      const old = Object.fromEntries(Object.entries(PARAMS_V1[t]!).filter(([k]) => !REMOVED.includes(k)).map(([k, v]) => [k, k in CHANGED ? CHANGED[k]!(v as never) : v]))
       expect(Object.keys(old).length, t).toBeGreaterThan(15)
       expect(Object.fromEntries(Object.keys(old).map(k => [k, params[k]])), t).toEqual(old)
       for (const k of REMOVED) expect(params, `${t} ${k}`).not.toHaveProperty(k)
@@ -139,9 +168,8 @@ describe('resolving a target (resolveRules)', () => {
 
   it('adds, beside them, the fields the migration moved into Params, each the value of the condition it replaced', () => {
     // (the engine's own conditions, as written before: layer2.mjs tokensOf2 keepAll `to === 'ko' || !cjk`, centred `to === 'zh-TW'`,
-    // cjkClassRe(to) the Korean class for 'ko', latinLang `to === 'de' ? 'de' : 'en'`; run.mjs's leadRel and fill defaults; the
-    // 0.5 and 0.6 of cellBands; the even pass and the fill off, trackStart the face's own)
-    for (const t of TARGETS) {
+    // cjkClassRe(to) the Korean class for 'ko', latinLang `to === 'de' ? 'de' : 'en'`; the 0.5 and 0.6 of cellBands)
+    for (const t of FROZEN) {
       const { params, patterns } = resolveRules(V1, t)
       const cjk = ['zh', 'zh-TW', 'ja', 'ko'].includes(t)
       expect(params.cjk, t).toBe(cjk)
@@ -150,8 +178,9 @@ describe('resolving a target (resolveRules)', () => {
       expect(params.cjkQuotes, t).toBe(t !== 'ko')
       expect(params.latinPatterns, t).toBe(t === 'de' ? 'de' : 'en')
       expect(patterns, t).toEqual(t === 'de' ? ['en', 'de'] : t === 'ru' ? ['en', 'ru'] : ['en'])
-      expect([params.cellClear, params.cellCapMin, params.even, params.fillSize, params.trackStart], t).toEqual([0.5, 0.6, 0, 0, null])
-      expect(params.hyphenation, t).toEqual({ minWord: 5, en: { left: 2, right: 3 }, de: { left: 2, right: 2 } })
+      expect([params.cellClear, params.cellCapMin], t).toEqual([0.5, 0.6])
+      expect(params.cyrillicPatterns, t).toBe('ru')
+      expect(params.hyphenation, t).toEqual({ minWord: 5, en: { left: 2, right: 3 }, de: { left: 2, right: 2 }, fr: { left: 2, right: 3 }, es: { left: 2, right: 2 }, pt: { left: 2, right: 3 }, it: { left: 2, right: 2 }, nl: { left: 2, right: 3 }, pl: { left: 2, right: 3 }, tr: { left: 2, right: 3 }, id: { left: 2, right: 2 }, cs: { left: 2, right: 3 }, sv: { left: 2, right: 2 }, uk: { left: 2, right: 2 }, bg: { left: 2, right: 3 } })
     }
   })
 
@@ -159,7 +188,7 @@ describe('resolving a target (resolveRules)', () => {
     // (layer1.mjs's NO_START and NO_END as they were: one class for every target)
     const NO_START = /^[\u3001\u3002\uFF0C\uFF0E,.\uFF01\uFF1F!?\uFF09)\]\u300D\u300F\u3011\u3015\u3009\u300B\u3019\u3017\u201D\u2019\uFF1A:\uFF1B;\u30FB\u30FC\u301C\u2026\u3005\u309D\u309E\u3041\u3043\u3045\u3047\u3049\u3063\u3083\u3085\u3087\u308E\u30A1\u30A3\u30A5\u30A7\u30A9\u30C3\u30E3\u30E5\u30E7\u30EE\u30F5\u30F6%\uFF05]/
     const NO_END = /[\uFF08([\u300C\u300E\u3010\u3014\u3008\u300A\u3018\u3016\u201C\u2018]$/
-    for (const t of TARGETS) {
+    for (const t of TARGETS.filter(x => x !== 'sv')) {
       const { noStart, noEnd } = resolveRules(V1, t).params
       const start = new Set([...noStart].map(c => c.codePointAt(0))), end = new Set([...noEnd].map(c => c.codePointAt(0)))
       expect(start.size, t).toBe([...noStart].length)
@@ -172,12 +201,39 @@ describe('resolving a target (resolveRules)', () => {
     }
   })
 
-  it('gives the CJK family of a CJK script and none to an alphabet, and the light designs beside which it is light', () => {
-    const family = { zh: ['shs-sc', 'fandolkai'], 'zh-TW': ['shs-tc', 'bkai00mp'], ja: ['haranoaji', null], ko: ['shs-k', null] } as Record<string, [string, string | null]>
+  it('gives each language of 2026-10-29 its own patterns, Malay Indonesian\'s as babel does, a Cyrillic one its own Cyrillic patterns', () => {
+    const latin = { it: 'it', nl: 'nl', pl: 'pl', tr: 'tr', id: 'id', ms: 'id', cs: 'cs', sv: 'sv' } as Record<string, string>
+    for (const t of LANGUAGES_ADDED) {
+      const { script, params, patterns } = resolveRules(BUILTIN_RULES, t)
+      if (latin[t]) {
+        expect([script, params.latinPatterns, params.cyrillicPatterns, patterns], t).toEqual(['Latn', latin[t], 'ru', ['en', latin[t]]])
+      } else {
+        // (a Latin word in Ukrainian or Bulgarian is English's, as in Russian; a Cyrillic word its language's own patterns)
+        expect([script, params.latinPatterns, params.cyrillicPatterns, patterns], t).toEqual(['Cyrl', 'en', t, ['en', t]])
+      }
+      // (the minimums TeX applies under babel: tests/fixtures/hyph/README.md)
+      const lang = (latin[t] ?? t) as 'uk'
+      expect(params.hyphenation[lang], t).toEqual(BUILTIN_RULES.hyphenation[lang])
+    }
+    expect(resolveRules(BUILTIN_RULES, 'ru').patterns).toEqual(['en', 'ru'])
+    // (a set that names another language's patterns for a script that is not Cyrillic loads them: none is named without its file)
+    expect(resolveRules(parseRules(v1(s => { s.languages.de.cyrillicPatterns = 'uk' })), 'de').patterns).toEqual(['en', 'de', 'uk'])
+  })
+
+  it('Swedish opens a quotation with the mark that closes one (Språkrådet\'s Svenska skrivregler, ”…” and ’…’): neither is one no line starts with', () => {
+    const latn = resolveRules(BUILTIN_RULES, 'de').params.noStart, sv = resolveRules(BUILTIN_RULES, 'sv').params.noStart
+    expect([...latn].filter(c => !sv.includes(c))).toEqual(['\u201D', '\u2019'])
+    expect([...sv].every(c => latn.includes(c))).toBe(true)
+    expect(resolveRules(BUILTIN_RULES, 'sv').params.noEnd).toBe(resolveRules(BUILTIN_RULES, 'de').params.noEnd)
+  })
+
+  it('gives the CJK family of a CJK script, its group alone, and none to an alphabet', () => {
+    const family = { zh: 'shs-sc', 'zh-TW': 'shs-tc', ja: 'haranoaji', ko: 'shs-k' } as Record<string, string>
     for (const t of TARGETS) {
       const { cjkFaces } = resolveRules(V1, t)
-      if (family[t]) expect(cjkFaces, t).toEqual({ group: family[t]![0], kai: family[t]![1], light: ['cm', 'garamond'] })
+      if (family[t]) expect(cjkFaces, t).toEqual({ group: family[t] })
       else expect(cjkFaces, t).toBeNull()
+      expect(resolveRules(BUILTIN_RULES, t).cjkFaces, t).toEqual(family[t] ? { group: family[t] } : null)
     }
   })
 
@@ -190,7 +246,7 @@ describe('resolving a target (resolveRules)', () => {
     expect(resolveRules(V1, 'de').script).toBe('Latn')
   })
 
-  it('a language\'s field overrides its script\'s: de\'s latinPatterns is \'de\', fr\'s \'en\'', () => {
+  it('a language\'s field overrides its script\'s: de\'s latinPatterns is \'de\', fr\'s \'en\' (the frozen first version\'s)', () => {
     expect(resolveRules(V1, 'de').params.latinPatterns).toBe('de')
     expect(resolveRules(V1, 'fr').params.latinPatterns).toBe('en')
     expect(resolveRules(V1, 'de').patterns).toEqual(['en', 'de'])
@@ -217,21 +273,21 @@ describe('resolving a target (resolveRules)', () => {
   it('an object field is replaced whole, never merged: languages.zh.adaptiveFill, cjkFaces and labels', () => {
     const edited = parseRules(v1(s => {
       s.languages.zh.adaptiveFill = { band: 0.2, track: 0, size: 1 }
-      s.languages.zh.cjkFaces = { group: 'shs-tc', kai: null, light: [] }
+      s.languages.zh.cjkFaces = { group: 'shs-tc' }
       s.languages.ja.adaptiveFill = null
       s.languages.ko.labels = { ...s.languages.ko.labels, figure: 'Fig', table: 'Tab' }
     }))
     const zh = resolveRules(edited, 'zh')
     expect(zh.params.adaptiveFill).toEqual({ band: 0.2, track: 0, size: 1 })
-    expect(zh.cjkFaces).toEqual({ group: 'shs-tc', kai: null, light: [] })
+    expect(zh.cjkFaces).toEqual({ group: 'shs-tc' })
     expect(zh.labels).toMatchObject({ figure: '\u56fe', table: '\u8868' })
     expect(resolveRules(edited, 'ja').params.adaptiveFill).toBeNull()
     expect(resolveRules(edited, 'ko').labels).toMatchObject({ figure: 'Fig', table: 'Tab', abstract: '\uc694 \uc57d' })
     // (an object over a script's null, and a null over a script's object, are the language's alone: nothing is merged in)
-    const over = parseRules(v1(s => { s.scripts.Hans.adaptiveFill = null; s.languages.zh.adaptiveFill = { band: 0.1, track: 0.1, size: 1.2 }; s.scripts.Hans.cjkFaces.kai = null }))
+    const over = parseRules(v1(s => { s.scripts.Hans.adaptiveFill = null; s.languages.zh.adaptiveFill = { band: 0.1, track: 0.1, size: 1.2 }; s.scripts.Hans.cjkFaces.group = 'shs-k' }))
     expect(resolveRules(over, 'zh').params.adaptiveFill).toEqual({ band: 0.1, track: 0.1, size: 1.2 })
     expect(resolveRules(parseRules(v1(s => { s.scripts.Hans.adaptiveFill = null })), 'zh').params.adaptiveFill).toBeNull()
-    expect(resolveRules(over, 'zh').cjkFaces!.kai).toBeNull()
+    expect(resolveRules(over, 'zh').cjkFaces!.group).toBe('shs-k')
     // (the script's own is untouched: Traditional Chinese keeps the script's fill and faces)
     expect(resolveRules(edited, 'zh-TW').params.adaptiveFill).toEqual({ band: 0.05, track: 0.05, size: 1.1 })
     expect(resolveRules(edited, 'zh-TW').cjkFaces!.group).toBe('shs-tc')
@@ -270,7 +326,7 @@ describe('resolving a target (resolveRules)', () => {
 
 describe('the labels: babel 26.12\'s [captions], the floats\' and the generated headings\'', () => {
   /** babel's [captions] of the locale each target's \\babelprovide imports (its pinned ini files: zh, zh-Hant, ja, ko, de,
-   *  es, fr, pt, ru), as \\u escapes; empty where babel's is */
+   *  es, fr, pt, ru, and the ten of 2026-10-29), the CJK ones as \\u escapes; empty where babel's is */
   const BABEL = {
     zh: { figure: '\u56fe', table: '\u8868', abstract: '\u6458\u8981', ref: '\u53c2\u8003\u6587\u732e', bib: '\u53c2\u8003\u6587\u732e', contents: '\u76ee\u5f55', listfigure: '\u63d2\u56fe', listtable: '\u8868\u683c', appendix: '\u9644\u5f55', index: '\u7d22\u5f15', proof: '\u8bc1\u660e', preface: '', glossary: '' },
     'zh-Hant': { figure: '\u5716', table: '\u8868', abstract: '\u6458 \u8981', ref: '\u53c3 \u8003 \u8cc7 \u6599', bib: '\u6587 \u737b', contents: '\u76ee \u9304', listfigure: '\u5716 \u76ee \u9304', listtable: '\u8868 \u76ee \u9304', appendix: '\u9644 \u9304', index: '\u7d22 \u5f15', proof: '', preface: '', glossary: '' },
@@ -280,6 +336,20 @@ describe('the labels: babel 26.12\'s [captions], the floats\' and the generated 
     es: { figure: 'Figura', table: 'Cuadro', abstract: 'Resumen', ref: 'Referencias', bib: 'Bibliograf\u00eda', contents: '\u00cdndice', listfigure: '\u00cdndice de figuras', listtable: '\u00cdndice de cuadros', appendix: 'Ap\u00e9ndice', index: '\u00cdndice alfab\u00e9tico', proof: 'Demostraci\u00f3n', preface: 'Prefacio', glossary: 'Glosario' },
     fr: { figure: 'Figure', table: 'Table', abstract: 'R\u00e9sum\u00e9', ref: 'R\u00e9f\u00e9rences', bib: 'Bibliographie', contents: 'Table des mati\u00e8res', listfigure: 'Table des figures', listtable: 'Liste des tableaux', appendix: 'Annexe', index: 'Index', proof: 'D\u00e9monstration', preface: 'Pr\u00e9face', glossary: 'Glossaire' },
     pt: { figure: 'Figura', table: 'Tabela', abstract: 'Resumo', ref: 'Refer\u00eancias', bib: 'Bibliografia', contents: '\u00cdndice', listfigure: 'Lista de Figuras', listtable: 'Lista de Tabelas', appendix: 'Ap\u00eandice', index: '\u00cdndice Remissivo', proof: 'Demonstra\u00e7\u00e3o', preface: 'Pref\u00e1cio', glossary: 'Gloss\u00e1rio' },
+    // (the languages of 2026-10-29, their babel-<lang>.ini [captions] of the pinned image, TeX Live 2025: Dutch's ĳ, which its
+    // ini and dutch.ldf (\\ij) write as the one character U+0133, as "ij", its compatibility decomposition (NFKC), the two letters
+    // Dutch is written in and every served face holds (Erewhon has no U+0133); Polish's glossary, which its ini leaves the English
+    // "Glossary", polish.ldf's "Słowniczek")
+    it: { figure: 'Figura', table: 'Tabella', abstract: 'Sommario', ref: 'Riferimenti bibliografici', bib: 'Bibliografia', contents: 'Indice', listfigure: 'Elenco delle figure', listtable: 'Elenco delle tabelle', appendix: 'Appendice', index: 'Indice analitico', proof: 'Dimostrazione', preface: 'Prefazione', glossary: 'Glossario' },
+    nl: { figure: 'Figuur', table: 'Tabel', abstract: 'Samenvatting', ref: 'Referenties', bib: 'Bibliografie', contents: 'Inhoudsopgave', listfigure: 'L\u0133st van figuren'.normalize('NFKC'), listtable: 'L\u0133st van tabellen'.normalize('NFKC'), appendix: 'B\u0133lage'.normalize('NFKC'), index: 'Index', proof: 'Bew\u0133s'.normalize('NFKC'), preface: 'Voorwoord', glossary: 'Verklarende Woordenl\u0133st'.normalize('NFKC') },
+    pl: { figure: 'Rysunek', table: 'Tablica', abstract: 'Streszczenie', ref: 'Literatura', bib: 'Bibliografia', contents: 'Spis treści', listfigure: 'Spis rysunków', listtable: 'Spis tablic', appendix: 'Dodatek', index: 'Indeks', proof: 'Dowód', preface: 'Przedmowa', glossary: 'Słowniczek' },
+    tr: { figure: 'Şekil', table: 'Tablo', abstract: 'Özet', ref: 'Kaynaklar', bib: 'Kaynakça', contents: 'İçindekiler', listfigure: 'Şekil Listesi', listtable: 'Tablo Listesi', appendix: 'Ek', index: 'Dizin', proof: 'İspat', preface: 'Önsöz', glossary: 'Sözlükçe' },
+    id: { figure: 'Gambar', table: 'Tabel', abstract: 'Ringkasan', ref: 'Pustaka', bib: 'Bibliografi', contents: 'Daftar Isi', listfigure: 'Daftar Gambar', listtable: 'Daftar Tabel', appendix: 'Lampiran', index: 'Indeks', proof: 'Bukti', preface: 'Pendahuluan', glossary: 'Daftar Istilah' },
+    ms: { figure: 'Gambar', table: 'Jadual', abstract: 'Abstrak', ref: 'Rujukan', bib: 'Bibliografi', contents: 'Kandungan', listfigure: 'Senarai Gambar', listtable: 'Senarai Jadual', appendix: 'Lampiran', index: 'Indeks', proof: 'Bukti', preface: 'Prakata', glossary: 'Istilah' },
+    cs: { figure: 'Obrázek', table: 'Tabulka', abstract: 'Abstrakt', ref: 'Reference', bib: 'Literatura', contents: 'Obsah', listfigure: 'Seznam obrázků', listtable: 'Seznam tabulek', appendix: 'Příloha', index: 'Rejstřík', proof: 'Důkaz', preface: 'Předmluva', glossary: 'Slovník' },
+    sv: { figure: 'Figur', table: 'Tabell', abstract: 'Sammanfattning', ref: 'Referenser', bib: 'Litteraturförteckning', contents: 'Innehåll', listfigure: 'Figurer', listtable: 'Tabeller', appendix: 'Bilaga', index: 'Sakregister', proof: 'Bevis', preface: 'Förord', glossary: 'Ordlista' },
+    uk: { figure: 'Рис.', table: 'Табл.', abstract: 'Анотація', ref: 'Література', bib: 'Бібліоґрафія', contents: 'Зміст', listfigure: 'Перелік ілюстрацій', listtable: 'Перелік таблиць', appendix: 'Додаток', index: 'Покажчик', proof: 'Доведення', preface: 'Вступ', glossary: 'Словник термінів' },
+    bg: { figure: 'Фигура', table: 'Таблица', abstract: 'Абстракт', ref: 'Литература', bib: 'Библиография', contents: 'Съдържание', listfigure: 'Списък на фигурите', listtable: 'Списък на таблиците', appendix: 'Приложение', index: 'Азбучен указател', proof: 'Доказателство', preface: 'Предговор', glossary: 'Притурка' },
     ru: { figure: '\u0420\u0438\u0441.', table: '\u0422\u0430\u0431\u043b\u0438\u0446\u0430', abstract: '\u0410\u043d\u043d\u043e\u0442\u0430\u0446\u0438\u044f', ref: '\u0421\u043f\u0438\u0441\u043e\u043a \u043b\u0438\u0442\u0435\u0440\u0430\u0442\u0443\u0440\u044b', bib: '\u041b\u0438\u0442\u0435\u0440\u0430\u0442\u0443\u0440\u0430', contents: '\u0421\u043e\u0434\u0435\u0440\u0436\u0430\u043d\u0438\u0435', listfigure: '\u0421\u043f\u0438\u0441\u043e\u043a \u0438\u043b\u043b\u044e\u0441\u0442\u0440\u0430\u0446\u0438\u0439', listtable: '\u0421\u043f\u0438\u0441\u043e\u043a \u0442\u0430\u0431\u043b\u0438\u0446', appendix: '\u041f\u0440\u0438\u043b\u043e\u0436\u0435\u043d\u0438\u0435', index: '\u041f\u0440\u0435\u0434\u043c\u0435\u0442\u043d\u044b\u0439 \u0443\u043a\u0430\u0437\u0430\u0442\u0435\u043b\u044c', proof: '\u0414\u043e\u043a\u0430\u0437\u0430\u0442\u0435\u043b\u044c\u0441\u0442\u0432\u043e', preface: '\u041f\u0440\u0435\u0434\u0438\u0441\u043b\u043e\u0432\u0438\u0435', glossary: '\u0421\u043b\u043e\u0432\u0430\u0440\u044c \u0442\u0435\u0440\u043c\u0438\u043d\u043e\u0432' },
   } as Record<string, Record<string, string>>
 
@@ -298,7 +368,7 @@ describe('the labels: babel 26.12\'s [captions], the floats\' and the generated 
     expect(resolveRules(BUILTIN_RULES, 'ru').labels!.figure).toBe('\u0420\u0438\u0441.')
   })
 
-  it('the built-in set holds exactly babel\'s names: the tags as they were, pt kept as a language of the wave', () => {
+  it('the built-in set holds exactly babel\'s names: the tags as they were, pt and the ten of 2026-10-29 as languages of the wave', () => {
     const held = Object.fromEntries(Object.entries(BUILTIN_RULES.languages).map(([tag, l]) => [tag === 'zh-TW' ? 'zh-Hant' : tag, l.labels]))
     expect(held).toEqual(BABEL)
   })
@@ -391,8 +461,15 @@ describe('the refusals of a set (parseRules), each naming its field', () => {
     ['schema 1 (a set before D6)', s => { s.schema = 1 }, 'schema'],
     ['schema 2 (a set before D1a)', s => { s.schema = 2 }, 'schema'],
     ['schema 3 (a set before 1b-C)', s => { s.schema = 3 }, 'schema'],
-    ['schema not 4', s => { s.schema = 5 }, 'schema'],
-    ['schema a string', s => { s.schema = '4' }, 'schema'],
+    ['schema 4 (a set before fillLeadRel)', s => { s.schema = 4 }, 'schema'],
+    ['schema 5 (a set whose CJK faces name light designs and a Kai)', s => { s.schema = 5 }, 'schema'],
+    ['schema 6 (a set before evenPitch and keepAlign)', s => { s.schema = 6 }, 'schema'],
+    ['schema 7 (a set before French, Spanish and Portuguese patterns)', s => { s.schema = 7 }, 'schema'],
+    ['schema 8 (a set before the languages of 2026-10-29 and cyrillicPatterns)', s => { s.schema = 8 }, 'schema'],
+    ['schema 9 (a set with the switches schema 10 took out)', s => { s.schema = 9 }, 'schema'],
+    ['a switch schema 10 took out', s => { s.scripts.Hans.leadRel = false }, 'scripts.Hans.leadRel'],
+    ['schema not 10', s => { s.schema = 11 }, 'schema'],
+    ['schema a string', s => { s.schema = '9' }, 'schema'],
     ['labels without a heading\'s name (a schema-2 set\'s labels)', s => { s.languages.de.labels = { figure: 'Abbildung', table: 'Tabelle' } }, 'languages.de.labels.abstract'],
     ['version 0', s => { s.version = 0 }, 'version'],
     ['version not an integer', s => { s.version = 1.5 }, 'version'],
@@ -407,14 +484,17 @@ describe('the refusals of a set (parseRules), each naming its field', () => {
     ['floor under its range', s => { s.scripts.Jpan.floor = 0.39 }, 'scripts.Jpan.floor'],
     ['borrowGap over its range', s => { s.scripts.Kore.borrowGap = 2.5 }, 'scripts.Kore.borrowGap'],
     ['trackMin above zero', s => { s.scripts.Latn.trackMin = 0.1 }, 'scripts.Latn.trackMin'],
-    ['trackStart out of range', s => { s.scripts.Latn.trackStart = 1 }, 'scripts.Latn.trackStart'],
     ['a number that is not finite (Infinity)', s => { s.scripts.Hans.spaceMax = Number.POSITIVE_INFINITY }, 'scripts.Hans.spaceMax'],
     ['a number that is not a number (NaN)', s => { s.scripts.Hans.spaceMax = Number.NaN }, 'scripts.Hans.spaceMax'],
     ['a number given as a string', s => { s.scripts.Hans.step = '0.025' }, 'scripts.Hans.step'],
-    ['a boolean given as a number', s => { s.scripts.Hans.leadRel = 0 }, 'scripts.Hans.leadRel'],
+    ['a boolean given as a number', s => { s.scripts.Hans.keepAll = 0 }, 'scripts.Hans.keepAll'],
     ['grid out of its values', s => { s.scripts.Hans.grid = 2 }, 'scripts.Hans.grid'],
     ['compressMax out of its values', s => { s.scripts.Hans.compressMax = 3 }, 'scripts.Hans.compressMax'],
-    ['latinPatterns out of its values', s => { s.languages.de.latinPatterns = 'fr' }, 'languages.de.latinPatterns'],
+    ['latinPatterns out of its values', s => { s.languages.de.latinPatterns = 'xx' }, 'languages.de.latinPatterns'],
+    // (a Cyrillic language's patterns are no Latin word's, nor a Latin one's a Cyrillic word's)
+    ['latinPatterns a Cyrillic language\'s', s => { s.languages.de.latinPatterns = 'uk' }, 'languages.de.latinPatterns'],
+    ['cyrillicPatterns a Latin language\'s', s => { s.languages.uk.cyrillicPatterns = 'de' }, 'languages.uk.cyrillicPatterns'],
+    ['cyrillicPatterns missing from a script', s => { delete s.scripts.Cyrl.cyrillicPatterns }, 'scripts.Cyrl.cyrillicPatterns'],
     ['an adaptive-fill band out of range', s => { s.scripts.Hans.adaptiveFill.band = 0.6 }, 'scripts.Hans.adaptiveFill.band'],
     ['a minimum word that is not an integer', s => { s.hyphenation.minWord = 5.5 }, 'hyphenation.minWord'],
     ['a hyphenation side of zero', s => { s.hyphenation.en.left = 0 }, 'hyphenation.en.left'],
@@ -422,7 +502,8 @@ describe('the refusals of a set (parseRules), each naming its field', () => {
     ['order that repeats a knob', s => { s.scripts.Hans.order = ['track', 'track', 'lead', 'shrink'] }, 'scripts.Hans.order'],
     ['order missing a knob', s => { s.scripts.Hans.order = ['track', 'borrow', 'lead'] }, 'scripts.Hans.order'],
     ['order with a knob that is none', s => { s.scripts.Hans.order = ['track', 'borrow', 'lead', 'grow'] }, 'scripts.Hans.order.3'],
-    ['further out of order', s => { s.scripts.Hans.further = ['flow', 'widen'] }, 'scripts.Hans.further'],
+    ['further out of order', s => { s.scripts.Hans.further = ['shrink', 'widen'] }, 'scripts.Hans.further'],
+    ['further with a step schema 10 took out', s => { s.scripts.Hans.further = ['widen', 'flow', 'shrink'] }, 'scripts.Hans.further.1'],
     ['further repeating a step', s => { s.scripts.Hans.further = ['widen', 'widen'] }, 'scripts.Hans.further'],
     ['further naming a step that is none', s => { s.scripts.Hans.further = ['widen', 'hang'] }, 'scripts.Hans.further.1'],
     // the strings: no control, no bidirectional control, bounded
@@ -452,17 +533,19 @@ describe('the refusals of a set (parseRules), each naming its field', () => {
     // the cross-checks against the face catalog and the targets
     ['a CJK group that is no group of the catalog', s => { s.scripts.Hans.cjkFaces.group = 'comic-sans' }, 'scripts.Hans.cjkFaces.group'],
     ['a CJK group of a Latin family', s => { s.scripts.Hans.cjkFaces.group = 'lm-roman' }, 'scripts.Hans.cjkFaces.group'],
-    ['a Kai that is no face of the catalog', s => { s.scripts.Hans.cjkFaces.kai = 'comic-sans' }, 'scripts.Hans.cjkFaces.kai'],
-    ['a light design that is none of the role table\'s', s => { s.scripts.Hans.cjkFaces.light = ['cm', 'comic'] }, 'scripts.Hans.cjkFaces.light.1'],
-    ['a CJK group in a language that is no group', s => { s.languages.ja.cjkFaces = { group: 'nope', kai: null, light: [] } }, 'languages.ja.cjkFaces.group'],
+    // (schema 6: a CJK family is its group alone; the light designs and the Kai of schema 5 are members no more)
+    ['a Kai, a member of schema 5', s => { s.scripts.Hans.cjkFaces.kai = 'fandolkai' }, 'scripts.Hans.cjkFaces.kai'],
+    ['light designs, a member of schema 5', s => { s.scripts.Hans.cjkFaces.light = ['cm', 'garamond'] }, 'scripts.Hans.cjkFaces.light'],
+    ['a CJK group of a weight short of the roles\' (a Kai is one face, no group)', s => { s.scripts.Hans.cjkFaces.group = 'fandolkai' }, 'scripts.Hans.cjkFaces.group'],
+    ['a CJK group in a language that is no group', s => { s.languages.ja.cjkFaces = { group: 'nope' } }, 'languages.ja.cjkFaces.group'],
     ['a CJK script without its CJK faces', s => { s.scripts.Kore.cjkFaces = null }, 'scripts.Kore.cjkFaces'],
     ['a CJK language without its CJK faces', s => { s.languages.zh.cjkFaces = null }, 'languages.zh.cjkFaces'],
     // an alphabetic script, and a language of one, takes no CJK faces: firstFaceOf('de', set) can never be a CJK face
-    ['a Latin script with CJK faces', s => { s.scripts.Latn.cjkFaces = { group: 'shs-sc', kai: null, light: [] } }, 'scripts.Latn.cjkFaces'],
-    ['a Cyrillic script with CJK faces', s => { s.scripts.Cyrl.cjkFaces = { group: 'haranoaji', kai: null, light: ['cm'] } }, 'scripts.Cyrl.cjkFaces'],
-    ['a language of the Latin script with CJK faces', s => { s.languages.de.cjkFaces = { group: 'shs-sc', kai: 'fandolkai', light: [] } }, 'languages.de.cjkFaces'],
-    ['a language of the Cyrillic script with CJK faces', s => { s.languages.ru.cjkFaces = { group: 'shs-k', kai: null, light: [] } }, 'languages.ru.cjkFaces'],
-    ['a language of the Latin script (Serbian in Latin) with CJK faces', s => { s.languages['sr-Latn'] = { labels: null, cjkFaces: { group: 'shs-sc', kai: null, light: [] } } }, 'languages.sr-Latn.cjkFaces'],
+    ['a Latin script with CJK faces', s => { s.scripts.Latn.cjkFaces = { group: 'shs-sc' } }, 'scripts.Latn.cjkFaces'],
+    ['a Cyrillic script with CJK faces', s => { s.scripts.Cyrl.cjkFaces = { group: 'haranoaji' } }, 'scripts.Cyrl.cjkFaces'],
+    ['a language of the Latin script with CJK faces', s => { s.languages.de.cjkFaces = { group: 'shs-sc' } }, 'languages.de.cjkFaces'],
+    ['a language of the Cyrillic script with CJK faces', s => { s.languages.ru.cjkFaces = { group: 'shs-k' } }, 'languages.ru.cjkFaces'],
+    ['a language of the Latin script (Serbian in Latin) with CJK faces', s => { s.languages['sr-Latn'] = { labels: null, cjkFaces: { group: 'shs-sc' } } }, 'languages.sr-Latn.cjkFaces'],
     // every language is a tag with rules: its script is one of the set's (a set read is refused here, not when a target is resolved)
     ['a language no script is known for', s => { s.languages.xx = { labels: null } }, 'languages.xx'],
     ['a language of Arabic script', s => { s.languages.ar = { labels: null } }, 'languages.ar'],
@@ -498,7 +581,7 @@ describe('the refusals of a set (parseRules), each naming its field', () => {
     expect(Object.keys(set.languages)).toEqual(expect.arrayContaining(wave))
     for (const t of wave) expect(resolveRules(set, t).script, t).toBe(scriptOf(t))
     // (a CJK language may name its own CJK faces; an alphabetic one may only say none)
-    expect(() => parseRules(v1(s => { s.languages['zh-Hant-HK'] = { labels: null, cjkFaces: { group: 'shs-tc', kai: 'bkai00mp', light: ['cm'] } } }))).not.toThrow()
+    expect(() => parseRules(v1(s => { s.languages['zh-Hant-HK'] = { labels: null, cjkFaces: { group: 'shs-tc' } } }))).not.toThrow()
     expect(() => parseRules(v1(s => { s.languages.de.cjkFaces = null }))).not.toThrow()
   })
 
@@ -524,7 +607,7 @@ describe('the refusals of a set (parseRules), each naming its field', () => {
     expect(refusal(v1(s => { s.scripts.Hans.leadBase = '1.3' })).why).toBe('number, not string')
     expect(refusal(v1(s => { s.scripts.Hans.leadBase = null })).why).toBe('number, not null')
     expect(refusal(v1(s => { s.scripts.Hans.leadBase = [1.3] })).why).toBe('number, not array')
-    expect(refusal(v1(s => { s.scripts.Hans.leadRel = 0 })).why).toBe('boolean, not number')
+    expect(refusal(v1(s => { s.scripts.Hans.keepAll = 0 })).why).toBe('boolean, not number')
     expect(refusal(v1(s => { s.scripts.Hans.spaceMax = Number.NaN })).why).toBe('number, not NaN')
     expect(refusal(v1(s => { s.scripts.Hans.noStart = 7 })).why).toBe('string, not number')
     expect(refusal(v1(s => { delete s.scripts.Hans.leadBase })).why).toBe('number missing')
@@ -581,7 +664,7 @@ describe('the fields the lab shows (RULES_FIELDS)', () => {
     const script = RULES_FIELDS.filter(f => f.scope === 'script').map(f => f.path)
     expect(script).toEqual(Object.keys(V1.scripts.Hans))
     expect(RULES_FIELDS.filter(f => f.scope === 'language').map(f => f.path)).toEqual(['labels'])
-    expect(RULES_FIELDS.filter(f => f.scope === 'set').map(f => f.path)).toEqual(['hyphenation.minWord', 'hyphenation.en.left', 'hyphenation.en.right', 'hyphenation.de.left', 'hyphenation.de.right'])
+    expect(RULES_FIELDS.filter(f => f.scope === 'set').map(f => f.path)).toEqual(['hyphenation.minWord', ...['en', 'de', 'fr', 'es', 'pt', 'it', 'nl', 'pl', 'tr', 'id', 'cs', 'sv', 'uk', 'bg'].flatMap(l => [`hyphenation.${l}.left`, `hyphenation.${l}.right`])])
     for (const f of RULES_FIELDS) {
       expect(f.words.length, f.path).toBeGreaterThan(10)
       expect(['fit', 'breaking', 'cells', 'faces', 'labels', 'hyphenation'], f.path).toContain(f.group)
@@ -606,8 +689,8 @@ describe('the fields the lab shows (RULES_FIELDS)', () => {
   it('the enumerations name the values the schema reads', () => {
     const by = Object.fromEntries(RULES_FIELDS.map(f => [f.path, f]))
     expect(by.order!.values).toEqual(['track', 'borrow', 'lead', 'shrink'])
-    expect(by.further!.values).toEqual(['widen', 'flow', 'shrink'])
-    for (const [path, ok] of [['leftover', ['foot', 'pack']], ['compressMax', [0, 1, 2]], ['even', [0, 1, 2]], ['hyphen', [0, 1]], ['borrow', [0, 1]], ['latinPatterns', ['en', 'de']]] as const) {
+    expect(by.further!.values).toEqual(['widen', 'shrink'])
+    for (const [path, ok] of [['compressMax', [0, 1, 2]], ['hyphen', [0, 1]], ['borrow', [0, 1]], ['latinPatterns', ['en', 'de', 'fr', 'es', 'pt', 'it', 'nl', 'pl', 'tr', 'id', 'cs', 'sv']], ['cyrillicPatterns', ['ru', 'uk', 'bg']]] as const) {
       expect(by[path]!.values, path).toEqual(ok)
       for (const v of ok) expect(() => parseRules(v1(s => { s.scripts.Hans[path] = v })), `${path} = ${v}`).not.toThrow()
     }
@@ -655,7 +738,7 @@ describe('writing a set (writeRules)', () => {
 })
 
 describe('the face a host asks for first (firstFaceOf)', () => {
-  it('is the set\'s CJK body for a CJK target (light beside the families the set names), and none for an alphabet', async () => {
+  it('is the set\'s CJK body for a CJK target (its Regular, beside every family), and none for an alphabet', async () => {
     const { firstFaceOf } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
     const { OPEN_FAMILY } = await import('@/pdf-reader/engine/layer-proto/fonts.mjs')
     expect(OPEN_FAMILY).toBe('times')
@@ -667,24 +750,21 @@ describe('the face a host asks for first (firstFaceOf)', () => {
     expect(firstFaceOf('ja')).toBe('haranoaji-regular')
     expect(firstFaceOf('ko')).toBe('shs-k-regular')
     for (const t of ['de', 'fr', 'es', 'ru']) expect(firstFaceOf(t), t).toBeNull()
-    // (a set that says light beside Times: the first face is the light one, and Hant\'s is untouched)
-    const set = parseRules(v1(s => { s.scripts.Hans.cjkFaces.light = ['times'] }))
-    expect(firstFaceOf('zh', set)).toBe('shs-sc-light')
-    expect(firstFaceOf('zh-TW', set)).toBe('shs-tc-regular')
-    // (and a set that gives a language another family)
-    const other = parseRules(v1(s => { s.languages.zh.cjkFaces = { group: 'shs-tc', kai: null, light: [] } }))
-    expect(firstFaceOf('zh', other)).toBe('shs-tc-regular')
-    expect(() => firstFaceOf('xx', set)).toThrow(RulesRefusal)
+    // (a set that gives a language another family: its Regular, and Hant's is untouched)
+    const other = parseRules(v1(s => { s.languages.zh.cjkFaces = { group: 'shs-k' } }))
+    expect(firstFaceOf('zh', other)).toBe('shs-k-regular')
+    expect(firstFaceOf('zh-TW', other)).toBe('shs-tc-regular')
+    expect(() => firstFaceOf('xx', other)).toThrow(RulesRefusal)
   })
 })
 
 describe('the catalog the set\'s faces are checked against', () => {
-  it('holds the CJK groups the built-in set names, each in all four weights, and the Kais', () => {
+  it('holds the CJK groups the built-in set names, each in the two weights its roles take, and none of the weights gone', () => {
     for (const script of ['Hans', 'Hant', 'Jpan', 'Kore'] as const) {
-      const { group, kai, light } = BUILTIN_RULES.scripts[script].cjkFaces!
-      for (const w of ['light', 'regular', 'semibold', 'bold']) expect(Object.hasOwn(FACES, `${group}-${w}`), `${group}-${w}`).toBe(true)
-      if (kai) expect(Object.hasOwn(FACES, kai), kai).toBe(true)
-      for (const d of light) expect(ENGLISH_FAMILIES, d).toContain(d)
+      const { group } = BUILTIN_RULES.scripts[script].cjkFaces!
+      for (const w of ['regular', 'bold']) expect(Object.hasOwn(FACES, `${group}-${w}`), `${group}-${w}`).toBe(true)
+      // (the Light and SemiBold the ruling of 2026-10-29 retired: no role draws them, so the catalog serves none)
+      for (const w of ['light', 'semibold']) expect(Object.hasOwn(FACES, `${group}-${w}`), `${group}-${w}`).toBe(false)
     }
   })
 })

@@ -2,21 +2,21 @@
 // repository's build loaded (the reader is its page pdf-reader.html, src/entrypoints/pdf-reader), and the reader's
 // address in it. The reader translates through that build's background, with its default settings unless
 // a spike changes them. Build first: `pnpm build` at the repository root.
-import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { chromiumOptions } from './chromium.mjs'
 
 const REPO = new URL('../../../', import.meta.url).pathname
 const { chromium } = createRequire(REPO)('playwright')
 export const BUILD = join(REPO, '.output/chrome-mv3')
 /**
- * The features Playwright turns off (its chromiumSwitches.ts, 1.63), save one: storage partitioning, which a reader's
- * Chrome has on. A later --disable-features replaces Playwright's list. Left off, the TeX page framed by the reader over
- * arXiv's PDF page shared the cache of the one framed by an extension page, which in Chrome it does not (measured in
- * Chrome 145, 153 and 154: the warm-up's report)
+ * The launch: chromium.mjs's options, storage partitioning left on (`partitioned`), which a reader's Chrome has on and
+ * Playwright turns off. Left off, the TeX page framed by the reader over arXiv's PDF page shared the cache of the one framed by
+ * an extension page, which in Chrome it does not (measured in Chrome 145, 153 and 154: the warm-up's report)
  */
-const PLAYWRIGHT_OFF = ['AvoidUnnecessaryBeforeUnloadCheckSync', 'DestroyProfileOnBrowserClose', 'DialMediaRouteProvider', 'GlobalMediaControls', 'HttpsUpgrades', 'LensOverlay', 'MediaRouter', 'PaintHolding', 'BlockOriginHeaderModificationOnRedirect', 'Translate', 'AutoDeElevate', 'OptimizationHints']
+const PARTITIONED = { partitioned: true }
 
 /**
  * { context, worker, id, readerUrl(query) }: `profile` names the temporary profile's directory, `extension` another
@@ -25,11 +25,19 @@ const PLAYWRIGHT_OFF = ['AvoidUnnecessaryBeforeUnloadCheckSync', 'DestroyProfile
  * a temporary copy of the build, for the spikes that open them — a build never holds them, since arXiv's papers may not
  * be redistributed (Codex on #296).
  *
+ * `topLevel` (true unless said otherwise): a copy whose manifest lets the reader's address open as a page of its own, as a
+ * release build's does not (above). `AXT_CHROME` in the environment runs another Chrome binary instead of Playwright's
+ * (the extension's floor, Chrome 131). `language`: the interface language the extension is read in, whatever the machine's
+ * (chromium.mjs's `language`), for a suite that finds its controls and sentences by their words in one language.
+ *
+ * `backForwardCache`: the browser's back-forward cache on, as a reader's Chrome has it (Playwright launches Chromium with
+ * `--disable-back-forward-cache`, so that a page left is never restored from it).
+ *
  * Both temporary directories go when the context closes: a copy of the build and a profile a run, never removed, once
  * filled the disk (25 GiB). `context.close()` removes them once the browser has exited; a context that closes on its
  * own (the browser crashing, a headed window shut) removes them from its `close` event
  */
-export async function launchWithReader({ profile = 'reader', extension = BUILD, demos = false, headless = true, viewport = { width: 1600, height: 1000 }, deviceScaleFactor, args = [], languages = null } = {}) {
+export async function launchWithReader({ profile = 'reader', extension = BUILD, demos = false, topLevel = true, headless = true, viewport = { width: 1600, height: 1000 }, deviceScaleFactor, args = [], languages = null, backForwardCache = false, language = null } = {}) {
   if (!existsSync(join(extension, 'pdf-reader.html'))) throw new Error(`no reader in ${extension}: \`pnpm build\` at the repository root`)
   const temporary = []
   const removeTemporary = () => {
@@ -37,13 +45,20 @@ export async function launchWithReader({ profile = 'reader', extension = BUILD, 
       try { rmSync(dir, { recursive: true, force: true, maxRetries: 3 }) } catch (e) { console.warn(`could not remove ${dir}: ${e.message}`) }
     }
   }
-  if (demos) {
-    const papers = new URL('../../../lab/pdf/poc-reader/papers', import.meta.url).pathname
-    if (!existsSync(papers)) throw new Error('no demo papers: node lab/pdf/spikes/reader-papers.mjs first')
-    const copy = mkdtempSync(join(tmpdir(), 'reader-demos-'))
+  // A release build's reader acts only in a frame its PDF page made (src/entrypoints/pdf-reader/main.tsx): the spikes and
+  // the checks that open the reader's address as a page of its own run a copy whose manifest lets them (`topLevel`, the
+  // key TOP_LEVEL_READER_KEY there); `topLevel: false` runs the build as it ships
+  const papers = new URL('../../../lab/pdf/poc-reader/papers', import.meta.url).pathname
+  if (demos && !existsSync(papers)) throw new Error('no demo papers: node lab/pdf/spikes/reader-papers.mjs first')
+  if (demos || topLevel) {
+    const copy = mkdtempSync(join(tmpdir(), 'reader-build-'))
     temporary.push(copy)
     cpSync(extension, copy, { recursive: true })
-    cpSync(papers, join(copy, 'pdf-reader/papers'), { recursive: true })
+    if (demos) cpSync(papers, join(copy, 'pdf-reader/papers'), { recursive: true })
+    if (topLevel) {
+      const manifest = JSON.parse(readFileSync(join(copy, 'manifest.json'), 'utf8'))
+      writeFileSync(join(copy, 'manifest.json'), JSON.stringify({ ...manifest, axt_top_level_reader: true }, null, 2))
+    }
     extension = copy
   }
   const profileDir = mkdtempSync(join(tmpdir(), `${profile}-`))
@@ -54,7 +69,8 @@ export async function launchWithReader({ profile = 'reader', extension = BUILD, 
   }
   let context
   try {
-    context = await chromium.launchPersistentContext(profileDir, { channel: 'chromium', headless, viewport, ...(deviceScaleFactor ? { deviceScaleFactor } : {}), args: [`--disable-features=${PLAYWRIGHT_OFF.join(',')}`, `--disable-extensions-except=${extension}`, `--load-extension=${extension}`, ...args] })
+    // (AXT_CHROME: another Chrome, the floor's for one, as the other suites take it)
+    context = await chromium.launchPersistentContext(profileDir, chromiumOptions({ ...(process.env.AXT_CHROME ? { executablePath: process.env.AXT_CHROME } : { channel: 'chromium' }), ...(backForwardCache ? { ignoreDefaultArgs: ['--disable-back-forward-cache'] } : {}), headless, viewport, ...(deviceScaleFactor ? { deviceScaleFactor } : {}), args: [`--disable-extensions-except=${extension}`, `--load-extension=${extension}`, ...args] }, { ...PARTITIONED, language }))
   } catch (e) {
     removeTemporary()
     throw e
@@ -69,6 +85,13 @@ export async function launchWithReader({ profile = 'reader', extension = BUILD, 
   }
   context.once('close', () => { if (!closing) removeTemporary() })
   const worker = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker'))
+  // (the browser's own interface language, which the worker keeps, beside the one stated: where they differ, a page closed can
+  // leave its sibling extension pages in the browser's own and a reader page reload itself (chromium.mjs): said, so that a run on
+  // such a machine knows its world is not the one stated)
+  if (language) {
+    const own = await worker.evaluate(() => chrome.i18n.getUILanguage()).catch(() => null)
+    if (own && own !== language) console.log(`NOTE the browser's own interface language is ${own}, the pages' ${language}: a page closed can leave its sibling extension pages in ${own} (tests/e2e/lib/chromium.mjs)`)
+  }
   const id = new URL(worker.url()).host, base = `chrome-extension://${id}/pdf-reader.html`
   return { context, worker, id, readerUrl: query => `${base}?${typeof query === 'string' ? query : new URLSearchParams(query)}` }
 }

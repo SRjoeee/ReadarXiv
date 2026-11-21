@@ -1,0 +1,12 @@
+% An included figure whose fonts carry a /ToUnicode (pdfTeX's \pdfgentounicode): figures.tex includes its PDF. Ours, CC0
+\documentclass[border=4pt]{standalone}
+\input{glyphtounicode}
+\pdfgentounicode=1
+\usepackage{tikz}
+\begin{document}
+\begin{tikzpicture}
+\draw (0,0) rectangle (5,2);
+\node at (2.5,1.3) {Signal strength};
+\node at (2.5,0.6) {Noise floor};
+\end{tikzpicture}
+\end{document}

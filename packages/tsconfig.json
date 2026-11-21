@@ -1,0 +1,26 @@
+{
+  "files": [],
+  "references": [
+    {
+      "path": "./format"
+    },
+    {
+      "path": "./text"
+    },
+    {
+      "path": "./ui"
+    },
+    {
+      "path": "./engine"
+    },
+    {
+      "path": "./typeset"
+    },
+    {
+      "path": "./translate"
+    },
+    {
+      "path": "./reader"
+    }
+  ]
+}

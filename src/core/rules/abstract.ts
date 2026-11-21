@@ -2,8 +2,7 @@
 // full text is translated; this is another page and another matter: recognising “where the HTML version is”, so the
 // bilingual entry can be placed beside it (issue #146).
 //
-// Kept apart from latexml.ts: that file exports RULES_VERSION, which enters the cache key, and a changed abstract-page
-// selector must not invalidate the whole site's cache.
+// Kept apart from latexml.ts: that file is the full text's rules, and the abstract page is another page.
 
 /**
  * The link on the abstract page that points at the HTML full text.

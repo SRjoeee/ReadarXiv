@@ -22,7 +22,7 @@
 // more than MAX_GLYPHS glyph points is not carried, the glyph points are found through a grid (not links x points), and the
 // freeze spends at most WORK_MAX point-against-operation comparisons, dropping what is left as `unplaced`.
 
-import { isMemoryError } from '../pipeline/memory.mjs'
+import { isMemoryError } from '@readarxiv/engine'
 
 /** the schemes a record's `url` may have (the contract's allow-list: PDF.js also lets ftp: and tel: through) */
 export const LINK_SCHEMES = ['http:', 'https:', 'mailto:']
@@ -202,9 +202,9 @@ export function annotsOf(raw, points, points2 = null) {
 }
 
 /**
- * The erased area of a page as a question: whether a point (device pixels) lies where the drawing's operations (a page record's
- * `ops`, device pixels [x, y, w, h]) left the paper erased at the end. In their order: an erase, paper or swap rectangle erases;
- * a restore puts the page's pixels back in each of its boxes within its clip; a crop erases nothing
+ * The hidden area of a page as a question: whether a point (device pixels) lies where the drawing's operations (a page record's
+ * `ops`, device pixels [x, y, w, h]) left the original's ink hidden at the end. In their order: a unit's hidden rectangles hide; a
+ * paste shows the page's ink again in its rectangles; a crop hides nothing
  */
 export function erasedOf(ops) {
   const list = ops ?? []
@@ -212,9 +212,8 @@ export function erasedOf(ops) {
   return (x, y) => {
     let erased = false
     for (const o of list) {
-      if (o.op === 'erase') { if (within(x, y, o.box)) erased = true }
-      else if (o.op === 'paper' || o.op === 'swap') { if (o.rects.some(b => within(x, y, b))) erased = true }
-      else if (o.op === 'restore') { if (o.boxes.some(b => within(x, y, b)) && o.clip.some(b => within(x, y, b))) erased = false }
+      if (o.op === 'hidden') { if (o.rects.some(b => within(x, y, b))) erased = true }
+      else if (o.op === 'paste') { if (o.rects.some(b => within(x, y, b))) erased = false }
     }
     return erased
   }
@@ -354,6 +353,9 @@ const within = (x, y, s) => x >= s[1] - 0.5 && x <= s[3] + 0.5 && y >= s[5] - 0.
  *  3. url: against its drawn `\url` and `\href` pieces and `\href` pairs of the same url that took none of it
  *  4. order, by kind: a footnote's mark against its drawn marks, another destination against its references and `\hyperref`
  *     or `\hyperlink` pairs, that took none of their kind.
+ *  5. whole: the annotations of one target no tier took that hold, together, every one of the unit's own characters the
+ *     drawing replaces (`own` of its `whole` target: a link round the unit's whole text, a contents entry's title, whose unit
+ *     has no piece to take it), all to the unit's drawing; two targets that both do, none of them (`ambiguous`).
  * In 2 to 4 the annotations (page, then PDF order: TeX set them in the source's order) and the pieces in the SOURCE's order
  * (`ord`, each piece's index in the unit's source, never the translation's order, which may set two of them the other way) are
  * paired in turn where they are as many, all to the one piece where there is one and they are of one target (a citation's
@@ -361,7 +363,7 @@ const within = (x, y, s) => x >= s[1] - 0.5 && x <= s[3] + 0.5 && y >= s[5] - 0.
  * no source index to order it by. `cands`: [{ q, a }] in page then PDF order; `targets`: [{ ord (its piece's index in the
  * source, or null), k | pair, kind, keys, url, name (a `\hyperlink`'s destination), single (its source names one target), gap
  * (Set of `page|item|k`) | null, segs ([page, x0, baseline, x1, top, bottom] ...) | null, draw ('text' | 'crop' | 'pair' |
- * null) }]; `budget` ({ left }): the tests it may spend, past which an annotation is `unplaced`. Returns { groups: [{ to:
+ * 'whole' | null), own (the whole target's: [{ key, page, x0, x1, yb }], or a function that makes it) }]; `budget` ({ left }): the tests it may spend, past which an annotation is `unplaced`. Returns { groups: [{ to:
  * target, annots: [{ q, a, tier }] }], tried: [{ q, i, why }] }
  */
 export function matchUnit({ cands, targets, budget = { left: WORK_MAX } }) {
@@ -421,6 +423,25 @@ export function matchUnit({ cands, targets, budget = { left: WORK_MAX } }) {
     // (a \hyperlink, which names its destination, is matched by it alone)
     assign(anns, drawn.filter(T => T.kind === kind && T.name === undefined && !tookOf(T, a => kindOfAnnot(a) === kind)), 'order')
   }
+  // 5. whole: the annotations of one target that hold, together, every character of the unit's own the drawing replaces (its
+  // `own`, a list or the function that makes it, read only where an annotation is left: most units' are all taken above)
+  const whole = drawn.find(T => T.draw === 'whole')
+  const rest = whole ? left.filter(c => !done.has(c)) : []
+  if (rest.length && typeof whole.own === 'function') whole.own = whole.own()
+  if (rest.length && whole.own?.length) {
+    const byTarget = []
+    for (const c of rest) {
+      const g = byTarget.find(x => sameTarget(x[0].a, c.a))
+      if (g) g.push(c); else byTarget.push([c])
+    }
+    budget.left -= whole.own.length * byTarget.length
+    const holding = budget.left < 0 ? [] : byTarget.filter(g => {
+      const under = new Set(g.flatMap(c => (c.a.g2.key ?? []).map(key => `${c.q}|${key}`)))
+      return whole.own.every(ch => under.has(ch.key))
+    })
+    if (holding.length === 1) for (const c of holding[0]) add(whole, c, 'whole')
+    else for (const g of holding) for (const c of g) tried.push({ q: c.q, i: c.a.i, why: 'ambiguous' })
+  }
   return { groups: [...took].map(([to, annots]) => ({ to, annots })), tried }
 }
 
@@ -469,7 +490,7 @@ export function placeUnit({ groups, lines, edge, band, scale, budget = { left: W
     budget.left -= items * (annots.length + 1)
     if (budget.left < 0) { for (const c of annots) tried.push({ q: c.q, i: c.a.i, why: 'unplaced' }); continue }
     if (to.draw === 'crop') placeCrop(to, annots, lines, scale, records, tried)
-    else if (to.draw === 'pair') placePair(to, annots, lines, edge, band, records, tried, budget)
+    else if (to.draw === 'pair' || to.draw === 'whole') placePair(to, annots, lines, edge, band, records, tried, budget)
     else placeText(to, annots, lines, edge, band, records, tried, budget)
   }
   return { records, tried }
@@ -642,7 +663,7 @@ function placeCrop(to, annots, lines, scale, records, tried) {
       const { line, it } = x, r = it.t.crop, cr = r.crop
       if (c.q !== r.page || (first && line.page !== first.line.page)) continue
       const sx = it.w / (cr[2] - cr[0])
-      const X = v => it.x + (v - cr[0]) * sx, Y = y => line.baseline + (y - r.baseline) * scale
+      const X = v => it.x + (v - cr[0]) * sx, Y = y => line.baseline + (y - r.baseline) * (line.seg?.scale ?? scale)
       const drawn = [it.x, Y(cr[1]), it.x + it.w, Y(cr[3])]
       const had = box.length
       for (const ar of c.a.boxes?.length ? c.a.boxes : [c.a.rect]) {
@@ -666,7 +687,7 @@ function placePair(to, annots, lines, edge, band, records, tried, budget) {
       if (run.crop !== undefined) continue
       for (const [n, at] of run.items) {
         const t = line.items[n].t
-        if (t.space || t.crop || typeof t.s !== 'string' || t.st?.link !== to.pair) continue
+        if (t.space || t.crop || typeof t.s !== 'string' || (to.draw !== 'whole' && t.st?.link !== to.pair)) continue
         let o = at
         for (const ch of t.s) { D.push({ ch, li, run, at: o, end: o + ch.length, n }); o += ch.length }
       }
@@ -679,7 +700,39 @@ function placePair(to, annots, lines, edge, band, records, tried, budget) {
   if (budget.left < 0) { for (const c of annots) tried.push({ q: c.q, i: c.a.i, why: 'unplaced' }); return }
   const r = rangeRecord(D, lines, edge, band)
   if (!r) { for (const c of annots) tried.push({ q: c.q, i: c.a.i, why: 'unplaced' }); return }
-  records.push({ page: r.page, li: r.li, x: r.x, rec: recordOf(annots[0].a, r.boxes, r.name), sources: { annots: annots.map(c => [c.q, c.a.i]), tier: annots[0].tier } })
+  const kept = to.draw === 'whole' ? keptOf(to.own, annots, r.page) : null
+  const boxes = kept ? [...kept.before.flat(), ...r.boxes, ...kept.after.flat()] : r.boxes
+  const name = kept ? collapse(`${kept.beforeText} ${r.name} ${kept.afterText}`) : r.name
+  records.push({ page: r.page, li: r.li, x: r.x, rec: recordOf(annots[0].a, boxes, name), sources: { annots: annots.map(c => [c.q, c.a.i]), tier: annots[0].tier } })
+}
+
+/**
+ * What a link round a unit's whole text holds besides it on `page`, which stays where TeX set it (a contents entry's number,
+ * not the unit's: kept as the original's ink): of each of its boxes over the unit's own characters (`own`), the part before the
+ * first of them and the part after the last, each where a glyph point of the annotation's stands there, with those glyphs'
+ * text. The record keeps them beside the drawing, so that the number links on the translated page as on the original
+ */
+function keptOf(own, annots, page) {
+  const out = { before: [], after: [], beforeText: '', afterText: '' }
+  const ownKeys = new Set(own.map(c => c.key))
+  for (const c of annots) {
+    if (c.q !== page) continue
+    const g = c.a.g2
+    for (const b of c.a.boxes) {
+      let lo = Number.POSITIVE_INFINITY, hi = Number.NEGATIVE_INFINITY
+      for (const ch of own) if (ch.page === page && inside((ch.x0 + ch.x1) / 2, ch.yb, b)) { lo = Math.min(lo, ch.x0); hi = Math.max(hi, ch.x1) }
+      if (!(lo < hi)) continue
+      let before = '', after = ''
+      for (let k = 0; k < g.x.length; k++) {
+        if (ownKeys.has(`${c.q}|${g.key?.[k]}`) || !inside(g.x[k], g.y[k], b)) continue
+        if (g.x[k] < lo) before += g.ch[k]
+        else if (g.x[k] > hi) after += g.ch[k]
+      }
+      if (before && sound([b[0], b[1], lo, b[3]])) { out.before.push([b[0], b[1], lo, b[3]]); out.beforeText += before }
+      if (after && sound([hi, b[1], b[2], b[3]])) { out.after.push([hi, b[1], b[2], b[3]]); out.afterText += after }
+    }
+  }
+  return out.before.length || out.after.length ? out : null
 }
 
 /** a record over the original's own ink: the annotation's rectangle (or quads), named by PDF.js's overlaid text (the engine's

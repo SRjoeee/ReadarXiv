@@ -4,8 +4,7 @@
 // Enter takes it, Escape closes; a press takes one without taking the focus. With no list yet, a press on the field —
 // or the arrow down — is the gesture the form asks for the endpoint's origin on (`onOpen`)
 import { type InputHTMLAttributes, type Ref, useId, useState } from 'react'
-import { TextInput } from '@/ui/controls/Field'
-import { useMenuNav } from '@/ui/menu-nav'
+import { TextInput, useMenuNav } from '@readarxiv/ui'
 
 export interface ComboOption { id: string; name?: string }
 

@@ -13,8 +13,8 @@
 //   fallback guess, and gives "sans-serif" for Nimbus Roman (Times) on every paper measured. The name is what TeX and
 //   the class chose: NimbusRomNo9L-Medi (Times bold), CMTI10 (Computer Modern text italic), SFBX1200, LMRoman10-Bold…
 // - facesFor: per target, the faces a translated run takes by its class, weight and slant. The prototype's CJK faces
-//   (`faces: 'prototype'`, the floor's measurement, below) follow the public repo's TeX path (src/pdf-reader/engine/
-//   pipeline/scripts.mjs CJK): a Song/Ming serif, its bold, Kai for italic in Chinese (FandolKai, bkai00mp: ctex's own
+//   (`faces: 'prototype'`, the floor's measurement, below) follow the public repo's TeX path as it was (its CJK strategies,
+//   parked then taken out on 2026-11-04): a Song/Ming serif, its bold, Kai for italic in Chinese (FandolKai, bkai00mp: ctex's own
 //   \itshape); Japanese and Korean have no italic face there, and take an oblique of their serif here (see the report).
 //   Latin and Cyrillic runs keep the original's family where the browser has one (Times, Latin Modern from TinyTeX's
 //   OpenType files served by serve.mjs, Palatino, Charter, Helvetica).
@@ -29,18 +29,21 @@
 // face the reader's device holds: no source of a face but its URL, no font rule written here, no generic family. A
 // character no served slice holds keeps its unit the original's.
 import { COVERAGE } from '../rules/font-coverage.mjs'
-import { canDrawIn, FACES, faceFor, rolesFor } from '../rules/font-roles.mjs'
+import { canDrawIn, capsLetters, FACES, faceFor, rolesFor } from '../rules/font-roles.mjs'
 
 /** the PostScript name without its subset tag */
 const bare = name => String(name ?? '').replace(/^[A-Z]{6}\+/, '')
 
 /** { fam: 'serif'|'sans'|'mono'|'math', bold, italic, caps, design } from a PDF font's name; `design` names the Latin
- *  family whose face the browser should use (times, cm, palatino, charter, libertine, helvetica, cmss, courier, cmtt) */
+ *  family whose face the browser should use (times, cm, palatino, charter, libertine, helvetica, cmss, courier, cmtt). A math
+ *  face by its family's names: Euler's EUEX, EURM and EURB with their size, MathTime's MTMI, MTSY, MTEX and their bold, and
+ *  XITS's math face, XITSMath, not its text face XITS-Regular (the ledger's math lines, the ink units' kept runs and the
+ *  figure runs' words read it: LAYOUT 25 and PIPELINE 31, unreleased) */
 export function classifyFont(name, fallbackFamily) {
   const n = bare(name)
   const low = n.toLowerCase()
   let fam = 'serif'
-  if (/^(cmmi|cmsy|cmex|msam|msbm|eufm|eufb|eusm|rsfs|cmbsy|cmmib|stmary|wasy|txsy|txex|txmi|pxsy|pxex|pxmi|lmmath|latinmodern-math|stixmath|stixtwomath|xits|cambria-?math|esint|bbold|bbm|dsrom|ntxmi|ntxsy|ntxexx|ntxbmi|newtxmi|newtxbmi|newpxmi|newpxbmi|newtxsy|newpxsy|zxmi|zplmi|mathdesign|mdbch|symbol|euler|lasy|line10|lcircle|futs|futm|mnsymbol|esstix|txmia|pxmia)/i.test(n) || /math|symbol/i.test(n)) fam = 'math'
+  if (/^(cmmi|cmsy|cmex|msam|msbm|eufm|eufb|eusm|eu(ex|rm|rb)\d|mt(mi|sy|ex|mib|syb)|rsfs|cmbsy|cmmib|stmary|wasy|txsy|txex|txmi|pxsy|pxex|pxmi|lmmath|latinmodern-math|stixmath|stixtwomath|xitsmath|cambria-?math|esint|bbold|bbm|dsrom|ntxmi|ntxsy|ntxexx|ntxbmi|newtxmi|newtxbmi|newpxmi|newpxbmi|newtxsy|newpxsy|zxmi|zplmi|mathdesign|mdbch|symbol|euler|lasy|line10|lcircle|futs|futm|mnsymbol|esstix|txmia|pxmia)/i.test(n) || /math|symbol/i.test(n)) fam = 'math'
   else if (/mono|courier|typewriter|inconsolata|consol|menlo|^(cm|lm|ec|tc)tt|^sftt|^txtt|^pcr|beramono|sourcecode|firamono|cmvtt|^zi4|nimbusmon|letter ?gothic/i.test(n)) fam = 'mono'
   else if (/sans|helvetica|arial|^(cm|lm)ss|^sfs[sxi]|^cmssbx|nimbussan|biolinum|grotesk|verdana|roboto|^lato|opensans|sourcesans|firasans|calibri|avant|futura|frutiger|myriad|segoe|tahoma|gillsans|optima|cabin|raleway|montserrat|^inter|heros|^phv|^uhvr|^qhv|arimo|dejavusans/i.test(n)) fam = 'sans'
   // PDF.js's own guess only for a face no name above tells (it says monospace for CMBX10 and CMR7 in 1512.03385)
@@ -79,15 +82,25 @@ export const roleFaces = () => ROLES
  */
 export const CJK_SLANT_DEG = 13
 /** the role table's face of a run: faceFor's, as faceOf's object, with the ids of its faces and fallbacks (`ids`); a CJK
- *  italic run's sheared CJK_SLANT_DEG (`oblique`) */
-function roleFaceOf(st, cls) {
-  const roles = ROLES
-  const id = faceFor(roles, { script: cls, cls: st.fam === 'math' ? 'serif' : st.fam, design: st.design ?? 'times', bold: !!st.bold, italic: !!st.italic, caps: !!st.caps })
+ *  italic run's sheared CJK_SLANT_DEG (`oblique`). Its `caps`, small capitals asked of the face, is none in a face whose letters
+ *  are them (Latin Modern's caps face, capsLetters): asked, the canvas measured capitals it synthesized at 0.7, narrower than the
+ *  face's own letters the drawing set, which synthesizes nothing (1125 against 1187 px for one heading, Chromium). `roles`: the
+ *  run's (setRoleFaces), or a role set of its own (faceWarmer's) */
+function roleFaceOf(st, cls, roles = ROLES) {
+  const run = { script: cls, cls: st.fam === 'math' ? 'serif' : st.fam, design: st.design ?? 'times', bold: !!st.bold, italic: !!st.italic, caps: !!st.caps }
+  const id = faceFor(roles, run)
   const F = FACES[id]
-  const ids = [...new Set([id, ...(roles.fallbacks[id] ?? []), ...(cls !== 'cjk' && roles.cjk ? [roles.cjk.body] : [])])].filter(f => FACES[f])
+  // (a CJK run's list ends with the Latin face of its weight, upright: the copy space the drawing appends to a run (layer2.mjs
+  // lineRuns) is Basic Latin, which no CJK slice serves (they leave it to the Latin faces), so with the CJK face alone the
+  // device drew it and the canvas measured it in the device's face; #47.14, the web's layer-fonts rows 3 and 4)
+  const latin = cls === 'cjk' && roles.cjk ? [faceFor(roles, { ...run, script: 'latin', italic: false, caps: false })] : []
+  const ids = [...new Set([id, ...(roles.fallbacks[id] ?? []), ...(cls !== 'cjk' && roles.cjk ? [roles.cjk.body] : []), ...latin])].filter(f => FACES[f])
   const slant = cls === 'cjk' && !!st.italic && !!roles.cjk
-  return { family: [...new Set(ids.map(f => `"${FACES[f].family}"`))].join(', '), weight: F.weight, style: F.style, oblique: slant ? CJK_SLANT_DEG : 0, stand: st.italic ? (cls === 'cjk' ? (slant ? 'oblique' : '') : 'italic') : '', caps: !!st.caps && cls !== 'cjk', size: F.size ?? 1, id, ids }
+  return { family: [...new Set(ids.map(f => `"${FACES[f].family}"`))].join(', '), weight: F.weight, style: F.style, oblique: slant ? CJK_SLANT_DEG : 0, stand: st.italic ? (cls === 'cjk' ? (slant ? 'oblique' : '') : 'italic') : '', caps: !!st.caps && cls !== 'cjk' && !capsLetters(id), size: F.size ?? 1, id, ids }
 }
+/** a run's face in a role set of the caller's (rolesFor's), as roleFaceOf gives it: the warmer's (warm.mjs), which asks the faces a
+ *  page's units will be drawn in before v0 has set its own roles (setRoleFaces) */
+export const faceOfRoles = (roles, st, cls) => roleFaceOf(st, cls, roles)
 // ---- the role table's faces as the host serves them
 
 /** a value's kind, for a refusal: its type, never its text */
@@ -108,6 +121,12 @@ function selectedFailed(family, style, ch, weight) {
   const up = ws.filter(x => x > weight).sort((x, y) => x - y), down = ws.filter(x => x < weight).sort((x, y) => y - x)
   const pick = ws.includes(weight) ? weight : weight > 500 ? [...up, ...down][0] : weight < 400 ? [...down, ...up][0] : [...up.filter(x => x <= 500), ...down, ...up][0]
   return mine.some(f => Number(f.weight) === pick && f.status === 'error')
+}
+/** whether any declared face has failed, its status as it stands now: one read a face, where selectedFailed walks every declared
+ *  face (a slice each: hundreds, a CJK body's) for each character of each family. Where none has, no face a load selects has */
+function anyFailed() {
+  for (const f of added.values()) if (f.status === 'error') return true
+  return false
 }
 const hex = n => n.toString(16).toUpperCase()
 /** a slice's unicode-range descriptor from its [start, end] pairs */
@@ -182,9 +201,13 @@ function forgetFailed() {
  *                      failed), else null, the slices its characters are in loaded. No other face is tried
  *   ready(face, text)  the slices of `face` that hold `text` loaded, as far as they can be (a measure is taken at once)
  *   warm(id)           the face's table asked and its first slice fetched, at once, not awaited
+ *   unloaded(face, text)  the FontFaces of the slices that hold `text`'s characters and have not loaded (each character's
+ *                      from the first of the face's ids whose served ranges hold it); [] where a table could not be had.
+ *                      The warmer loads them itself, a few at a time (warm.mjs)
  */
-export function roleFaceSet({ faceSources = null, faceUrl = file => `/fonts/${encodeURIComponent(file)}` } = {}) {
-  forgetFailed()
+export function roleFaceSet({ faceSources = null, faceUrl = file => `/fonts/${encodeURIComponent(file)}`, keepFailed = false } = {}) {
+  // (a warmer's set, keepFailed, lets nothing go: a run's open does, and a run under way keeps what failed for its units)
+  if (!keepFailed) forgetFailed()
   const tables = new Map()
   /** a face's table: null (not served) or { lists (its served ranges, as one sorted list), faces (its FontFaces) } */
   const table = id => {
@@ -235,7 +258,8 @@ export function roleFaceSet({ faceSources = null, faceUrl = file => `/fonts/${en
   /** whether a face the load selects for a glyph of `v` has failed. The promise of document.fonts.load is not the verdict: a
    *  browser that has seen a face fail (on an earlier character) fulfils a later load that matches it with just the faces
    *  that did load. A face never selected (a fallback family's, another weight's) stays unloaded and is no failure, only an
-   *  errored one is, and an errored one stays errored, so the answer for a unit does not depend on which unit asked first */
+   *  errored one is, and an errored one stays errored, so the answer for a unit does not depend on which unit asked first. Asked
+   *  only once some declared face has failed (anyFailed): until then its answer is no */
   const errored = v => {
     const families = new Map(v.got.flatMap(t => (t ? t.faces : [])).map(f => [`${f.family}|${f.style}`, f]))
     return v.need.some(ch => [...families.values()].some(f => selectedFailed(f.family, f.style, ch, v.weight)))
@@ -249,9 +273,11 @@ export function roleFaceSet({ faceSources = null, faceUrl = file => `/fonts/${en
         if (v.fresh) plan.push(v)
       }
       const results = await Promise.allSettled(plan.map(async v => document.fonts.load(v.font, v.fresh)))
+      // (the statuses read once, in this task: none failed, no character is walked through the faces for its own)
+      const failing = plan.length > 0 && anyFailed()
       let failed = false
       results.forEach((r, n) => {
-        if (r.status === 'fulfilled' && !errored(plan[n])) for (const ch of plan[n].fresh) setOf(drawn, plan[n].font).add(ch)
+        if (r.status === 'fulfilled' && !(failing && errored(plan[n]))) for (const ch of plan[n].fresh) setOf(drawn, plan[n].font).add(ch)
         else failed = true
       })
       return failed ? { why: 'face' } : null
@@ -265,6 +291,20 @@ export function roleFaceSet({ faceSources = null, faceUrl = file => `/fonts/${en
     },
     warm(id) {
       if (FACES[id]) table(id).then(t => t?.faces[0]?.load()).catch(() => {})
+    },
+    async unloaded(face, text) {
+      const got = await tablesOf(face.ids)
+      if (!got) return []
+      const out = new Set()
+      for (const ch of new Set(glyphs(text))) {
+        if (/\s/u.test(ch)) continue
+        // (the first of the face's ids whose served ranges hold it: the family CSS takes the glyph from)
+        for (const t of got) {
+          const f = t?.faces.find(x => { const r = rangesOf.get(x); return r === null || canDrawIn(ch, [r]) })
+          if (f) { out.add(f); break }
+        }
+      }
+      return [...out].filter(f => f.status === 'unloaded')
     },
   }
 }

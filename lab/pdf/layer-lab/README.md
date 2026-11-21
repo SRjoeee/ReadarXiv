@@ -2,7 +2,7 @@
 
 A local bench for the instant layer: a paper and a language, any two views side by side, pages in step. Its main view,
 the **quick view** (`a=v0`, once called Layer v0), draws exactly what the engine draws (`src/pdf-reader/engine/`): the
-hybrid over the paper's add-on, with D (adaptive fill), on the layer gate's own inputs. Like the gate it is a
+layer over the paper's layout file and add-on, with D (adaptive fill), on the layer gate's own inputs. Like the gate it is a
 measurement tool of the maintainer's machine: not part of the type check, the unit tests or the build
 (`lab/pdf/README.md`), checked by `pnpm lint` alone.
 
@@ -36,14 +36,15 @@ The address holds the view, for example:
 - **Finals** (`LAYER_FINALS`, default `data/layer-fixtures`): the compiled finals, made on 2026-10-06 from the lab's own
   fixtures. The lab only reads them: the compile path is parked (`parked/README.md`), and nothing here makes a final.
 - **The engine**: this worktree's (`LAYER_PROTO=<worktree>` runs another's).
-- **The add-on**: one per paper, as the engine makes it (`layout/addon.mjs`, `paperAddon`: the gate's shipped half). It
-  is read from the gate's cache (`out/layer-gate/removal/`) when that holds one for the paper's bytes, layout file and
-  remover, else made once into `out/layer-lab/addon/`. It is opened as a reader opens it: arXiv's pages and the add-on's
-  in one document, with its manifest.
+- **The page drawn over**: the fixture's base page (`base.pdf`, our final pass; arXiv's PDF where there is none) wrapped by
+  optional content as the maker child wraps it (`lab/pdf/spikes/layer-gate/wrap.mjs`, the gate's: its cache
+  `out/layer-gate/wrap/` is shared), with the paper's source units (`data/layout/<id>/source.gz`, `data/corpus/<id>/source.gz`,
+  or `LAYER_SOURCES`), and its head fields (what the wrap could not hide, the cell rules). A page with no source, or whose
+  wrap is refused (arXiv's PDF has no marks), is served unwrapped: every unit the original's.
 
 ## Views and controls
 
-The page is drawn in the extension's tokens and controls (`/styles/tokens.css` and `controls.css`, from `src/styles`),
+The page is drawn in the extension's tokens and controls (`/styles/tokens.css` and `controls.css`, from `packages/ui/src`),
 light or dark as the system is. Its words are `strings.mjs`'s: Chinese by default, English with `ui=en` (the switch at
 the foot of the settings); the target languages are always named in their own languages.
 
@@ -58,15 +59,18 @@ the foot of the settings); the target languages are always named in their own la
   interface's language. Each group says what the page shows in a few facts; the engine's own names and numbers (fit
   actions, steps, commits, paths) are under its technical details.
 - **The quick view's choices** (kept in the address):
-  - the hybrid: the layout file's geometry where it locates a unit whole (`v0tex`), else v0 alone;
   - over the paper's add-on (`v0rm`), else erased and put back;
   - the prototype's own faces (`v0=prototype`), else the role table's;
+  - drawn as the readers draw a laid page (the default: the copy and the SVG in `engine.css`'s `.axt-layer`, which the lab
+    serves and links, the SVG scaled by its viewBox, its text rendered as `view/text-rendering.mjs`'s probe says, written on
+    the page's `<html>` at its start), or as the lab drew it before (`look=lab`: no viewBox, a transform, none of
+    `engine.css`'s text rendering, as the layer gate's own page draws it);
 
   Everything else the quick view does is the layout rule set's: see **The rules panel** below. (D, adaptive fill, and B, the
   script's leading on the original's pitch alone, are the rule `adaptiveFill`, set or empty; D's three sliders are its
   members.)
 - **The rules panel:** below the quick view's choices, while a pane shows the quick view. See below.
-- **The page summary:** each page's units by geometry, the removal, the fit, and the first drawing's time: v0's step
+- **The page summary:** each page's units by geometry, the groups hidden, the fit, and the first drawing's time: v0's step
   (render, text, lay, ops, svg) plus the pane's drawing at its resolution. Clicking a unit shows v0's record of it.
 
 ## The rules panel
@@ -129,8 +133,10 @@ request carries a project user agent and nothing about the maintainer.
 - `node lab/pdf/layer-lab/smoke.mjs --port=8095`, with the same three variables: every fixture's Original, Final and
   quick view draw their first page (a fixture with no final is not checked on Final), and the early engine's view (an
   old link's `a=layer`) still draws. Screenshots go to `lab/pdf/data/layer-lab/shots/`.
-- Against the gate's progress images (`I24`, `I25`), the quick view at the gate's resolution (zoom 0.9375 at device
-  pixel ratio 2, 2.5 device px a unit) is pixel-identical on Letter pages.
+- Against the gate's progress images (`I24`, `I25`), the quick view drawn as the lab drew it (`look=lab`) at the gate's
+  resolution (zoom 0.9375 at device pixel ratio 2, 2.5 device px a unit) is pixel-identical on Letter pages; drawn as the
+  readers draw it (the default) its text takes the readers' rendering, the weight PDF.js gives the page (docs/PDF-READER.md
+  §11.8).
 - On A4 pages the gate's own panels differ slightly: the gate screenshots the text in a box of the page's fractional
   size (1490 x 2106 for 744.095 x 1052.36 CSS px) and draws it into its 1488 x 2104 canvas. Its text is therefore
   0.13 % smaller and a little lighter there. The lab draws it at its true size. With that step applied to the lab's own

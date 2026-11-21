@@ -256,7 +256,7 @@ window.gate = {
     let index
     try { index = E.indexLayout(E.parseLayout(await bytes(`${base}layout.json`))) } catch (e) { return { ready: false, why: `layout refused: ${String(e?.message ?? e).slice(0, 200)}` } }
     const units = (await (await fetch(`${base}units.json`)).json()).units
-    const doc = await pdfjs.getDocument({ data: await bytes(`${base}arxiv.pdf`), ...ASSETS }).promise
+    const doc = await pdfjs.getDocument({ data: await bytes(`${base}base.pdf`), ...ASSETS }).promise
     // (the role table's CJK family for the target: the layout rules' built-in set's, the v0 layer's)
     const { BUILTIN_RULES, resolveRules } = await import('/engine/rules/layout.mjs')
     const run = await new Run({ E, index, units, target, doc, cjkFaces: resolveRules(BUILTIN_RULES, target).cjkFaces }).init()

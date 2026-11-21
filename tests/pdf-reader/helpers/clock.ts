@@ -4,8 +4,8 @@ import { vi } from 'vitest'
 // (the real setImmediate, taken before any test fakes it), so that the run's real work — a digest of WebCrypto's thread pool, a
 // PDF.js document's answer — goes on over as many turns as it takes; the fake clock is moved on only while a timer is pending, so
 // a timer the run sets only once such work is done is waited for, never stepped past. It holds for timers whose own promises wait
-// on no real work, as the reads' bounds (oplist.mjs within, the draw's race) do. A step moves the clock by `step` (the bound the
-// run waits out, OPS_MS); the turns are bounded by `turns`, never by wall-clock time
+// on no real work, as a late read's own timer does. A step moves the clock by `step` (how late the read comes); the turns
+// are bounded by `turns`, never by wall-clock time
 
 /** the host's own setImmediate, whatever a test fakes later */
 const realImmediate = globalThis.setImmediate

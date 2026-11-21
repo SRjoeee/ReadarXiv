@@ -1,0 +1,10 @@
+{
+  "description": {
+    "message": "arXiv 논문을 두 언어로 읽기: HTML은 제자리에서 번역하고 PDF는 원문과 번역문을 나란히 보여 주며, 언제든 원문으로 되돌릴 수 있습니다.",
+    "description": "The extensions page and the store listing"
+  },
+  "toggle": {
+    "message": "이 페이지 번역 / 원문 보기",
+    "description": "The keyboard shortcut's description in chrome://extensions/shortcuts"
+  }
+}

@@ -22,7 +22,7 @@ function tsc(files: Record<string, string>, paths: Record<string, string[]> = { 
   dirs.push(dir)
   for (const [name, text] of Object.entries(files)) { mkdirSync(join(dir, name, '..'), { recursive: true }); writeFileSync(join(dir, name), text) }
   writeFileSync(join(dir, 'tsconfig.json'), JSON.stringify({
-    compilerOptions: { strict: true, noEmit: true, skipLibCheck: false, module: 'ESNext', moduleResolution: 'Bundler', target: 'ES2022', lib: ['ES2022', 'DOM', 'DOM.Iterable'], types: [], allowImportingTsExtensions: true, paths },
+    compilerOptions: { strict: true, noEmit: true, skipLibCheck: false, module: 'ESNext', moduleResolution: 'Bundler', target: 'ES2022', lib: ['ES2023', 'DOM', 'DOM.Iterable'], types: [], allowImportingTsExtensions: true, paths },
     files: Object.keys(files).filter(f => f.endsWith('.ts') && !f.endsWith('.d.ts')),
   }))
   const r = spawnSync(process.execPath, [TSC, '-p', join(dir, 'tsconfig.json')], { encoding: 'utf8' })

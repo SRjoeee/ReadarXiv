@@ -2,12 +2,11 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { bundleUnitsOf } from '@/pdf-reader/engine/layer-proto/units.mjs'
-import { sourceHash } from '@/pdf-reader/engine/pipeline/cache.mjs'
-import { openPaper } from '@/pdf-reader/engine/pipeline/live.mjs'
-import { inMemory, loadProject } from '@/pdf-reader/engine/source/latex-front.mjs'
-import { unpackSource } from '@/pdf-reader/engine/source/tar.mjs'
-import { unitText } from '@/pdf-reader/engine/translate/mt.mjs'
+import { openPaper } from '../../packages/engine/src/compile/live.ts'
+import { bundleUnitsOf } from '../../packages/engine/src/instrument/units.ts'
+import { inMemory, loadProject } from '../../packages/engine/src/source/latex-front.ts'
+import { sourceHash, unitText } from '../../packages/engine/tests/helpers/unit-harness.ts'
+import { unpackSource } from '../../packages/engine/src/source/tar.ts'
 import { LAB } from './helpers/lab-data'
 
 // The units written inside a float (`inFloat`, the front end's: their indices in `units`, beside them): TeX sets a float away from
@@ -98,7 +97,16 @@ describe('inFloat: the indices of the units written inside a float', () => {
     ])
   })
 
-  it('a footnote nested in a float\'s caption is in the set by its own index, and its parent\'s hash is the hash it has outside a float', async () => {
+  it('a list of numbers, rising: it survives JSON and a copy of the units', () => {
+    const p = project(doc('Text before.\n\n\\begin{figure}\\caption{One caption words.}\\end{figure}\n\nText between.\n\n\\begin{table}\\caption{Two caption words.}\\end{table}'))
+    expect(p.inFloat).toEqual([1, 3])
+    expect(JSON.parse(JSON.stringify(p.inFloat))).toEqual(p.inFloat)
+    expect(structuredClone({ units: p.units.map(u => ({ ...u })), inFloat: p.inFloat }).inFloat).toEqual([1, 3])
+  })
+
+  // (held here since lane c1-rewrites: the bundle rows the engine package's bundleUnitsOf writes, the kept set stated, no longer
+  // through today's wrapper, layer-proto/units.mjs, whose kept set was today's name rule's)
+  it('a footnote nested in a float\'s caption is in the set by its own index, and its parent\'s hash is the hash it has outside a float; the bundle\'s rows the same (bundleUnitsOf, no unit kept)', async () => {
     const body = (env: string) => doc(`Running text before the figure here.\n\n\\begin{${env}}Produced by the author.\\caption{The figure words\\footnote{A note in the caption here.} here.}\\end{${env}}\n\nRunning text after it.`)
     const inside = project(body('figure')), outside = project(body('center'))
     const units = inside.units as unknown as Unit[]
@@ -117,14 +125,8 @@ describe('inFloat: the indices of the units written inside a float', () => {
     const files = (env: string) => new Map([['main.tex', enc(body(env))]])
     const a = openPaper(files('figure')), b = openPaper(files('center'))
     expect(a.inFloat).toEqual(inside.inFloat)
-    expect(JSON.stringify(bundleUnitsOf(a))).toBe(JSON.stringify(bundleUnitsOf(b)))
-  })
-
-  it('a list of numbers, rising: it survives JSON and a copy of the units', () => {
-    const p = project(doc('Text before.\n\n\\begin{figure}\\caption{One caption words.}\\end{figure}\n\nText between.\n\n\\begin{table}\\caption{Two caption words.}\\end{table}'))
-    expect(p.inFloat).toEqual([1, 3])
-    expect(JSON.parse(JSON.stringify(p.inFloat))).toEqual(p.inFloat)
-    expect(structuredClone({ units: p.units.map(u => ({ ...u })), inFloat: p.inFloat }).inFloat).toEqual([1, 3])
+    const kept = null
+    expect(JSON.stringify(bundleUnitsOf(a, kept))).toBe(JSON.stringify(bundleUnitsOf(b, kept)))
   })
 })
 

@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest'
-import { fileSwap, unitRemoval } from '@/pdf-reader/engine/layer-proto/removal.mjs'
+import { unitHiding } from '@/pdf-reader/engine/layer-proto/hide.mjs'
 import { addUnitWords, newWords } from '@/pdf-reader/engine/layer-proto/words.mjs'
 import { BUILTIN_RULES, resolveRules } from '@/pdf-reader/engine/rules/layout.mjs'
 
@@ -48,9 +48,8 @@ const u = { kind: 'para', src: 'a b c d', pieces: [text('\u7532 '), ph("$g(z')=\
 const SEGS = [1, 150, 500, 200, 507, 498, 1, 10, 488, 40, 495, 486]
 const lu = unitOf([L(500), L(488)], [[1, 0, SEGS]])
 const page = (sum: { nu?: boolean } = {}) => [...item('a b', 10, 500, 10, 0), ...item('g=', 150, 500, 10, 1, math), ...item('\u00cd', 10, 488, 10, 2, math).map(c => ({ ...c, ...sum })), ...item('gn', 20, 488, 10, 3, math), ...item('c d', 50, 488, 10, 4)]
-/** the unit read as the hybrid reads one the file locates whole (texParts), or as a filed unit (the proof alone) */
-const whole = (pg = page()) => { const t = T.texRects(lu); return L2.prepareUnit(u, t.rects as never, [pg as never], new Map() as never, null, T.texParts(lu, [-1, 1, -1], { use: 'lines', lines: t }) as never) }
-const filed = (pg = page()) => L2.prepareUnit(u, T.texRects(lu).rects as never, [pg as never], new Map() as never, null, { proof: T.proofOf(lu, [-1, 1, -1]) } as never)
+/** the unit read as the layer reads one the file locates whole (texParts) */
+const whole = (pg = page()) => { const t = T.texRects(lu); return L2.prepareUnit(u, t.rects as never, [pg as never], new Map() as never, null, T.texParts(lu, [-1, 1, -1], { lines: t }) as never) }
 const round = (b: number[]) => b.map(v => Math.round(v * 100) / 100)
 /** its two crops, each a segment's box with the antialias margin (cropOfBox), on the baseline of its own line */
 const TWO = [{ page: 1, baseline: 500, crop: [149.6, 497.7, 200.4, 507.3] }, { page: 1, baseline: 488, crop: [9.6, 485.7, 40.4, 495.3] }]
@@ -67,40 +66,25 @@ describe('a formula TeX broke over lines is its crops, one a line, never its pag
       expect(L2.cropGrows(r.get(1) as never)).toBe(false)
     }
   })
-  it("in a unit filed but not located whole, v0's page text standing in its segments", () => {
-    for (const pg of [page(), page({ nu: true })]) {
-      const r = filed(pg)
-      expect(r.unproven).toBeUndefined()
-      expect(partsOf(r.get(1))).toEqual(TWO)
-    }
-    // (and where v0's reading holds a character outside them, no proof: as before)
-    // (its "g" read 10 before its segment's start)
-    expect(filed(page().map(c => (c.item === 1 && c.ch === 'g' ? { ...c, x0: 140, x1: 145 } : c))).unproven).toBe(1)
-  })
-  it('read from its segments where v0 found no rendering (resolutionFrom: the rendering its row gives)', () => {
-    const uc = page().map(c => ({ ...c, page: 1, rect: [1, 10, c.yb - 2, 200, c.yb + 8] }))
-    const g = T.renderingOf(Float64Array.from(SEGS) as never, uc as never, false)
-    const r = L2.resolutionFrom({ k: 1, src: "$g(z')=\\sum_n g_n$", cls: 'other' } as never, { ...g, proof: true } as never, u)
-    expect(r).toMatchObject({ mode: 'crop', page: 1, baseline: 500 })
-    expect(partsOf(r)).toEqual(TWO)
-    // (each part's extent over and under its baseline its own segment's, never the rendering's box over both lines, which
-    // would open the line under it by a line's depth: lineExtent)
-    expect(L2.cropPartsOf(r).map(q => L2.lineExtent({ items: [{ t: { crop: q } }] } as never, 10, 1))).toMatchObject([{ a: 7, d: 2 }, { a: 7, d: 2 }])
+  it("each part's extent over and under its baseline is its own segment's, never the rendering's box over both lines", () => {
+    // (which would open the line under it by a line's depth: lineExtent)
+    const r = whole().get(1)
+    expect(L2.cropPartsOf(r as never).map(q => L2.lineExtent({ items: [{ t: { crop: q } }] } as never, 10, 1))).toMatchObject([{ a: 7, d: 2 }, { a: 7, d: 2 }])
   })
   it("without its own brackets where the translation sets its own: the first part cut after its opening one, the last before its closing one", () => {
     // "\uff08(x+" on the line at 500, "y)\uff09" on the next: the brackets' ink left out of the crops
     const ub = { kind: 'para', src: 'see (x+y)', pieces: [text('\u89c1\uff08'), ph('$(x+y)$'), text('\uff09')] } as never
     const segs = [1, 150, 500, 165, 507, 498, 1, 10, 488, 20, 495, 486]
-    const uc = [...item('see', 10, 500, 10, 0), ...item('(x+', 150, 500, 10, 1, math), ...item('y)', 10, 488, 10, 2, math)].map(c => ({ ...c, page: 1, rect: [1, 10, c.yb - 2, 200, c.yb + 8] }))
-    const g = T.renderingOf(Float64Array.from(segs) as never, uc as never, false)
-    const r = L2.resolutionFrom({ k: 1, src: '$(x+y)$', cls: 'other' } as never, { ...g, proof: true } as never, ub)
+    const lb = unitOf([L(500), L(488)], [[1, 0, segs]]), t = T.texRects(lb)
+    const pg = [...item('see', 10, 500, 10, 0), ...item('(x+', 150, 500, 10, 1, math), ...item('y)', 10, 488, 10, 2, math)]
+    const r = L2.prepareUnit(ub, t.rects as never, [pg as never], new Map() as never, null, T.texParts(lb, [-1, 1, -1], { lines: t }) as never).get(1)
     expect(partsOf(r)).toEqual([{ page: 1, baseline: 500, crop: [154.6, 497.7, 165.4, 507.3] }, { page: 1, baseline: 488, crop: [9.6, 485.7, 15.4, 495.3] }])
   })
   it('one line of segments (a tall operator, its rows two segments that meet) is one crop of their union', () => {
     const one = unitOf([L(500), L(488)], [[1, 0, [1, 150, 500, 200, 507, 498, 1, 160, 496, 190, 503, 494]]])
     const t = T.texRects(one)
     const pg1 = [...item('a b', 10, 500, 10, 0), ...item('g=', 150, 500, 10, 1, math), ...item('\u00cd', 170, 496, 10, 2, math), ...item('c d', 10, 488, 10, 4)]
-    const r = L2.prepareUnit(u, t.rects as never, [pg1 as never], new Map() as never, null, T.texParts(one, [-1, 1, -1], { use: 'lines', lines: t }) as never)
+    const r = L2.prepareUnit(u, t.rects as never, [pg1 as never], new Map() as never, null, T.texParts(one, [-1, 1, -1], { lines: t }) as never)
     expect(r.get(1)).toMatchObject({ mode: 'crop', page: 1, baseline: 500 })
     expect(r.get(1)?.parts).toBeUndefined()
   })
@@ -109,7 +93,7 @@ describe('a formula TeX broke over lines is its crops, one a line, never its pag
     const lt = unitOf([L(500), L(488)], [[1, 0, [1, 150, 500, 160, 507, 498, 1, 10, 488, 20, 495, 486]]])
     const t = T.texRects(lt)
     const pg = [...item('a b', 10, 500, 10, 0), ...item('ab', 150, 500, 10, 1, mono), ...item('cd', 10, 488, 10, 2, mono), ...item('c d', 50, 488, 10, 4)]
-    const r = L2.prepareUnit(tt, t.rects as never, [pg as never], new Map() as never, null, T.texParts(lt, [-1, 1, -1], { use: 'lines', lines: t }) as never)
+    const r = L2.prepareUnit(tt, t.rects as never, [pg as never], new Map() as never, null, T.texParts(lt, [-1, 1, -1], { lines: t }) as never)
     expect(r.unproven).toBeUndefined()
     expect(r.get(1)).toMatchObject({ mode: 'orig-text', text: 'ab cd' })
   })
@@ -167,7 +151,7 @@ describe('every reader of a crop takes its parts', () => {
   it('the drawer cuts each part once, the svg copies the formula once, and the checker counts one showing, nothing lost', () => {
     const { prep, tokens, layout } = laid()
     const audit: { what: string; k?: number; part?: number; src?: number[] }[] = []
-    L2.unitOps(layout as never, [], 1, { px: id, k: 1, hasSource: () => true, pxOf: () => id, audit: audit as never, id: 7 } as never)
+    L2.hideOps(layout as never, 1, { px: id, k: 1, hasSource: () => true, pxOf: () => id, audit: audit as never, id: 7 } as never)
     const crops = audit.filter(a => a.what === 'crop')
     expect(crops.map(a => [a.k, a.part, round(a.src!)])).toEqual([[1, 0, TWO[0]!.crop], [1, 1, TWO[1]!.crop]])
     const svg = L2.svgOfUnit(layout as never, 1, id as never, 1, 7)
@@ -196,37 +180,26 @@ describe('every reader of a crop takes its parts', () => {
     const crops = [...Array(W.n).keys()].filter(i => W.word[i] === -1 && W.r[i]! - W.l[i]! > 30)
     expect(crops.map(i => [Math.round(W.l[i]! * 100) / 100, Math.round(W.y[i]!)])).toEqual([[2.5, 500], [0, 488]])
   })
-  it("the removal: a part on another page than the first is that page's crop, its glyphs and its clip", () => {
-    // its second line the next page's first: the part there cut from page 2
-    const two = unitOf([L(500), [2, 10, 200, 700, 707, 698, 10, 0]], [[1, 0, [1, 150, 500, 200, 507, 498, 2, 10, 700, 40, 707, 698]]]) as { ph: Map<number, unknown> }
-    const r = { mode: 'crop', k: 1, page: 1, crop: [149.6, 497.7, 200.4, 507.3], baseline: 500, parts: [{ page: 1, crop: [149.6, 497.7, 200.4, 507.3], baseline: 500 }, { page: 2, crop: [9.6, 697.7, 40.4, 707.3], baseline: 700 }] }
-    const prep = Object.assign(new Map([[1, r]]), { keep: [], uc: [], cat: new Map(), label: null }) as never
-    const sw = fileSwap({ page: 2, lu: two as never, kOf: [-1, 1, -1], lines: { rects: [], lineOf: new Map(), jOf: [] } as never, prep })
-    expect(sw.clips.get(1)?.own).toEqual([[10, 698, 40, 707]])
-    const glyph = { u: 'x', x0: 12, x1: 17, y: 700, top: 707, bottom: 698, size: 10, font: 'F', ix0: 12, ix1: 17, n: 0, k: 0 }
-    const ink = { glyphs: [glyph], boxes: [], paths: [], shows: 1 }
-    const own = { owner: Int32Array.from([3]), ph: Int32Array.from([1]), paths: new Map(), linePaths: new Map() }
-    const rm = unitRemoval({ id: 3, page: 2, prep, tex: { lu: two as never, kOf: [-1, 1, -1] }, own: own as never, charMap: new Map(), unmapped: [], ink: ink as never, claimed: new Map(), fileDrawn: new Set([3]) } as never)
-    expect(rm.crops).toEqual([{ k: 1, glyphs: [0], paths: [] }])
-    // and with no file (v0's reading): the glyphs no character stands for inside the part's box on the page
-    const v0 = unitRemoval({ id: 3, page: 2, prep, tex: null, own: own as never, charMap: new Map(), unmapped: [0], ink: ink as never, claimed: new Map(), fileDrawn: new Set() } as never)
-    expect(v0.crops).toEqual([{ k: 1, glyphs: [0], paths: [] }])
-  })
-  it("the removal's clips: each page's its own segments, and a part cut only through its own page's (the review of #424)", () => {
+  it("the crops' clips: each page's its own segments, and a part cut only through its own page's (the review of #424)", () => {
     // the formula's first line at the foot of page 1, its second at the head of page 2, the unit drawn on page 2 with both
     // parts on its one line: page 2's clip is in page 2's pixels and through page 2's segment, outside the part from page 1
     const two = unitOf([L(500), [2, 10, 200, 700, 707, 698, 10, 0]], [[1, 0, [1, 150, 500, 200, 507, 498, 2, 10, 700, 40, 707, 698]]]) as { ph: Map<number, unknown> }
     const r = { mode: 'crop', k: 1, page: 1, crop: [149.6, 497.7, 200.4, 507.3], baseline: 500, text: 'x', parts: [{ page: 1, crop: [149.6, 497.7, 200.4, 507.3], baseline: 500 }, { page: 2, crop: [9.6, 697.7, 40.4, 707.3], baseline: 700 }] }
     const prep = Object.assign(new Map([[1, r]]), { keep: [], uc: [], cat: new Map(), label: null }) as never
-    const swap = (page: number) => fileSwap({ page, lu: two as never, kOf: [-1, 1, -1], lines: { rects: [], lineOf: new Map(), jOf: [] } as never, prep })
+    const swap = (page: number) => unitHiding({ page, id: 3, lu: two as never, kOf: [-1, 1, -1], lines: { rects: [], lineOf: new Map(), jOf: [] } as never, prep })
     expect(swap(1).clips.get(1)?.own).toEqual([[150, 498, 200, 507]])
     const clips = swap(2).clips
     expect(clips.get(1)?.own).toEqual([[10, 698, 40, 707]])
     const items = L2.cropPartsOf(r as never).map((q, n) => ({ t: { crop: q }, x: 20 + 60 * n, w: q.crop![2]! - q.crop![0]! }))
     const audit: { what: string; part?: number; srcPage?: number; clip?: unknown }[] = []
-    const ops = L2.removalOps({ lines: [{ page: 2, baseline: 650, items }], scale: 1 } as never, 2, { px: id, k: 1, hasSource: () => true, pxOf: () => id, rects: [], erase: [], lines: [], removed: () => true, clips, audit, id: 3 } as never) as unknown as { op: string; page: number; clip?: unknown }[]
-    expect(ops.filter(o => o.op === 'crop').map(o => [o.page, o.clip ?? null])).toEqual([[1, null], [2, clips.get(1)!.rects]])
-    expect(audit.filter(a => a.what === 'crop').map(a => [a.part, a.srcPage, a.clip ?? null])).toEqual([[0, 1, null], [1, 2, clips.get(1)!.rects]])
+    const ops = L2.hideOps({ lines: [{ page: 2, baseline: 650, items }], scale: 1 } as never, 2, { px: id, k: 1, hasSource: () => true, pxOf: () => id, clips, audit, id: 3 } as never) as unknown as { op: string; page: number; plane: string; clip?: unknown }[]
+    // (in the page's pixels, here the PDF's own: the boxes as [x, y, w, h])
+    const dev = clips.get(1)!.rects.map(b => [b[0], b[1], b[2]! - b[0]!, b[3]! - b[1]!].map(v => expect.closeTo(v as number, 9)))
+    expect(ops.filter(o => o.op === 'crop').map(o => [o.page, o.plane, o.clip ?? null])).toEqual([[1, 'B', null], [2, 'B', dev]])
+    expect(audit.filter(a => a.what === 'crop').map(a => [a.part, a.srcPage, a.clip ?? null])).toEqual([[0, 1, null], [1, 2, dev]])
+    // (the unit hides its placeholders' group on each page a part of the crop is cut from)
+    expect(swap(1).off).toEqual(['u3', 'u3.p'])
+    expect(swap(2).off).toEqual(['u3', 'u3.p'])
   })
   it('the crop loop grows no part: each is a segment of the file, its ink TeX set', () => {
     const r = whole().get(1)

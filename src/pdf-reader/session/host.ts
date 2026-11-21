@@ -8,24 +8,25 @@
 // The settings are the extension's (the reader's design, §9.1), through the settings surface as the popup and the settings page
 // have them (shared/surface-config.ts): a display or a sync the reader chooses here is written back, a write storage refuses is
 // told (S-R-22), and settings that land from elsewhere are followed (settings.ts followOf): their display and sync unless the
-// reader chose them here, a new target language once a translation has started by loading the page again, a run that stopped
-// short run again once the services change. What is not seen takes no resources (DESIGN §10): the run starts once a translated
+// reader chose them here, a new target language once a translation has started in place (the run's retarget: the left, both
+// documents and the reading place kept), a run that stopped short run again once the services change. What is not seen takes no resources (DESIGN §10): the run starts once a translated
 // display is shown in a visible tab.
 import { appearanceRule } from '@/core/renderer/style-preset'
 import { htmlVersionOf, viewerUrlOf } from '@/core/pdf/entry'
 import { lookOf } from '@/config/appearance'
+import { toBcp47 } from '@/config/languages'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
 import { createLayerStore, type LayerStore } from '@/cache/layer-store'
 import { createSurfaceConfig, type Landing } from '@/shared/surface-config'
 import { firstReadTime } from '@/ui/first-read'
 import { localeStale } from '@/ui/locale-stale'
-import { R } from '@/ui/strings'
+import { R } from '@readarxiv/ui'
 import { createReaderView, type DocumentTask, type ReaderView, type ViewPrefs } from '../engine/view.mjs'
-import { READER_API, readerAddresses } from '../addresses'
-import { fromView, type Session } from '../controller'
-import { ASSETS, EventBus, LinkTarget, PDFLinkService, PDFPageView, PDFViewer, pdfjsLib } from '../pdfjs'
-import { displayOf, firstConfig, followOf, withDisplay } from '../settings'
-import { linkNameOf } from '../ui/link-names'
+import { paperOf, READER_API, readerAddresses } from '../addresses'
+import { fromView, type Session } from './events'
+import { ASSETS, EventBus, LinkTarget, PDFLinkService, PDFPageView, PDFViewer, pdfjsLib, TextLayerBuilder } from '../pdfjs'
+import { displayOf, firstConfig, followOf, sameClasses, withDisplay } from '../settings'
+import { linkNameOf } from '../host/link-names'
 import { shownAgain, whenVisible } from '../visible'
 import type { EngineDisplay, SessionHost, SyncMode } from './events'
 import { abstractPage, ownVersion } from './paper'
@@ -77,7 +78,7 @@ export interface ReaderIo {
  * `host.reading`, the page's own first read of the settings, is started on at once (settings.ts firstConfig)
  */
 export async function openReader(host: SessionHost, io: ReaderIo = {}): Promise<Session> {
-  const params = host.params, paper = params.get('paper') ?? ''
+  const params = host.params, paper = paperOf(params)
   const addresses = readerAddresses(params, paper, io.api ?? READER_API)
   const abstract = abstractPage(paper, io.fetch)
 
@@ -114,7 +115,7 @@ export async function openReader(host: SessionHost, io: ReaderIo = {}): Promise<
   let mode: EngineDisplay = paper ? displayFrom(params, config) : 'original', readingPage: number | null = null
   const view: ReaderView = (io.view ?? createReaderView)({
     panes: { left: host.left, right: host.right },
-    pdfjs: { lib: pdfjsLib, viewer: { EventBus, PDFViewer, PDFPageView, PDFLinkService, LinkTarget }, assets: ASSETS },
+    pdfjs: { lib: pdfjsLib, viewer: { EventBus, PDFViewer, PDFPageView, PDFLinkService, LinkTarget, TextLayerBuilder }, assets: ASSETS },
     words: { pageName: (side, n) => R.pageName(side === 'left' ? 'original' : 'translation', n), sideName: side => R.display[side === 'left' ? 'original' : 'translation'], linkName: linkNameOf },
     prefs: { get: () => prefsOf(config, !!dark?.matches), subscribe: l => { lookers.add(l); return () => { lookers.delete(l) } } },
     links: { openExternal: url => { if (outward(url)) globalThis.open(url, '_blank', 'noopener,noreferrer') } },
@@ -146,6 +147,8 @@ export async function openReader(host: SessionHost, io: ReaderIo = {}): Promise<
   // ---------------------------------------------------------------- the layer's run
   const store = io.store === undefined ? createLayerStore() : io.store
   let run: Run | null = null, prepareAsked = false, translating = false, held = !paper
+  /** why the original is held: the paper's own (no paper, none to be had), or the target language's (another target mends it) */
+  let heldFor: 'paper' | 'target' | null = held ? 'paper' : null
   // the harness's hooks (the browser checks, the lab's probes): the view, the run and its side, bounded probes alone
   const reader = { ready: false, view, store, get run() { return run }, probe: () => view.probe(), side: () => run?.side ?? null }
   ;(window as unknown as { __reader: object }).__reader = reader
@@ -169,15 +172,17 @@ export async function openReader(host: SessionHost, io: ReaderIo = {}): Promise<
       api: addresses.api, ...(io.fetch ? { fetch: io.fetch } : {}), store,
       engine: () => (io.engine ?? openEngine)({ paper }),
       openPdf: (data, options) => pdfjsLib.getDocument({ ...options, data }) as unknown as DocumentTask,
-      pdfjs: pdfjsLib, originalUrl: addresses.pdf,
+      pdfjs: pdfjsLib,
       hidden: { now: () => document.visibilityState === 'hidden', shown: signal => shownAgain(document, signal) },
       readingPage: () => readingPage,
+      // (what to translate: the content classes shown translated, the reader's own setting)
+      classes: () => config.pdfReader.classes,
       mayPrepare: () => { if (prepareAsked) return false; prepareAsked = true; return true },
       prepareUnsent: () => { prepareAsked = false },
       emit(e) {
         if (e.type === 'unavailable') {
           // the paper's own, or its language's: the translated displays greyed, the original shown for this visit
-          if (e.why !== 'refused' && e.why !== 'unreachable') { held = true; view.setDisplay('original') }
+          if (e.why !== 'refused' && e.why !== 'unreachable') { held = true; heldFor = e.why === 'target' ? 'target' : 'paper'; view.setDisplay('original') }
           void htmlVersion().then(url => host.emit({ type: 'html', url }))
         }
         if (e.type === 'fail') { host.emit({ type: 'fail', event: 'service', text: `Cannot translate ${paper} (${e.kind})`, kind: e.kind }); return }
@@ -206,10 +211,21 @@ export async function openReader(host: SessionHost, io: ReaderIo = {}): Promise<
     // (a run that stopped short: the service failed, or units were lost to it)
     const at = run?.probe(), stopped = at?.state === 'failed' || at?.rowsState === 'failed' || (at?.rowsState === 'translated' && Number(at.lost) > 0)
     const follow = followOf(prev, next, from, { translating, held, stopped, addressDisplay: isDisplay(params.get('mode')), addressSync, display: mode, syncMode: view.probe().sync ? 'same' : 'off' })
-    if (follow.reload) { void writes.then(() => location.reload()); return }
+    // another target, in place: a hold for the language before is lifted (the translated display shown again), one for the paper's
+    // own reason stays (no language mends it); the run told once this page's writes are in, so that the service it opens again is
+    // the new target's
+    if (follow.retarget && heldFor !== 'paper') {
+      // (the language's notice and the greyed switch go with the hold: the layer is coming again, as an open tells it)
+      if (held) { held = false; heldFor = null; host.emit({ type: 'coming' }); mode = displayFrom(params, config); view.setDisplay(mode) }
+      const to = toBcp47(next.targetLanguage)
+      void writes.then(() => run?.retarget(to))
+    }
     if (follow.retry) void writes.then(() => run?.retry())
     if (follow.display && !(late && chosen.display)) { view.setDisplay(follow.display); mode = follow.display; wantTranslation() }
     if (follow.sync && !(late && chosen.sync)) view.setSync(follow.sync !== 'off')
+    // the content classes shown translated or not as "What to translate" lands, from here or elsewhere (the reading options, the
+    // settings page): in place, nothing fetched or translated again
+    if (!sameClasses(next.pdfReader.classes, prev.pdfReader.classes)) run?.setClasses(next.pdfReader.classes)
   }
 
   // ---------------------------------------------------------------- the page's end
@@ -231,9 +247,6 @@ export async function openReader(host: SessionHost, io: ReaderIo = {}): Promise<
       view.setSync(m !== 'off')
       if (m === 'same' || m === 'off') save(c => ({ ...c, pdfReader: { ...c.pdfReader, sync: m === 'same' } }))
     },
-    // figure text is a question of the layer's units, which the run translates as they come (Stage 5 K8): the switch is the
-    // setting's, for the HTML page and the reader's later figure text (Task 21)
-    setFigures: on => save(c => ({ ...c, image: { ...c.image, enabled: on } })),
     zoomBy: f => view.zoomBy(f),
     zoomTo: z => view.zoomTo(z),
     goToPage: (side, n) => view.goToPage(side, n),

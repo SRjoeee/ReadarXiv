@@ -4,7 +4,8 @@
 // The real PDF.js, in a real browser, is pnpm e2e:reader's (its development entry, ?layer=1).
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createFollower } from '@/pdf-reader/engine/view/sync.mjs'
-import { createReaderView, type DocumentTask, internalsOf, type ReaderHost, type ReaderView, type Shapes, type ViewEvent, type ViewPrefs } from '@/pdf-reader/engine/view/reader-view.mjs'
+import { AHEAD_HOLD_MS, NEAR, TEXT_BACK_MS } from '@/pdf-reader/engine/view/places.mjs'
+import { createReaderView, type DocumentTask, internalsOf, PINCH_COMMIT_MS, type ReaderHost, type ReaderView, type Shapes, type ViewEvent, type ViewPrefs } from '@/pdf-reader/engine/view/reader-view.mjs'
 import { clientOf, drawPanes, FakeEventBus, FakeIO, FakeLinkService, FakePDFPageView, FakePDFViewer, FakeRO, fakeDoc, fakeKit, fakeTask, flush, installLayout, type ManualClock, manualClock, reads, resetFakes } from './helpers/reader-fakes'
 
 vi.mock('@/pdf-reader/engine/view/highlight.mjs', async importOriginal => {
@@ -51,7 +52,10 @@ afterEach(() => {
 
 const views: ReaderView[] = []
 interface Setup { view: ReaderView; host: ReaderHost; events: ViewEvent[]; clock: ManualClock; panes: { left: HTMLElement; right: HTMLElement }; prefs: { set(p: Partial<ViewPrefs>): void }; words: { pageName: ReturnType<typeof vi.fn>; sideName: ReturnType<typeof vi.fn> } }
-function setup(o: { scrollEnd?: 'native' | 'timer'; titleFallback?: () => Promise<string> } = {}): Setup {
+/** the view over its stand-ins; `own` (by default): every page stays the original's, as a layer side says of a page it will not
+ *  lay, so that each place near the view draws its own page view (the rows below that are those page views'); false: the pages
+ *  wait for a layer, and a place shows the left's drawing of its page while the panes scroll together (V15) */
+function setup(o: { scrollEnd?: 'native' | 'timer'; titleFallback?: () => Promise<string>; own?: boolean } = {}): Setup {
   const panes = drawPanes()
   const events: ViewEvent[] = []
   const clock = manualClock()
@@ -67,6 +71,7 @@ function setup(o: { scrollEnd?: 'native' | 'timer'; titleFallback?: () => Promis
   }
   const view = createReaderView(host)
   views.push(view)
+  if (o.own !== false) internalsOf(view).places.settle?.(() => true)
   return { view, host, events, clock, panes, words, prefs: { set: p => { look = { ...look, ...p }; for (const l of listeners) l(look) } } }
 }
 const leftViewer = () => FakePDFViewer.made[0] as FakePDFViewer
@@ -106,8 +111,6 @@ const stub = (): Shapes & { calls: string[] } => {
     runs: id => { calls.push(`runs ${id}`); return id === 1 ? [run] : [] },
     block: () => { calls.push('block'); return { page: 1, x0: 100, y0: 600, x1: 300, y1: 700 } },
     sentence: () => { calls.push('sentence'); return [] },
-    float: () => { calls.push('float'); return null },
-    floatShapes: () => [],
     fits: () => { calls.push('fits'); return false },
     hit: (page, x, y) => { calls.push(`hit ${page}`); return x >= 100 && x <= 300 && y >= 600 && y <= 700 ? { id: 1, s: -1 } : null },
     click: () => { calls.push('click'); return { id: 1, line: 0, f: 0 } },
@@ -374,6 +377,36 @@ describe('V4 and V9: sync is one mode, the identity follower, available once the
   })
 })
 
+describe('the follower beside a pinch', () => {
+  it('on the compositor binds nothing while a pinch is shown by transform, however the pointer moves; it is bound again from the commit', async () => {
+    vi.stubGlobal('ScrollTimeline', class {})
+    const anims: { cancel: ReturnType<typeof vi.fn>; currentTime: number }[] = []
+    const animate = vi.fn(function (this: HTMLElement) { const a = { cancel: vi.fn(), currentTime: 0, onfinish: null }; anims.push(a); return a })
+    ;(HTMLElement.prototype as unknown as { animate: unknown }).animate = animate
+    try {
+      const s = setup()
+      await opened(s, 6)
+      s.panes.left.dispatchEvent(new Event('wheel'))
+      expect(anims).toHaveLength(1)
+      s.view.pinch('left', 1.1, [300, 300])
+      // the binding under way ended where it stood, and none made again: the pointer over the other pane, a Ctrl-wheel
+      expect(anims[0]?.cancel).toHaveBeenCalled()
+      s.panes.right.dispatchEvent(new Event('pointermove'))
+      const ctrl = new Event('wheel') as Event & { ctrlKey: boolean }
+      ctrl.ctrlKey = true
+      s.panes.left.dispatchEvent(ctrl)
+      s.view.pinch('left', 1.1, [300, 300])
+      expect(anims).toHaveLength(1)
+      expect(s.view.probe()).toMatchObject({ motion: null })
+      await s.clock.advance(PINCH_COMMIT_MS)
+      expect(s.view.probe().pinching).toBeNull()
+      // bound again by the next input
+      s.panes.left.dispatchEvent(new Event('wheel'))
+      expect(anims).toHaveLength(2)
+    } finally { delete (HTMLElement.prototype as unknown as { animate?: unknown }).animate }
+  })
+})
+
 describe('the follower\'s rest armed again after an input', () => {
   it('ends its listener on the view\'s signal with the input, not with the view', async () => {
     const { left, right } = drawPanes()
@@ -463,27 +496,291 @@ describe('V6: overlays', () => {
     expect(s.panes.left.querySelector('.page .axt-hl-layer > .axt-hl')).toBe(band)
   })
 
-  it('a pinch reads every rectangle before the left\'s viewer is scaled, over either pane', async () => {
+  /** where a pane shows the point at height `y` of its view (client px): the page box it is level with, and its share of
+   *  the box's height, or px above the box (the gap before it) */
+  const pointAt = (pane: HTMLElement, y: number) => {
+    const pages = [...pane.querySelectorAll<HTMLElement>(':scope > .pdfViewer > .page')]
+    const n = pages.findIndex(p => p.getBoundingClientRect().bottom > y)
+    const r = (pages[n] as HTMLElement).getBoundingClientRect()
+    return y < r.top ? { n, gap: y - r.top } : { n, share: (y - r.top) / r.height }
+  }
+  /** the height of the view (client px) a pane shows that point at now */
+  const heightOf = (pane: HTMLElement, at: ReturnType<typeof pointAt>) => {
+    const r = (pane.querySelectorAll<HTMLElement>(':scope > .pdfViewer > .page')[at.n] as HTMLElement).getBoundingClientRect()
+    return at.share === undefined ? r.top + (at.gap as number) : r.top + at.share * r.height
+  }
+
+  it('a pinch keeps the point under the gesture where it is on both panes, wherever it lies — on a page, in the gap between two, beside one — and the pair stays level', async () => {
     const s = setup()
-    await opened(s, 4)
-    for (const side of ['left', 'right'] as const) {
-      const viewer = leftViewer()
-      reads.log = []
-      reads.counting = true
-      const real = viewer.updateScale.bind(viewer)
-      let at = -1
-      viewer.updateScale = o => { at = reads.log.length; reads.counting = false; real(o); reads.counting = true; reads.log.push('-- after') }
-      const before = s.panes.right.scrollTop
-      s.view.pinch(side, 1.1, [side === 'left' ? 200 : 800, 300])
-      reads.counting = false
-      viewer.updateScale = real
-      // the right's point under the pointer, or at its top quarter, kept: the pane scrolled with its growing pages
-      expect(s.panes.right.scrollTop).toBeGreaterThan(before)
-      expect(at).toBeGreaterThan(0)
-      // after the scale, writes alone: no read between the scale and the end of the pinch's own task
-      expect(reads.log.slice(at)).toEqual(['-- after'])
+    await opened(s, 6)
+    // a quarter's scale: a page 204 px wide in a pane of 600, so that a point beside it is held by no page
+    s.view.zoomTo(0.25)
+    for (const pane of [s.panes.left, s.panes.right]) pane.scrollTop = 700
+    await flush()
+    const pages = [...s.panes.right.querySelectorAll<HTMLElement>(':scope > .pdfViewer > .page')]
+    const gapY = (pages[3] as HTMLElement).getBoundingClientRect().top - 7
+    for (const [what, side, x, y] of [['on a page', 'right', 608 + 100, 300], ['between two pages', 'right', 608 + 100, gapY], ['beside a page', 'right', 608 + 450, 520], ['over the left', 'left', 450, 400]] as const) {
+      // (each pane's point read at the same height of its view: the panes stand at the same height on the screen)
+      const keep = [s.panes.left, s.panes.right].map(pane => pointAt(pane, y))
+      for (let i = 0; i < 6; i++) s.view.pinch(side, 1.06, [x, y])
+      await s.clock.advance(PINCH_COMMIT_MS)
+      await flush()
+      // (to the pixels the steps' scrolls round to)
+      for (const [k, pane] of [s.panes.left, s.panes.right].entries()) expect(Math.abs(heightOf(pane, keep[k] as ReturnType<typeof pointAt>) - y), `${what}, the ${k ? 'right' : 'left'} pane`).toBeLessThanOrEqual(3)
+      expect(s.panes.left.scrollTop, what).toBe(s.panes.right.scrollTop)
     }
     expect(last(s.events, 'scale')?.zoom).toBeNull()
+  })
+
+  it('a slow pinch\'s small steps add up: at a quarter\'s scale, where PDF.js rounds any step under 1.9 % to no change', async () => {
+    const s = setup()
+    await opened(s, 4)
+    s.view.zoomTo(0.26)
+    for (let i = 0; i < 20; i++) { s.view.pinch('right', 1.01, [700, 300]); await s.clock.advance(16) }
+    await s.clock.advance(PINCH_COMMIT_MS)
+    // 0.26 × 1.01^20 = 0.317, to PDF.js's hundredth
+    expect(leftViewer().currentScale).toBe(0.32)
+    // the way back, carried afresh: a turn of the fingers is not held up by what was carried the other way
+    s.view.pinch('right', 1 / 1.03, [700, 300])
+    await s.clock.advance(PINCH_COMMIT_MS)
+    expect(leftViewer().currentScale).toBe(0.31)
+    // what a pinch's rounding leaves is carried to the next pinch the same way: two of 1.4 % at 0.31 make one hundredth
+    s.view.pinch('right', 1.014, [700, 300])
+    await s.clock.advance(PINCH_COMMIT_MS)
+    expect(leftViewer().currentScale).toBe(0.31)
+    s.view.pinch('right', 1.014, [700, 300])
+    await s.clock.advance(PINCH_COMMIT_MS)
+    expect(leftViewer().currentScale).toBe(0.32)
+  })
+
+  it('a pinch\'s steps move neither pane by the follower: no rest and no glide between two steps, however long the fingers pause', async () => {
+    const s = setup()
+    await opened(s, 6)
+    s.view.zoomTo(0.5)
+    for (const pane of [s.panes.left, s.panes.right]) pane.scrollTop = 600
+    await flush()
+    const tops: number[][] = []
+    for (let i = 0; i < 8; i++) {
+      s.view.pinch('right', 1.05, [608 + 300, 600])
+      await flush()
+      // a pause longer than the rest's wait between two steps, shorter than the commit's
+      await s.clock.advance(PINCH_COMMIT_MS - 10)
+      tops.push([s.panes.left.scrollTop, s.panes.right.scrollTop])
+      expect(s.view.probe().motion, `step ${i}`).toBeNull()
+    }
+    expect(tops.every(([l, r]) => l === r)).toBe(true)
+  })
+
+  it('a pinch is shown by transform while its steps last — the scale unwritten, the layout unread after its first step, nothing of the follower bound — and committed once, PINCH_COMMIT_MS after its last step', async () => {
+    const s = setup()
+    await opened(s, 6)
+    s.view.zoomTo(0.5)
+    for (const pane of [s.panes.left, s.panes.right]) pane.scrollTop = 600
+    await flush()
+    // (the zoom's and the scroll's own rests over)
+    await s.clock.advance(1000)
+    await flush()
+    const scale0 = leftViewer().currentScale, log0 = leftViewer().log.length
+    s.view.pinch('right', 1.05, [608 + 300, 400])
+    reads.counting = true; reads.n = 0
+    for (let i = 0; i < 10; i++) { s.view.pinch('right', 1.05, [608 + 300, 400]); await s.clock.advance(16) }
+    reads.counting = false
+    expect(reads.n, reads.log.join(', ')).toBe(0)
+    expect(leftViewer().currentScale).toBe(scale0)
+    expect(leftViewer().log.slice(log0).filter(l => l.startsWith('updateScale'))).toEqual([])
+    // (shown at the scale the commit will set: PDF.js's hundredth)
+    const next = Math.round(scale0 * 1.05 ** 11 * 100) / 100
+    for (const pane of [s.panes.left, s.panes.right]) { expect(pane.style.transform).toContain(`scale(${next / scale0})`); expect(pane.scrollTop).toBe(600) }
+    expect(s.view.probe().pinching).toBeCloseTo(next / scale0, 9)
+    expect(s.view.probe().motion).toBeNull()
+    // the zoom shown as it goes, the menu's check none
+    expect(last(s.events, 'scale')).toEqual({ type: 'scale', scale: Math.round(scale0 * 1.05 ** 11 * 100) / 100, zoom: null })
+    await s.clock.advance(PINCH_COMMIT_MS)
+    expect(leftViewer().log.slice(log0).filter(l => l.startsWith('updateScale'))).toEqual(['updateScale 0'])
+    expect(leftViewer().currentScale).toBe(Math.round(scale0 * 1.05 ** 11 * 100) / 100)
+    for (const pane of [s.panes.left, s.panes.right]) expect(pane.style.transform).toBe('')
+    expect(s.view.probe().pinching).toBeNull()
+  })
+
+  it('a pinch out shows the pages around the view: their stack scaled inside a hold of the scroll\'s size, so that nothing scrolls, nor is clamped at the paper\'s end; the hold gone at the commit', async () => {
+    const s = setup()
+    await opened(s, 4)
+    const most = s.panes.right.scrollHeight - 800
+    for (const pane of [s.panes.left, s.panes.right]) pane.scrollTop = most
+    await flush()
+    for (let i = 0; i < 6; i++) s.view.pinch('right', 0.9, [608 + 300, 600])
+    for (const pane of [s.panes.left, s.panes.right]) {
+      const stack = pane.querySelector<HTMLElement>(':scope > .pdfViewer') as HTMLElement
+      expect(pane.style.transform).toBe('')
+      expect(stack.style.transform).toMatch(/scale\(0\.5\d*\)/)
+      const hold = pane.querySelector<HTMLElement>(':scope > .axt-pinch-hold')
+      expect(hold?.style.height).toBe(`${most + 800}px`)
+      expect(pane.scrollTop).toBe(most)
+    }
+    await s.clock.advance(PINCH_COMMIT_MS)
+    for (const pane of [s.panes.left, s.panes.right]) {
+      expect(pane.querySelector(':scope > .axt-pinch-hold')).toBeNull()
+      expect(pane.querySelector<HTMLElement>(':scope > .pdfViewer')?.style.transform).toBe('')
+    }
+  })
+
+  it('while a pinch is shown by transform the places\' near window is held — nothing made, laid or let go at a scale the commit replaces — and told at the commit', async () => {
+    const s = setup()
+    await opened(s, 6)
+    await nearOn(s, [1, 2])
+    const made = FakePDFPageView.made.length, nearOf = (n: number) => internalsOf(s.view).places.near(n)
+    s.view.pinch('right', 0.8, [608 + 300, 400])
+    // (the preview's shrunk stack brings places 3 and 4 into the window, and takes 1 out)
+    await nearOn(s, [3, 4])
+    await nearOn(s, [1], false)
+    expect([nearOf(1), nearOf(3), nearOf(4)]).toEqual([true, false, false])
+    expect(FakePDFPageView.made.length).toBe(made)
+    await s.clock.advance(PINCH_COMMIT_MS)
+    await flush(10)
+    expect([nearOf(1), nearOf(3), nearOf(4)]).toEqual([false, true, true])
+    expect(FakePDFPageView.made.length).toBe(made + 2)
+  })
+
+  it('a page box of no size under the gesture keeps no point: the preview and the commit write nothing that is not a number', async () => {
+    const s = setup()
+    await opened(s, 4)
+    // (pages PDF.js has sized to nothing, as its rounding down can at the least scale)
+    for (const page of document.querySelectorAll<HTMLElement>('.pdfViewer > .page')) { page.style.width = '0px'; page.style.height = '0px' }
+    s.view.pinch('left', 1.3, [300, 300])
+    // (a value that is not a number is no CSS: the style would refuse it and show no preview at all)
+    for (const pane of [s.panes.left, s.panes.right]) expect(pane.style.transform).toMatch(/^translate\(-?[\d.]+px, -?[\d.]+px\) scale\([\d.]+\)$/)
+    await s.clock.advance(PINCH_COMMIT_MS)
+    for (const pane of [s.panes.left, s.panes.right]) { expect(Number.isFinite(pane.scrollTop)).toBe(true); expect(Number.isFinite(pane.scrollLeft)).toBe(true) }
+  })
+
+  it('a paper that fits its pane is shown growing as the commit lays it: no scroll the committed layout cannot have (the pane\'s empty foot is no margin of the paper\'s)', async () => {
+    const s = setup()
+    await opened(s, 1)
+    s.view.zoomTo(0.25)
+    await flush()
+    await s.clock.advance(1000)
+    const page = s.panes.right.querySelector<HTMLElement>(':scope > .pdfViewer > .page') as HTMLElement
+    const top0 = page.getBoundingClientRect().top - 40
+    expect(s.panes.right.scrollHeight).toBe(800)
+    s.view.pinch('right', 1.5, [608 + 300, 40 + 200])
+    // the page grows about the scroller's top left by k and is put where the committed layout puts it: its top where it was
+    const m = /translate\((-?[\d.]+)px, (-?[\d.]+)px\) scale\(([\d.]+)\)/.exec(s.panes.right.style.transform) as RegExpExecArray
+    const by = Number(m[2]), k = Number(m[3])
+    expect(by + k * top0).toBeCloseTo(top0, 6)
+  })
+
+  it('a zoom\'s pending level is called off by the pinch that starts before it: nothing moves a pane under the preview', async () => {
+    const s = setup()
+    await opened(s, 8)
+    s.view.zoomTo(0.6)
+    for (const pane of [s.panes.left, s.panes.right]) pane.scrollTop = 900
+    await flush()
+    await s.clock.advance(1000)
+    // a step of the keys' zoom, which levels the pair 150 ms on; the right put off level meanwhile; then a pinch
+    s.view.zoomBy(1.1)
+    s.panes.right.scrollTop += 300
+    await flush()
+    await s.clock.advance(50)
+    s.view.pinch('left', 1.05, [300, 400])
+    const right0 = s.panes.right.scrollTop
+    for (let i = 0; i < 6; i++) { await s.clock.advance(30); s.view.pinch('left', 1.02, [300, 400]); await flush() }
+    expect(s.view.probe().motion).toBeNull()
+    expect(s.panes.right.scrollTop).toBe(right0)
+  })
+
+  it('a display changed while a pinch is shown keeps the place the pinch left: the pinch committed before the place is read', async () => {
+    // the same pinch, committed by its wait or by the display's change, then the same display: the same place
+    const placeAfter = async (early: boolean) => {
+      const s = setup()
+      await opened(s, 8)
+      s.view.zoomTo(0.6)
+      for (const pane of [s.panes.left, s.panes.right]) pane.scrollTop = 900
+      await flush()
+      await s.clock.advance(1000)
+      for (let i = 0; i < 6; i++) s.view.pinch('left', 1.1, [300, 700])
+      if (!early) await s.clock.advance(PINCH_COMMIT_MS)
+      s.view.setDisplay('original')
+      await s.clock.advance(100)
+      await flush(10)
+      const top = s.panes.left.scrollTop
+      s.view.dispose()
+      return top
+    }
+    expect(await placeAfter(true)).toBe(await placeAfter(false))
+  })
+
+  it('a pointer at rest is looked at again at each step of a pinch shown by transform, as each step\'s scroll had it looked at', async () => {
+    const s = setup()
+    await opened(s, 3)
+    const left = stub()
+    internalsOf(s.view).setShapes('left', left)
+    internalsOf(s.view).setShapes('right', stub())
+    FakeRO.fire()
+    await flush()
+    const page = s.panes.left.querySelector('.page') as HTMLElement
+    page.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, ...clientOf(s.panes.left, 1, 150, 650) }))
+    await s.clock.tick()
+    left.calls.length = 0
+    for (let i = 0; i < 3; i++) { s.view.pinch('left', 1.1, [300, 100]); await s.clock.tick() }
+    expect(left.calls.filter(c => c.startsWith('hit')).length).toBeGreaterThanOrEqual(3)
+  })
+
+  it('an input during a pinch\'s preview commits it first: a wheel without Ctrl scrolls on from the zoom, not from under its transform', async () => {
+    const s = setup()
+    await opened(s, 6)
+    const scale0 = leftViewer().currentScale
+    for (let i = 0; i < 4; i++) s.view.pinch('left', 1.1, [300, 300])
+    expect(s.view.probe().pinching).not.toBeNull()
+    s.panes.left.dispatchEvent(new Event('wheel'))
+    expect(s.view.probe().pinching).toBeNull()
+    expect(leftViewer().currentScale).toBe(Math.round(scale0 * 1.1 ** 4 * 100) / 100)
+    expect(s.panes.left.style.transform).toBe('')
+    // a command does too
+    for (let i = 0; i < 2; i++) s.view.pinch('left', 1.1, [300, 300])
+    s.view.zoomBy(1.1)
+    expect(s.view.probe().pinching).toBeNull()
+    expect(leftViewer().log.filter(l => l === 'updateScale 0')).toHaveLength(2)
+  })
+
+  it('a wheel with ⌘ held is the reader\'s scroll, as one without: it commits a pinch under way and makes its pane the driver; only a wheel with Ctrl is the pinch\'s own (macOS\'s screenshot keys hold ⌘ while a scroll runs, the owner\'s report of 2026-11-10)', async () => {
+    const s = setup()
+    await opened(s, 6)
+    const wheel = (pane: HTMLElement, keys: { ctrlKey?: boolean; metaKey?: boolean; shiftKey?: boolean }) => pane.dispatchEvent(Object.assign(new Event('wheel'), keys))
+    s.panes.left.dispatchEvent(new Event('wheel'))
+    for (let i = 0; i < 2; i++) s.view.pinch('left', 1.1, [300, 300])
+    // a Ctrl-wheel, ⌘ held beside it or not, is the pinch's: the preview stays, and the driver
+    wheel(s.panes.right, { ctrlKey: true })
+    wheel(s.panes.right, { ctrlKey: true, metaKey: true })
+    const pinch = { pinching: s.view.probe().pinching !== null, driver: s.view.probe().driver }
+    // ⌘⇧ held, then ⌘ alone, each over the other pane
+    wheel(s.panes.right, { metaKey: true, shiftKey: true })
+    const meta = { pinching: s.view.probe().pinching !== null, driver: s.view.probe().driver }
+    wheel(s.panes.left, { metaKey: true })
+    expect([pinch, meta, s.view.probe().driver]).toEqual([{ pinching: true, driver: 'left' }, { pinching: false, driver: 'right' }, 'left'])
+  })
+
+  it('the pointer during a pinch\'s preview finds what shows under it: the point its transform shows there', async () => {
+    const s = setup()
+    await opened(s, 3)
+    const left = stub()
+    internalsOf(s.view).setShapes('left', left)
+    internalsOf(s.view).setShapes('right', stub())
+    FakeRO.fire()
+    await flush()
+    // a point of the unit (PDF 110, 610 on page 1), then a pinch of 2 about a point 100 px above it: the point shows 100 px
+    // below where it was, where the page as laid out holds the space below the unit
+    const c = clientOf(s.panes.left, 1, 110, 610), o: [number, number] = [c.clientX, c.clientY - 100]
+    s.view.pinch('left', 2, o)
+    const page = s.panes.left.querySelector('.page') as HTMLElement
+    page.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: c.clientX, clientY: c.clientY + 100 }))
+    await s.clock.tick()
+    expect(left.calls).toContain('hit 1')
+    expect(s.view.probe().lit).toBe(1)
+    // a point well below it: the unit's no more
+    page.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: c.clientX, clientY: c.clientY + 300 }))
+    await s.clock.tick()
+    await s.clock.advance(200)
+    expect(s.view.probe().lit).toBeNull()
   })
 
   it('an original let go lets go of what was lit on its pages: nothing painted holds them', async () => {
@@ -500,6 +797,22 @@ describe('V6: overlays', () => {
     expect(await again).toBe('opened')
     expect(s.view.probe().lit).toBeNull()
     expect(band.isConnected || band.parentElement !== null).toBe(false)
+  })
+
+  it('a pane scrolled by another under a pinch\'s preview (the find bar, a script) keeps the place that scroll took it to: the pinch committed about the point it shows there', async () => {
+    const s = setup()
+    await opened(s, 8)
+    for (const pane of [s.panes.left, s.panes.right]) pane.scrollTop = 1000
+    await flush()
+    await s.clock.advance(1000)
+    const y = 40 + 300
+    s.view.pinch('right', 1.5, [608 + 300, y])
+    // the find bar takes the right pane on, under the preview: the point it shows at the gesture's height, at the scale shown
+    s.panes.right.scrollTop = 5000
+    const keep = pointAt(s.panes.right, y)
+    await flush()
+    expect(s.view.probe().pinching).toBeNull()
+    expect(Math.abs(heightOf(s.panes.right, keep) - y)).toBeLessThanOrEqual(3)
   })
 
   it('the zoom menu\'s check follows the fit applied, and is none after a step', async () => {
@@ -672,6 +985,54 @@ describe('V11: the places before a layer', () => {
     expect(s.panes.right.scrollTop).toBe((places(s)[4] as HTMLElement).offsetTop)
   })
 
+  it('a place near the view but not in it waits to draw the original\'s page until the layer lets the pages ahead go (letAheadGo) or AHEAD_HOLD_MS: one in view drawn at once, the page views made all the same (2610.31506v1: the right\'s page 3, near, read 5.5 MB of images while page 1\'s layer waited)', async () => {
+    const s = setup()
+    await opened(s, 6)
+    // pages 1 and 2 in view, page 3 near alone (its near observer told, not its in-view one)
+    await nearOn(s, [1, 2])
+    const p3 = places(s)[2] as HTMLElement
+    for (const io of [...FakeIO.live]) if ((io.options as { rootMargin?: string } | undefined)?.rootMargin === NEAR && io.targets.has(p3)) io.cb([{ target: p3, isIntersecting: true }])
+    await flush(20)
+    const drawsOf = (n: number) => FakePDFPageView.made.filter(v => v.id === n).reduce((a, v) => a + v.draws, 0)
+    expect(FakePDFPageView.made.map(v => v.id)).toEqual([1, 2, 3])
+    expect([drawsOf(1), drawsOf(2), drawsOf(3)]).toEqual([1, 1, 0])
+    expect(internalsOf(s.view).places.aheadHeld()).toBe(true)
+    // let go (the layer's first page drawn, or no layer): page 3 drawn
+    internalsOf(s.view).places.letAheadGo()
+    await flush(20)
+    expect(drawsOf(3)).toBe(1)
+    expect(internalsOf(s.view).places.aheadHeld()).toBe(false)
+    // a place that comes into view while held is drawn at once
+    const t = setup()
+    await opened(t, 6)
+    await nearOn(t, [1])
+    const q2 = places(t)[1] as HTMLElement
+    for (const io of [...FakeIO.live]) if ((io.options as { rootMargin?: string } | undefined)?.rootMargin === NEAR && io.targets.has(q2)) io.cb([{ target: q2, isIntersecting: true }])
+    await flush(20)
+    const drawsIn = (n: number) => FakePDFPageView.made.filter(v => v.id === n && (t.panes.right as HTMLElement).contains(v.div)).reduce((a, v) => a + v.draws, 0)
+    expect(drawsIn(2)).toBe(0)
+    await nearOn(t, [2])
+    expect(drawsIn(2)).toBe(1)
+  })
+
+  it('the hold of the pages ahead ends by itself AHEAD_HOLD_MS after the places are made, where nothing lets it go (no layer for the visit)', async () => {
+    const s = setup()
+    await opened(s, 6)
+    await nearOn(s, [1])
+    const p2 = places(s)[1] as HTMLElement
+    for (const io of [...FakeIO.live]) if ((io.options as { rootMargin?: string } | undefined)?.rootMargin === NEAR && io.targets.has(p2)) io.cb([{ target: p2, isIntersecting: true }])
+    await flush(20)
+    const drawsOf = (n: number) => FakePDFPageView.made.filter(v => v.id === n).reduce((a, v) => a + v.draws, 0)
+    expect(drawsOf(2)).toBe(0)
+    await s.clock.advance(AHEAD_HOLD_MS)
+    await flush(20)
+    expect(drawsOf(2)).toBe(1)
+    // another document set: its pages ahead wait again (local Codex review)
+    internalsOf(s.view).places.letAheadGo()
+    await opened(s, 6)
+    expect(internalsOf(s.view).places.aheadHeld()).toBe(true)
+  })
+
   it('a link out of the paper, on either pane, goes out through the host alone', async () => {
     const s = setup()
     await opened(s, 6)
@@ -794,6 +1155,137 @@ describe('V11: the places before a layer', () => {
   })
 })
 
+describe('V15: a place waiting for its layer shows the left\'s drawing of its page (places.mjs, the rules audit\'s V1)', () => {
+  const copyOf = (s: Setup, n: number) => (places(s)[n - 1] as HTMLElement).querySelector<HTMLCanvasElement>(':scope > .axt-place-view > canvas.axt-place-copy')
+  const viewsIn = (s: Setup) => FakePDFPageView.made.filter(v => s.panes.right.contains(v.div))
+  const leftPage = (n: number) => leftViewer().getPageView(n - 1) as unknown as { div: HTMLElement; canvas: HTMLCanvasElement | null }
+
+  it('the left\'s canvas copied at its size in the frame after the left has drawn the page: no page view, no text layer, no links of its own; the left\'s loading mark shown meanwhile', async () => {
+    const s = setup({ own: false })
+    await opened(s, 6)
+    await nearOn(s, [1, 2])
+    const P = internalsOf(s.view).places
+    // (waiting: the original's page there, still to come from the left; PDF.js's loading mark as the left's page shows it)
+    expect([P.contentOf(1), copyOf(s, 1), viewsIn(s).length]).toEqual(['original', null, 0])
+    leftPage(1).div.classList.add('loadingIcon', 'loading')
+    await flush()
+    expect((places(s)[0] as HTMLElement).classList.contains('loading')).toBe(true)
+    expect((places(s)[0] as HTMLElement).getAttribute('aria-label')).toBe('right 1')
+    leftViewer().render(1, null, { width: 612, height: 792, sx: 1, sy: 1 })
+    // (nothing of the right's in the task the left's page is drawn in: the copy in the next frame, the mark kept until then)
+    expect([copyOf(s, 1), (places(s)[0] as HTMLElement).classList.contains('loading')]).toEqual([null, true])
+    await s.clock.tick()
+    const c = copyOf(s, 1)
+    expect([c?.width, c?.height]).toEqual([612, 792])
+    expect((places(s)[0] as HTMLElement).classList.contains('loading')).toBe(false)
+    expect((places(s)[0] as HTMLElement).querySelector('.textLayer, .annotationLayer, .page')).toBeNull()
+    expect(viewsIn(s)).toHaveLength(0)
+    // (one bitmap a place: its copy; page 2 still waits for the left)
+    expect(P.contentOf(2)).toBe('original')
+    expect((s.view.probe() as Record<string, unknown>)).toMatchObject({ copies: 1, copyPixels: 612 * 792, copyWaits: 1, pageViews: 0 })
+    // a place come near once the left has drawn its page takes it at once
+    leftViewer().render(3, null, { width: 612, height: 792, sx: 1, sy: 1 })
+    await s.clock.tick()
+    await nearOn(s, [3])
+    expect(copyOf(s, 3)?.width).toBe(612)
+  })
+
+  it('a zoom: the copy kept and stretched with its place until the left draws the page at the new scale, then taken again, the one before let go', async () => {
+    const s = setup({ own: false })
+    await opened(s, 6)
+    await nearOn(s, [1])
+    leftViewer().render(1, null, { width: 612, height: 792, sx: 1, sy: 1 })
+    await s.clock.tick()
+    const before = copyOf(s, 1) as HTMLCanvasElement
+    s.view.zoomBy(1.5)
+    await s.clock.advance(100)
+    expect(copyOf(s, 1)).toBe(before)
+    leftViewer().render(1, null, { width: 918, height: 1188, sx: 1, sy: 1 })
+    await s.clock.tick()
+    const after = copyOf(s, 1) as HTMLCanvasElement
+    expect([after === before, after.width, before.width]).toEqual([false, 918, 0])
+    expect(viewsIn(s)).toHaveLength(0)
+  })
+
+  it('a page that stays the original\'s is drawn by its own page view (its text layer and links), the copy kept over it until it is drawn, then let go', async () => {
+    const s = setup({ own: false })
+    await opened(s, 6)
+    await nearOn(s, [1])
+    leftViewer().render(1, null, { width: 612, height: 792, sx: 1, sy: 1 })
+    await s.clock.tick()
+    const copy = copyOf(s, 1) as HTMLCanvasElement
+    let drawn = () => {}
+    const held = new Promise<void>(ok => { drawn = ok })
+    const draw = FakePDFPageView.prototype.draw
+    vi.spyOn(FakePDFPageView.prototype, 'draw').mockImplementation(async function (this: FakePDFPageView) { await held; return draw.call(this) })
+    internalsOf(s.view).places.settle?.(n => n === 1)
+    await flush(5)
+    const view = viewsIn(s)[0] as FakePDFPageView
+    // (over the page view, as it is drawn: the copy its holder's last child)
+    expect([view.id, copyOf(s, 1), (places(s)[0] as HTMLElement).querySelector('.axt-place-view')?.lastElementChild]).toEqual([1, copy, copy])
+    drawn()
+    await flush(10)
+    expect([copyOf(s, 1), copy.width]).toEqual([null, 0])
+    expect((places(s)[0] as HTMLElement).querySelector('.textLayer')?.textContent).toBe('page 1')
+    expect((places(s)[0] as HTMLElement).querySelectorAll('canvas')).toHaveLength(1)
+  })
+
+  it('where the left does not show the right\'s pages (the sync off, the right alone), a place draws its own page view; one waiting for the left then draws its own too', async () => {
+    const s = setup({ own: false })
+    await opened(s, 6)
+    s.view.setSync(false)
+    await nearOn(s, [1])
+    expect(viewsIn(s).map(v => v.id)).toEqual([1])
+    const t = setup({ own: false })
+    await opened(t, 6)
+    await nearOn(t, [2])
+    expect(viewsIn(t)).toHaveLength(0)
+    t.view.setDisplay('translation')
+    await flush(5)
+    expect(viewsIn(t).map(v => v.id)).toEqual([2])
+  })
+
+  it('a left page whose drawing failed: the place draws its own', async () => {
+    const s = setup({ own: false })
+    await opened(s, 6)
+    await nearOn(s, [1])
+    leftViewer().render(1, new Error('a broken page'))
+    await flush(5)
+    expect([viewsIn(s).map(v => v.id), copyOf(s, 1)]).toEqual([[1], null])
+  })
+
+  it('dark pages: the copy is a page\'s canvas to the host sheet, which dims it as it dims the left\'s', async () => {
+    const s = setup({ own: false })
+    await opened(s, 6)
+    await nearOn(s, [1])
+    leftViewer().render(1, null, { width: 612, height: 792, sx: 1, sy: 1 })
+    await s.clock.tick()
+    document.documentElement.setAttribute('data-axt-dim', '')
+    try {
+      expect(copyOf(s, 1)?.matches('html[data-axt-dim] .pdfViewer .page canvas')).toBe(true)
+    } finally { document.documentElement.removeAttribute('data-axt-dim') }
+  })
+
+  it('a far place lets its copy go, pixels and all, and its wait for the left; dispose leaves neither', async () => {
+    const s = setup({ own: false })
+    await opened(s, 6)
+    await nearOn(s, [1, 2])
+    leftViewer().render(1, null, { width: 612, height: 792, sx: 1, sy: 1 })
+    await s.clock.tick()
+    leftPage(2).div.classList.add('loadingIcon')
+    await flush()
+    const copy = copyOf(s, 1) as HTMLCanvasElement
+    await nearOn(s, [1, 2], false)
+    expect([copy.width, copy.isConnected, (places(s)[1] as HTMLElement).classList.contains('loadingIcon')]).toEqual([0, false, false])
+    expect(s.view.probe()).toMatchObject({ copies: 0, copyWaits: 0 })
+    await nearOn(s, [1])
+    expect(copyOf(s, 1)?.width).toBe(612)
+    const again = copyOf(s, 1) as HTMLCanvasElement
+    s.view.dispose()
+    expect([again.width, again.isConnected]).toEqual([0, false])
+  })
+})
+
 describe('V12: the web\'s fixes as plain behaviour', () => {
   it('with scrollEnd timer, the pair levels after the rest with no scrollend event', async () => {
     const s = setup({ scrollEnd: 'timer' })
@@ -858,6 +1350,52 @@ describe('V12: the web\'s fixes as plain behaviour', () => {
     expect(v.draws).toBe(2)
   })
 
+  it('while a zoom\'s or a pinch\'s steps last the places\' stack is marked scaling, its text layers out of style and layout; marked no more once they are drawn again, nor for a zoom of one step', async () => {
+    const s = setup()
+    await opened(s, 4)
+    await nearOn(s, [1])
+    await flush(20)
+    const stack = s.panes.right.querySelector(':scope > .pdfViewer') as HTMLElement
+    expect(stack.hasAttribute('data-axt-scaling')).toBe(false)
+    s.view.zoomBy(1.1); await s.clock.advance(50); s.view.zoomBy(1.1)
+    expect(stack.hasAttribute('data-axt-scaling')).toBe(true)
+    // (drawn again after the steps' delay, the text layers still out a while: a step soon after finds them so)
+    await s.clock.advance(450)
+    await flush(20)
+    expect(stack.hasAttribute('data-axt-scaling')).toBe(true)
+    s.view.zoomBy(1.1)
+    await s.clock.advance(450)
+    expect(stack.hasAttribute('data-axt-scaling')).toBe(true)
+    await s.clock.advance(TEXT_BACK_MS + 100)
+    await flush(20)
+    expect(stack.hasAttribute('data-axt-scaling')).toBe(false)
+    s.view.pinch('right', 1.1, [800, 300])
+    // (a pinch: shown by transform until it is committed, its text layers out from then until they are drawn again)
+    expect(stack.hasAttribute('data-axt-scaling')).toBe(false)
+    await s.clock.advance(PINCH_COMMIT_MS)
+    expect(stack.hasAttribute('data-axt-scaling')).toBe(true)
+    await s.clock.advance(TEXT_BACK_MS + 100)
+    expect(stack.hasAttribute('data-axt-scaling')).toBe(false)
+    // (a zoom the menu sets is drawn at once: no step to wait for)
+    s.view.zoomTo(2)
+    expect(stack.hasAttribute('data-axt-scaling')).toBe(false)
+    // (a menu zoom while the mark waits to go, then steps again: no reveal left over from before takes it off mid-steps)
+    await s.clock.advance(TEXT_BACK_MS + 1000)
+    s.view.zoomBy(1.1)
+    await s.clock.advance(500)
+    s.view.zoomTo(1.5)
+    await s.clock.advance(100)
+    s.view.zoomBy(1.1)
+    await s.clock.advance(350)
+    expect(stack.hasAttribute('data-axt-scaling')).toBe(true)
+    await s.clock.advance(400 + TEXT_BACK_MS)
+    expect(stack.hasAttribute('data-axt-scaling')).toBe(false)
+    // (and the view's end takes the mark with it)
+    s.view.zoomBy(1.1)
+    s.view.dispose()
+    expect(stack.hasAttribute('data-axt-scaling')).toBe(false)
+  })
+
   it('a stub Shapes gets every paint, hit and click, and layoutOf none', async () => {
     const s = setup()
     await opened(s, 3)
@@ -919,6 +1457,23 @@ describe('V12: the web\'s fixes as plain behaviour', () => {
     expect(reads.n).toBe(0)
     expect(s.panes.left.querySelector('.page')?.getAttribute('aria-label')).toBe('left page 1, again')
     expect((places(s)[0] as HTMLElement).getAttribute('aria-label')).toBe('right page 1, again')
+  })
+
+  it('marks the original\'s words as the paper\'s language on each page view\'s text layer alone, on the left and in a place that shows the original\'s page: the page\'s region, its name and its links keep the interface\'s (PDF-READER §13)', async () => {
+    const s = setup()
+    await opened(s, 2)
+    leftViewer().renderText(1)
+    await nearOn(s, [1])
+    await flush(20)
+    const left = s.panes.left.querySelector<HTMLElement>('.page')!
+    const place = places(s)[0] as HTMLElement
+    expect([left.querySelector('.textLayer')?.getAttribute('lang'), place.querySelector('.textLayer')?.getAttribute('lang')]).toEqual(['en', 'en'])
+    // the page's name is said in the interface's language: no lang on the page, the place, the panes or the viewer
+    expect(left.getAttribute('aria-label')).toBe('left 1')
+    expect([left, place, s.panes.left, s.panes.right, ...s.panes.left.querySelectorAll('.pdfViewer')].map(el => el.hasAttribute('lang'))).toEqual([false, false, false, false, false])
+    expect(place.querySelector('.annotationLayer')?.hasAttribute('lang')).toBe(false)
+    // the control: before PDF.js says the left's page 2 has its text layer, it carries none
+    expect(s.panes.left.querySelectorAll('.page')[1]?.querySelector('.textLayer')).toBeNull()
   })
 
   it('setNarrow(true, { display: original }) from bilingual lays out once', async () => {

@@ -1,0 +1,25 @@
+iso-639-3.tab: the rows of the ISO 639-3 code set for the 179 languages Read arXiv translates into (180 menu
+entries: Simplified and Traditional Mandarin share `cmn`), as published by SIL International, the ISO 639-3
+Registration Authority, at https://iso639-3.sil.org/code_tables/download_tables ("ISO 639-3 Code Set", the UTF-8
+tab-separated table iso-639-3.tab; the release of 2026-10-15, downloaded on 2026-11-07). The rows are taken unchanged,
+with the table's header line; the other rows are left out. scripts/languages.ts reads them.
+
+Source of the codes: iso639-3.sil.org.
+
+SIL's terms, as stated on that page on 2026-11-07 ("ISO 639-3 Code Tables Terms of Use"):
+
+  The ISO 639-3 code set may be downloaded and incorporated into software products, web-based systems, digital
+  devices, etc., either commercial or non-commercial, provided that:
+  - attribution is given to iso639-3.sil.org as the source of the codes;
+  - the identifiers of the code set are not modified or extended except as may be privately agreed using the Private
+    Use Area (range qaa to qtz), and then such extensions shall not be distributed publicly;
+  - the product, system, or device does not provide a means to redistribute the code set.
+  Expansions to the information provided by the standard (e.g., population data, names in other languages, geographic
+  coordinates, etc.) may be made and distributed as long as such added information is clearly identified as not being
+  part of the standard itself. The ISO 639-3 website is the only authorized distribution site for the ISO 639-3 code
+  tables.
+
+So this repository holds only the rows its language table is built from, never the code set: the whole table is to be
+had from the address above. Not part of the standard, and named as such where they are used: the menus' order, the
+BCP 47 tags the translators are sent, the names (Unicode CLDR's, scripts/languages.ts; the table's reference name only
+for a language CLDR does not name in English), the script notes and the product's own words in the generator's tables.
