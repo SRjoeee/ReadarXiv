@@ -1246,15 +1246,20 @@ lower case, as the spec had it until 2026-11-22, a run of a face's own small cap
 text after it on its line was drawn over its last letters: the owner's report on production of 2603.14468v1, whose
 `\textsc` name of thirteen letters in Linux Libertine O Bold is 765.8 thousandths of an em in its small capitals (the file's
 smcp glyphs) and was laid at its lower case's 681.8, the translation after it in its §3 heading begun 6.98 pt before the name's
-drawn end (21
-such runs over the paper, each 4.2 to 7.0 pt over the text after it). A limit, the slices': the face is the unit of the rule,
-and the class is drawn by the face's slice. A served slice with no smcp feature of its own draws its letters in lower case
-under the class, where Chromium's canvas, asked the small capitals, synthesizes them (Chromium 153, Linux Libertine O's Greek
-slice, "αβγδ" at 100 px: the canvas 166.67, the class 207.91; its IPA slice, 151.69 against 192.81; its Latin slices, where the
-feature is, equal). Such a run is measured narrower than drawn: Libertine's, Biolinum's, XCharter's, EB Garamond's, Erewhon's,
-CMU Serif's and Domitian's slices hold every letter of the targets' alphabets where the feature is (none of the 396 small-caps
-runs of the 245 corpus papers holds another), CMU Sans' and CMU Mono's slices with them have none (every target letter). The
-faces' tables say which slices a face has, not which keep the feature. The website serves those files from its origin; the extension reads them from our
+drawn end (21 such runs over the paper, each 4.2 to 7.0 pt over the text after it). A limit: the rule reads a face, and the
+class is drawn by a slice. A face's smcp feature substitutes some of its letters, and a served slice keeps the feature where it
+holds one of them: Linux Libertine O's substitutes Latin and Cyrillic letters (98 code points), no Greek or IPA letter, so its
+Greek and IPA slices have no feature; CMU Sans' and CMU Mono's substitute Greek letters alone (150), so their Latin slices have
+none. In a slice with none the class draws the lower case and Chromium's canvas, asked small capitals, synthesizes them
+(Chromium 153, Libertine's "αβγδ" at 100 px: the canvas 166.67, the class 207.91; its IPA slice, 151.69 against 192.81); in a
+slice with the feature the two give one width, for the letters it substitutes and the others alike. Such a run is measured
+narrower than drawn. Every letter of the targets' alphabets stands in a slice with the feature in Libertine, Biolinum, XCharter,
+EB Garamond, Erewhon, CMU Serif and Domitian, and in none in CMU Sans and CMU Mono; none of the 396 small-caps runs of the 245
+corpus papers holds such a letter. The exact rule is the letter's (a run in small capitals where its face's smcp substitutes one
+of its letters, in its lower case elsewhere), and its data, the code points each face's smcp substitutes, is in no table the
+reader reads (`SMCP` is one boolean a face; the served tables give each slice's ranges and file). The lab's measurer
+(`lab/typeset/served-metrics.mjs`, Skia) synthesizes none and so measures what the class draws in every slice (Libertine's
+"αβγδ" 207.90 with small capitals asked and without). The website serves those files from its origin; the extension reads them from our
 server's, as today's reader does. Both hosts' readers take this path: neither gives an engine (the website's page, and the
 extension's `src/pdf-reader/host/v2.ts`, open the reader with none); a host that gives its own engine and faces
 (`createFaces`, a table; the harness's fixture lay) keeps its faces' own rules, a face lost drawn in its fallback.
