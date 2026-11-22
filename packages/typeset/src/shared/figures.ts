@@ -8,13 +8,13 @@
 // docs/PDF-READER.md §19.12). It paints nothing (the hidden box, the SVG, the text layer are the reader's and D.*'s); a
 // figure's family, weight and slant are its font's name's (fontClassOf). A face not loaded yet is waited for (B.cover:
 // `waiting`, its faces in `wait`): no width is taken before its face is there.
-import { readFontName } from '@readarxiv/text'
+import { ownSmallCapsOf, readFontName } from '@readarxiv/text'
 import { hangOf, leadOf } from '../breaker/break.ts'
 import { cover } from '../breaker/cover.ts'
 import { type FitMeasure, fitMeasure } from '../breaker/measure.ts'
 import { cjkLeadRe, clustersOf, markOf } from '../breaker/script.ts'
 import { shown, type TextPiece } from '../breaker/text.ts'
-import type { Face, Token, TStyle } from '../breaker/tokens.ts'
+import { type Face, type Token, type TStyle, upperOf } from '../breaker/tokens.ts'
 import { firstCompress } from '../fit/walk.ts'
 import type { FaceId, Metrics } from '../types.ts'
 import { type FitFigure, fitFigure, sameAsSource } from './figure-fit.ts'
@@ -90,6 +90,9 @@ type FiguresInput = {
   faceOf: (st: TStyle, cls: 'cjk' | 'latin') => Face
   /** the rules' cjkQuotes, the last floor (P.floorMin), and how far the marks are compressed (compressMax: blanksOf) */
   rules: { cjkQuotes?: boolean; floorMin: number; compressMax: number }
+  /** the target: its case mapping reads a run's lower-case letters (whether a face has a small capital for each); none, the
+   *  root's */
+  to?: string
   metrics: Metrics
 }
 
@@ -103,12 +106,17 @@ export function fontClassOf(name: string): { fam: 'serif' | 'sans' | 'mono' | 'm
 }
 
 /** a figure's translation in its runs by script, each in its face; and by style, where its characters
- *  (`at`, by code point) hold their own (a group's run on A), each run in its style's face */
+ *  (`at`, by code point) hold their own (a group's run on A), each run in its style's face. A run asks its face's small
+ *  capitals only where the face has one for every lower-case letter of it (`ownCaps`, @readarxiv/text ownSmallCapsOf); else
+ *  its face is the plain one, measured and drawn in lower case, as a run in a face with none is drawn (the class synthesizes
+ *  none): asked of a face for a letter it has none for, the run was drawn in lower case and measured in the canvas's
+ *  synthesized small capitals */
 function figureRuns(
   text: string,
   faceOf: (cls: 'cjk' | 'latin', st?: TStyle) => Face,
   quotes: boolean,
   at: readonly (TStyle | undefined)[] = [],
+  ownCaps: (id: string, s: string) => boolean = () => true,
 ): FigureRun[] {
   const cjkLead = cjkLeadRe(quotes),
     runs: { cls: 'cjk' | 'latin'; s: string; st: TStyle | undefined }[] = []
@@ -124,7 +132,8 @@ function figureRuns(
     else runs.push({ cls, s: ch, st })
   }
   return runs.map((r) => {
-    const face = r.st ? faceOf(r.cls, r.st) : faceOf(r.cls)
+    const face0 = r.st ? faceOf(r.cls, r.st) : faceOf(r.cls)
+    const face = face0.caps && !(face0.id && ownCaps(face0.id, r.s)) ? { ...face0, caps: false } : face0
     return { s: r.s, face, cls: r.cls, ...(typeof r.st?.fill === 'number' ? { fill: r.st.fill } : {}) }
   })
 }
@@ -226,6 +235,7 @@ export function figures(i: FiguresInput): { figures: Figure[]; wait: [FaceId, st
       (cls, s) => i.faceOf(cls === 'cjk' ? cjkOf(s ?? st) : (s ?? st), cls),
       !!i.rules.cjkQuotes,
       stAt,
+      (id, s) => ownSmallCapsOf(id, s, upperOf(i.to ?? 'und')),
     )
     const covered = cover(
       runs.map((r) => ({ s: r.s, face: r.face }) as Token),

@@ -1259,10 +1259,12 @@ none (below, "Small capitals the layer draws itself"): one rule a piece, never s
 whole keeps its kerning. Small capitals are then asked of a slice only for letters it holds them for, and the canvas and the
 class give one width. Until 2026-11-22 the rule read the face whole, and such a run (Libertine's Greek in small capitals; under
 a Cyrillic target, CMU Sans' and CMU Mono's Latin and Cyrillic, Computer Modern's sans and typewriter text being set in them)
-was drawn in lower case, measured since the measure kept small capitals in the canvas's synthesized ones. A figure's text keeps
-its small capitals by its glyphs' class and is not set by this rule (its runs are the face's whole: `shared/figures.ts`
-figureRuns): a figure text in small capitals with a letter its face has none for is drawn in lower case and measured in the
-canvas's synthesized small capitals, the one path left. The lab's measurer (`lab/typeset/served-metrics.mjs`, Skia)
+was drawn in lower case, measured since the measure kept small capitals in the canvas's synthesized ones. A figure's text, whose
+runs keep their class's small capitals rather than the layer's (`shared/figures.ts` figureRuns), asks them of its face by the
+same letters: a run with a letter its face has none for is set in the plain face, measured and drawn in lower case, as a figure
+text in a face with no small capitals of its own already is (the class synthesizes none; the layer's own small capitals for
+figure texts are not drawn). So no run reaches the measure asking a face's small capitals for a letter it has none for, on any
+path: B.tokens' pieces, spaces and raised runs, S.names' names and label rows, and the figure texts' runs. The lab's measurer (`lab/typeset/served-metrics.mjs`, Skia)
 synthesizes none and measures what the class draws in every slice. The website serves those files from its origin; the extension reads them from our
 server's, as today's reader does. Both hosts' readers take this path: neither gives an engine (the website's page, and the
 extension's `src/pdf-reader/host/v2.ts`, open the reader with none); a host that gives its own engine and faces

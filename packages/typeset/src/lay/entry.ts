@@ -475,7 +475,7 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
       read.set(m.ord, { rd, pieces, tokens, ...(paras ? { paras } : {}) })
     }
   // (the figure texts, S.figures over the part, each at the size its own width needs: a face not loaded waited for as any)
-  const fig = figuresOf(part, figs, rows, { paper, R, metrics })
+  const fig = figuresOf(part, figs, rows, { paper, R, metrics, to: rules.target })
   faces.push(...fig.wait)
   for (const [ord, w] of fig.why) state.set(ord, w)
   // (one state per call: a face not loaded leaves the whole page waiting, as a row not in does)

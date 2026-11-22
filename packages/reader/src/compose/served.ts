@@ -152,9 +152,9 @@ const OWN_CAPS: ReadonlySet<string> = new Set(SMCP)
  *  that has its own alone (its faked ones are runs of capitals at a share of the size, B.tokens): measured in its lower case,
  *  such a run was laid narrower than it is drawn, the text after it on its line drawn over its last letters. The typesetter
  *  asks them letter by letter (@readarxiv/text ownSmallCapsOf): of a face only for a piece whose every lower-case letter its
- *  smcp substitutes, so that the slice a run falls in holds them and the canvas and the class give one width; a slice with no
- *  feature draws lower case where the canvas would synthesize (a figure's text, whose runs keep their class's small capitals
- *  whole, the one path left: docs/PDF-READER.md §11.5) */
+ *  smcp substitutes, on every path (B.tokens' pieces, spaces and raised runs; S.names; the figure texts' runs, set in the plain
+ *  face where their face has none for a letter): no run reaches here asking a face's small capitals for a letter it has none
+ *  for, so the slice a run falls in holds them and the canvas and the class give one width (docs/PDF-READER.md §11.5) */
 export function partsOf(
   font: string,
   runs: readonly { text: string; cjk: boolean; face?: { id: string } }[],
