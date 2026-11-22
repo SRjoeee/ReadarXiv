@@ -19,12 +19,12 @@
 //           the same trim and synthesis; read only, never gated: on Chromium 153 the element's trim reaches its text, its
 //           synthesis does not, and the kana stay kerned)
 // Each against the table's w100 and the Node measurer's (served-metrics.mjs), equal within 1/1000 px. Exit 0 when rules
-// equals the measurer on every measure and every other difference of rules and plain is of a named class (served-check's
-// 14: 8 text-spacing-trim of adjacent CJK punctuation, 2 kana runs Chrome kerns, 4 small capitals on domitian and xcharter,
-// which rules measured in lower case until 2026-11-22: Chrome's widths are the faces' own smcp glyphs, domitian's "ArXiv" 289.0
-// at 100 px, its file's), none over its count; else 1. The 14 stand between rules and the table and between plain and the
-// measurer: the table is today's Chrome, which trims, kerns kana and synthesizes; the measurer, the spec's target, does
-// none of these. Offline: a static server on 127.0.0.1 serves the page and the
+// equals the measurer on every measure and every other difference of rules and plain is of a named class (10: 8
+// text-spacing-trim of adjacent CJK punctuation, 2 kana runs Chrome kerns), none over its count; else 1. The 10 stand between
+// rules and the table and between plain and the measurer: the table is today's Chrome, which trims and kerns kana; the
+// measurer, the spec's target, does neither. A small-caps measure is of no named class: Chrome's canvas, the measurer and the
+// table give a face's own small capitals one width (the 4 of the tables, domitian's "ArXiv" 289.0 at 100 px, its file's smcp
+// glyphs, and xcharter's "Gap" and "Props", equal in all three). Offline: a static server on 127.0.0.1 serves the page and the
 // slices, the browser aborts any other request. Lab-data stays where it is: nothing is written. Run from the worktree's root,
 // in the machine's browser slot:
 //   <the lab's heavy-slot.sh> e2e -- node lab/typeset/metrics-browser.mjs
@@ -143,10 +143,9 @@ const unicodeRangeOf = (ranges) => {
   return out.join(', ')
 }
 
-/** a difference's named class (served-check's 14), or 'other' */
-const NAMED = { trim: 8, kana: 2, 'small-caps': 4 }
-function classOf(font, text) {
-  if (/^(italic )?small-caps /.test(font)) return 'small-caps'
+/** a difference's named class (the 10 of the header), or 'other' (a small-caps measure among them: none is named) */
+const NAMED = { trim: 8, kana: 2 }
+function classOf(_font, text) {
   const cs = [...text]
   for (let i = 1; i < cs.length; i++) if (PUNCT.test(cs[i - 1]) && PUNCT.test(cs[i])) return 'trim'
   for (let i = 1; i < cs.length; i++) if ((KANA.test(cs[i - 1]) || KANA.test(cs[i])) && CJK.test(cs[i - 1]) && CJK.test(cs[i])) return 'kana'
