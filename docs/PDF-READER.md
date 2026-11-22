@@ -9310,14 +9310,15 @@ So no class is left out, and no table of classes is kept.
   displays and 25 inline formulas (every unit drawn), 31 pieces of no mark (`\noindent`, `\label`, `\\`) and 7 of the failing
   kind, every one's unit `text past its source`: three `\Cref`, two citations, two `\delete{…}`. The chain from the stored
   compiles at this round's head, against round c5's: the marked TeX of 24 papers moves (the seven, and 17 with an inline formula
-  there, now the carrier's), only their marked requests' keys, 49 final passes with a PDF, 1,749 pages, 599,858 text items, none
+  there, now the carrier's), only their marked requests' keys, 47 final passes with a PDF, 1,715 pages, 595,318 text items, none
   moved; 238 papers byte for byte (every bundle file, prepare dump and ownership file; the located files but their timings), the
   17 among them, and every units object of the 245; in each of the seven one unit moves, the failing kind's, from `text past its
   source` to drawn (2608.00812v1, 2610.18513v1, 2610.20285v1, 2608.12255v1, 2608.18626v1, 2608.29558v2, 2608.29782v1), its
   pages' flows and links and every page's faces with it. 2601.06943v2: one unit moves (its paragraph, 2 lines on page 5, 5
   under Figure 4 on page 6). The three papers reported earlier that day (2609.35143v1, 2606.07636v2, 2603.14468v1) and the
-  gate pack's layout files byte for byte. The reader's own lay over the 245 with every row answered draws the five, and
-  leaves the two `\delete{…}` paragraphs the original's (`unproven`): their part states the piece's element with no ink (both
+  gate pack's layout files byte for byte. The reader's own lay over the 245 with every row answered draws the five (51,591
+  -> 51,596; 51,600 with #666's lay, its own four units of 2608.23517v1), so 6 of the 8 with 2601.06943v2's, and leaves the
+  two `\delete{…}` paragraphs the original's (`unproven`), for the element-ink round: their part states the piece's element with no ink (both
   its points stand, nothing between), and the typesetter refuses a placeholder of no ink that is no space, symbol or nothing
   (packages/typeset `unit/elements.ts` `crops`): it cannot tell a piece that set nothing from one whose ink was not found. Not
   changed here.
