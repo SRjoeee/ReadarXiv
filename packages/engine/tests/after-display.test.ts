@@ -13,7 +13,25 @@
 import { describe, expect, it } from 'vitest'
 import { type Glyph, packGlyphs } from '../src/ink.ts'
 import { openPaper, originalFiles } from '../src/compile/live.ts'
-import { CARRY_END_TEX, CARRY_TEX, followsOf, LAYOUT_TEX, layoutMarking, MARK_CLASSES } from '../src/marks/marks.ts'
+import { END_TEX, LINES_TEX } from '../src/compile/tex.ts'
+import {
+  ASK_TEX,
+  CALL_TEX,
+  CARRY_END_TEX,
+  CARRY_TEX,
+  classNamesTex,
+  DVI_LAYOUT_TEX,
+  followsOf,
+  LAYOUT_TEX,
+  LAYOUT_TEX_REDUCED,
+  layoutMarking,
+  MARK_CLASSES,
+  NAMES_TEX,
+  refsTex,
+  regionsTex,
+  STATEMENTS_TEX,
+} from '../src/marks/marks.ts'
+import { DVI_MARK_DEF, MARK_DEF } from '../src/source/latex-front.ts'
 import { OWNED, OWNED_HOW, ownedOf, STREAM_COLUMNS, type StreamPage } from '../src/own/stream.ts'
 import type { SourceUnit } from '../src/source/latex-front.ts'
 
@@ -248,5 +266,34 @@ describe("the carrier's TeX in a paper's head only where the marking writes a ca
     expect(tex).not.toContain('\\axtpmd{')
     expect(tex).not.toContain(CARRY_TEX)
     expect(tex).not.toContain(CARRY_END_TEX)
+  })
+})
+
+describe("the carrier's TeX takes no name the rest of a marked head has", () => {
+  // (its scratch box and count were \axt@cc and \axt@uc, a cell's statement in LAYOUT_TEX: every marked cell of a paper with a
+  // carrier then failed, "Forbidden control sequence found while scanning use of \axt@tec", 2307.16209v1 refused)
+  it('each macro, register and switch CARRY_TEX defines is named nowhere else, but the two marks it wraps', () => {
+    const others = [
+      MARK_DEF,
+      DVI_MARK_DEF,
+      LAYOUT_TEX,
+      LAYOUT_TEX_REDUCED,
+      STATEMENTS_TEX,
+      ASK_TEX,
+      DVI_LAYOUT_TEX,
+      CALL_TEX,
+    ]
+    others.push(NAMES_TEX, END_TEX, LINES_TEX, classNamesTex(['\\begin{IEEEproof}']), refsTex(['key']))
+    others.push(regionsTex(['verbatim', 'lstlisting'], ['codebody']))
+    const defined = new Set(
+      [...CARRY_TEX.matchAll(/\\(?:(?:protected\\)?def|let|newbox|newcount|newif)\\((?:if)?axt[A-Za-z@]+)/g)].map((m) =>
+        m[1]!.replace(/^if/, ''),
+      ),
+    )
+    const wrapped = new Set(['axt@pmc', 'axt@pm'])
+    const named = (n: string) => new RegExp(`\\\\(?:if)?${n.replace(/@/g, '@')}(?:true|false)?(?![A-Za-z@])`)
+    const clash = [...defined].filter((n) => !wrapped.has(n) && others.some((t) => named(n).test(t)))
+    expect(defined.size).toBeGreaterThan(20)
+    expect(clash).toEqual([])
   })
 })
