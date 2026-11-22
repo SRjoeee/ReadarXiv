@@ -219,10 +219,15 @@ async function pagesOf(bytes: Uint8Array) {
       masks.push([m.width, m.height, Array.from(m.data)])
     }
     await new Promise((r) => setTimeout(r, 200))
+    // (whether an image's pixels came: the lite worker resolves each with a record of none (compile/pdf-lite.ts), or with none
+    // where PDFImage cannot read it, as a JPX whose header the packing zeroed; which of the two is no reading of B's: read.ts
+    // reads an image's object on arXiv's page alone, `images`)
     const decoded = ofKind(OPS.paintImageXObject).map((a) => {
       const id = a[0] as string
       const objs = id.startsWith('g_') ? page.commonObjs : page.objs
-      return objs.has(id) ? (objs.get(id) ? 'pixels' : 'none') : 'pending'
+      if (!objs.has(id)) return 'pending'
+      const o = objs.get(id) as { data?: { length: number }; bitmap?: unknown } | null
+      return o && (o.bitmap || (o.data?.length ?? 0) > 0) ? 'pixels' : 'none'
     })
     const text = (await page.getTextContent()).items
     // (a Map, as a Type 3 font's glyph lists are, by its entries; a typed array by its values)

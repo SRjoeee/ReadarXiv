@@ -4220,7 +4220,7 @@ await check(
     assert(
       st.faces === 'lost' &&
         st.laid > 0 &&
-        st.said === "Some fonts didn't load. Reload to try again." &&
+        st.said === 'Some fonts could not be loaded. The translation appears once they load.' &&
         other.faces === null &&
         !other.toast,
       `faces ${JSON.stringify({ st, other })}`,

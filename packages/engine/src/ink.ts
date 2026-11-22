@@ -70,7 +70,7 @@ export interface Glyph {
   blank?: boolean
   form?: boolean
   /** with `turned` (the figures' reading): not wholly inside the clip in force (`clipped`); nothing of it shown (`unseen`: wholly
-   *  outside the clip, painted at an alpha of 0, or covered whole by an opaque fill painted after it); its form's number and its
+   *  outside the clip, painted at an alpha of 0, or covered whole by an opaque fill or image painted after it); its form's number and its
    *  innermost picture's (`fid`, `pid`) */
   clipped?: true
   unseen?: true
@@ -121,6 +121,8 @@ export type PageInk = {
   mergedAt: number | null
   rotated: boolean
 }
+/** pageInk's walk as a reader of the list in pieces (inkReader): an OpsReader, and the image objects its end will read (`asks`) */
+export type InkReader = OpsReader<PageInk> & { asks(): string[] }
 /** pageInk's options */
 export interface PageInkOptions {
   rotate: number
@@ -141,12 +143,18 @@ export interface PageInkOptions {
   names?: Map<unknown, string> | null
   /** false: no figure path's lines (`shapes` empty), every other reading as it is */
   shapes?: boolean
+  /** with `turned`: the page's image objects, by a paint's object id, as PDF.js resolves them (an id that starts `g_` the
+   *  document's common objects', any other the page's own: PDF.js's canvas getObject). Given, an image painted after a glyph
+   *  covers it as an opaque fill does where its samples are opaque (imageOpaque), read at the walk's end over the glyphs painted
+   *  before it: the reader's `asks` names the objects it will read, which its host awaits first. None given, an image covers
+   *  nothing */
+  images?: InkObjects | null
 }
 /** a glyph set turned (pageInk's `turned`): its baseline from its origin to its advance's end, its direction, its size, its
  *  font's band in em, its own ink up and down from its baseline in em (`up`, `down`: its outline's, else its font's band), its
  *  box's index (-1 for none), the level glyphs and the pictures' points before it; `clipped` where its own ink (its outline,
  *  else its font's band, across its advance) is not wholly inside the clip in force; `unseen` where nothing of it is shown (that
- *  ink wholly outside the clip, painted at an alpha of 0, or covered whole by an opaque fill painted after it) */
+ *  ink wholly outside the clip, painted at an alpha of 0, or covered whole by an opaque fill or image painted after it) */
 export interface TurnedGlyph {
   u: string
   n: number
@@ -589,19 +597,48 @@ function textBoxOnPage(M: Matrix, a0: number, a1: number, b0: number, b1: number
   }
   return [X0, Y0, X1, Y1]
 }
+/** the unit square an image is painted into under its matrix (PDF 8.9.4; PDF.js's paintInlineImageXObject alike), as the path
+ *  data PDF.js gives one (moveTo, three lineTos, closePath): an image's region read as a fill's is (holdsWhole) */
+const UNIT_SQUARE = Float32Array.from([0, 0, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 4])
+/** PDF.js's kinds of decoded image data (shared/util.js ImageKind): one bit of grey, RGB, RGBA */
+const GRAYSCALE_1BPP = 1,
+  RGB_24BPP = 2,
+  RGBA_32BPP = 3
 /**
- * The figures' reading of what an opaque fill painted after a glyph covers whole (pageInk's `turned`). `add`: a glyph painted,
- * level or turned, with its own ink's box on the page, kept by the cell of the grid its box's middle lies in. `cover`: an opaque
- * fill painted now (under matrix `m`, its path's data, its rule, and `fb` its box on the page cut to the clip in force and the
- * groups' bounds, where it shows): each glyph painted before it whose box lies inside `fb` and whose ink its region holds whole
- * (holdsWhole) is `unseen`, a turned glyph's box with it (`boxes`, the walk's unseen boxes). A step of the walk's (`step`, which
- * may stop it: `stopped`) each cell it meets, each glyph it tests and each of the path's numbers it reads for one
+ * Whether every sample of an image paints at full opacity, from what PDF.js gives of it: the box's lite worker's record of no
+ * pixels (compile/pdf-lite.ts: `alpha` false where the image has no /SMask, no /Mask and no alpha in its data, PDFImage's own test
+ * of whether its decoded data carries alpha), or its decoded data (an inline image the list carries, a document read with its
+ * pixels): of a kind with no alpha channel, or one whose alpha is 255 at every sample. Anything else is not opaque, so that a text
+ * under it stays shown: no object yet, a decode that failed (null), a bitmap that gives no samples to read
+ */
+export function imageOpaque(img: unknown): boolean {
+  if (!img || typeof img !== 'object') return false
+  const alpha = at(img, 'alpha')
+  if (typeof alpha === 'boolean') return !alpha
+  const kind = at(img, 'kind')
+  if (kind === GRAYSCALE_1BPP || kind === RGB_24BPP) return true
+  if (kind !== RGBA_32BPP) return false
+  const data = at(img, 'data'),
+    n = lengthOf(data)
+  if (!(n > 0) || n % 4 !== 0) return false
+  for (let i = 3; i < n; i += 4) if (at(data, i) !== 255) return false
+  return true
+}
+/**
+ * The figures' reading of what an opaque paint after a glyph covers whole (pageInk's `turned`): a fill, an image. `add`: a glyph
+ * painted, level or turned, with its own ink's box on the page, kept by the cell of the grid its box's middle lies in. `cover`: an
+ * opaque paint (under matrix `m`, its path's data, its rule, and `fb` its box on the page cut to the clip in force and the groups'
+ * bounds, where it shows): each glyph painted before it (the first `before` added, all by default) whose box lies inside `fb` and
+ * whose ink its region holds whole (holdsWhole) is `unseen`, a turned glyph's box with it (`boxes`, the walk's unseen boxes).
+ * `count`: the glyphs added so far, an image's `before` where its cover is read later. A step of the walk's (`step`, which may
+ * stop it: `stopped`) each cell it meets, each glyph it tests and each of the path's numbers it reads for one
  */
 function coverReading(boxes: Set<number>, step: (k: number) => void, stopped: () => boolean) {
   const glyphs: (Glyph | TurnedGlyph)[] = [],
     inks: Box4[] = []
   let cells: (number[] | undefined)[] | null = null
   return {
+    count: (): number => glyphs.length,
     add(x: Glyph | TurnedGlyph, x0: number, y0: number, x1: number, y1: number): void {
       if (!(x1 > x0 && y1 > y0) || !finite(x0, y0, x1, y1)) return
       cells ??= new Array(TILES * TILES)
@@ -615,7 +652,7 @@ function coverReading(boxes: Set<number>, step: (k: number) => void, stopped: ()
       glyphs.push(x)
       inks.push([x0, y0, x1, y1])
     },
-    cover(m: Matrix, path: unknown, evenOdd: boolean, fb: Box4): void {
+    cover(m: Matrix, path: unknown, evenOdd: boolean, fb: Box4, before = Infinity): void {
       if (!cells) return
       const cost = pathOf(path)?.length ?? 0
       for (let cy = cellOf(fb[1]); cy <= cellOf(fb[3]); cy++)
@@ -623,6 +660,7 @@ function coverReading(boxes: Set<number>, step: (k: number) => void, stopped: ()
           step(1)
           if (stopped()) return
           for (const i of cells[cy * TILES + cx] ?? []) {
+            if (i >= before) break
             const x = glyphs[i],
               b = inks[i]
             if (!x || !b || x.unseen) continue
@@ -996,7 +1034,7 @@ export const FORCED_BREAK = /^kb\d+$/
  * as their lines (`shapes`), the pictures' points, each figure's extent (`figures`), and what the page does not show, which is no
  * ink a figure's label may be crowded by or stand on, nor a label's own: a glyph's `clipped` where it is not wholly inside the
  * clip in force and `unseen` where nothing of it is shown (wholly outside the clip, painted at an alpha of 0, or covered whole by
- * an opaque fill painted after it: coverReading, holdsWhole), and `unseen`, the boxes painted at an alpha of 0 (a fill's, an image's or
+ * an opaque fill or image painted after it: coverReading, holdsWhole, imageCover), and `unseen`, the boxes painted at an alpha of 0 (a fill's, an image's or
  * a shading's by the fill's alpha constant, a stroke's by the stroke's, a glyph's by its rendering mode's, each times the alpha
  * every transparency group open is painted with: PDF 11.6.6), and a turned glyph's box where its glyph is covered so. Every box is
  * kept, at its index, as every other reading has it
@@ -1025,7 +1063,8 @@ export function pageInk(
  * (opstream.ts readOps), and a page of paths holds hundreds of thousands of them (2610.40394v1 page 23: 510,506 operations, 93 MiB
  * held as one list). The walk is the same whatever the pieces: its state (the graphics state's stack, the text state, the guards,
  * the steps) runs on from one piece to the next, OPS_CAP counts the operations of every piece read, and the clock (`msMax`) starts
- * as the reader is made
+ * as the reader is made. `asks()`, once every piece is read: the image objects `end` will read (pageInk's `images`), each id once,
+ * none where no image may cover
  */
 export function inkReader(
   OPS: Record<string, number>,
@@ -1044,8 +1083,9 @@ export function inkReader(
     shapesAll = false,
     shapes: withShapes = true,
     names = null,
+    images = null,
   }: PageInkOptions,
-): OpsReader<PageInk> {
+): InkReader {
   const turn = ((Number(rotate) % 360) + 360) % 360
   if (turn !== 0) {
     const rotated: PageInk = {
@@ -1064,7 +1104,7 @@ export function inkReader(
       mergedAt: null,
       rotated: true,
     }
-    return { read() {}, end: () => rotated }
+    return { read() {}, end: () => rotated, asks: () => [] }
   }
   // (the operations of the pieces read so far, and those walked: OPS_CAP at most, the page capped past it)
   let listed = 0,
@@ -1150,6 +1190,9 @@ export function inkReader(
     glyphAt = -1,
     inMask = 0
   const maskGroups: boolean[] = []
+  // (the images painted under a state that covers (opaquePaint), each read at the walk's end once its page's objects are there:
+  // its object's id, its matrix, its box on the page as it shows, and the glyphs painted before it (coverReading's count))
+  const imageCovers: { id: string; m: Matrix; fb: Box4; before: number }[] = []
   const fonts = new Map<string, PdfFont | null>()
   const fontOf = (id: string): PdfFont | null => {
     let font = fonts.get(id)
@@ -1325,10 +1368,12 @@ export function inkReader(
   /** the alpha a fill (or an image, a shading, a group) is painted with now, and a stroke: the alpha constant times the groups' */
   const fillAlpha = () => s.ga * s.ca,
     strokeAlpha = () => s.ga * s.CA
-  /** whether a fill painted now covers what was painted under it (`opaque`): a colour (no pattern, nor PDF.js's transparent) at
-   *  an alpha of 1, under no blend mode but Normal and no soft mask, its groups' alike, and every clip in force a rectangle on the
-   *  page's axes, so that `clip`, and the groups' bounds, are where it shows */
-  const opaqueNow = (): boolean => s.fill !== NO_FILL && fillAlpha() >= 1 && !s.bm && !s.sm && !s.gblend && s.rclip
+  /** whether what is painted now covers what was painted under it as far as the state says (`opaquePaint`): at an alpha of 1,
+   *  under no blend mode but Normal and no soft mask, its groups' alike, and every clip in force a rectangle on the page's axes,
+   *  so that `clip`, and the groups' bounds, are where it shows. A fill (`opaqueNow`, a shape's `opaque`) in a colour too, no
+   *  pattern nor PDF.js's transparent; an image by its samples (imageCover) */
+  const opaquePaint = (): boolean => fillAlpha() >= 1 && !s.bm && !s.sm && !s.gblend && s.rclip
+  const opaqueNow = (): boolean => s.fill !== NO_FILL && opaquePaint()
   /** what a Type 3 glyph's procedure paints, once a font and glyph: `d0` where it begins with d0, and where it paints, by the
    *  alpha the text gives it (`fill`, `stroke`: a fill's paint, or a stroke's, under no alpha of its own) or at an alpha its own
    *  ExtGState set above 0 (`lit`), as PDF.js keeps a procedure's alpha entries; a fill's paint is a path filled, a bitmap's mask
@@ -1572,7 +1617,7 @@ export function inkReader(
     if (turned && outsideClip(glyph.ix0, glyph.bottom, glyph.ix1, glyph.top)) glyph.clipped = true
     // (and one nothing of which is shown, `unseen`: its own ink (its outline, else its advance and its font's band) wholly outside
     // the clip, a cropped plot's title its form's box hides, or painted at an alpha of 0: no ink a figure's label may be crowded
-    // by, nor a label's own. An opaque fill painted after it may yet cover it whole: coverReading)
+    // by, nor a label's own. An opaque fill or image painted after it may yet cover it whole: coverReading)
     if (
       turned &&
       (!(textAlpha(g) > 0) || (glyph.clipped && hiddenByClip(glyph.ix0, glyph.bottom, glyph.ix1, glyph.top)))
@@ -1679,7 +1724,7 @@ export function inkReader(
       b1 = ty + up * s.size
     // (its own ink, its outline across (else its advance), the four corners of that box turned with it: not shown whole where it
     // is not wholly inside the clip, as a level glyph's; nothing of it shown where it is wholly outside, or where an opaque fill
-    // painted after it covers it whole: coverReading)
+    // or image painted after it covers it whole: coverReading)
     const own = has
       ? textBoxOnPage(M, Math.min(ia, ib), Math.max(ia, ib), b0, b1)
       : textBoxOnPage(M, Math.min(xa, xb), Math.max(xa, xb), b0, b1)
@@ -1891,6 +1936,26 @@ export function inkReader(
     }
     if (vertical) s.y -= x
     else s.x += x * hs
+  }
+
+  /** what an image painted now covers (the figures' reading of a page given its objects, `images`: the page a reader is shown),
+   *  as an opaque fill does: where the state covers (opaquePaint) and every sample paints (imageOpaque), the glyphs painted
+   *  before it whose ink its unit square holds whole, inside the clip in force and the groups' bounds. An image's object
+   *  (paintImageXObject's id, which PDF.js's worker resolves after the operator) is read at the walk's end; an inline image's
+   *  data, which the list carries, now; a stencil of one sample that paints (paintSolidColorImageMask) fills its square in the
+   *  fill's colour, so now as a fill (opaqueNow). Any other stencil (paintImageMaskXObject) covers nothing: where it paints is
+   *  its samples', which no box of the walk's reads, and a text under it stays shown; nor does a repeat or a group of images,
+   *  which a list getOperatorList answers never holds (BOXES_CAP). A reading given no objects (B's) reads no image as covering */
+  const imageCover = (fn: unknown, a: readonly unknown[]): void => {
+    if (!turned || !images || glyphsOnly || inAnnotation || inMask || !known() || !opaquePaint()) return
+    const fb = boxOf(s.ctm, 0, 0, 1, 1, figureClip())
+    if (!fb) return
+    if (fn === SOLID_MASK) {
+      if (opaqueNow()) covers.cover(s.ctm, UNIT_SQUARE, false, fb)
+    } else if (fn === INLINE_IMAGE) {
+      if (imageOpaque(a[0])) covers.cover(s.ctm, UNIT_SQUARE, false, fb)
+    } else if (fn === IMAGE && typeof a[0] === 'string')
+      imageCovers.push({ id: a[0], m: [...s.ctm] as Matrix, fb, before: covers.count() })
   }
 
   /** the next piece of the list, walked on from the state the pieces before it left */
@@ -2122,6 +2187,7 @@ export function inkReader(
         case MASK:
         case SOLID_MASK:
           if (!glyphsOnly) addBox(s.ctm, 0, 0, 1, 1, -3, fillAlpha())
+          imageCover(fn, a)
           break
         case IMAGE_REPEAT:
         case MASK_REPEAT: {
@@ -2194,6 +2260,16 @@ export function inkReader(
   let answer: PageInk | null = null
   function end(): PageInk {
     if (answer) return answer
+    // (each image painted under a state that covers, over the glyphs painted before it, by its object as the page gives it now:
+    // none yet, or one that does not say every sample paints, covers nothing)
+    for (const c of imageCovers) {
+      if (stop) break
+      let img: unknown
+      try {
+        img = images?.has?.(c.id) === false ? undefined : images?.get(c.id)
+      } catch {}
+      if (imageOpaque(img)) covers.cover(c.m, UNIT_SQUARE, false, c.fb, c.before)
+    }
     // (the merged boxes after the others, from `mergedAt` on, in the cells' order: rising, then across)
     const mergedAt = tiles ? boxes.length / 4 : null
     if (tiles) {
@@ -2223,7 +2299,7 @@ export function inkReader(
     }
     return answer
   }
-  return { read, end }
+  return { read, end, asks: () => [...new Set(imageCovers.map((c) => c.id))] }
 }
 
 /**
