@@ -9318,13 +9318,48 @@ So no class is left out, and no table of classes is kept.
   under Figure 4 on page 6). The three papers reported earlier that day (2609.35143v1, 2606.07636v2, 2603.14468v1) and the
   gate pack's layout files byte for byte. The reader's own lay over the 245 with every row answered draws the five (51,591
   -> 51,596; 51,600 with #666's lay, its own four units of 2608.23517v1), so 6 of the 8 with 2601.06943v2's, and leaves the
-  two `\delete{…}` paragraphs the original's (`unproven`), for the element-ink round: their part states the piece's element with no ink (both
-  its points stand, nothing between), and the typesetter refuses a placeholder of no ink that is no space, symbol or nothing
+  two `\delete{…}` paragraphs the original's (`unproven`), for the element-ink round: their part states the piece's element with no ink (its
+  opening point stands, alone, the text after it right after it, nothing between: §18.107), and the typesetter refuses a placeholder of no ink that is no space, symbol or nothing
   (packages/typeset `unit/elements.ts` `crops`): it cannot tell a piece that set nothing from one whose ink was not found. Not
   changed here.
 - **Versions**: PIPELINE 111 (the units' states); LAYOUT 45 (today's layout maker writes its marked TeX by the same
   layoutMarking); the marks digest moves (the marking is in the compile child's closure); TRANSLATE 11 and FORMAT 1 stay: no
   unit's content, id or wire moves.
+
+### 18.107 What TeX's bounds prove set nothing is stated so, and the lay believes it, a nested unit's mark too (2026-11-23)
+
+An element of no ink of a class drawn from its ink is one of three, and the part says which (format's `El`): TeX set nothing
+for it (`text: ''`), set it outside the unit's text (`keep`), or neither stated, its ink not found, and the typesetter leaves
+the unit the original's (`unproven`: it cannot tell "TeX set nothing" from "the ink was not found"). The prepare states the
+first from TeX's points (`instrument/instrument.ts` `boundedEmpty`, the instrument's `empty`, `locate/geometry.ts`): a piece's
+two points with no glyph of B between them; a piece of no point of its own whose nearest points around it hold nothing; and,
+after an earlier piece's opening point TeX gave no closing one, the first glyph of the text after it as the upper bound.
+
+Two holes left the statement unmade where TeX's bounds hold nothing:
+
+- **A piece's own opening point alone, the text after it next.** A paper's macro has no closing mark (it may read what follows
+  it), so its own opening point is its lower bound and, its unit's text next in the source, that text's first glyph its upper
+  one, as for the pieces after any opener. `boundedEmpty` read the text bound only after an earlier piece's opening point: a
+  piece of its own opening point alone with text after it was never bounded. 2608.29558v2's and 2608.29782v1's `\delete{…}`
+  (a macro that sets nothing for its argument), first in the paragraph TeX resumes after a display (§18.106's carrier holds
+  its point): the point stands right before the first glyph of the text after it ("By the mean …", "We give …"), nothing
+  between; the stream's own reading says the same (`own/stream.ts`, `open, nothing before the text after it`); the element
+  `{"kind":"other","ink":[]}`, no statement, and both paragraphs `unproven`. Now bounded so, with nothing passed over: no
+  glyph of its own, of the text or of another's and no painted box between the point and that glyph, which begins the text
+  next in its source; else no statement (a display's own rows after its point, a macro whose glyphs the ownership read as
+  the text, a box an icon set).
+- **A nested unit's mark** (a footnote's call, El.mark): `boundedEmpty` read placeholders alone, and the lay read a call of no
+  ink as one not found whatever the part stated (`lay/read.ts`: drawn from its source as `*`, the unit `unproven`).
+  2608.18760v1's IEEEtran title: `\thanks{…}` after its last text, the class setting no mark in the title; the title's end
+  point and the authors' start point stand together, nothing between, and the title stayed the original's. Now a call is
+  bounded as a placeholder is, by its own two points too (`n<u>.<k>a`, `b`: no `places` states a call's), and stated only
+  where no ink at all stands between its bounds: a call is drawn from its own ink, which is never in another piece's (after an
+  opener's point, a macro's glyphs and the call's raised digit are read as that piece's ink: unknown); and the lay draws a
+  call the part states empty as nothing, proven, as any element so stated.
+
+What stays the doubt it is: an element whose ink exists and was not found, or whose bounds cannot be told (no point of its
+own, text on both sides; a conditional's test or its false branch read as the unit's text, which TeX never sets: there the
+unit's own text is not TeX's, and the original is the right drawing).
 
 ## 19. The engine's contract
 

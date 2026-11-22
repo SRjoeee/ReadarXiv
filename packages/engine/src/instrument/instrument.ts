@@ -1252,10 +1252,16 @@ const inked = (g: InkGlyph | undefined): boolean => /\S/.test(g?.u ?? '') && !g?
  * ahead, the marking gives no point, between the end point and `\\showDOI`'s opening one, where nothing stands wherever TeX
  * broke the line before the DOI; a `\\endgroup` after the last word, the next unit's start point next. Where the lower of the
  * two is the opening point of a piece TeX gave no closing one, and everything between them is that piece's by the ownership,
- * what the pieces after it set is in that piece's ink. The points decide it, never the line beside the unit's mark, which
- * line breaking decides: read by that line, 19 of 2402.10294v1's 86 references were English where its DOI began
- * mid-line. A unit whose points TeX set more than once is not read. `pages` the adapter's (glyphs, boxes, points), `owners` the
- * instrument's glyphs' and boxes' owners by page
+ * what the pieces after it set is in that piece's ink. A piece of its own opening point alone is bounded by it as by any
+ * point, and, its unit's text next in the source, by that text's first glyph: nothing at all between the two (no glyph of its
+ * own, of the unit's text or of another's, no painted box), TeX set none for it (a paper's macro that sets nothing for its
+ * argument, 2608.29558v2's `\\delete{…}` before the text TeX resumes its paragraph with after a display). A nested unit's mark
+ * (a footnote's call) is bounded as a placeholder is, by its own two points too, which no `places` states, and stated only
+ * where no ink stands between its bounds at all: a call is drawn from its own ink, which is never in another piece's (a
+ * macro's glyphs and the call's raised digit after an opening point alone read as that piece's ink). The points decide it,
+ * never the line beside the unit's mark, which line breaking decides: read by that line, 19 of 2402.10294v1's 86 references
+ * were English where its DOI began mid-line. A unit whose points TeX set more than once is not read. `pages` the adapter's
+ * (glyphs, boxes, points), `owners` the instrument's glyphs' and boxes' owners by page
  */
 export function boundedEmpty(
   pages: readonly InkPage[],
@@ -1347,9 +1353,12 @@ export function boundedEmpty(
     const seen = new Map<string, boolean>()
     P.forEach((piece, k) => {
       // (a piece's own two points bound it already (placesOf), as a trailing macro's point after its group does with the end point;
-      // one with its opening point alone is bounded by it and the next)
+      // one with its opening point alone is bounded by it and the next, or the text after it. A nested unit's mark is read here
+      // by its own two points too: no `places` states a call's)
       const mine = own(k)
-      if (piece.t !== 'ph' || (mine && ((mine.a && mine.b) || mine.g))) return
+      const call = piece.t === 'nested'
+      if ((piece.t !== 'ph' && !call) || (mine && ((mine.a && mine.b && !call) || mine.g))) return
+      const alone = !!mine?.a && !mine.b
       // (the nearest point before it: a piece's (its closing, else its opening one, whose piece's ink then runs on), the start
       // point where the walk passes it, the end point after the last text; none of the unit's, the stream's; text first, or a
       // trailing macro's point after its group alone (which may stand after this piece), no bound)
@@ -1379,8 +1388,11 @@ export function boundedEmpty(
           if (real(P[j])) break
         }
       if (!lo) return
-      // (the nearest after it; after an opener, text first is bounded by its first glyph (textAfter): `\\DOIprefix\\doi{…}.`, the
-      // prefix's opening point alone and its ink to the stop, the DOI's in it)
+      // (a call after an opener's point: its raised ink may stand in that piece's, which the ownership gave it: unknown)
+      if (call && opener !== null) return
+      // (the nearest after it; after an opener, its own opening point alone or an earlier piece's, text first is bounded by its
+      // first glyph (textAfter): `\\DOIprefix\\doi{…}.`, the prefix's opening point alone and its ink to the stop, the DOI's in
+      // it; `\\delete{…} By …`, nothing between its point and the text's first glyph, nothing passed over)
       let text: SrcPiece | null = null
       if (!hi)
         for (let j = k + 1; ; j++) {
@@ -1398,7 +1410,7 @@ export function boundedEmpty(
             break
           }
           if (real(P[j])) {
-            if (opener !== null) text = P[j]!
+            if (opener !== null || alone) text = P[j]!
             break
           }
         }

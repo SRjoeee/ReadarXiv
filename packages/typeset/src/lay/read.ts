@@ -243,13 +243,17 @@ function readingsOf(
   const readings = new Map<number, ElementReading>()
   const cls2 = clsOf(pieces, els)
   pieces.forEach((p, k) => {
-    if (p.t === 'nested' && !els.get(String(p.k))?.ink.length) {
+    // (a nested unit's mark of no ink: TeX set nothing for it where the part states so (El.text '', as of any element of a class
+    // drawn from its ink: a heading's `\thanks` whose class sets no mark there), drawn as nothing, proven; else not found,
+    // drawn from its source as '*', which leaves its unit the original's)
+    const nestedEl = p.t === 'nested' ? els.get(String(p.k)) : undefined
+    if (p.t === 'nested' && !nestedEl?.ink.length) {
       const source: Res = { mode: 'source', text: '*', math: false, sup: true }
       readings.set(k, {
         src: '\\footnotemark',
         cls: 'num',
         nested: true,
-        fixed: null,
+        fixed: nestedEl?.text === '' ? { mode: 'none', text: '', proof: true, empty: true } : null,
         inked: false,
         symbol: null,
         supSrc: true,

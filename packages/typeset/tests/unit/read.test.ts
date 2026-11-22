@@ -176,7 +176,10 @@ describe('the reading from the part', () => {
     )
     expect(none.unproven).toBe(-1)
     expect(none.resolutions.get(1)).toMatchObject({ mode: 'none', text: '', proof: true })
-    expect((none.tokens as unknown as { s?: string }[]).map((t) => t.s ?? '').join('')).toBe('Ein Titel')
+    expect((none.tokens as unknown as { s?: string }[]).flatMap((t) => (t.s?.trim() ? [t.s] : []))).toEqual([
+      'Ein',
+      'Titel',
+    ])
     const lost = read(member({ els: [['1', { kind: 'num', ink: [], mark: 1, nested: 1 }]] }), pieces, 'heading')
     expect(lost.unproven).toBe(1)
   })
