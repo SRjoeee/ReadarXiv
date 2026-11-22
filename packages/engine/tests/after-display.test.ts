@@ -230,6 +230,31 @@ describe('a piece first in the paragraph TeX resumes after a display: its openin
     ])
   })
 
+  it('a piece behind a command of no mark after a display has the carrier too: TeX sets it first', () => {
+    // (the local review's finding: `\\noindent` puts nothing on the list; a `\\label` a whatsit, where the carrier's mark is
+    // \\axtpma's)
+    const u = (between: string) =>
+      unit('para', [
+        { t: 'text', s: 'We define ' },
+        { t: 'ph', src: '\\[ a = b \\]' },
+        { t: 'text', s: '\n' },
+        { t: 'ph', src: between },
+        { t: 'ph', src: '\\cite{k}' },
+        { t: 'text', s: ' shows it.' },
+      ])
+    const after = (between: string, inkless: string[] = []) =>
+      (
+        layoutMarking([u(between)] as unknown as SourceUnit[], MARK_CLASSES, { lines: false, inkless }).units[0]!
+          .pieces as { t: string; src?: string }[]
+      )
+        .map((p) => (p.t === 'ph' ? (p.src ?? '') : ''))
+        .find((s) => /\{[pn]0\.4a\}$/.test(s))
+        ?.replace(/\{.*$/, '')
+    expect([after('\\noindent'), after('\\label{e}')]).toEqual(['\\axtpmd', '\\axtpmd'])
+    // (behind a paper's macro that may read what follows it the piece has no mark of ours at all, as anywhere)
+    expect(after('\\nothing', ['\\nothing'])).toBeUndefined()
+  })
+
   it('a reference after text keeps \\axtpma, and an inline formula after text \\axtpmm', () => {
     const u = unit('para', [
       { t: 'text', s: 'see ' },

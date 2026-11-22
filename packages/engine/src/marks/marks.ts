@@ -3295,6 +3295,35 @@ export function layoutMarking(
         else if (!lead && k === lastText + 1) out[k] = [{ t: 'ph', src: `\\axttg{p${i}.${k}g}` }, ...out[k]!]
       }
     }
+    // (a piece behind pieces of no mark of ours after a display, white space alone besides — `\\noindent`, `\\label{…}`, a
+    // group's brace —: TeX sets it first where those set nothing, so it is carried too; where they set something the carrier's
+    // mark is \\axtpma's. Its opening mark wherever the marking wrote it, \\axtpmd for \\axtpma, \\axtpmm or \\axthpk)
+    {
+      let open = false
+      for (let k = 0; k < u.pieces.length; k++) {
+        const q = u.pieces[k]!
+        if (q.t === 'text') {
+          if (/[^ \t\r\n]/.test(q.s)) open = false
+          continue
+        }
+        const c = classOf(q)
+        if (c === 'display') {
+          open = true
+          continue
+        }
+        if (!open || carried.has(q)) continue
+        let found = false
+        for (const list of out)
+          for (let j = 0; j < list.length; j++) {
+            const r = list[j]!
+            const m = r.t === 'ph' ? OPENING_MARK.exec(r.src ?? '') : null
+            if (!m || Number(m[1]) !== i || Number(m[2]) !== k) continue
+            list[j] = { ...r, src: r.src!.replace(/\\axt(?:pm[am]?|hpk)\{/, '\\axtpmd{') }
+            found = true
+          }
+        if (found) carried.add(q)
+      }
+    }
     // (a carried piece before a display that has no opening mark of ours, white space and unmarked pieces alone between — the
     // marking writes none right after a paper's macro that may read what follows it —: nothing would take the carrier back
     // before that display breaks the paragraph, which TeX drops where it is empty, so the piece keeps the mark it has elsewhere.
