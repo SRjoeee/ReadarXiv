@@ -1244,8 +1244,9 @@ canvas asked them would). The typesetter asks small capitals of such a face alon
 runs of capitals at a share of the size), as today's reader measured them (`layer2.mjs` w100, its fontString). Measured in its
 lower case, as the spec had it until 2026-11-22, a run of a face's own small capitals was laid narrower than it is drawn and the
 text after it on its line was drawn over its last letters: the owner's report on production of 2603.14468v1, whose
-`\textsc{LongVidSearch}` in Linux Libertine O is 765.8 thousandths of an em in its small capitals (the file's smcp glyphs) and
-was laid at its lower case's 681.8, the translation after it in the §3 heading begun 6.98 pt before the name's drawn end (21
+`\textsc` name of thirteen letters in Linux Libertine O Bold is 765.8 thousandths of an em in its small capitals (the file's
+smcp glyphs) and was laid at its lower case's 681.8, the translation after it in its §3 heading begun 6.98 pt before the name's
+drawn end (21
 such runs over the paper, each 4.2 to 7.0 pt over the text after it). The website serves those files from its origin; the extension reads them from our
 server's, as today's reader does. Both hosts' readers take this path: neither gives an engine (the website's page, and the
 extension's `src/pdf-reader/host/v2.ts`, open the reader with none); a host that gives its own engine and faces
