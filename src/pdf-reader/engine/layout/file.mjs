@@ -235,12 +235,10 @@ export { LayoutRefusal } from './json.mjs'
   (PDF-READER §18.105), so that a file of 43 holds such a paper with none of that file's units: 2609.35143v1, every section of
   it; none of the lab's 245 papers, nor the gate pack's seven, names a file so, their files the same but their version (the
   image cover of §18.98 does not reach this maker: its pageInk calls are given no image objects); 45 (with PIPELINE 111): the
-  marking, which this maker calls through @readarxiv/engine/today (layoutMarking), writes the opening mark TeX sets on an empty
-  list (\axtpmm) before a piece sure to set something that stands first in the paragraph TeX resumes after a display (a
-  citation's label, a reference that prints a name or a page, \eqref, a footnote's call: marks.ts OPENS_ON_EMPTY, PDF-READER
-  §18.106), so that a file of 44 holds a paper with such a piece as made from a marked TeX without that point: of the lab's 245
-  papers 2608.00812v1, 2610.18513v1, 2610.20285v1, 2608.12255v1 and 2608.18626v1; the gate pack's seven papers hold none, their
-  files the same but their version */
+  marking, which this maker calls through @readarxiv/engine/today (layoutMarking), writes the carrier's opening mark (\axtpmd)
+  before every piece but a display that stands first in the paragraph TeX resumes after a display, an inline formula's for
+  \axtpmm (marks.ts CARRY_TEX, PDF-READER §18.106), so that a file of 44 holds such a paper as made from a marked TeX without
+  that point where the piece is no formula (the papers of the lab's 245 it reaches: PDF-READER §18.106) */
 export const LAYOUT = '45'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour

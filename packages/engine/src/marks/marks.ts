@@ -157,60 +157,11 @@ const NUMBER = /^(?:[^\s\p{L}\\{}$%#&^_~]*\d[^\s\p{L}\\{}$%#&^_~]*|10\.\d{4,9}\/
  *  mark alone, its end told by the text after it, and where a forced break or another element followed it (2608.25210v2 p3's
  *  and 2610.22195v1's prompts) its glyphs were read as the unit's text, the unit left unlocated */
 const identifierPiece = identifierSource
+/** an opening mark of ours as the layout marking writes it: its unit and piece */
+const OPENING_MARK = /\\axt(?:pm[amd]?|hpk)\{[pn](\d+)\.(\d+)a\}$/
 /** a footnote's call: \footnotemark, and a \footnote whose note the scanner made no unit of (fewer than two letters: a
  *  number, a link) — a call all the same, which the layer places by its mark */
 const FOOTNOTE_MARK = /^\\footnote(?:mark)?(?![A-Za-z@])/
-
-/**
- * Where a piece's opening mark is the one TeX sets on an empty list too (LAYOUT_TEX's \axtpmm, not \axtpma's gobble), by its
- * class: the one place the marking reads it (opensOnEmpty).
- * - `anywhere`: an inline formula, whose math node follows the mark at once on whatever list it opens.
- * - `true`, or the forms a pattern matches: a piece SURE TO SET SOMETHING on the list where it stands, by its commands'
- *   own definitions, so that the paragraph TeX resumes after a display is no empty one with the mark or without it (no line
- *   is made that TeX would not make) and the mark cuts short no \ignorespaces that \] began (the piece's first act sets a
- *   node, where the skip would have stopped anyway). Set so where the piece stands first in that paragraph: there \axtpma
- *   set no point, the display before it, which has no closing point, found no mark of its unit's next ones, and both were
- *   LOST (2601.06943v2 p5's `\autoref` after a `\[ … \]`; 7 units of the lab's 245 papers, a `\Cref`, a `\cite` or a
- *   `\citep` first after a display, the other two a paper's `\delete{…}`, which stay so). Each form has its native case (lab/pdf/spikes/layout-marks-cases.mjs, 'a piece first
- *   after a display: …'): it first in the paragraph there, it ending the paragraph there, and its forms that could set
- *   nothing — an empty argument, a key or a label no one defined, a label TeX stored no text for.
- *   - cite: the commands that print a citation's label in their own delimiters — latex.ltx's \cite (`[` … `]`, `[?]` for a
- *     key no one defined, `[]` for none), natbib's \citep, \citet, \citealp, \citealt (and their capitals and stars), biblatex's
- *     \cite, \parencite, \textcite, \autocite (and their capitals and plurals). Not the commands that print one field of an
- *     entry (biblatex's \citeauthor, \citeyear, \citetitle, \citeurl, \citefield …), which an entry without the field sets
- *     nothing for.
- *   - ref: the commands that print a name or a page besides the label's stored text — hyperref's \autoref (its link's nodes
- *     whatever it prints), cleveref's \cref and \Cref (the type's name, `??` for a label no one defined), latex.ltx's \pageref
- *     (a page's number). Not \ref, \nameref or \autoref*, which print the label's stored text alone: none where TeX stored
- *     none (a \label before any counter is stepped).
- *   - eqref: amsmath's \eqref, its parentheses (\tagform@) whatever the label holds.
- *   - footnote: the call's mark, latex.ltx's \@makefnmark a box whatever \thefootnote prints, and a \nobreak before it.
- * - `false`: \axtpma's rule, no point on an empty list. A display: two displays in a row, between which TeX drops the empty
- *   paragraph a mark would keep a line (a display after a display is its group's, own/stream.ts ownedOf). A paper's macro, which
- *   may set nothing (`\delete{…}`), and a mark would end the \ignorespaces amsmath's \] began before the line end after it.
- *   Code (`\texttt{}` sets nothing, its argument TeX's to expand) and a URL (a paper's own \url, often \texttt, the same):
- *   either may set nothing. A number a bibliography keeps: never after a display, no case shows it either way
- */
-const OPENS_ON_EMPTY: Readonly<Record<MarkClass, 'anywhere' | boolean | RegExp>> = {
-  math: 'anywhere',
-  display: false,
-  cite: /^\\(?:[cC]ite(?:s|[pt]|al[pt])?|[pP]arencites?|[tT]extcites?|[aA]utocites?)\*?(?![A-Za-z@*])/,
-  ref: /^\\(?:autoref|[cC]ref\*?|pageref\*?)(?![A-Za-z@*])/,
-  eqref: true,
-  code: false,
-  url: false,
-  footnote: true,
-  macro: false,
-  number: false,
-}
-/** whether a piece of class `cls` (source `src`) has the opening mark TeX sets on an empty list too (OPENS_ON_EMPTY), where
- *  `afterDisplay` says it stands first in the paragraph TeX resumes after a display (the piece before it a display, white space
- *  alone between) */
-export function opensOnEmpty(cls: MarkClass, src: string, afterDisplay: boolean): boolean {
-  const on = OPENS_ON_EMPTY[cls]
-  if (on === 'anywhere') return true
-  return afterDisplay && (on === true || (on instanceof RegExp && on.test(src)))
-}
 
 /** whether a piece is the list backref sets after a bibliography entry (source/latex-front.ts BACKREF_LIST): no source of its own,
  *  its marks LAYOUT_TEX's around the list (layoutMarking's `\\axtbrname`), never a sample of the probe's */
@@ -1878,12 +1829,12 @@ export function readMarkProbe(log: string | null | undefined, samples: readonly 
  *   empty one either way (no line is made), and no \ignorespaces is cut short of a space it would have skipped: the
  *   native case (lab/pdf/spikes/layout-marks-cases.mjs, 'an inline formula first after a display') holds every item in
  *   place. A display after a display keeps \axtpma's rule: it has no point, and own/stream.ts ownedOf gives its group's ink to the
- *   display before it. And before a piece SURE TO SET SOMETHING where it stands (OPENS_ON_EMPTY: a citation's label, a
- *   reference that prints a name or a page, an equation's reference, a footnote's call) standing first in the paragraph TeX
- *   resumes after a display: that paragraph is no empty one either way, and the piece's first node stops the \ignorespaces
- *   where the skip would have stopped. With \axtpma's gobble there the piece had no opening point, the display (no closing
- *   point) no mark of its unit's next ones, and both their inks were read as the unit's text (2601.06943v2 p5's `\autoref`,
- *   PDF-READER §18.106). A paper's macro keeps the gobble: it may set nothing (`\delete{…}`, 2608.29782).
+ *   display before it.
+ * - **\axtpmd{name}, before every piece but a display that stands first in the paragraph TeX resumes after a display**,
+ *   whatever its class and whether it sets ink (an inline formula there too): \axtpma's, but on the empty list its point is
+ *   set in a carrier the paragraph can give back (CARRY_TEX). With \axtpma's gobble there the piece had no opening point, the
+ *   display (no closing point) no mark of its unit's next ones, and both their inks were read as the unit's text
+ *   (2601.06943v2 p5's `\autoref`, PDF-READER §18.106).
  * - **\axtpm{name}, after one; \axthmark{name}, a heading's.** Set in horizontal mode only; \axtpm after the placeholder's
  *   last ink, its trailing glue, penalties and kerns put back after it, and on an empty list nothing: after a display,
  *   where TeX resumes the paragraph, a mark would open a line of its own where the paragraph ends, and TeX's skip of the
@@ -2343,6 +2294,7 @@ export const MARK_CS = [
   'axtlines',
   'axtpma',
   'axtpmm',
+  'axtpmd',
   'axtpm',
   'axthpk',
   'axttg',
@@ -2740,6 +2692,37 @@ export const DVI_POINTS_TEX =
  */
 export const CALL_TEX =
   '\\makeatletter\\def\\axtcall{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@call\\else\\noexpand\\axtcall\\fi}\\def\\axt@call#1{\\ifhmode\\ifnum\\lastnodetype=-1 \\else\\axt@set{#1c}\\fi\\fi}\\AtBeginDocument{\\ifdefined\\pdfstringdefDisableCommands\\pdfstringdefDisableCommands{\\let\\axtcall\\@gobble}\\fi}\\makeatother'
+/**
+ * The carrier (PDF-READER §18.106): the TeX of `\axtpmd`, the opening mark the marking writes before every piece but a display
+ * that stands first in the paragraph TeX resumes after a display, whatever its class and whether it sets ink, and before every
+ * piece but a display right after such a piece (layoutMarking `carried`). That paragraph's list is empty there, and a point set
+ * on it would keep it from being dropped (TeX drops an empty paragraph at its \par and at a display's start: the empty one
+ * between two displays would be a line) and cut short the \ignorespaces a LaTeX display ends with, before a macro that expands
+ * to nothing and the line end after it: \axtpma sets none there (LAYOUT_TEX's \axt@pmc). On the empty list \axtpmd sets its
+ * point in a carrier, `\hbox{<point>}\penalty10939`: a box of nothing (no width, height or depth: no line moves by it), and a
+ * sentinel no paper sets (a penalty past 10000, where TeX never breaks; the glue after it no place to break either, as the
+ * paragraph's first glue is none), read by \lastpenalty, which takes nothing off. Before it a probe: a \space, which an
+ * \ignorespaces in force skips, and which is else set as glue and taken off at once (\unskip); \ignorespaces is issued again
+ * after the carrier only where one was. While the list still ends with the sentinel, the piece has set nothing: its closing
+ * mark (\axt@pm), and the opening mark of a carried piece after it, put their points in the carrier too (the box taken off
+ * with \lastbox and set again with the point in it, the sentinel after it, the probe as before). Where the paragraph ends with
+ * nothing else, the carrier is taken back and the list is empty again, as the original's: at any other opening mark (a display
+ * after the piece, whose start would break an empty paragraph into a line: TeX drops it so) and at LaTeX's para/end
+ * (CARRY_END_TEX). Where anything stands after it, the paragraph was not empty in the original either, and the carrier stays
+ * with the points: 2608.29558v2's and 2608.29782v1's `\delete{…}`, a macro that sets nothing between a display and the text after
+ * it, has both. In the marked compile's head only where the marking writes an \axtpmd (compile/live.ts originalFiles): every other
+ * paper's bytes as before. After LAYOUT_TEX, whose \axt@pmc and \axt@pm it wraps; without LaTeX's para/end (before 2021-06) it
+ * is \axtpma. One line. What TeX cannot give back: a paper's macro that takes the list's last penalty off (\unpenalty) takes the
+ * sentinel, so where it sets nothing else and ends its paragraph, that paragraph is a line of nothing (the native cases)
+ */
+export const CARRY_TEX = String.raw`\makeatletter\newbox\axt@cb\def\axtpmd{\ifx\protect\@typeset@protect\expandafter\axt@pmy\else\expandafter\@gobble\fi}\protected\def\axt@pmy{\ifaxt@off\expandafter\@gobble\else\expandafter\axt@pmyb\fi}\def\axt@pmyb{\ifhmode\expandafter\axt@pmyc\else\expandafter\axt@pmv\fi}\def\axt@pmyc{\ifnum\lastnodetype=-1 \expandafter\axt@cnew\else\expandafter\axt@pmyd\fi}\def\axt@pmyd{\axt@ifcy\axt@cadd\axt@pmc@plain}\def\axt@cnew#1{\space\axt@cdo{\hbox{\axt@mark{#1}}\penalty10939\relax}}\def\axt@cadd#1{\space\axt@cdo{\unpenalty\setbox\axt@cb\lastbox\hbox{\unhbox\axt@cb\axt@mark{#1}}\penalty10939\relax}}\def\axt@cback#1{\space\axt@cdo{\unpenalty\setbox\axt@cb\lastbox}}\protected\def\axt@cdo#1{\ifnum\lastnodetype=11 \unskip#1\else#1\expandafter\ignorespaces\fi}\let\axt@pmc@plain\axt@pmc\def\axt@pmc{\axt@ifcy\axt@cback\axt@pmc@plain}\let\axt@pm@plain\axt@pm\protected\def\axt@pm{\axt@ifcy\axt@cadd\axt@pm@plain}\ifdefined\AddToHook\ifdefined\IndentBox\else\let\axt@pmy\axt@pma\fi\else\let\axt@pmy\axt@pma\fi\AtBeginDocument{\ifdefined\pdfstringdefDisableCommands\pdfstringdefDisableCommands{\let\axtpmd\@gobble}\fi}\ifcsname l_text_case_exclude_arg_tl\endcsname\expandafter\g@addto@macro\csname l_text_case_exclude_arg_tl\endcsname{\axtpmd\axt@pmy}\fi\makeatother`
+/**
+ * The carrier's end (CARRY_TEX): at LaTeX's para/end, where the list ends with the sentinel, the carrier taken back, so that the
+ * paragraph is as empty as the original's and TeX drops it. Before LAYOUT_TEX in the head: para/end is a reversed hook, whose
+ * code of the document's top level runs first and in the order it was added, so this runs before every other hook of ours there
+ * (POINTS' `qe`, the measures, the code regions), each of which reads an empty list as none. With CARRY_TEX alone; one line
+ */
+export const CARRY_END_TEX = String.raw`\makeatletter\def\axt@ifcy{\ifnum\ifhmode\lastpenalty\else0\fi=10939 \expandafter\@firstoftwo\else\expandafter\@secondoftwo\fi}\ifdefined\AddToHook\ifdefined\IndentBox\AddToHook{para/end}{\axt@ifcy{\unpenalty\setbox\axt@cb\lastbox}\relax}\fi\fi\makeatother`
 export const DVI_LAYOUT_TEX = `\\makeatletter\\let\\axt@pdfdo\\axt@destonly\\def\\axt@destonly#1{\\ifnum\\pdfoutput>0 \\axt@pdfdo{#1}\\else\\axt@dvidest{#1}\\fi}${DVI_POINTS_TEX}\\makeatother`
 
 /** a colour piece's name in the log, `c<unit>.<k>` */
@@ -3070,6 +3053,9 @@ export function layoutMarking(
       gapBefore = false
     /** the pieces whose closing mark goes after the punctuation mark their command moves (TeX's 3), by index: that mark */
     const movedAt = new Map<number, PhPiece>()
+    /** the pieces with the carrier's opening mark (\\axtpmd, CARRY_TEX): each first after a display, or after such a piece,
+     *  white space alone between */
+    const carried = new Set<Piece>()
     /** the groups open at a piece, innermost last: whether each is, or is inside, an argument read verbatim */
     const verbatim: boolean[] = []
     /** the paper's macros this unit sets with no mark of their own, by index (none TeX said sets no ink): those passed over that
@@ -3160,15 +3146,18 @@ export function layoutMarking(
             : raw
       if (said === '2') return [piece]
       const name = `${cls === 'footnote' ? 'n' : 'p'}${i}.${k}`
-      // (an inline formula's opening mark is set on the empty list too, and a piece sure to set something where it stands first
-      // in the paragraph TeX resumes after a display: \axtpmm, LAYOUT_TEX, OPENS_ON_EMPTY. `opens`: the mark that opens the
-      // piece after it, which patch writes after the unit's start mark where that mark goes before this piece)
+      // (an inline formula's opening mark is set on the empty list too: \axtpmm, LAYOUT_TEX; every piece but a display that stands
+      // first in the paragraph TeX resumes after a display, whatever its class, has the carrier's, \axtpmd: CARRY_TEX; so has
+      // every piece but a display right after such a piece, which TeX sets first where that one set nothing. `opens`: the mark
+      // that opens the piece after it, which patch writes after the unit's start mark where that mark goes before this piece)
+      const carry = cls !== 'display' && (classOf(after) === 'display' || (!!after && carried.has(after)))
+      if (carry) carried.add(p)
       // (an identifier's \axthpk: it begins with a character, so in vertical mode, where a box's paragraph opens with it, the mark
       // begins the paragraph before that character as TeX would and sets its point there, where \axtpma waits for the next mark
       // (its closing one: 2608.25210v2 p3's \mypython box, the element empty); in horizontal mode \axtpma's)
       const open: PhPiece = {
         t: 'ph',
-        src: `${lead}\\${opensOnEmpty(cls, p.src ?? '', classOf(after) === 'display') ? 'axtpmm' : identifierPiece(p.src) ? 'axthpk' : 'axtpma'}{${name}a}`,
+        src: `${lead}\\${carry ? 'axtpmd' : cls === 'math' ? 'axtpmm' : identifierPiece(p.src) ? 'axthpk' : 'axtpma'}{${name}a}`,
         opens: true,
       }
       if (said === '3') {
@@ -3295,6 +3284,47 @@ export function layoutMarking(
         // (right after the last text alone: the end mark stands between the two, nothing of the paper's — `\\urldef\\tempurl`,
         // whose first defines the next token, 2608.25210v2's .bbl)
         else if (!lead && k === lastText + 1) out[k] = [{ t: 'ph', src: `\\axttg{p${i}.${k}g}` }, ...out[k]!]
+      }
+    }
+    // (a carried piece before a display that has no opening mark of ours, white space and unmarked pieces alone between — the
+    // marking writes none right after a paper's macro that may read what follows it —: nothing would take the carrier back
+    // before that display breaks the paragraph, which TeX drops where it is empty, so the piece keeps the mark it has elsewhere.
+    // Last first, so that a carried piece before one so kept still sees an opening mark after it, which takes its carrier back)
+    if (carried.size) {
+      /** whether piece n has an opening mark of ours, wherever the marking wrote it (a prefix's: before it) */
+      const opensAt = (n: number) =>
+        out.some((list) =>
+          list.some((q) => {
+            const m = q.t === 'ph' ? OPENING_MARK.exec(q.src ?? '') : null
+            return !!m && Number(m[1]) === i && Number(m[2]) === n
+          }),
+        )
+      for (let k = u.pieces.length - 1; k >= 0; k--) {
+        if (!carried.has(u.pieces[k]!)) continue
+        let held = false
+        for (let n = k + 1; n < u.pieces.length; n++) {
+          const q = u.pieces[n]!
+          if (q.t === 'text') {
+            if (/[^ \t\r\n]/.test(q.s)) break
+            continue
+          }
+          if (opensAt(n)) break
+          if (classOf(q) === 'display') {
+            held = true
+            break
+          }
+        }
+        if (!held) continue
+        const p = u.pieces[k]!,
+          kept =
+            classOf(p) === 'math' ? 'axtpmm' : identifierPiece(p.t === 'ph' ? p.src : undefined) ? 'axthpk' : 'axtpma'
+        for (const list of out)
+          for (let j = 0; j < list.length; j++) {
+            const q = list[j]!
+            if (q.t === 'ph' && q.src?.endsWith(`\\axtpmd{${classOf(p) === 'footnote' ? 'n' : 'p'}${i}.${k}a}`))
+              list[j] = { ...q, src: q.src.replace(/\\axtpmd\{/, `\\${kept}{`) }
+          }
+        carried.delete(p)
       }
     }
     copies[i]!.pieces = out.flat()

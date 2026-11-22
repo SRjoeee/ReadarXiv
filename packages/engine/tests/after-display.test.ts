@@ -12,7 +12,8 @@
 // at 10 pt), in content of our own.
 import { describe, expect, it } from 'vitest'
 import { type Glyph, packGlyphs } from '../src/ink.ts'
-import { followsOf, layoutMarking, MARK_CLASSES } from '../src/marks/marks.ts'
+import { openPaper, originalFiles } from '../src/compile/live.ts'
+import { CARRY_END_TEX, CARRY_TEX, followsOf, LAYOUT_TEX, layoutMarking, MARK_CLASSES } from '../src/marks/marks.ts'
 import { OWNED, OWNED_HOW, ownedOf, STREAM_COLUMNS, type StreamPage } from '../src/own/stream.ts'
 import type { SourceUnit } from '../src/source/latex-front.ts'
 
@@ -142,9 +143,8 @@ describe('a piece first in the paragraph TeX resumes after a display: its openin
   const command = (src: string) => opening(after(src), 3)?.replace(/\{.*$/, '')
 
   it('every piece that is no display, whatever its class and whether it sets ink: \\axtpmd, its point in a carrier', () => {
-    // (one mark for every class, no table of classes: marks.ts CARRY_TEX sets the point in a box the piece's closing mark, the
-    // next opening mark or the paragraph's end takes back where the piece set nothing; the native cases in
-    // lab/pdf/spikes/layout-marks-cases.mjs, 'a piece first after a display: …')
+    // (one mark for every class, no table of classes: marks.ts CARRY_TEX sets the point in a box the paragraph takes back where
+    // nothing else stands in it; the native cases in lab/pdf/spikes/layout-marks-cases.mjs, '… first after a display: …')
     const every = ['\\autoref{f}', '\\cref{f}', '\\Cref{f}', '\\pageref{f}', '\\eqref{e}', '\\cite{k}', '\\citep{k}']
     every.push(
       '\\citet{k}',
@@ -163,6 +163,55 @@ describe('a piece first in the paragraph TeX resumes after a display: its openin
     expect(command('\\[ c = d \\]')).toBe('\\axtpma')
   })
 
+  it('a piece right after a carried one has the carrier too, a display there \\axtpma, a piece after text none', () => {
+    // (TeX sets it first where the piece before set nothing: `\\ref{…}` of a label TeX stored no text for)
+    const u = unit('para', [
+      { t: 'text', s: 'We define ' },
+      { t: 'ph', src: '\\[ a = b \\]' },
+      { t: 'text', s: '\n' },
+      { t: 'ph', src: '\\ref{top}' },
+      { t: 'ph', src: '\\cite{k}' },
+      { t: 'text', s: '\n' },
+      { t: 'ph', src: '\\[ c = d \\]' },
+      { t: 'text', s: '\n' },
+      { t: 'ph', src: '\\cite{k}' },
+      { t: 'text', s: ' and ' },
+      { t: 'ph', src: '\\cite{j}' },
+      { t: 'text', s: ' shows it.' },
+    ])
+    expect([3, 4, 6, 8, 10].map((k) => opening(u, k)?.replace(/\{.*$/, ''))).toEqual([
+      '\\axtpmd',
+      '\\axtpmd',
+      '\\axtpma',
+      '\\axtpmd',
+      '\\axtpma',
+    ])
+  })
+
+  it('a carried piece before a display the marking leaves unmarked keeps \\axtpma: nothing would take its carrier back', () => {
+    // (no mark of ours right after a paper's macro that may read what follows it: `\\delete{…}` then `\\[`; a reference before
+    // a display keeps the carrier, which the display's own opening mark takes back where the reference set nothing)
+    const u = unit('para', [
+      { t: 'text', s: 'We define ' },
+      { t: 'ph', src: '\\[ a = b \\]' },
+      { t: 'text', s: '\n' },
+      { t: 'ph', src: '\\delete{x}' },
+      { t: 'text', s: '\n' },
+      { t: 'ph', src: '\\[ c = d \\]' },
+      { t: 'text', s: '\n' },
+      { t: 'ph', src: '\\ref{top}' },
+      { t: 'text', s: '\n' },
+      { t: 'ph', src: '\\[ e = f \\]' },
+      { t: 'text', s: ' and words.' },
+    ])
+    expect([3, 5, 7, 9].map((k) => opening(u, k)?.replace(/\{.*$/, ''))).toEqual([
+      '\\axtpma',
+      undefined,
+      '\\axtpmd',
+      '\\axtpma',
+    ])
+  })
+
   it('a reference after text keeps \\axtpma, and an inline formula after text \\axtpmm', () => {
     const u = unit('para', [
       { t: 'text', s: 'see ' },
@@ -172,5 +221,32 @@ describe('a piece first in the paragraph TeX resumes after a display: its openin
       { t: 'text', s: ' holds.' },
     ])
     expect([opening(u, 1), opening(u, 3)]).toEqual(['\\axtpma{p0.1a}', '\\axtpmm{p0.3a}'])
+  })
+})
+
+describe("the carrier's TeX in a paper's head only where the marking writes a carrier", () => {
+  const files = (body: string) => {
+    const paper = openPaper(
+      new Map([
+        [
+          'main.tex',
+          new TextEncoder().encode(`\\documentclass{article}\n\\begin{document}\n${body}\n\\end{document}\n`),
+        ],
+      ]),
+    )
+    return new TextDecoder('latin1').decode(originalFiles(paper, { lines: true, layout: MARK_CLASSES }).get('main.tex'))
+  }
+  it('a paragraph with a reference first after a display: CARRY_TEX in its head, its paragraph end before LAYOUT_TEX', () => {
+    const tex = files('We define words here\n\\[ a = b \\]\n\\ref{f} shows it, and more words.')
+    expect(tex).toContain('\\axtpmd{')
+    expect(tex.indexOf(CARRY_END_TEX)).toBeGreaterThan(-1)
+    expect(tex.indexOf(CARRY_END_TEX)).toBeLessThan(tex.indexOf(LAYOUT_TEX))
+    expect(tex.indexOf(CARRY_TEX)).toBeGreaterThan(tex.indexOf(LAYOUT_TEX))
+  })
+  it('a paper with none: its head as before, no CARRY_TEX', () => {
+    const tex = files('We define words here\n\\[ a = b \\]\nwhere the words go on, \\ref{f} shows it.')
+    expect(tex).not.toContain('\\axtpmd{')
+    expect(tex).not.toContain(CARRY_TEX)
+    expect(tex).not.toContain(CARRY_END_TEX)
   })
 })

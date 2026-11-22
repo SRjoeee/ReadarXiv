@@ -9224,7 +9224,7 @@ report of 2026-11-21 on production; the released reader did the same).
 - **Versions**: PIPELINE 110 (what the units are); LAYOUT 44 (today's layout maker reads the cut through the same front end);
   the marks digest moves (the front end is in the compile child's closure): every stored paper is prepared and compiled again.
 
-### 18.106 A piece sure to set something, first in the paragraph TeX resumes after a display, has its opening point there (the coordinator's ruling of 2026-11-22)
+### 18.106 Every piece first in the paragraph TeX resumes after a display has its opening point, in a carrier TeX gives back where that paragraph stays empty (the owner's word of 2026-11-22)
 
 2601.06943v2 p5: a paragraph, a display `\[ … \]`, then on the next line an `\autoref{…}` and the rest of the paragraph, which runs
 on under a float to page 6. The marked compile set no opening point for the reference: LAYOUT_TEX's `\axtpma` sets nothing on an
@@ -9237,37 +9237,55 @@ inks were read as the unit's text; the locate counted 834 letters where the sour
 display's 7 and "Figure"), and the whole paragraph stayed the original's, its row answered and never drawn (the owner's report
 of 2026-11-22 on production; the released reader did the same: its dump `laid`, `lost`, the display and the reference LOST).
 
-- **The rule** (`marks/marks.ts` `OPENS_ON_EMPTY`, read by `opensOnEmpty` alone): a piece's opening mark is `\axtpmm`, the
-  one TeX sets on an empty list too, for an inline formula anywhere (its math node follows the mark at once), and for a piece
-  SURE TO SET SOMETHING on the list where it stands first in the paragraph TeX resumes after a display (the piece before it a
-  display, white space alone between). There that paragraph is no empty one with the mark or without it, and the piece's first
-  node stops the skip where it would have stopped: no line moves. Sure, by the commands' own definitions: a citation's label
-  (latex.ltx's `\cite`; natbib's `\citep`, `\citet`, `\citealp`, `\citealt`; biblatex's `\cite`, `\parencite`, `\textcite`,
-  `\autocite`; their capitals, stars and plurals), a reference that prints a name or a page (hyperref's `\autoref`, cleveref's
-  `\cref` and `\Cref`, latex.ltx's `\pageref`), an equation's reference (amsmath's `\eqref`, its parentheses), a footnote's call
-  (latex.ltx's `\@makefnmark`, a box). The gobble stays for a display (a display after a display is its group's), a paper's
-  macro (it may set nothing), and the forms that may set nothing: `\ref`, `\nameref` and `\autoref*` print the label's stored
-  text alone (none where TeX stored none: a `\label` before any counter is stepped), biblatex's one-field commands
-  (`\citeauthor`, `\citeyear`, `\citeurl`, …) an entry without the field, code (`\texttt{}`) and a URL (a paper's own `\url`) an
-  argument with nothing in it; a number a bibliography keeps is never after a display.
-- **Its native cases** (`lab/pdf/spikes/layout-marks-cases.mjs`, `ONLY=lost`: 'a piece first after a display: …', each under
-  pdfLaTeX and latex, with hyperref and without): each form first in a paragraph after `\[ \]` and after amsmath's equation, and
-  ending its paragraph there; the forms that could set nothing on the sure side (an empty key, a key or a label no one defined, a
-  label TeX stored no text for) and the gobble side's beside them (`\ref`, `\nameref`, `\autoref*`): every text item where it was
-  (TeX's DVI to the sp under latex), the log the run reads unchanged, and each new opening point standing in the PDF.
-- **Not covered**: a paper's macro first after a display (the lab's two `\delete{…}`, 2608.29558v2 and 2608.29782v1) keeps the
-  gobble and its paragraph the original's; a piece behind a command that puts nothing on the list (`\noindent`) is not first by
-  the source's order.
-- **Reach**, as measured: over the lab's 245 papers the elements right after a display, white space alone between, are 75
-  displays and 25 inline formulas (every unit drawn), 31 pieces of no mark (`\noindent`, `\label`, `\\`) and 7 of the failing
-  kind, every one's unit `text past its source`: three `\Cref`, two citations, two `\delete{…}`. The chain from the stored
-  compiles at this round's head: 240 papers byte for byte (every bundle file, prepare dump and ownership file; the located files but
-  their timings) and every units object of the 245; the five with a sure piece compiled again (their marked passes alone, every
-  text item of their final compiles where it was), one unit each moving, the failing kind's, from `text past its source` to
-  drawn (2608.00812v1, 2610.18513v1, 2610.20285v1, 2608.12255v1, 2608.18626v1), its pages' flows and links and every page's
-  faces with it; the reader's own lay over the 245 with every row answered draws those five units and leaves every other unit as
-  it was. 2601.06943v2: one unit moves (its paragraph, 2 lines on page 5, 5 under Figure 4 on page 6); its compiles' text items
-  where they were. The three papers reported earlier today (2609.35143v1, 2606.07636v2, 2603.14468v1) byte for byte.
+The owner's word on the first fix (a property of the classes sure to set ink, a paper's macro left out): "the cost of preparing
+again is acceptable; our long-term aim is to come as close to the original as we can, to solve the known and the potential
+problems and close the holes; the rules are to be made in that long-term way, not by short-term patches in the wrong direction".
+So no class is left out, and no table of classes is kept.
+
+- **The mechanism** (`marks/marks.ts` `CARRY_TEX`, `CARRY_END_TEX`; `layoutMarking`'s `carried`): the marking writes `\axtpmd`
+  before every piece but a display that stands first in the paragraph TeX resumes after a display (white space alone between),
+  whatever its class and whether it sets ink, an inline formula's too, and before every piece but a display right after such a
+  piece (TeX sets it first where the one before set nothing). On a list that is not empty it is `\axtpma`. On the empty one it
+  sets its point in a carrier, `\hbox{<point>}\penalty10939`: a box of nothing, no width, height or depth, so that no line
+  moves by it, and a sentinel no paper sets, a penalty past 10000 where TeX never breaks (the glue after it no place to break
+  either, as the paragraph's first glue is none), read by `\lastpenalty`, which takes nothing off. Before it a probe, a
+  `\space`: an `\ignorespaces` in force skips it, and it is else set as glue and taken off at once; the carrier's TeX issues
+  `\ignorespaces` again only where one was in force. While the list still ends with the sentinel the piece has set nothing,
+  and its closing mark and the opening mark of a carried piece after it put their points in the carrier too (the box taken
+  off with `\lastbox`, set again with the point in it, the sentinel after it). Where the paragraph ends with nothing else, the
+  carrier is taken back and the list is as empty as the original's: at any other opening mark of ours (a display after the
+  piece, whose start breaks a paragraph that is not empty into a line) and at LaTeX's `para/end` (`\par`, `\@@par` and
+  `\endgraf` are all LaTeX's paragraph end, whose `\unskip` runs before the hook). Where anything stands after it, the
+  paragraph was not empty in the original either, and the carrier stays with its points. The take-back at `para/end` is
+  written before LAYOUT_TEX in the head: `para/end` is a reversed hook, whose top-level code runs first and in the order it was
+  added (TeX Live 2026's `\ShowHook`), so that it runs before every other hook of ours there, each of which reads an empty
+  list as none. Both in a paper's head only where the marking writes a carrier (`compile/live.ts` `originalFiles`): every
+  other paper's marked TeX as before. `\lastnodetype` after a display, with the carrier and after the take-back reads
+  −1, 13 (`\lastpenalty` 10939) and −1 under pdfTeX, XeTeX and LuaTeX alike.
+- **Why not at the piece's closing mark** (the coordinator's first form: the carrier taken back there where nothing was set):
+  the lab's two `\delete{…}` units, a macro that sets nothing between a display and the text after it ("By the mean value
+  theorem …", 2608.29558v2; "We give a proof …", 2608.29782v1), would then have no point at all, `followsOf` would still find
+  the display's next piece unmarked, and the paragraph would stay the original's. Taken back only where the paragraph stays
+  empty, both points stand there.
+- **The inline formula joins**: its `\axtpmm` set its point on the empty list as a bare point; the carrier holds it in the
+  same place (its math node follows at once, so the carrier always stays), one rule with no class test but the display's.
+- **Its native cases** (`lab/pdf/spikes/layout-marks-cases.mjs`, `ONLY=lost`, our own content under pdfLaTeX, XeLaTeX,
+  LuaLaTeX and latex, with hyperref and without; every text item where it was, TeX's DVI to the sp under latex, the log the run
+  reads unchanged): 'a piece first after a display: …' (latex.ltx's, cite.sty's, cite.sty [super]'s, natbib's and biblatex's
+  citations, a reference that prints a name, a page or a label's stored text, `\eqref`, a URL and code, a footnote's call, an
+  inline formula, a paper's macro that sets ink), each first after `\[ \]` and after an equation and then ending its
+  paragraph, every carried point standing; 'a paper's macro first after a display: …' with text after it (one that sets
+  nothing, a whatsit, glue or a penalty, one that reads what stands before it: `\unskip`, `\xspace`, an italic correction,
+  `\@ifnextchar[`, `\lastbox`, `\lastskip`, `\unpenalty`), every carried point standing; ending its paragraph (the same,
+  `\par` inside, a citation, a reference: where it sets nothing the paragraph dropped as the original's, its carrier taken
+  back), then a display; and two displays in a row, a display inside a paragraph and one ending it, an environment that skips
+  the spaces after it (subequations, a `\label` after its align), a macro that sets nothing after a display: unchanged.
+- **Limits, as found**: a paper's macro that takes the list's last penalty off (`\unpenalty`) takes the sentinel, so that
+  where it sets nothing else and ends its paragraph that paragraph is a line of nothing (its native case fails so, on
+  purpose). A carried piece before a display the marking leaves without an opening mark (it writes none right after a
+  paper's macro that may read what follows it) keeps `\axtpma`'s mark: nothing would take its carrier back before that display
+  (the native case 'then a display' found it: a line before the display); where such a piece sets ink it has no point, as
+  before. A piece behind a command that puts nothing on the list (`\noindent`) is not first by the source's order: as before.
 - **Versions**: PIPELINE 111 (the units' states); LAYOUT 45 (today's layout maker writes its marked TeX by the same
   layoutMarking); the marks digest moves (the marking is in the compile child's closure); TRANSLATE 11 and FORMAT 1 stay: no
   unit's content, id or wire moves.
