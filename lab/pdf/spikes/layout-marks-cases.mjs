@@ -43,6 +43,7 @@ import { OWNED, OWNED_HOW } from '../../../src/pdf-reader/engine/layout/stream.m
 import { boxDiff, pageBoxes } from './layout-marks-compare.mjs'
 import { openPaper, originalFiles, probeFiles } from '../../../src/pdf-reader/engine/pipeline/live.mjs'
 import { checkCompileImage, COMPILE_IMAGE, PLATFORM } from './compile-image.mjs'
+import { carrySamples, readDisplayProbe } from '../../../packages/engine/src/marks/marks.ts'
 
 // (the image of the pin or COMPILE_IMAGE, here as the compile cache keys name it)
 await checkCompileImage()
@@ -126,6 +127,10 @@ const STAY = {
   'a piece first after a display: and a table in the same paper': { engines: ENGINES3, src: doc('\\usepackage{amsmath}', `${afterDisplays(['\\cite{a}', '\\ref{zz}'])}\n\n\\begin{tabular}{ll} a cell of words & another cell of words \\\\ more words here & and the last words \\end{tabular}\n\n${prose(4, () => '')}\n${BIB}`) },
   // (behind a command of no mark: \\noindent, which sets nothing, a \\label's whatsit, a group's brace; the local review's)
   'a piece first after a display: behind a command of no mark': { engines: ENGINES3, src: doc('\\usepackage{amsmath}', `${afterDisplays(['\\noindent\\cite{a}', '\\label{q1}\\cite{b}', '{\\cite{a}}', '\\noindent $x$'])}\n${BIB}`) },
+  // (Devin's finding on #667: a second display through a paper's shorthand — \\be … \\ee by \\def or \\newcommand to equation,
+  // to \\[ \\], to $$ —, a macro whose body is a display, one nested in another, an environment of the paper's own: never a
+  // carrier before one, TeX's display probe or the source reader saying it is a display; text after it, and ending its paragraph)
+  'a display of the paper\'s own after a display': { engines: ENGINES3, src: doc('\\usepackage{amsmath}\\def\\be{\\begin{equation}}\\def\\ee{\\end{equation}}\\newcommand\\bs{\\begin{equation*}}\\newcommand\\es{\\end{equation*}}\\newcommand\\bd{\\[}\\newcommand\\ed{\\]}\\def\\bdd{$$}\\def\\edd{$$}\\newcommand\\eqn[1]{\\begin{equation}#1\\end{equation}}\\newcommand\\eqnn[1]{\\eqn{#1}}\\newenvironment{myeq}{\\begin{equation}}{\\end{equation}}', `${afterDisplays(['\\be c = d \\ee', '\\bs c = d \\es', '\\bd c = d \\ed', '\\bdd c = d \\edd', '\\eqn{c = d}', '\\eqnn{c = d}', '\\begin{myeq} c = d \\end{myeq}'])}`) },
   'a piece first after a display: an inline formula': { engines: ENGINES3, src: doc('\\usepackage{amsmath}', afterDisplays(['$x_1$', '\\(y\\)', '\\ensuremath{z}'])) },
   'a piece first after a display: a paper\'s macro that sets ink': { engines: ENGINES3, src: doc('\\usepackage{amsmath}\\newcommand\\name{Name}\\newcommand\\tool[1]{\\textsc{#1}}', afterDisplays(['\\name{}', '\\tool{Tool}', '\\name'])) },
   'a paper\'s macro first after a display: one that sets nothing, text after it': { engines: ENGINES3, src: doc('\\usepackage{amsmath}\\newcommand\\delete[1]{}\\newcommand\\nothing{}', afterDisplays(['\\delete{A passage $x$ set aside.}', '\\nothing', '\\delete{More.}'], false)) },
@@ -243,7 +248,7 @@ function queue(name, src, { engine = 'pdflatex', passes = 2, variants = ['v0', '
   if (engine === 'latex') files = { ...files, '00README.json': JSON.stringify({ sources: [{ usage: 'toplevel', filename: 'main.tex' }], process: { compiler: 'latex' } }) }
   const all = new Map([['main.tex', new TextEncoder().encode(src)], ...Object.entries(files).map(([f, t]) => [f, new TextEncoder().encode(t)])])
   const paper = openPaper(all)
-  if ((STREAM_ONLY && !name.startsWith('stream-')) || (RUNIN_ONLY && !name.startsWith('stream-F-')) || (NAMES_ONLY && !name.startsWith('names-')) || (UNMARK_ONLY && !name.startsWith('unmark-')) || (WRAPPERS_ONLY && !name.startsWith('wrappers-')) || (LOST_ONLY && !name.startsWith('stay-an-inline-formula-first-after-a-display') && !name.startsWith('stay-a-piece-first-after-a-display') && !name.startsWith('stay-a-paper-s-macro-first-after-a-display') && !/^stay-(?:two-displays-in-a-row|a-macro-that-sets-nothing-after-a-display|an-environment-that-skips-the-spaces-after-it|a-display-inside-a-paragraph-and-one-ending-it)(?:-|$)/.test(name) && !name.startsWith('stay-a-superscript-or-a-box-glued-to-a-word') && !name.startsWith('stream-E-')) || (DVI_ONLY && !/-latex(?:-hyperref)?$/.test(name))) return paper
+  if ((STREAM_ONLY && !name.startsWith('stream-')) || (RUNIN_ONLY && !name.startsWith('stream-F-')) || (NAMES_ONLY && !name.startsWith('names-')) || (UNMARK_ONLY && !name.startsWith('unmark-')) || (WRAPPERS_ONLY && !name.startsWith('wrappers-')) || (LOST_ONLY && !name.startsWith('stay-an-inline-formula-first-after-a-display') && !name.startsWith('stay-a-piece-first-after-a-display') && !name.startsWith('stay-a-paper-s-macro-first-after-a-display') && !/^stay-(?:a-display-of-the-paper-s-own-after-a-display|two-displays-in-a-row|a-macro-that-sets-nothing-after-a-display|an-environment-that-skips-the-spaces-after-it|a-display-inside-a-paragraph-and-one-ending-it)(?:-|$)/.test(name) && !name.startsWith('stay-a-superscript-or-a-box-glued-to-a-word') && !name.startsWith('stream-E-')) || (DVI_ONLY && !/-latex(?:-hyperref)?$/.test(name))) return paper
   queued.push({ name, paper, engine, passes, variants, own, trace, files: all })
   return paper
 }
@@ -256,6 +261,9 @@ function prepare() {
   for (const q of queued) {
     const switches = q.own ? readMarkProbe(read(`${q.name}-probe`, 'log', 'latin1') ?? '', probeSamples(q.paper.units)) : null
     q.switches = switches
+    // (the display probe's answers, as the run reads them: the pieces a carrier may stand before, marks.ts carrySamples)
+    const quiet = q.own ? readDisplayProbe(read(`${q.name}-probe`, 'log', 'latin1') ?? '', carrySamples(q.paper.units)) : null
+    q.quiet = quiet
     q.names = q.own ? readNameProbe(read(`${q.name}-probe`, 'log', 'latin1') ?? '') : null
     for (const v of q.variants) {
       const d = join(dir, `${q.name}-${v}`)
@@ -264,7 +272,7 @@ function prepare() {
       for (const [path, bytes] of q.files) writeFileSync(join(d, path), bytes)
       // v1np: v1 with no points, LAYOUT_TEX as it was before them
       // (under latex, v1np is v1 with no DVI point: POINTS_TEX's own sets nothing in DVI mode)
-      for (const [path, bytes] of originalFiles(q.paper, v === 'v0' ? { lines: true, transcode: false } : { lines: true, layout: MARK_CLASSES, switches })) writeFileSync(join(d, path), v === 'v1np' && path === 'main.tex' ? latin1Bytes(latin1(bytes).replace(q.engine === 'latex' ? DVI_POINTS_TEX : POINTS_TEX, '')) : bytes)
+      for (const [path, bytes] of originalFiles(q.paper, v === 'v0' ? { lines: true, transcode: false } : { lines: true, layout: MARK_CLASSES, switches, quiet })) writeFileSync(join(d, path), v === 'v1np' && path === 'main.tex' ? latin1Bytes(latin1(bytes).replace(q.engine === 'latex' ? DVI_POINTS_TEX : POINTS_TEX, '')) : bytes)
       jobs.push({ name: `${q.name}-${v}`, engine: q.engine, passes: q.passes, trace: q.trace })
     }
   }
@@ -1088,7 +1096,10 @@ for (const s of NAMES_ONLY || UNMARK_ONLY || WRAPPERS_ONLY ? [] : LOST_ONLY ? st
   const byName = new Map(m.owned.map(e => [e[0], e]))
   // the pieces the marking marked (the probe's switch as v1 was compiled with): the others have no point by design
   const design = new Set()
-  for (const c of layoutMarking(units, MARK_CLASSES, { lines: false, switches: queued.find(q => q.name === s.key)?.switches ?? {} }).units) for (const p of c.pieces) { const x = p.t === 'ph' && /^\\axtpm[am]\{([pn]\d+\.\d+a)\}$/.exec(p.src ?? ''); if (x) design.add(x[1]) }
+  // (the carrier's \\axtpmd among them: an older scan knew \\axtpma and \\axtpmm alone, and read a carried piece with no point as
+  // one unmarked by design, judged by nothing; `carriedBlind` counts the pieces that scan left out)
+  const carriedBlind = []
+  for (const c of layoutMarking(units, MARK_CLASSES, { lines: false, switches: queued.find(q => q.name === s.key)?.switches ?? {}, quiet: queued.find(q => q.name === s.key)?.quiet ?? null }).units) for (const p of c.pieces) { const x = p.t === 'ph' && /^\\axtpm([amd])\{([pn]\d+\.\d+a)\}$/.exec(p.src ?? ''); if (x) { design.add(x[2]); if (x[1] === 'd') carriedBlind.push(x[2]) } }
   const tally = {}, bad = [], seen = new Map()
   units.forEach((u, i) => u.pieces.forEach((p, k) => {
     const cls = classOf(p)
@@ -1113,6 +1124,7 @@ for (const s of NAMES_ONLY || UNMARK_ONLY || WRAPPERS_ONLY ? [] : LOST_ONLY ? st
   // E: not vacuous — a display at a page's foot owned past its column's end, a group, a formula after a display marked
   if (s.name === 'E') check(`${label}: a display past its column's end, a display group and a formula first after a display among them`, (tally["open, past its column's end"] ?? 0) >= 1 && (tally['open, with the displays after it'] ?? 0) === 1 && (tally['in the display before it'] ?? 0) === 2 && !tally['no point'], JSON.stringify(tally))
   console.log(`note ${label}: ${points} points (${brackets} of brackets), ${named} pieces named; ${JSON.stringify(tally)}; with no point, ${none.owned.length} pieces own anything`)
+  if (carriedBlind.length) console.log(`note ${label}: carried pieces (\\axtpmd) ${carriedBlind.length}, of which with an ownership record ${carriedBlind.filter(n => byName.has(n)).length}, with none (the older scan's blind spot) ${carriedBlind.filter(n => !byName.has(n)).length} ${JSON.stringify(carriedBlind.filter(n => !byName.has(n)))}`)
   // A's display across a page: the stream holds its rows in order, the running foot and head and the footnote between
   // them outside the column bodies
   if (s.name === 'A') {

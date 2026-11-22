@@ -19,6 +19,7 @@ import {
   CALL_TEX,
   CARRY_END_TEX,
   CARRY_TEX,
+  carrySamples,
   classNamesTex,
   DVI_LAYOUT_TEX,
   followsOf,
@@ -35,6 +36,10 @@ import { DVI_MARK_DEF, MARK_DEF } from '../src/source/latex-front.ts'
 import { OWNED, OWNED_HOW, ownedOf, STREAM_COLUMNS, type StreamPage } from '../src/own/stream.ts'
 import type { SourceUnit } from '../src/source/latex-front.ts'
 
+/** every placeholder's source of a unit, as TeX's display probe answers for a piece that opens no display (marks.ts
+ *  carrySamples, readDisplayProbe) */
+const quietOf = (u: SourceUnit<null>): string[] =>
+  (u.pieces as { t: string; src?: string }[]).flatMap((p) => (p.t === 'ph' && p.src ? [p.src] : []))
 type Item = string | { at: string }
 /** a page from items in stream order: a string is glyphs on the current line (a space 3 pt, `\n` the next line 12 pt down),
  *  `{ at }` a point */
@@ -143,7 +148,8 @@ describe('a piece first in the paragraph TeX resumes after a display: the readin
 describe('a piece first in the paragraph TeX resumes after a display: its opening mark', () => {
   const opening = (u: SourceUnit<null>, k: number) =>
     (
-      layoutMarking([u] as unknown as SourceUnit[], MARK_CLASSES, { lines: false }).units[0]!.pieces as {
+      layoutMarking([u] as unknown as SourceUnit[], MARK_CLASSES, { lines: false, quiet: quietOf(u) }).units[0]!
+        .pieces as {
         t: string
         src?: string
       }[]
@@ -244,8 +250,11 @@ describe('a piece first in the paragraph TeX resumes after a display: its openin
       ])
     const after = (between: string, inkless: string[] = []) =>
       (
-        layoutMarking([u(between)] as unknown as SourceUnit[], MARK_CLASSES, { lines: false, inkless }).units[0]!
-          .pieces as { t: string; src?: string }[]
+        layoutMarking([u(between)] as unknown as SourceUnit[], MARK_CLASSES, {
+          lines: false,
+          inkless,
+          quiet: quietOf(u(between)),
+        }).units[0]!.pieces as { t: string; src?: string }[]
       )
         .map((p) => (p.t === 'ph' ? (p.src ?? '') : ''))
         .find((s) => /\{[pn]0\.4a\}$/.test(s))
@@ -253,6 +262,54 @@ describe('a piece first in the paragraph TeX resumes after a display: its openin
     expect([after('\\noindent'), after('\\label{e}')]).toEqual(['\\axtpmd', '\\axtpmd'])
     // (behind a paper's macro that may read what follows it the piece has no mark of ours at all, as anywhere)
     expect(after('\\nothing', ['\\nothing'])).toBeUndefined()
+  })
+
+  it("the carrier only before a piece TeX's display probe said opens no display: a shorthand display is a display", () => {
+    // (Devin's finding on #667: `\\be … \\ee`, a paper's shorthand the source reader states is a display (PhPiece.closes), was
+    // carried, and TeX broke the carrier's empty list into a line where it opened the display; a macro the probe said opens one,
+    // or did not answer for, keeps \\axtpma: marks.ts carrySamples)
+    const be = { t: 'ph', src: '\\be c = d \\ee' }
+    Object.defineProperty(be, 'closes', { value: 10 })
+    const u = unit('para', [
+      { t: 'text', s: 'We define ' },
+      { t: 'ph', src: '\\[ a = b \\]' },
+      { t: 'text', s: '\n' },
+      be as never,
+      { t: 'text', s: ' and ' },
+      { t: 'ph', src: '\\[ e = f \\]' },
+      { t: 'text', s: '\n' },
+      { t: 'ph', src: '\\cite{k}' },
+      { t: 'text', s: ' and ' },
+      { t: 'ph', src: '\\[ g = h \\]' },
+      { t: 'text', s: '\n' },
+      { t: 'ph', src: '\\eqn{g}' },
+      { t: 'text', s: ' shows it.' },
+    ])
+    const marks = (quiet: string[]) =>
+      (
+        layoutMarking([u] as unknown as SourceUnit[], MARK_CLASSES, { lines: false, quiet }).units[0]!.pieces as {
+          t: string
+          src?: string
+        }[]
+      )
+        .map((p) => (p.t === 'ph' ? (p.src ?? '') : ''))
+        .filter((s) => /\\axtpm[amd]?\{p0\.(?:3|7|11)a\}$/.test(s))
+    // (the shorthand a display, \\axtpma, though the answers name it; the citation first after a display, carried where TeX said
+    // it opens none; \\eqn, a macro the probe said opens a display or never asked, \\axtpma)
+    expect(marks(['\\be c = d \\ee', '\\cite{k}'])).toEqual(['\\axtpma{p0.3a}', '\\axtpmd{p0.7a}', '\\axtpma{p0.11a}'])
+    expect(marks([])).toEqual(['\\axtpma{p0.3a}', '\\axtpma{p0.7a}', '\\axtpma{p0.11a}'])
+    expect(carrySamples([u] as unknown as SourceUnit[])).toEqual(['\\cite{k}', '\\eqn{g}'])
+  })
+
+  it("the carrier's TeX assigns nothing outside a carrier's window: its wrappers let in and out, its hooks guarded", () => {
+    // (the coordinator's ruling on #667: a pending \\afterassignment of a package is what an assignment of ours meets)
+    expect(CARRY_TEX).not.toMatch(/\\(?:protected\\)?def\\(?:raise|lower|unhbox|unhcopy)(?![A-Za-z@])/)
+    // (\\raise and the others let to the wrappers inside \\axt@cywrap alone, which a carrier's setting calls)
+    expect(CARRY_TEX.replace(/\\def\\axt@cy(?:un)?wrap\{[^}]*\}/g, '')).not.toMatch(
+      /\\let\\(?:raise|lower|unhbox|unhcopy)\\/,
+    )
+    expect(CARRY_TEX).toContain('\\def\\axt@cyhook{\\ifaxt@cyon\\global\\axt@cybtrue\\fi}')
+    expect(CARRY_END_TEX).toContain('{\\ifaxt@cyon\\axt@ifcy{')
   })
 
   it('a reference after text keeps \\axtpma, and an inline formula after text \\axtpmm', () => {
@@ -277,7 +334,10 @@ describe("the carrier's TeX in a paper's head only where the marking writes a ca
         ],
       ]),
     )
-    return new TextDecoder('latin1').decode(originalFiles(paper, { lines: true, layout: MARK_CLASSES }).get('main.tex'))
+    const quiet = paper.project.units.flatMap((u) => u.pieces.flatMap((p) => (p.t === 'ph' ? [p.src] : [])))
+    return new TextDecoder('latin1').decode(
+      originalFiles(paper, { lines: true, layout: MARK_CLASSES, quiet }).get('main.tex'),
+    )
   }
   it('a paragraph with a reference first after a display: CARRY_TEX in its head, its paragraph end before LAYOUT_TEX', () => {
     const tex = files('We define words here\n\\[ a = b \\]\n\\ref{f} shows it, and more words.')
@@ -325,6 +385,6 @@ describe("the carrier's TeX takes no name the rest of a marked head has", () => 
     // (a first form read \\unhbox's register by \\afterassignment, which took the place of one a package had set before its own
     // \\leavevmode: a section's skip in 2307.16209v1 moved, 147 pages 146, the paper refused)
     expect(CARRY_TEX).not.toContain('\\afterassignment')
-    expect(CARRY_TEX).toContain('\\protected\\def\\unhbox#1{\\ifx#1\\voidb@x\\else\\axt@cyhook\\fi\\axt@unhbox#1}')
+    expect(CARRY_TEX).toContain('\\protected\\def\\axt@unhboxw#1{\\ifx#1\\voidb@x\\else\\axt@cyhook\\fi\\axt@unhbox#1}')
   })
 })

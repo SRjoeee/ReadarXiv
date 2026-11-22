@@ -9274,7 +9274,22 @@ So no class is left out, and no table of classes is kept.
   `\let` and nothing else, and none for an `\unhbox` of the void box (LaTeX's `\leavevmode`). A first form read the register's
   number by `\afterassignment`, which took the place of one a package had pending: in 2307.16209v1 a section's skip moved
   0.7 pt and the marked compile lost a page (refused); none is used. A box of the paper's read so is one appended from a
-  register by `\box` or `\copy`, which carry no shift: set back exactly.
+  register by `\box` or `\copy`, which carry no shift: set back exactly. All of it only while a carrier is pending (the coordinator's ruling
+  on #667): the wrappers are let in when a carrier is set and the primitives given back when its window closes (at the take-back
+  or the paragraph's end), and the hooks assign nothing outside the window; outside it the hook's test in every box and the
+  marks' own test of the list's end run, assigning nothing.
+- **Where the carrier may stand: THE RULE** (`marks/marks.ts` `carrySamples`, `displayPiece`, `readDisplayProbe`; Devin's
+  finding on #667): the carrier stands on the empty list, and a display the piece itself opens would break that list into a
+  line (a paper's `\be … \ee`, a shorthand the source reader states is a display while `classOf` reads a paper's macro: 59 of
+  94 text items moved in a case of our own). So a piece the source reader states is a display (`PhPiece.closes`) is a display,
+  never carried; every other piece the marking may carry is set by the mark probe in a paragraph of its own, a vertical box at the
+  measure (its display section, written only where a paper has such a piece), and the carrier stands only before one whose run
+  started no display (`\everydisplay`) and raised no error. A piece the probe says opens one, errs on or does not ask about (a
+  parameter sign, `\verb`, braces unbalanced) keeps `\axtpma`, `\axtpmm` for a formula: today's reading, no line moved. The whole
+  kind so: a recognised shorthand, a macro whose body is a display, one nested in another, an environment of the paper's own,
+  `$$` through a macro. Over the lab's 245: 25 papers hold a candidate (the 24 and 2608.23517v1, whose shorthand displays open
+  the chain); in 23 every one answered none; 2610.21026v1's two formulas and 2608.23517v1's formula erred and its `\iffa` left
+  no row (no carrier there); every object of the 25 as before the rule.
 - **Why not at the piece's closing mark** (the coordinator's first form: the carrier taken back there where nothing was set):
   the lab's two `\delete{…}` units, a macro that sets nothing between a display and the text after it ("By the mean value
   theorem …", 2608.29558v2; "We give a proof …", 2608.29782v1), would then have no point at all, `followsOf` would still find
@@ -9302,7 +9317,7 @@ So no class is left out, and no table of classes is kept.
   marked compile set 18 of 33 text items a line lower, and no check of the chain saw it: `align/align.ts` pairs the marked
   compile's glyphs with arXiv's by their key sequences, a line of no glyph moves none, the page maps by index, and every
   unit's lines are arXiv's. A moved line in the marked compile is so never seen downstream: the native cases are its gate.
-- **Limits, as found**: a carried piece before a display the marking leaves without an opening mark (it writes none right after a
+- **Limits, as found**: a piece the display probe did not clear keeps `\axtpma` (the rule above). A carried piece before a display the marking leaves without an opening mark (it writes none right after a
   paper's macro that may read what follows it) keeps `\axtpma`'s mark: nothing would take its carrier back before that display
   (the native case 'then a display' found it: a line before the display); where such a piece sets ink it has no point, as
   before. A piece behind a command that puts nothing on the list (`\noindent`) is not first by the source's order: as before.
