@@ -88,9 +88,9 @@ describe('layoutMarking', () => {
     expect(units).toEqual(before)
     expect(marked[0]).not.toBe(units[0])
   })
-  it("an inline formula's opening mark is \\axtpmm, set on the empty list after a display too; a display's \\axtpma", () => {
+  it("an inline formula's opening mark is \\axtpmm, set on the empty list; first after a display the carrier's \\axtpmd (marks.ts CARRY_TEX); a display's \\axtpma", () => {
     const marked = layoutMarking([unit('para', [text('the '), ph('\\[a=b\\]'), text('\n'), ph('$x$'), text(' and '), ph('\\(y\\)'), text(' or '), ph('\\ensuremath{z}'), text(' then '), ph('\\cite{k}')])], MARK_CLASSES, { lines: false }).units[0]
-    expect(srcs(marked).filter(s => /axtpm[am]/.test(s))).toEqual(['ph \\axtpma{p0.1a}', 'ph \\axtpmm{p0.3a}', 'ph \\axtpmm{p0.5a}', 'ph \\axtpmm{p0.7a}', 'ph \\axtpma{p0.9a}'])
+    expect(srcs(marked).filter(s => /axtpm[amd]/.test(s))).toEqual(['ph \\axtpma{p0.1a}', 'ph \\axtpmd{p0.3a}', 'ph \\axtpmm{p0.5a}', 'ph \\axtpmm{p0.7a}', 'ph \\axtpma{p0.9a}'])
     // LAYOUT_TEX's \\axt@pmm: \\axt@pma with no test of the empty list
     expect(LAYOUT_TEX).toContain('\\protected\\def\\axt@pmm{\\ifaxt@off\\expandafter\\@gobble\\else\\expandafter\\axt@pmn\\fi}')
     expect(LAYOUT_TEX).toContain('\\def\\axt@pmn{\\ifhmode\\expandafter\\axt@pmd\\else\\expandafter\\axt@pmv\\fi}')
