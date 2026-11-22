@@ -21,7 +21,7 @@
 // with its names in the target's (U.rename: Rules.refs, babel's names, the paper's own).
 import { type Box, type Ink, LINE_FLAG, type OutPiece, type Part, type Placed, toggleKind } from '@readarxiv/format'
 import { cover } from '../breaker/cover.ts'
-import { faceOf, ownSmallCaps } from '../breaker/faces.ts'
+import { faceOf, ownSmallCapsOf } from '../breaker/faces.ts'
 import { fitMeasure, fontString } from '../breaker/measure.ts'
 import { type NameRow, nameScriptRuns, runsWidth, setNameOf } from '../shared/names.ts'
 import { ownNamesOf } from '../unit/rename.ts'
@@ -217,7 +217,7 @@ export function nameOf(
     serif: paper.designs.serif,
     P: rules.set as never,
     faceOf: (s, cls) => faceOf(paper.roles, s, cls),
-    ownSmallCaps,
+    ownSmallCaps: ownSmallCapsOf,
     metrics,
     shown: !m.why,
     before,
@@ -259,7 +259,7 @@ function labelRowOf(
     (cls) => faceFor(row.st, cls),
     to,
     !!(R as { cjkQuotes?: boolean }).cjkQuotes,
-    ownSmallCaps,
+    ownSmallCapsOf,
   )
   const c = cover(drawn.runs.map((q) => ({ s: q.s, face: q.face })) as never, metrics)
   if ('wait' in c) return { wait: c.wait }
@@ -475,7 +475,7 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
       read.set(m.ord, { rd, pieces, tokens, ...(paras ? { paras } : {}) })
     }
   // (the figure texts, S.figures over the part, each at the size its own width needs: a face not loaded waited for as any)
-  const fig = figuresOf(part, figs, rows, { paper, R, metrics })
+  const fig = figuresOf(part, figs, rows, { paper, R, metrics, to: rules.target })
   faces.push(...fig.wait)
   for (const [ord, w] of fig.why) state.set(ord, w)
   // (one state per call: a face not loaded leaves the whole page waiting, as a row not in does)

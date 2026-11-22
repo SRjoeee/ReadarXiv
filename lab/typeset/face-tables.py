@@ -3,7 +3,8 @@
 # of the check's reference (lab/typeset/face-files.json, beside this file: each face's file, each alphabet's letters, each
 # file's binding SHA-256), its file in the fonts folder read with fontTools: its SHA-256; the letters of each alphabet its best
 # Unicode cmap subtable does not map (OpenType's character map, the subtable fontTools' getBestCmap picks); whether its GSUB
-# table has the `smcp` feature (OpenType's small capitals). Written as JSON, one entry a face; nothing judged here. A file
+# table has the `smcp` feature (OpenType's small capitals), and the code points whose glyph it substitutes (`smallCaps`, ranges).
+# Written as JSON, one entry a face; nothing judged here. A file
 # missing from the folder is written so, never skipped. The fonts folder holds every face's file under its reference name, as
 # lab/typeset/marks-data.py's does (the website's build fills one; no font file is in this
 # repository).
@@ -26,8 +27,38 @@ def usage(why):
     sys.exit(2)
 
 
+def small_caps_of(gsub, cmap):
+    """the code points whose glyph (the best Unicode cmap's) the `smcp` feature substitutes: every lookup of every smcp feature
+    record, whatever script and language system lists it (the union; on the catalogue's 26 faces with the feature it equals,
+    for every lower-case letter, the set the default language system of the letter's own script substitutes), its single (1),
+    multiple (2) and alternate (3) substitutions, an extension (7) read through; as sorted inclusive ranges, start and end in
+    turn"""
+    recs = gsub.FeatureList.FeatureRecord if gsub and gsub.FeatureList else []
+    glyphs = set()
+    for r in recs:
+        if r.FeatureTag != 'smcp':
+            continue
+        for li in r.Feature.LookupListIndex:
+            lookup = gsub.LookupList.Lookup[li]
+            for st in lookup.SubTable:
+                t, kind = (st.ExtSubTable, st.ExtensionLookupType) if lookup.LookupType == 7 else (st, lookup.LookupType)
+                if kind in (1, 2):
+                    glyphs |= set(t.mapping)
+                elif kind == 3:
+                    glyphs |= set(t.alternates)
+    cps = sorted(cp for cp, g in cmap.items() if g in glyphs)
+    out = []
+    for cp in cps:
+        if out and out[-1] == cp - 1:
+            out[-1] = cp
+        else:
+            out += [cp, cp]
+    return out
+
+
 def face_tables(path, alphabets):
-    """one face file's reading: its SHA-256, each alphabet's letters its best Unicode cmap leaves unmapped, its GSUB smcp"""
+    """one face file's reading: its SHA-256, each alphabet's letters its best Unicode cmap leaves unmapped, its GSUB smcp and
+    the code points that feature substitutes (small_caps_of)"""
     from fontTools.ttLib import TTFont
 
     data = path.read_bytes()
@@ -36,7 +67,12 @@ def face_tables(path, alphabets):
     unmapped = {a: ''.join(ch for ch in letters if ord(ch) not in cmap) for a, letters in alphabets.items()}
     gsub = font['GSUB'].table if 'GSUB' in font else None
     smcp = bool(gsub and gsub.FeatureList and any(r.FeatureTag == 'smcp' for r in gsub.FeatureList.FeatureRecord))
-    return {'sha256': hashlib.sha256(data).hexdigest(), 'unmapped': {a: s for a, s in unmapped.items() if s}, 'smcp': smcp}
+    return {
+        'sha256': hashlib.sha256(data).hexdigest(),
+        'unmapped': {a: s for a, s in unmapped.items() if s},
+        'smcp': smcp,
+        'smallCaps': small_caps_of(gsub, cmap) if smcp else [],
+    }
 
 
 def main(argv):

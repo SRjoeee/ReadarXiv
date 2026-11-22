@@ -25,13 +25,15 @@
 //
 // The Metrics measure (held in a browser by lab/typeset/metrics-browser.mjs's `rules` mode, equal to the measurer on 98,862 of 98,862): a text cut where its
 // characters' slice changes (the first family of the string whose face, by CSS's matching, has a slice declaring the
-// character), each run measured alone in the font string without small capitals, a run of CJK characters unkerned and cut
+// character), each run measured alone in the font string, its small capitals kept where the run's face sets its own (its smcp
+// feature) and dropped where it has none (`partsOf`: as the run's class draws it), a run of CJK characters unkerned and cut
 // between two adjacent CJK punctuation marks (no text-spacing-trim), the runs' widths summed; the ink their highest ascent,
 // deepest descent and furthest right. `ready` is true where every slice the text needs is loaded, 'never' where a character is
 // in no slice of the string's faces (a face whose table cannot be had holds none), or its slice is lost (an answer no ask would
 // mend, or a failure met twice, until it comes), else false: the typesetter waits for the face (the page's `wait.faces`), and
 // the composer asks it here (`faces.ready`), whose answer is each face's table read or found not to be had, never a wait
 // asked again at once.
+import { SMCP } from '@readarxiv/text'
 import { FACES, hyphenationOf, type Metrics, type Patterns } from '@readarxiv/typeset'
 import { type Fetch, realTimers, type Timers } from '../bytes/source.ts'
 import { bodyWithin, Refused, RETRY_MS, request } from '../session/client.ts'
@@ -141,26 +143,41 @@ function faceOf(list: readonly ServedFace[], weight: number, style: string): Ser
   return (weight <= 500 ? [...lighter, ...heavier] : [...heavier, ...lighter])[0]
 }
 
-/** the parts a text is measured in: [the font string without small capitals, text, unkerned] */
-export function partsOf(font: string, runs: readonly { text: string; cjk: boolean }[]): [string, string, boolean][] {
+/** the faces whose small capitals are their own, by their file's smcp feature (@readarxiv/text SMCP) */
+const OWN_CAPS: ReadonlySet<string> = new Set(SMCP)
+/** the parts a text is measured in: [its run's font string, text, unkerned]. A run is measured as its class draws it
+ *  (`faces.classOf`: the string's small capitals asked, none synthesized): in the string with its small capitals where the run's
+ *  face sets its own (its smcp feature, the glyphs the face draws for them), else without them, in its lower case (a face with
+ *  none draws its lower case, where a canvas asked them would synthesize them). The typesetter asks small capitals of a face
+ *  that has its own alone (its faked ones are runs of capitals at a share of the size, B.tokens): measured in its lower case,
+ *  such a run was laid narrower than it is drawn, the text after it on its line drawn over its last letters. The typesetter
+ *  asks them letter by letter (@readarxiv/text ownSmallCapsOf): of a face only for a piece whose every lower-case letter its
+ *  smcp substitutes, on every path (B.tokens' pieces, spaces and raised runs; S.names; the figure texts' runs, set in the plain
+ *  face where their face has none for a letter): no run reaches here asking a face's small capitals for a letter it has none
+ *  for, so the slice a run falls in holds them and the canvas and the class give one width (docs/PDF-READER.md §11.5) */
+export function partsOf(
+  font: string,
+  runs: readonly { text: string; cjk: boolean; face?: { id: string } }[],
+): [string, string, boolean][] {
   const out: [string, string, boolean][] = []
   const plain = font.replace(/^(italic )?small-caps /, '$1')
   for (const r of runs) {
+    const f = r.face && OWN_CAPS.has(r.face.id) ? font : plain
     if (!r.cjk) {
-      out.push([plain, r.text, false])
+      out.push([f, r.text, false])
       continue
     }
     let cur = '',
       prev = ''
     for (const ch of r.text) {
       if (cur && PUNCT.test(prev) && PUNCT.test(ch)) {
-        out.push([plain, cur, true])
+        out.push([f, cur, true])
         cur = ''
       }
       cur += ch
       prev = ch
     }
-    out.push([plain, cur, true])
+    out.push([f, cur, true])
   }
   return out
 }
