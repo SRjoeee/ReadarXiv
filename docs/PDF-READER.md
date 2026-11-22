@@ -9270,8 +9270,11 @@ So no class is left out, and no table of classes is kept.
   raised box of the paper's, taken to be read, could not be set back as it was. A box is read only while a carrier is pending
   in the paragraph and no box was made, raised, lowered or unpacked from a register since it: `\everyhbox` and `\everyvbox`
   say a box was made; `\raise`, `\lower`, `\unhbox` and `\unhcopy` (and expl3's `\tex_raise:D`, `\tex_lower:D`,
-  `\tex_unhbox:D`, `\tex_unhcopy:D`) say so before they act, an `\unhbox` of a void box (LaTeX's `\leavevmode`) not. A box of
-  the paper's read so is one appended from a register by `\box` or `\copy`, which carry no shift: set back exactly.
+  `\tex_unhbox:D`, `\tex_unhcopy:D`) say so before they act, each taking the next token and handing it back, with one global
+  `\let` and nothing else, and none for an `\unhbox` of the void box (LaTeX's `\leavevmode`). A first form read the register's
+  number by `\afterassignment`, which took the place of one a package had pending: in 2307.16209v1 a section's skip moved
+  0.7 pt and the marked compile lost a page (refused); none is used. A box of the paper's read so is one appended from a
+  register by `\box` or `\copy`, which carry no shift: set back exactly.
 - **Why not at the piece's closing mark** (the coordinator's first form: the carrier taken back there where nothing was set):
   the lab's two `\delete{…}` units, a macro that sets nothing between a display and the text after it ("By the mean value
   theorem …", 2608.29558v2; "We give a proof …", 2608.29782v1), would then have no point at all, `followsOf` would still find

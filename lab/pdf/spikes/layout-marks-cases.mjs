@@ -338,9 +338,10 @@ function dviMoved(a, b) {
 }
 const READ_LINE = /^(?:AXT-|Missing character: |! LaTeX Error: Unicode character )/
 /** what the layout marks themselves write to the log (LAYOUT_TEX: a unit's alignment, a run's colour, a column's body as TeX
- *  shipped it; refsTex: a label's type and its names), which v0, with none of them, cannot write: their readings, not something
- *  they change (AXT-BODY since 70232b1c0 and the references' since refsTex: every case's check read them as changes) */
-const MARKS_OWN_LINE = /^AXT-(?:ALIGN|COLOUR|BODY|REF|REFNAME|REFLANG) /
+ *  shipped it, a cell's end (\\axt@te); refsTex: a label's type and its names), which v0, with none of them, cannot write: their
+ *  readings, not something they change (AXT-BODY since 70232b1c0, the references' since refsTex and AXT-CELL since the cells'
+ *  statements: every case's check read them as changes, a cell's case at the base among them) */
+const MARKS_OWN_LINE = /^AXT-(?:ALIGN|COLOUR|BODY|REF|REFNAME|REFLANG|CELL) /
 /** the log lines the run reads (live.mjs readingsOf) but the layout marks' own, and LaTeX's warnings and errors */
 const readLog = name => lastTexLog(read(name, 'log', 'latin1') ?? '').split('\n').filter(l => (READ_LINE.test(l) && !MARKS_OWN_LINE.test(l)) || /^(?:LaTeX|Package \S+|Class \S+) Warning|^! /.test(l))
 const errorsOf = name => (read(name, 'log', 'latin1') ?? '').match(/^! .*/gm) ?? []
