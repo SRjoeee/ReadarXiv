@@ -6,6 +6,8 @@
 // language systems), as sorted inclusive ranges, start and end in turn; faces of one set share one entry. What a face draws in
 // its own small capitals letter by letter (font-faces.ts ownSmallCapsOf): a served slice keeps the feature where it holds one
 // of these letters, and a letter it does not substitute is drawn in lower case under `font-variant-caps: small-caps`.
+// Read by font-faces.ts alone, never re-exported by the package's entry: there the website's server bundles, which bundle the
+// entry, kept its tables (each an Object.freeze call) though nothing of the server reads them, and their keys moved.
 
 const S0: readonly number[] = Object.freeze([
   38, 38, 45, 45, 97, 122, 223, 246, 248, 255, 259, 259, 261, 261, 263, 263, 269, 269, 271, 271, 273, 273, 281, 281,

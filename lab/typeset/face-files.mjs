@@ -98,6 +98,8 @@ export function smallCapsModule(tables, faces) {
 // language systems), as sorted inclusive ranges, start and end in turn; faces of one set share one entry. What a face draws in
 // its own small capitals letter by letter (font-faces.ts ownSmallCapsOf): a served slice keeps the feature where it holds one
 // of these letters, and a letter it does not substitute is drawn in lower case under \`font-variant-caps: small-caps\`.
+// Read by font-faces.ts alone, never re-exported by the package's entry: there the website's server bundles, which bundle the
+// entry, kept its tables (each an Object.freeze call) though nothing of the server reads them, and their keys moved.
 `
   const body = sets.map((s, k) => `const S${k}: readonly number[] = Object.freeze(${s})`).join('\n')
   const map = of.map(([face, k]) => `  '${face}': S${k},`).join('\n')

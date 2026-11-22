@@ -29,7 +29,6 @@ export {
   styled,
   styleOf,
 } from './font-faces.ts'
-export { SMALL_CAPS } from './font-caps.ts'
 export { HOLDS, SMCP } from './font-letters.ts'
 export { bareFontName, type FontNameClass, readFontName, readFontStyle } from './font-names.ts'
 export { ABBR, opensAfter, STAND_IN, type StandIn, sentenceCuts, TERMINAL_ABBR } from './sentences.ts'
