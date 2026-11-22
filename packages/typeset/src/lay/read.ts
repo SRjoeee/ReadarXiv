@@ -243,13 +243,17 @@ function readingsOf(
   const readings = new Map<number, ElementReading>()
   const cls2 = clsOf(pieces, els)
   pieces.forEach((p, k) => {
-    if (p.t === 'nested' && !els.get(String(p.k))?.ink.length) {
+    // (a nested unit's mark of no ink: TeX set nothing for it where the part states so (El.text '', as of any element of a class
+    // drawn from its ink: a heading's `\thanks` whose class sets no mark there), drawn as nothing, proven; else not found,
+    // drawn from its source as '*', which leaves its unit the original's)
+    const nestedEl = p.t === 'nested' ? els.get(String(p.k)) : undefined
+    if (p.t === 'nested' && !nestedEl?.ink.length) {
       const source: Res = { mode: 'source', text: '*', math: false, sup: true }
       readings.set(k, {
         src: '\\footnotemark',
         cls: 'num',
         nested: true,
-        fixed: null,
+        fixed: nestedEl?.text === '' ? { mode: 'none', text: '', proof: true, empty: true } : null,
         inked: false,
         symbol: null,
         supSrc: true,
@@ -495,6 +499,9 @@ type ReadInput = {
   lead?: { parts: { text: string; st: TStyle }[]; gap?: number; drawn: string } | null
   /** the last page shown */
   shown: number
+  /** the row's pieces (by index) whose text, as a reading before drew it, holds a character no served face holds (B.cover,
+   *  lay/entry.ts): drawn as their elements' ink where they have one (U.elements) */
+  inked?: ReadonlySet<number>
 }
 type ReadOut = {
   tokens: Tokens
@@ -527,7 +534,16 @@ export function readMember(i: ReadInput): ReadOut {
   const displayLines = new Set<string>()
   for (const r of readings.values()) for (const l of r.display ?? []) displayLines.add(l)
   const held = L.filter((l) => l.kept && !displayLines.has(l.key)).map((l) => l.key)
-  const el = elements({ pieces, cls2, readings, held, macros: new Map(), touched: [...displayLines], shown: i.shown })
+  const el = elements({
+    pieces,
+    cls2,
+    readings,
+    held,
+    macros: new Map(),
+    touched: [...displayLines],
+    shown: i.shown,
+    ...(i.inked?.size ? { inked: i.inked } : {}),
+  })
   const res = el.resolutions
   // U.breaks: TeX's forced breaks and the paragraphs it opened, paired with the row in its order; the kept lines in runs, each
   // kept resolution's region

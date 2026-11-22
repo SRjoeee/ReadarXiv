@@ -10,6 +10,9 @@ import {
   askOf,
   looksAhead,
   CALL_TEX,
+  carrySamples,
+  CARRY_END_TEX,
+  CARRY_TEX,
   classNamesTex,
   DVI_LAYOUT_TEX,
   inkSamples,
@@ -153,11 +156,20 @@ export type Spans = { skip?: number; marks?: string; lines?: () => UnitLines<Sou
 /**
  * The TeX that defines every mark the marking writes, as the marked original's head holds it and the mark probe over the marked
  * preamble takes it: MARK_DEF's unit marks, LAYOUT_TEX (`layout`, its full or reduced form) and the head's parts after it
- * (`then`: the statements, the asks), each followed by its DVI form under `latex` (`dvi`), and CALL_TEX where a unit states an
- * author's call (`called`), after LAYOUT_TEX whose \axt@set it uses
+ * (`then`: the statements, the asks), each followed by its DVI form under `latex` (`dvi`), CALL_TEX where a unit states an
+ * author's call (`called`), after LAYOUT_TEX whose \axt@set it uses, and CARRY_TEX where the marking writes a carrier, the
+ * opening mark of a piece first in the paragraph TeX resumes after a display (`carried`), after LAYOUT_TEX whose marks it wraps,
+ * its paragraph end (CARRY_END_TEX) before LAYOUT_TEX, so that it runs before every para/end hook of ours
  */
-const marksTex = (dvi: boolean, layout: string, called: boolean, then = ''): string =>
-  MARK_DEF + (dvi ? DVI_MARK_DEF : '') + layout + then + (dvi ? DVI_LAYOUT_TEX : '') + (called ? CALL_TEX : '')
+const marksTex = (dvi: boolean, layout: string, called: boolean, then = '', carried = false): string =>
+  MARK_DEF +
+  (dvi ? DVI_MARK_DEF : '') +
+  (carried ? CARRY_END_TEX : '') +
+  layout +
+  then +
+  (dvi ? DVI_LAYOUT_TEX : '') +
+  (called ? CALL_TEX : '') +
+  (carried ? CARRY_TEX : '')
 /** originalFiles' options */
 export type OriginalOptions = {
   lines?: boolean
@@ -167,6 +179,9 @@ export type OriginalOptions = {
   inkless?: readonly string[] | null
   complete?: CompleteGiven | null
   apart?: readonly string[] | null
+  /** with `layout`: the pieces TeX's display probe said open no display (readDisplayProbe over carrySamples), the only ones a
+   *  carrier stands before (marks.ts CARRY_TEX); none: no carrier */
+  quiet?: readonly string[] | null
   unmarked?: ReadonlySet<number> | null
   names?: boolean
   pastBegin?: boolean
@@ -402,7 +417,7 @@ export function probeFiles(
   const at = beginDocument(text)
   const head = marks ? probeHead(paper, preamble) : '',
     probe = marks
-      ? `${bblProvides(fsys, project.main)}${markProbeTex(probeSamples(project.units, project.complete), inkSamples(project.units), leadSamples(project.units))}`
+      ? `${bblProvides(fsys, project.main)}${markProbeTex(probeSamples(project.units, project.complete), inkSamples(project.units), leadSamples(project.units), carrySamples(project.units))}`
       : ''
   return new Map([
     [
@@ -518,6 +533,7 @@ export function originalFiles(
     inkless = null,
     complete = null,
     apart = null,
+    quiet = null,
     unmarked = null,
     names = true,
     pastBegin = !!layout,
@@ -534,9 +550,10 @@ export function originalFiles(
   const raw: UnitSpan[] | null = spans ? [] : null
   let out: Map<string, Uint8Array>,
     patched: Map<string, Uint8Array> | null = null,
-    called = false
+    called = false,
+    carried = false
   if (layout) {
-    const laid = layoutMarking(project.units, layout, { lines, switches, inkless, complete, apart })
+    const laid = layoutMarking(project.units, layout, { lines, switches, inkless, complete, apart, quiet })
     // (the asks, where given, in the marked units: each before its piece and the marks that open it, the marks as they were)
     const asked = asks?.asked.length ? asks : null
     const of = new Map<SourceUnit, SourceUnit>()
@@ -555,6 +572,10 @@ export function originalFiles(
     const paperOf = new Map(marked.units.map((c, i) => [c, project.units[i]]))
     // (an author's call the source states, \axtcall: its definition in the head, CALL_TEX)
     called = marked.units.some((u) => !!marked.mark(u)?.call)
+    // (a carrier the marking writes, \axtpmd: its TeX in the head, CARRY_TEX)
+    carried = marked.units.some((u) =>
+      u.pieces.some((p) => p.t === 'ph' && /^(?:\\protect)?\\axtpmd\{/.test(p.src ?? '')),
+    )
     const asSource = unmarked
       ? (new Set([...unmarked].map((i) => marked.units[i]).filter(Boolean)) as Set<SourceUnit>)
       : null
@@ -601,6 +622,7 @@ export function originalFiles(
         reduced ? LAYOUT_TEX_REDUCED : LAYOUT_TEX,
         called,
         (statements && !reduced ? STATEMENTS_TEX : '') + (asks?.asked.length ? ASK_TEX : ''),
+        carried,
       )
     : MARK_DEF + (dvi ? DVI_MARK_DEF : '')
   const head =
