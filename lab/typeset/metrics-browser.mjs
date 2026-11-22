@@ -5,9 +5,10 @@
 // (font string, text) of the tap's metrics tables (baseline/tap/metrics/<pair>.metrics.json.gz) is measured at 100 px:
 //   rules   the spec's (2) and (3), what the reader's Metrics must do: the text cut where its characters' slice changes
 //           (served-metrics' runs: the first family of the string whose face, by CSS matching, has a slice declaring the
-//           character), each run measured alone in the font string itself but never in small capitals (the typesetter fakes
-//           them itself: B.tokens' `sc`; a canvas element's `font-synthesis: none` does not reach its text, the styled mode
-//           shows), a run of CJK characters unkerned and cut between two adjacent CJK punctuation marks (no
+//           character), each run measured alone in the font string itself, in small capitals where the run's face sets its own
+//           (its smcp feature, @readarxiv/text SMCP: the reader's class draws them) and never where it has none (the
+//           typesetter fakes those itself, B.tokens' `sc`; a canvas element's `font-synthesis: none` does not reach its text,
+//           the styled mode shows), a run of CJK characters unkerned and cut between two adjacent CJK punctuation marks (no
 //           text-spacing-trim), the runs' widths summed; the ink their highest ascent, deepest descent and furthest right.
 //           In the whole string, not its run's family alone: no family before the run's declares its characters, so Chrome
 //           sets them in the run's slice, and a character a slice declares but its file lacks (xcharter-regular's slice 5
@@ -19,8 +20,9 @@
 //           synthesis does not, and the kana stay kerned)
 // Each against the table's w100 and the Node measurer's (served-metrics.mjs), equal within 1/1000 px. Exit 0 when rules
 // equals the measurer on every measure and every other difference of rules and plain is of a named class (served-check's
-// 14: 8 text-spacing-trim of adjacent CJK punctuation, 2 kana runs Chrome kerns, 4 small capitals Chrome synthesizes on
-// domitian and xcharter), none over its count; else 1. The 14 stand between rules and the table and between plain and the
+// 14: 8 text-spacing-trim of adjacent CJK punctuation, 2 kana runs Chrome kerns, 4 small capitals on domitian and xcharter,
+// which rules measured in lower case until 2026-11-22: Chrome's widths are the faces' own smcp glyphs, domitian's "ArXiv" 289.0
+// at 100 px, its file's), none over its count; else 1. The 14 stand between rules and the table and between plain and the
 // measurer: the table is today's Chrome, which trims, kerns kana and synthesizes; the measurer, the spec's target, does
 // none of these. Offline: a static server on 127.0.0.1 serves the page and the
 // slices, the browser aborts any other request. Lab-data stays where it is: nothing is written. Run from the worktree's root,
@@ -29,6 +31,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { join } from 'node:path'
+import { SMCP } from '../../packages/text/src/index.ts'
 import { FACES } from '../../packages/typeset/src/data/faces.ts'
 import { readGz, TAP } from '../../packages/typeset/tests/replay/tap.ts'
 import { CJK, faceOf, hasServed, inRanges, parse, SLICES, servedMetrics, TABLES } from './served-metrics.mjs'
@@ -106,11 +109,13 @@ function runsOf(families, font, text) {
 const PUNCT = /[\u3001-\u3003\u3008-\u3011\u3014-\u301f\u30fb\uff01-\uff0f\uff1a-\uff20\uff3b-\uff40\uff5b-\uff65]/u
 const KANA = /[\p{Script=Hiragana}\p{Script=Katakana}\u30fc]/u
 
-/** the parts the rules mode measures: [the font string without small capitals, text, unkerned, the slice's key] */
+/** the parts the rules mode measures: [the font string, its small capitals kept where the run's face sets its own (its smcp
+ *  feature, @readarxiv/text SMCP) and dropped where it has none, as the reader's served.ts partsOf; text, unkerned, the slice's key] */
 function partsOf(string, runs) {
   const out = []
-  const font = string.replace(/^(italic )?small-caps /, '$1')
+  const plain = string.replace(/^(italic )?small-caps /, '$1')
   for (const r of runs) {
+    const font = SMCP.includes(r.face.id) ? string : plain
     if (!r.cjk) {
       out.push([font, r.text, 0, r.s.key])
       continue

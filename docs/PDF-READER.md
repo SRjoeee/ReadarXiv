@@ -1236,8 +1236,17 @@ Where its host gives no engine, the reader lays with lane L3's typesetter (`pack
 reader's own Metrics over our site's served faces (`served.ts`: `/static-fonts/index.json`, its groups'
 `/static-fonts/<group>.json?fonts=<fonts>`, each slice `/static-fonts/<16 hex>.woff2` fetched as data through the host's
 fetch and made a FontFace with its code points as its unicode-range), measured as lane L7's spec says (runs cut where the
-slice changes, a CJK run unkerned and cut between two punctuation marks, never in small capitals; held in a browser by
-`lab/typeset/metrics-browser.mjs`). The website serves those files from its origin; the extension reads them from our
+slice changes, a CJK run unkerned and cut between two punctuation marks; held in a browser by
+`lab/typeset/metrics-browser.mjs`), each run as its class draws it: in the font string with its small capitals where the run's
+face sets its own (its file's smcp feature, `@readarxiv/text` `SMCP`: the class asks them, `font-variant-caps: small-caps`, and
+the face draws them), in its lower case where the face has none (the class synthesizes none, `font-synthesis: none`, where a
+canvas asked them would). The typesetter asks small capitals of such a face alone (B.tokens: a face with none has them faked,
+runs of capitals at a share of the size), as today's reader measured them (`layer2.mjs` w100, its fontString). Measured in its
+lower case, as the spec had it until 2026-11-22, a run of a face's own small capitals was laid narrower than it is drawn and the
+text after it on its line was drawn over its last letters: the owner's report on production of 2603.14468v1, whose
+`\textsc{LongVidSearch}` in Linux Libertine O is 765.8 thousandths of an em in its small capitals (the file's smcp glyphs) and
+was laid at its lower case's 681.8, the translation after it in the §3 heading begun 6.98 pt before the name's drawn end (21
+such runs over the paper, each 4.2 to 7.0 pt over the text after it). The website serves those files from its origin; the extension reads them from our
 server's, as today's reader does. Both hosts' readers take this path: neither gives an engine (the website's page, and the
 extension's `src/pdf-reader/host/v2.ts`, open the reader with none); a host that gives its own engine and faces
 (`createFaces`, a table; the harness's fixture lay) keeps its faces' own rules, a face lost drawn in its fallback.

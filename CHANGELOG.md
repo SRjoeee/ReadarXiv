@@ -4,6 +4,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- Fixed: in the PDF reader, a name the paper sets in small capitals, such as `\textsc{…}` in a heading or a paragraph, is followed by the translation after its last letter. The translation had started about one letter before the name ended, drawn over it.
 - Fixed: in the PDF reader, a figure's text that a picture painted over it hides on the page, such as the labels of a mock interface under a pasted screenshot, is no longer translated. Its translation had been drawn over the picture.
 - Fixed: in the PDF reader, a paper that names its section files through a macro of its own, such as `\input{\subpath sections/intro.tex}`, is read from its source: its figures' and tables' captions and its tables' cells are translated. They had stayed English, with the rest of the text translated only from the printed page.
 - Changed: in the PDF reader, the first scroll through a paper stutters less while its fonts arrive: the text of pages far off screen is no longer laid out again each time a font loads.
