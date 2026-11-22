@@ -540,6 +540,27 @@ describe('a piece with no point of its own, between the nearest points TeX shipp
     const rows = [[...Array(2).fill('u5'), ...Array(3).fill('u5.1'), ...Array(6).fill('u5')]]
     expect(run([{ glyphs: glyphs('sox=1holds.'), points: [pt('5s', 0), pt('p5.1a', 2), pt('5e', 11)] }], rows, shown)).toEqual([])
   })
+  it('reads a glyph TeX painted between the bounds as ink whatever its Unicode: a mark of blank or absent Unicode states nothing', () => {
+    // (pageInk flags a glyph `blank` by its Unicode alone: a symbol font's mark mapped to a space, a Type 3 glyph of no Unicode
+    // paint ink all the same, its outline a box. Read as no ink, the piece would be stated empty, drawn as nothing, and its
+    // unit's own mark erased: the review's case on #668)
+    const painted = (u: string) => ({ u, blank: true, x0: 30, x1: 34, ix0: 30, ix1: 34, top: 7, bottom: 0 })
+    const withMark = (before: string, after: string, u = '') => [...glyphs(before), painted(u), ...glyphs(after)]
+    // (a paper's macro of its own opening point alone, the text after it next: its one glyph a mark of blank Unicode)
+    const gone = unitsOf([{ t: 'text', s: 'We set ' }, ph('\\mark{}'), { t: 'text', s: ' and go on.' }])
+    const p1 = [{ glyphs: withMark('Weset', 'andgoon.'), points: [pt('5s', 0), pt('p5.1a', 5), pt('5e', 14)] }]
+    expect(run(p1, [Array(14).fill('u5')], gone)).toEqual([])
+    expect(run([{ ...p1[0]!, glyphs: withMark('Weset', 'andgoon.', '\u0000') }], [Array(14).fill('u5')], gone)).toEqual([])
+    // (a nested unit's mark after a heading's last text, its one glyph of blank Unicode between the end point and the next start)
+    const note = { t: 'nested', pre: '\\thanks{', unit: { kind: 'footnote', pieces: [{ t: 'text', s: 'Funded.' }] }, post: '}' }
+    const title = unitsOf([{ t: 'text', s: 'A title' }, note])
+    const p2 = [{ glyphs: withMark('Atitle', 'Names'), points: [pt('h5s', 0), pt('h5e', 6), pt('6s', 7)] }]
+    expect(run(p2, [[...Array(6).fill('u5'), null, ...Array(5).fill('u6')]], title)).toEqual([])
+    // (and a piece of no point of its own between two points, as the statement read before: the painted mark between, nothing)
+    const tail = unitsOf([{ t: 'text', s: 'a word.' }, ph('\\endgroup')])
+    const p3 = [{ glyphs: withMark('aword.', 'Next'), points: [pt('5s', 0), pt('5e', 6), pt('6s', 7)] }]
+    expect(run(p3, [[...Array(6).fill('u5'), null, ...Array(4).fill('u6')]], tail)).toEqual([])
+  })
   it('bounds a nested unit’s mark as a placeholder, by its own points or the nearest around it, where nothing stands between', () => {
     // (a heading's `\thanks{…}`, its class setting no mark in the heading: the unit's end point and the next unit's start point,
     // nothing between them. 2608.18760v1's title: no statement made, its title unproven, the original's)
