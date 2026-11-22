@@ -223,26 +223,30 @@ export function elements(i: ElementsInput): Elements {
   }
   // (an element whose text the reading draws as the page's text holds a character no served face holds (`inked`, B.cover's
   // answer: a paper's macro TeX set as a symbol in a face we serve none of, pifont's \ding): drawn as its ink, the glyphs TeX
-  // set for it, as a formula's are, its text the copy's; one of no ink stays as read, and its member the original's)
+  // set for it, as a formula's are, its text the copy's; the ink of the rendering it draws, its gap's (U.brackets: one the
+  // translation brackets itself, the ink between its own brackets, as `inner` reads it); one of no ink stays as read, and its
+  // member the original's)
   for (const k of i.inked ?? []) {
     const r = out.get(k)
-    if (r && r.mode !== 'crop' && r.text) cropped(out, r, readings, shown, r.text)
+    const own = (r?.gap?.box as { segs?: readonly number[] } | undefined)?.segs
+    if (r && r.mode !== 'crop' && r.text) cropped(out, r, readings, shown, r.text, own)
   }
   const unproven = crops(out, readings, shown)
   return { resolutions: out, keep: [...new Set([...(keep ?? []), ...i.touched])], unproven }
 }
 
-/** a resolution drawn as its element's ink, its row's segments (ElementReading.segs) as the file's crops, proven; `text` its
- *  copy text (the source's where none is given); false where it has no ink, one of it stands past the last page shown, or the
- *  segments make no crop */
+/** a resolution drawn as its element's ink, its row's segments (ElementReading.segs, or `segs` where given: the rendering's own)
+ *  as the file's crops, proven; `text` its copy text (the source's where none is given); false where it has no ink, one of it
+ *  stands past the last page shown, or the segments make no crop */
 function cropped(
   res: Map<number, Res>,
   r: Res,
   readings: ReadonlyMap<number, ElementReading>,
   shown: number,
   text?: string,
+  segs?: readonly number[],
 ): boolean {
-  const S = readings.get(r.k!)!.segs
+  const S = segs ?? readings.get(r.k!)!.segs
   if (r.cls === 'display' || !S.length) return false
   for (let s = 0; s + 5 < S.length; s += 6) if (S[s]! > shown) return false
   const parts = cropPartsOfSegments(S)

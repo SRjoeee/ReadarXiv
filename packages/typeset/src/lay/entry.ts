@@ -247,7 +247,8 @@ export function nameOf(
 /** a label on a line of its own (Label with no `line`: IEEEtran's "TABLE I" above its caption): its relabel `row.text` laid as a
  *  row of its own on the label's baseline, at its size, in its runs by script (a name's: nameScriptRuns), set as TeX set that
  *  line against its measure (Label.align): centred on the label's middle, from its start, or to its end. Nothing else of its
- *  member moves: no line of the member's leads with it */
+ *  member moves: no line of the member's leads with it. None where a face it needs is never ready: `unheld` where a character
+ *  of it is one no served face holds (Metrics.holds), not a face lost for now */
 function labelRowOf(
   lb: NonNullable<Placed['label']>,
   row: { text: string; st: Parameters<typeof faceOf>[1] },
@@ -255,7 +256,7 @@ function labelRowOf(
   to: string,
   R: Rules['set'],
   metrics: Metrics,
-): { line: Laid['lines'][number] | null } | { wait: [string, string][] } {
+): { line: Laid['lines'][number] | null; unheld?: true } | { wait: [string, string][] } {
   const drawn = nameScriptRuns(
     row.text,
     (cls) => faceFor(row.st, cls),
@@ -265,7 +266,10 @@ function labelRowOf(
   )
   const c = cover(drawn.runs.map((q) => ({ s: q.s, face: q.face })) as never, metrics)
   if ('wait' in c) return { wait: c.wait }
-  if (!c.ok) return { line: null }
+  if (!c.ok)
+    return drawn.runs.some((q) => metrics.holds?.(fontString(q.face ?? drawn.face, 100), q.s) === false)
+      ? { line: null, unheld: true }
+      : { line: null }
   const size = lb.style.size
   const w = runsWidth(drawn, metrics) * size
   const x0 = lb.align === 'r' ? lb.ink[3] - w : lb.align === 'c' ? (lb.ink[1] + lb.ink[3]) / 2 - w / 2 : lb.ink[1]
@@ -283,13 +287,15 @@ function labelRowOf(
 
 /** what of a member's tokens B.cover found no served face for that the original's own ink can stand for: the row's pieces
  *  whose text the reading draws as the page's text (their tokens' `k`; each token's text asked of its face alone, as B.cover
- *  asks a run's), and the label drawn anew (`label`). A character of the translation's own text is in neither */
+ *  asks a run's), and the label drawn anew (`label`). A character of the translation's own text is in neither; nor is one a
+ *  served face holds whose slice is lost for now (Metrics.holds: `ready` says 'never' for both), whose unit the lost faces'
+ *  path leaves the original's until it is back; a host that states no `holds` has none */
 function unservedOf(tokens: Tokens, metrics: Metrics): { inked: Set<number>; label: boolean } {
   const inked = new Set<number>()
   let label = false
   for (const t of tokens as readonly Token[]) {
     const face = t.face as (Face & { ids?: unknown }) | undefined
-    if (!face?.ids || !t.s || metrics.ready(fontString(face, 100), t.s) !== 'never') continue
+    if (!face?.ids || !t.s || metrics.holds?.(fontString(face, 100), t.s) !== false) continue
     if (t.label) label = true
     else if (t.ph !== undefined && t.k !== undefined) inked.add(t.k)
   }
@@ -428,11 +434,13 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
       const row = typeof m.text === 'string' ? rows.get(m.text) : undefined
       const { pieces, paras } = paraPieces(mm, rowPieces(mm, content), row?.ok ? row.sentences : undefined)
       // (read, its faces asked, measured; its label on a line of its own laid as a row of its own (labelRowOf), its faces waited
-      // for as the tokens' are. Where a character no served face holds (B.cover's `served`) is one the reading draws anew of the
-      // original's own glyphs, that piece is drawn as the original's ink, as TeX set it, read again so once: an element's text
-      // (a paper's macro TeX set as a symbol in a face we serve none of, pifont's \ding) as its ink's crop (U.elements'
-      // `inked`), the label drawn anew, in the line or as its row, kept where it stands. One in the translation's own text, or
-      // in an element of no ink, leaves the member the original's, `served`, as the faces' rule has it (docs/PDF-READER.md §18))
+      // for as the tokens' are. Where a character no served face holds (B.cover's `served`; by the catalogue, Metrics.holds) is
+      // one the reading draws anew of the original's own glyphs, that piece is drawn as the original's ink, as TeX set it: an
+      // element's text (a paper's macro TeX set as a symbol in a face we serve none of, pifont's \ding) as its ink's crop
+      // (U.elements' `inked`), the label drawn anew, in the line or as its row, kept where it stands; every such piece found in
+      // one reading, the tokens and the row asked together, and read again so once. One in the translation's own text, in an
+      // element of no ink, or in a face lost for now leaves the member the original's, `served`, as the faces' rule has it
+      // (docs/PDF-READER.md §18), the lost faces' path laying it again once its face is back)
       const take = (
         relabel: boolean,
         inked: ReadonlySet<number>,
@@ -469,7 +477,15 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
         if (rd.unproven >= 0) return { state: 'unproven' as Unlaid }
         const c = cover(rd.tokens as never, metrics)
         if ('wait' in c) return { wait: c.wait }
-        if (!c.ok) return { unserved: unservedOf(rd.tokens, metrics) }
+        // (what of its tokens the original's ink can stand for; none: the original's, its row not asked)
+        const u = c.ok ? { inked: new Set<number>(), label: false } : unservedOf(rd.tokens, metrics)
+        if (!c.ok && !u.inked.size && !u.label) return { unserved: u }
+        const lr =
+          rd.labelRow && mm.label
+            ? labelRowOf(mm.label, rd.labelRow, (st, cls) => faceOf(paper.roles, st, cls), rules.target, R, metrics)
+            : null
+        if (lr && 'wait' in lr) return { wait: lr.wait }
+        if (!c.ok || (lr && !lr.line)) return { unserved: { inked: u.inked, label: u.label || !!lr?.unheld } }
         let tokens: Tokens
         try {
           tokens = measured(rd.tokens as Tokens, metrics)
@@ -477,17 +493,7 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
           if (e instanceof RangeError) throw e
           return { state: 'error' }
         }
-        if (!rd.labelRow || !mm.label) return { rd, tokens, labelLine: null }
-        const lr = labelRowOf(
-          mm.label,
-          rd.labelRow,
-          (st, cls) => faceOf(paper.roles, st, cls),
-          rules.target,
-          R,
-          metrics,
-        )
-        if ('wait' in lr) return { wait: lr.wait }
-        return lr.line ? { rd, tokens, labelLine: lr.line } : { unserved: { inked: new Set(), label: true } }
+        return { rd, tokens, labelLine: lr?.line ?? null }
       }
       let got = take(relabels, new Set())
       if ('unserved' in got && (got.unserved.inked.size || (got.unserved.label && relabels)))
