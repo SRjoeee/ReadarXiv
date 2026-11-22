@@ -495,6 +495,9 @@ type ReadInput = {
   lead?: { parts: { text: string; st: TStyle }[]; gap?: number; drawn: string } | null
   /** the last page shown */
   shown: number
+  /** the row's pieces (by index) whose text, as a reading before drew it, holds a character no served face holds (B.cover,
+   *  lay/entry.ts): drawn as their elements' ink where they have one (U.elements) */
+  inked?: ReadonlySet<number>
 }
 type ReadOut = {
   tokens: Tokens
@@ -527,7 +530,16 @@ export function readMember(i: ReadInput): ReadOut {
   const displayLines = new Set<string>()
   for (const r of readings.values()) for (const l of r.display ?? []) displayLines.add(l)
   const held = L.filter((l) => l.kept && !displayLines.has(l.key)).map((l) => l.key)
-  const el = elements({ pieces, cls2, readings, held, macros: new Map(), touched: [...displayLines], shown: i.shown })
+  const el = elements({
+    pieces,
+    cls2,
+    readings,
+    held,
+    macros: new Map(),
+    touched: [...displayLines],
+    shown: i.shown,
+    ...(i.inked?.size ? { inked: i.inked } : {}),
+  })
   const res = el.resolutions
   // U.breaks: TeX's forced breaks and the paragraphs it opened, paired with the row in its order; the kept lines in runs, each
   // kept resolution's region
