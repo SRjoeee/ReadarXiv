@@ -3316,9 +3316,12 @@ export function layoutMarking(
         for (const list of out)
           for (let j = 0; j < list.length; j++) {
             const r = list[j]!
-            const m = r.t === 'ph' ? OPENING_MARK.exec(r.src ?? '') : null
+            // (the opening marks of the marking's own pass alone: the head point a paper's macro of no mark gets at the unit's
+            // head, \\axthpk, is that piece's, which TeX sets before the unit's start mark, not a carrier's)
+            if (r.t !== 'ph' || !r.opens) continue
+            const m = OPENING_MARK.exec(r.src ?? '')
             if (!m || Number(m[1]) !== i || Number(m[2]) !== k) continue
-            list[j] = { ...r, src: r.src!.replace(/\\axt(?:pm[am]?|hpk)\{/, '\\axtpmd{') }
+            list[j] = { ...r, src: (r.src ?? '').replace(/\\axt(?:pm[am]?|hpk)\{/, '\\axtpmd{') }
             found = true
           }
         if (found) carried.add(q)
