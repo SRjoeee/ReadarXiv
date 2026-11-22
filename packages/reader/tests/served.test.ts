@@ -34,7 +34,15 @@ const TABLES: Record<string, unknown> = {
       'nimbus-roman-regular': { group: 'nimbus-roman' },
       'shs-sc-regular': { group: 'shs-sc' },
       'cmun-serif-regular': { group: 'cmun-serif' },
+      'libertine-regular': { group: 'libertine' },
     },
+  },
+  // (a face that sets small capitals of its own, by its smcp feature: @readarxiv/text SMCP)
+  '/static-fonts/libertine.json?fonts=6': {
+    schema: 1,
+    group: 'libertine',
+    slices: [LATIN],
+    faces: { 'libertine-regular': [{ path: 'static-fonts/0000000000000005.woff2' }] },
   },
   '/static-fonts/cmun-serif.json?fonts=6': {
     schema: 1,
@@ -128,10 +136,15 @@ function site(
   let stretch: string[] | null = null
   const measured: [string, string, boolean][] = []
   const platform: Platform = {
-    // (each character 50 units wide at 100 px, a CJK one 100; its ink 70 over, 20 under, ending at its advance)
+    // (each character 50 units wide at 100 px, a CJK one 100; a lower-case letter in a font string asking small capitals 60, as
+    // a face's own small capitals set it wider than its lower case; its ink 70 over, 20 under, ending at its advance)
     measure(font, text, unkerned) {
       measured.push([font, text, unkerned])
-      const width = [...text].reduce((w, ch) => w + (/[\u3000-\u9fff\uff00-\uffef]/.test(ch) ? 100 : 50), 0)
+      const caps = /^(italic )?small-caps /.test(font)
+      const width = [...text].reduce(
+        (w, ch) => w + (/[\u3000-\u9fff\uff00-\uffef]/.test(ch) ? 100 : caps && /\p{Ll}/u.test(ch) ? 60 : 50),
+        0,
+      )
       return { width, ascent: 70, descent: 20, right: width }
     },
     async face(family, _bytes, d) {
@@ -309,6 +322,22 @@ describe('the served faces and the Metrics over them', () => {
     expect(partsOf(`italic small-caps ${FONT}`, [{ text: 'Ab', cjk: false }])).toEqual([
       [`italic ${FONT}`, 'Ab', false],
     ])
+  })
+  it('measures a run in small capitals where its face sets its own, as its class draws it; a face with none in its lower case', async () => {
+    // (a name set in small capitals, followed on its line by the translation: the advance its run is given is the width its
+    // class draws, `font-variant-caps: small-caps` in a face with an smcp feature; measured in its lower case, the text after it
+    // was laid over its last letters)
+    const CAPS = 'small-caps 400 100px "axt-libertine", "axt-shs-sc"'
+    const { s, measured } = site()
+    await s.faces.ready([[CAPS, 'Abc中'], [`small-caps ${FONT}`, 'Abc']])
+    expect(s.metrics.advance(CAPS, 10, 'Abc')).toBeCloseTo((50 + 60 + 60) / 10)
+    expect(measured).toContainEqual([CAPS, 'Abc', false])
+    // (its CJK run in the CJK face, which has none: no small capitals asked, as none are drawn)
+    expect(s.metrics.advance(CAPS, 10, 'Abc中')).toBeCloseTo((50 + 60 + 60 + 100) / 10)
+    expect(measured).toContainEqual(['400 100px "axt-libertine", "axt-shs-sc"', '中', true])
+    // (a face with no small capitals of its own is drawn in its lower case, none synthesized: measured so)
+    expect(s.metrics.advance(`small-caps ${FONT}`, 10, 'Abc')).toBeCloseTo((50 + 50 + 50) / 10)
+    expect(measured).toContainEqual([FONT, 'Abc', false])
   })
   it('a slice not there is lost, its face told once; one that fails for now is lost once it fails again', async () => {
     const gone = site({ missing: ['/static-fonts/0000000000000001.woff2'] })
