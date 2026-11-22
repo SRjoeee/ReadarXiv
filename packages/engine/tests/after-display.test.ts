@@ -296,4 +296,10 @@ describe("the carrier's TeX takes no name the rest of a marked head has", () => 
     expect(defined.size).toBeGreaterThan(20)
     expect(clash).toEqual([])
   })
+  it('nor takes the place of an \\afterassignment a package set: its wrappers read one token, and set no number', () => {
+    // (a first form read \\unhbox's register by \\afterassignment, which took the place of one a package had set before its own
+    // \\leavevmode: a section's skip in 2307.16209v1 moved, 147 pages 146, the paper refused)
+    expect(CARRY_TEX).not.toContain('\\afterassignment')
+    expect(CARRY_TEX).toContain('\\protected\\def\\unhbox#1{\\ifx#1\\voidb@x\\else\\axt@cyhook\\fi\\axt@unhbox#1}')
+  })
 })
