@@ -9361,6 +9361,23 @@ What stays the doubt it is: an element whose ink exists and was not found, or wh
 own, text on both sides; a conditional's test or its false branch read as the unit's text, which TeX never sets: there the
 unit's own text is not TeX's, and the original is the right drawing).
 
+- **Reach**, as measured: the reader's own lay over the lab's 245 papers, every row answered, left 25 units `unproven`; their
+  members hold 82 elements of no ink and no statement, none with both its points. This round states 4 of them (the two
+  `\delete{…}`, 2608.18760v1's title call, and a `\else` of 2610.38516v1 whose paragraph stays for its `\ifnum`): 3 units
+  drawn (51,600 -> 51,603), 22 left, each for a cause of its own: the unit's source holds text TeX never sets (8: the test of
+  `\ifnum\arxivbuild=1` read as text, false branches of `\iffa`); ink TeX set that the ownership gave the unit's text or another
+  piece (6: `\code{'0'}` in a `\makecell`, `\textyen`, a footnote's call), or no unit (6: `\texttt{…}` and a paper's macro after
+  their unit's end point); a table's body read as one paragraph (1: aastex's deluxetable, its `&`); a tail piece whose next
+  point is another unit's start set before it (1). The chain from the stored compiles (no compile key moves) against
+  §18.106's: 240 papers byte for byte, every units object, prepare dump and ownership file of the 245; 21 element placements
+  of 6 units in 5 papers gain `text: ''` (and the style every element stated so carries), nothing else (the located files
+  but their parts' digests): those named and 2608.15334v1's author block, eight MNRAS `\newauthor`, which stays unproven for
+  other elements of no ink. No unit the lay drew before is lost.
+- **Versions**: PIPELINE must move (the parts' elements, three units' states; the integration's to raise); FORMAT 1 stays
+  (`El.text` is the field the format's rule already reads: an older typesetter reads a stated call as one not found, its unit
+  the original's, as before); TRANSLATE stays (no unit's content, id or wire moves: the rows production holds are kept);
+  LAYOUT and the marks digest stay (no TeX moves; today's layout maker reads no instrument of this engine).
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server

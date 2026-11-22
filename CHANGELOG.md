@@ -4,6 +4,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- Fixed: in the PDF reader, a paragraph holding a command of the paper's own that prints nothing, such as one that hides a passage the author struck out, is translated, and so is a title whose acknowledgement the paper's class sets without a mark in the title. Both had stayed in the original.
 - Fixed: in the PDF reader, a paragraph that goes on after a displayed formula with a reference, a citation, a footnote's mark or a command of the paper's own that prints something, such as `\[ … \]` then `\autoref{fig}` on the next line, is translated. It had stayed in the original, though its translation had arrived.
 - Fixed: in the PDF reader, a caption or a paragraph holding a symbol the reader has no font for, such as a check mark or a cross the paper draws from a symbol font, is translated, the symbol drawn as printed. It had stayed in the original language.
 - Fixed: in the PDF reader, a page on which the number before a line is a link, such as a note's number that leads to its mark, is translated. The whole page had stayed as printed.
