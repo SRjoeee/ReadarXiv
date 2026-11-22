@@ -3,7 +3,8 @@
 // the translation package's Results by unit id. Composed over what the gate's runner proves member by member: the wait check
 // (waitOf: rows not in while more may come, before any work), each member's reading and tokens (read.ts readMember over the row's
 // pieces made from the member's stated facts, rowPieces: no Units object), its faces (B.cover: a face not loaded is waited for, a
-// character no served face holds leaves it `served`), its setting (adapt.ts: U.blocks, U.decor, U.params, its flow's shared
+// character no served face holds leaves it `served`, but one of an element's text or of the label drawn anew, which the
+// original's ink draws instead: unservedOf), its setting (adapt.ts: U.blocks, U.decor, U.params, its flow's shared
 // rows), every flow laid and each pass page filled (layPagePrepared: L8-L11, a flow that throws its own; a table's cells each
 // laid by its own row and held or settled by group where one cannot be drawn, S.table.groups: the header, each column, the cells
 // spanning the same columns; a flow's size tie's members at one size), and the members as drawn (D.display). The reader's leave
@@ -23,6 +24,7 @@ import { type Box, type Ink, LINE_FLAG, type OutPiece, type Part, type Placed, t
 import { cover } from '../breaker/cover.ts'
 import { faceOf, ownSmallCapsOf } from '../breaker/faces.ts'
 import { fitMeasure, fontString } from '../breaker/measure.ts'
+import type { Face, Token } from '../breaker/tokens.ts'
 import { type NameRow, nameScriptRuns, runsWidth, setNameOf } from '../shared/names.ts'
 import { ownNamesOf } from '../unit/rename.ts'
 import type { Layout, Tokens } from '../fit/types.ts'
@@ -279,6 +281,21 @@ function labelRowOf(
   return { line: [lb.ink[5], x0, x, items] }
 }
 
+/** what of a member's tokens B.cover found no served face for that the original's own ink can stand for: the row's pieces
+ *  whose text the reading draws as the page's text (their tokens' `k`; each token's text asked of its face alone, as B.cover
+ *  asks a run's), and the label drawn anew (`label`). A character of the translation's own text is in neither */
+function unservedOf(tokens: Tokens, metrics: Metrics): { inked: Set<number>; label: boolean } {
+  const inked = new Set<number>()
+  let label = false
+  for (const t of tokens as readonly Token[]) {
+    const face = t.face as (Face & { ids?: unknown }) | undefined
+    if (!face?.ids || !t.s || metrics.ready(fontString(face, 100), t.s) !== 'never') continue
+    if (t.label) label = true
+    else if (t.ph !== undefined && t.k !== undefined) inked.add(t.k)
+  }
+  return { inked, label }
+}
+
 /** layPage: page `part.page` laid from its part and the target's rows */
 export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics, o: EntryOptions = {}): Page {
   const page = part.page
@@ -406,59 +423,62 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
         else if (ld.word) state.set(ld.name.ord, 'name')
       }
       const relabels = !!mm.label && !((mm.fixed ?? 0) & LABEL_KEPT)
-      let rd: ReturnType<typeof readMember>
       // (its paragraph points cut into its row where a sentence start pairs with them, Placed.paras: unit/breaks.ts paraPieces;
       // a named unit's sentences in its own projection, named.ts)
       const row = typeof m.text === 'string' ? rows.get(m.text) : undefined
       const { pieces, paras } = paraPieces(mm, rowPieces(mm, content), row?.ok ? row.sentences : undefined)
-      try {
-        rd = readMember({
-          m: mm,
-          unit: { kind: m.kind, ...(m.title ? { title: true } : {}), state: 'whole', pieces },
-          rects: mm.lines.map((l) => rectOf(l, mm)),
-          to: rules.target,
-          P: R as never,
-          paper,
-          labels: {
-            words: rules.labels,
-            captions: rules.captions,
-            heads: rules.heads,
-            names: drawsName(m) ? ownNames : null,
-          },
-          refs: rules.refs,
-          relabels,
-          lead: led?.lead ?? null,
-          shown: Number.POSITIVE_INFINITY,
-        })
-      } catch (e) {
-        if (e instanceof RangeError) throw e
-        state.set(m.ord, 'error')
-        continue
-      }
-      if (rd.unproven >= 0) {
-        state.set(m.ord, 'unproven' as Unlaid)
-        continue
-      }
-      const c = cover(rd.tokens as never, metrics)
-      if ('wait' in c) {
-        faces.push(...c.wait)
-        continue
-      }
-      if (!c.ok) {
-        state.set(m.ord, c.why as Unlaid)
-        continue
-      }
-      let tokens: Tokens
-      try {
-        tokens = measured(rd.tokens as Tokens, metrics)
-      } catch (e) {
-        if (e instanceof RangeError) throw e
-        state.set(m.ord, 'error')
-        continue
-      }
-      // (its label on a line of its own: its relabel laid as a row of its own, its faces waited for as the tokens' are)
-      if (rd.labelRow && mm.label) {
-        const row = labelRowOf(
+      // (read, its faces asked, measured; its label on a line of its own laid as a row of its own (labelRowOf), its faces waited
+      // for as the tokens' are. Where a character no served face holds (B.cover's `served`) is one the reading draws anew of the
+      // original's own glyphs, that piece is drawn as the original's ink, as TeX set it, read again so once: an element's text
+      // (a paper's macro TeX set as a symbol in a face we serve none of, pifont's \ding) as its ink's crop (U.elements'
+      // `inked`), the label drawn anew, in the line or as its row, kept where it stands. One in the translation's own text, or
+      // in an element of no ink, leaves the member the original's, `served`, as the faces' rule has it (docs/PDF-READER.md §18))
+      const take = (
+        relabel: boolean,
+        inked: ReadonlySet<number>,
+      ):
+        | { rd: ReturnType<typeof readMember>; tokens: Tokens; labelLine: Laid['lines'][number] | null }
+        | { state: Unlaid }
+        | { wait: Page['wait']['faces'] }
+        | { unserved: { inked: Set<number>; label: boolean } } => {
+        let rd: ReturnType<typeof readMember>
+        try {
+          rd = readMember({
+            m: mm,
+            unit: { kind: m.kind, ...(m.title ? { title: true } : {}), state: 'whole', pieces },
+            rects: mm.lines.map((l) => rectOf(l, mm)),
+            to: rules.target,
+            P: R as never,
+            paper,
+            labels: {
+              words: rules.labels,
+              captions: rules.captions,
+              heads: rules.heads,
+              names: drawsName(m) ? ownNames : null,
+            },
+            refs: rules.refs,
+            relabels: relabel,
+            lead: led?.lead ?? null,
+            shown: Number.POSITIVE_INFINITY,
+            ...(inked.size ? { inked } : {}),
+          })
+        } catch (e) {
+          if (e instanceof RangeError) throw e
+          return { state: 'error' }
+        }
+        if (rd.unproven >= 0) return { state: 'unproven' as Unlaid }
+        const c = cover(rd.tokens as never, metrics)
+        if ('wait' in c) return { wait: c.wait }
+        if (!c.ok) return { unserved: unservedOf(rd.tokens, metrics) }
+        let tokens: Tokens
+        try {
+          tokens = measured(rd.tokens as Tokens, metrics)
+        } catch (e) {
+          if (e instanceof RangeError) throw e
+          return { state: 'error' }
+        }
+        if (!rd.labelRow || !mm.label) return { rd, tokens, labelLine: null }
+        const lr = labelRowOf(
           mm.label,
           rd.labelRow,
           (st, cls) => faceOf(paper.roles, st, cls),
@@ -466,13 +486,22 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
           R,
           metrics,
         )
-        if ('wait' in row) {
-          faces.push(...row.wait)
-          continue
-        }
-        if (row.line) labelRows.set(m.ord, row.line)
+        if ('wait' in lr) return { wait: lr.wait }
+        return lr.line ? { rd, tokens, labelLine: lr.line } : { unserved: { inked: new Set(), label: true } }
       }
-      read.set(m.ord, { rd, pieces, tokens, ...(paras ? { paras } : {}) })
+      let got = take(relabels, new Set())
+      if ('unserved' in got && (got.unserved.inked.size || (got.unserved.label && relabels)))
+        got = take(relabels && !got.unserved.label, got.unserved.inked)
+      if ('wait' in got) {
+        faces.push(...got.wait)
+        continue
+      }
+      if ('state' in got || 'unserved' in got) {
+        state.set(m.ord, 'state' in got ? got.state : ('served' as Unlaid))
+        continue
+      }
+      if (got.labelLine) labelRows.set(m.ord, got.labelLine)
+      read.set(m.ord, { rd: got.rd, pieces, tokens: got.tokens, ...(paras ? { paras } : {}) })
     }
   // (the figure texts, S.figures over the part, each at the size its own width needs: a face not loaded waited for as any)
   const fig = figuresOf(part, figs, rows, { paper, R, metrics, to: rules.target })

@@ -536,10 +536,14 @@ function placeCrop(
   records: Placed[],
   tried: Tried[],
 ) {
+  // (the crops of the target's piece: its element's, by `k`, or, where the target names none, the label's, whose crop names
+  // none either (unit/decor.ts carriedCrop, fit/numbered.ts numberCrop). A word, a space or a control token is no crop,
+  // whatever its absent `k` reads as: taken for one, a word beside the label's crop threw here, and the page's lay with it)
   const at: { line: LaidLine; li: number; it: LaidLine['items'][number]; n: number }[] = []
   lines.forEach(({ line }, li) => {
     line.items.forEach((it, n) => {
-      if ((it.t as Tok).crop?.k === to.k) at.push({ line, li, it, n })
+      const crop = (it.t as Tok).crop
+      if (crop !== undefined && crop.k === to.k) at.push({ line, li, it, n })
     })
   })
   for (const c of annots) {

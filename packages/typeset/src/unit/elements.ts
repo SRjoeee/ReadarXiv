@@ -1,6 +1,7 @@
 // U.elements and the rules it composes: U.render (each element's mode by its class and its stated rendering), U.leadMark (a
 // mark the unit starts with that the page shows before its first line is kept), U.brackets (a rendering in its own brackets
-// drawn without them where the translation brackets it itself), each placeholder resolved in the row's order.
+// drawn without them where the translation brackets it itself), each placeholder resolved in the row's order; an element
+// whose text no served face holds (`inked`, B.cover's answer through lay/entry.ts) drawn as its ink.
 //
 // What it reads of each element is its reading, whatever the row (`ElementReading`): what the element's facts set it to in
 // each case the row decides. The part states it as the element's El: `fixed` ← El.keep / El.text / an empty El.ink (EMPTY,
@@ -99,6 +100,9 @@ type ElementsInput = {
   touched: readonly string[]
   /** the last page shown */
   shown: number
+  /** the row's pieces (by index) whose text, as the reading draws it, holds a character no served face holds (B.cover's
+   *  answer, lay/entry.ts): each drawn as its element's ink where it has one */
+  inked?: ReadonlySet<number>
 }
 
 type Elements = {
@@ -217,46 +221,64 @@ export function elements(i: ElementsInput): Elements {
       macros.set(e.src, r.gap.text)
     if (r.mode === 'source' && !r.text && macros.has(e.src)) r.text = macros.get(e.src)!
   }
+  // (an element whose text the reading draws as the page's text holds a character no served face holds (`inked`, B.cover's
+  // answer: a paper's macro TeX set as a symbol in a face we serve none of, pifont's \ding): drawn as its ink, the glyphs TeX
+  // set for it, as a formula's are, its text the copy's; one of no ink stays as read, and its member the original's)
+  for (const k of i.inked ?? []) {
+    const r = out.get(k)
+    if (r && r.mode !== 'crop' && r.text) cropped(out, r, readings, shown, r.text)
+  }
   const unproven = crops(out, readings, shown)
   return { resolutions: out, keep: [...new Set([...(keep ?? []), ...i.touched])], unproven }
+}
+
+/** a resolution drawn as its element's ink, its row's segments (ElementReading.segs) as the file's crops, proven; `text` its
+ *  copy text (the source's where none is given); false where it has no ink, one of it stands past the last page shown, or the
+ *  segments make no crop */
+function cropped(
+  res: Map<number, Res>,
+  r: Res,
+  readings: ReadonlyMap<number, ElementReading>,
+  shown: number,
+  text?: string,
+): boolean {
+  const S = readings.get(r.k!)!.segs
+  if (r.cls === 'display' || !S.length) return false
+  for (let s = 0; s + 5 < S.length; s += 6) if (S[s]! > shown) return false
+  const parts = cropPartsOfSegments(S)
+  if (!parts) return false
+  res.set(r.k!, {
+    ...cropFields(parts),
+    text: text ?? readings.get(r.k!)!.srcText,
+    sup: false,
+    k: r.k!,
+    src: r.src!,
+    cls: r.cls!,
+    gap: {
+      text: r.gap?.text ?? '',
+      lines: r.gap?.lines ?? [],
+      nu: r.gap?.nu ?? false,
+      box: parts[0]!.seg,
+      proof: true,
+      n: r.gap?.n ?? 0,
+    },
+    proof: true,
+  })
+  return true
 }
 
 /** the file's crops over the resolutions, in their order: the first placeholder the file cannot draw, or -1 (its answer is
  *  U.admit's `unproven`) */
 function crops(res: Map<number, Res>, readings: ReadonlyMap<number, ElementReading>, shown: number): number {
-  const cropped = (r: Res, S: readonly number[]) => {
-    if (r.cls === 'display' || !S.length) return false
-    for (let s = 0; s + 5 < S.length; s += 6) if (S[s]! > shown) return false
-    const parts = cropPartsOfSegments(S)
-    if (!parts) return false
-    res.set(r.k!, {
-      ...cropFields(parts),
-      text: readings.get(r.k!)!.srcText,
-      sup: false,
-      k: r.k!,
-      src: r.src!,
-      cls: r.cls!,
-      gap: {
-        text: r.gap?.text ?? '',
-        lines: r.gap?.lines ?? [],
-        nu: r.gap?.nu ?? false,
-        box: parts[0]!.seg,
-        proof: true,
-        n: r.gap?.n ?? 0,
-      },
-      proof: true,
-    })
-    return true
-  }
   for (const r of res.values()) {
     const e = readings.get(r.k!)!
     const S = e.segs
     if (r.mode === 'orig-text' && r.gap?.nu) {
-      if (cropped(r, S)) continue
+      if (cropped(res, r, readings, shown)) continue
       return r.k!
     }
     if (r.cls === 'zero' && r.mode === 'none' && !r.proof && S.length) {
-      cropped(r, S)
+      cropped(res, r, readings, shown)
       continue
     }
     if (r.cls === 'zero' || r.cls === 'space' || r.cls === 'symbol' || r.proof || r.gap?.proof) continue
@@ -269,7 +291,7 @@ function crops(res: Map<number, Res>, readings: ReadonlyMap<number, ElementReadi
       Object.assign(r, { mode: e.rowText ? 'source' : 'none', text: e.rowText ?? '', proof: true })
       continue
     }
-    if (!anyPast && cropped(r, S)) continue
+    if (!anyPast && cropped(res, r, readings, shown)) continue
     return r.k!
   }
   return -1
