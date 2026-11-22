@@ -511,6 +511,60 @@ describe('a piece with no point of its own, between the nearest points TeX shipp
     const pages = [{ glyphs: glyphs('pages.https://doi.org'), points: [pt('5s', 0), pt('5e', 6), pt('p5.9a', 6), pt('5e', 21)] }]
     expect(run(pages, [[...Array(6).fill('u5'), ...Array(15).fill('u5.9')]], unitsOf(entry))).toEqual([])
   })
+  it('bounds a piece by its own opening point alone and the first glyph of the text after it: nothing between, TeX set none', () => {
+    // (a paper's macro that sets nothing for its argument, `\gone{…}`: its opening point alone (a paper's macro has no closing
+    // mark), the text after it next in its unit's source, and no glyph or painted box between the point and that text's first
+    // glyph. 2608.29558v2's and 2608.29782v1's `\delete{…}`: no statement made, their paragraphs unproven, the original's)
+    const gone = unitsOf([{ t: 'text', s: 'We set ' }, ph('\\gone{a display and more}'), { t: 'text', s: ' and go on.' }])
+    const pages = [{ glyphs: glyphs('Wesetandgoon.'), points: [pt('5s', 0), pt('p5.1a', 5), pt('5e', 13)] }]
+    expect(run(pages, [Array(13).fill('u5')], gone)).toEqual([{ unit: 5, piece: '1' }])
+    // (a glyph of its own after the point: TeX set ink for it, no statement)
+    const inked = [{ glyphs: glyphs('WesetXandgoon.'), points: [pt('5s', 0), pt('p5.1a', 5), pt('5e', 14)] }]
+    expect(run(inked, [[...Array(5).fill('u5'), 'u5.1', ...Array(8).fill('u5')]], gone)).toEqual([])
+    // (a glyph the ownership read as the unit's text that does not begin the text after it: what TeX set for it, unknown)
+    expect(run(inked, [Array(14).fill('u5')], gone)).toEqual([])
+    // (a glyph of another unit's first: unknown)
+    expect(run(inked, [[...Array(5).fill('u5'), 'u6', ...Array(8).fill('u5')]], gone)).toEqual([])
+    // (a painted box between the point and the text: TeX set something, an icon)
+    const boxed = [
+      {
+        glyphs: glyphs('Wesetandgoon.'),
+        boxes: [0, 0, 1, 1],
+        boxAt: [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1],
+        points: [pt('5s', 0, 0), pt('p5.1a', 5, 0), pt('5e', 13, 1)],
+      },
+    ]
+    expect(run(boxed, [Array(13).fill('u5')], gone)).toEqual([])
+    // (a display's opening point alone, its rows its own glyphs, then the text: it set ink, no statement)
+    const shown = unitsOf([{ t: 'text', s: 'so ' }, ph('\\[x=1\\]'), { t: 'text', s: ' holds.' }])
+    const rows = [[...Array(2).fill('u5'), ...Array(3).fill('u5.1'), ...Array(6).fill('u5')]]
+    expect(run([{ glyphs: glyphs('sox=1holds.'), points: [pt('5s', 0), pt('p5.1a', 2), pt('5e', 11)] }], rows, shown)).toEqual([])
+  })
+  it('bounds a nested unit’s mark as a placeholder, by its own points or the nearest around it, where nothing stands between', () => {
+    // (a heading's `\thanks{…}`, its class setting no mark in the heading: the unit's end point and the next unit's start point,
+    // nothing between them. 2608.18760v1's title: no statement made, its title unproven, the original's)
+    const note = { t: 'nested', pre: '\\thanks{', unit: { kind: 'footnote', pieces: [{ t: 'text', s: 'Funded.' }] }, post: '}' }
+    const title = unitsOf([{ t: 'text', s: 'A title' }, note])
+    const heading = (mark: string, row: (string | null)[]) =>
+      run([{ glyphs: glyphs(`Atitle${mark}Names`), points: [pt('h5s', 0), pt('h5e', 6), pt('6s', 6 + mark.length)] }], [row], title)
+    expect(heading('', [...Array(6).fill('u5'), ...Array(5).fill('u6')])).toEqual([{ unit: 5, piece: '1' }])
+    // (its mark set between them, a glyph of no unit's or of the unit's: unknown)
+    expect(heading('*', [...Array(6).fill('u5'), null, ...Array(5).fill('u6')])).toEqual([])
+    expect(heading('*', [...Array(7).fill('u5'), ...Array(5).fill('u6')])).toEqual([])
+    // (its own two points, nothing between them: TeX set no mark; a glyph between them: its mark)
+    const inPara = unitsOf([{ t: 'text', s: 'Some words' }, note, { t: 'text', s: ' and more.' }])
+    const own = (mark: string, row: (string | null)[]) =>
+      run([{ glyphs: glyphs(`Somewords${mark}andmore.`), points: [pt('5s', 0), pt('n5.1a', 9), pt('n5.1b', 9 + mark.length), pt('5e', 17 + mark.length)] }], [row], inPara)
+    expect(own('', Array(17).fill('u5'))).toEqual([{ unit: 5, piece: '1' }])
+    expect(own('1', [...Array(9).fill('u5'), 'u5.1', ...Array(8).fill('u5')])).toEqual([])
+    // (after an opening point alone whose ink runs on to the text after it: the call's raised mark may be in that piece's ink —
+    // a macro's glyphs and the call's digit read as one —; a call is drawn from its own ink, so none is stated, where a
+    // placeholder of no point there is)
+    const after = unitsOf([{ t: 'text', s: 'We use ' }, ph('\\tool{}'), note, { t: 'text', s: ', a system.' }])
+    const pages = [{ glyphs: glyphs('WeuseTool1,asystem.'), points: [pt('5s', 0), pt('p5.1a', 5), pt('5e', 19)] }]
+    const rows = [[...Array(5).fill('u5'), ...Array(5).fill('u5.1'), ...Array(9).fill('u5')]]
+    expect(run(pages, rows, after)).toEqual([])
+  })
 })
 
 describe('a piece TeX set before its unit’s start point (Instrument `outside`)', () => {
