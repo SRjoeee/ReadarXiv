@@ -1101,6 +1101,45 @@ describe('Page.links: as drawn, moved with their pieces, else at A’s boxes', (
     expect(f2).toEqual(['off'])
     expect(q.links).toEqual([])
   })
+  it('moves a link over the member’s label carried as a crop with the crop, the words beside it on the line its own', () => {
+    // (a member's label carried to its first line's start as its ink's crop (a number before a centred line, lay/adapt.ts
+    // carriedCrop): the link over it (Link.label) is placed over that crop, the label's target naming no element (`k`), as the
+    // label's crop names none. placeCrop took every item of the member's lines whose crop's `k` read as absent, the words' too,
+    // which hold no crop at all, and threw on the first word: the page's lay was lost whole)
+    const note = member({
+      kind: 'inknotes',
+      align: 'c',
+      label: {
+        kind: 'number',
+        ink: [1, 66, 698.8, 70, 707, 703.5],
+        style: { role: 'serif', size: 6 },
+        num: ['2', [1, 66, 698.8, 70, 707, 703.5]],
+        line: 0,
+      },
+      lines: [[1, 0, 72, 300, 700, 707, 698, 72, 300, 0, 10]],
+    })
+    const onLabel: Link = { box: [65, 698, 71, 708], to: { dest: '"aff.2"' }, owner: [0, ''], text: '2', label: 1 }
+    const rr = row([{ t: 'text', s: 'Abteilung der Physik' }])
+    const fates: LinkFate[] = []
+    const p = layPage(part(note, [onLabel]), rowsOf([rr]), rules, metrics(), { linkFates: fates })
+    const laid = p.members[0]!
+    expect(laid.state).toBe('laid')
+    expect(laid.off & 4).toBe(4)
+    const crop = laid.lines.flatMap(([y, , , items]) =>
+      items.flatMap((it) =>
+        'src' in it && it.piece === 'label' ? [{ y, it: it as Extract<Item, { src: unknown }> & { w: number } }] : [],
+      ),
+    )
+    expect(crop).toHaveLength(1)
+    expect(fates).toEqual(['crop'])
+    const [b, to] = only(p)
+    expect(to).toEqual(onLabel.to)
+    // (over what the crop draws: inside its drawn box, moved off A's with the line)
+    const c = crop[0]!.it
+    expect(b[0]).toBeGreaterThanOrEqual(c.x - 1e-9)
+    expect(b[2]).toBeLessThanOrEqual(c.x + c.w + 1e-9)
+    expect(b[0]).not.toBeCloseTo(65, 1)
+  })
   it('lays an element’s own links where one round it holds them on A (a link left open over a footnote)', () => {
     // (2610.10069v1-zh p10, ord 74: a citation's link left open over a whole footnote, one annotation a line; its last line's
     // holds "Berry et al. (1995)." and the two of that citation, "Berry et al." and "1995", and the part gives it to the
