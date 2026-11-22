@@ -49,10 +49,10 @@ describe("the face files' tables, against the package's lists", () => {
     ])
   })
   it('fails a face claimed in SMCP whose GSUB has no smcp, and one whose GSUB has it that SMCP leaves out', () => {
-    expect(differencesOf(tables(), reference, { ...lists, smcp: ['caps', 'serif'] })).toEqual([
+    expect(differencesOf(tables(), reference, { ...lists, smallCaps: null, smcp: ['caps', 'serif'] })).toEqual([
       "serif: SMCP claims it, its file's GSUB has no smcp feature",
     ])
-    expect(differencesOf(tables(), reference, { ...lists, smcp: [] })).toEqual([
+    expect(differencesOf(tables(), reference, { ...lists, smallCaps: null, smcp: [] })).toEqual([
       "caps: its file's GSUB has the smcp feature, SMCP leaves it out",
     ])
   })
@@ -85,7 +85,7 @@ describe("the face files' tables, against the package's lists", () => {
     expect(differencesOf(tables(), reference, { ...lists, faces: ['serif', 'caps', 'mono'] })).toEqual([
       'mono: a face of the catalogue, no file in the reference',
     ])
-    expect(differencesOf(tables(), reference, { ...lists, faces: ['serif'], smcp: [] })).toEqual([
+    expect(differencesOf(tables(), reference, { ...lists, faces: ['serif'], smcp: [], smallCaps: null })).toEqual([
       'caps: a file in the reference, no face of the catalogue',
     ])
   })

@@ -20,7 +20,7 @@
 // no fact for a reading, the reading goes without it, as named where it is read: a rendering's runs of one fill and its
 // faked small capitals, a colour piece's run.
 import type { El, KnownElClass, OutPiece, Placed, Piece, SpanAt } from '@readarxiv/format'
-import { type CjkFaces, faceOf, ownSmallCaps, type Roles, rolesFor } from '../breaker/faces.ts'
+import { type CjkFaces, faceOf, ownSmallCapsOf, type Roles, rolesFor } from '../breaker/faces.ts'
 import { classifyFont, familyOfFonts } from '../breaker/font-names.ts'
 import { measure } from '../breaker/measure.ts'
 import { noStart } from '../breaker/script.ts'
@@ -593,7 +593,7 @@ export function readMember(i: ReadInput): ReadOut {
       tailOwn: null,
     },
   )
-  const faces = { of: (s: TStyle, c: 'cjk' | 'latin') => faceOf(paper.roles, s, c), ownSmallCaps }
+  const faces = { of: (s: TStyle, c: 'cjk' | 'latin') => faceOf(paper.roles, s, c), ownSmallCaps: ownSmallCapsOf }
   const made = tokensOf({
     unit: { kind: unit.kind, ...(unit.title ? { title: true } : {}), pieces },
     resolved,
