@@ -146,7 +146,7 @@ export declare const MARK_NAME: RegExp
 /** the units with their layout marks as pieces of their own (each unit copied; the paper's units untouched), and each
  *  unit's mark for patch(): MARK_DEF's for a marked unit (with \axtlines when `lines`), a cell's and a heading's own;
  *  marks taken off where `switches` (TeX's answers) says they change what follows */
-export declare function layoutMarking(units: readonly SourceUnit[], classes: readonly MarkClass[], o: { lines: boolean; switches?: Switches | null; inkless?: readonly string[] | null; complete?: Complete | ReadonlyMap<string, number> | readonly (readonly [string, number])[] | null; apart?: readonly string[] | null }): { units: SourceUnit[]; mark(u: SourceUnit): UnitMark }
+export declare function layoutMarking(units: readonly SourceUnit[], classes: readonly MarkClass[], o: { lines: boolean; switches?: Switches | null; inkless?: readonly string[] | null; complete?: Complete | ReadonlyMap<string, number> | readonly (readonly [string, number])[] | null; apart?: readonly string[] | null; quiet?: readonly string[] | null }): { units: SourceUnit[]; mark(u: SourceUnit): UnitMark }
 
 /** the marks file (internal, prep/<mid>/marks-<sha>.json): what the layout maker reads from the marked original */
 export interface LayoutMarks {
