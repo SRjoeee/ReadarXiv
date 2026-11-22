@@ -10,6 +10,7 @@ import {
   askOf,
   looksAhead,
   CALL_TEX,
+  carrySamples,
   CARRY_END_TEX,
   CARRY_TEX,
   classNamesTex,
@@ -178,6 +179,9 @@ export type OriginalOptions = {
   inkless?: readonly string[] | null
   complete?: CompleteGiven | null
   apart?: readonly string[] | null
+  /** with `layout`: the pieces TeX's display probe said open no display (readDisplayProbe over carrySamples), the only ones a
+   *  carrier stands before (marks.ts CARRY_TEX); none: no carrier */
+  quiet?: readonly string[] | null
   unmarked?: ReadonlySet<number> | null
   names?: boolean
   pastBegin?: boolean
@@ -450,7 +454,7 @@ export function probeFiles(
   const at = beginDocument(text)
   const head = marks ? probeHead(paper, preamble) : '',
     probe = marks
-      ? `${bblProvides(fsys, project.main)}${markProbeTex(probeSamples(project.units, project.complete), inkSamples(project.units), leadSamples(project.units))}`
+      ? `${bblProvides(fsys, project.main)}${markProbeTex(probeSamples(project.units, project.complete), inkSamples(project.units), leadSamples(project.units), carrySamples(project.units))}`
       : ''
   return new Map([
     [
@@ -566,6 +570,7 @@ export function originalFiles(
     inkless = null,
     complete = null,
     apart = null,
+    quiet = null,
     unmarked = null,
     names = true,
     pastBegin = !!layout,
@@ -585,7 +590,7 @@ export function originalFiles(
     called = false,
     carried = false
   if (layout) {
-    const laid = layoutMarking(project.units, layout, { lines, switches, inkless, complete, apart })
+    const laid = layoutMarking(project.units, layout, { lines, switches, inkless, complete, apart, quiet })
     // (the asks, where given, in the marked units: each before its piece and the marks that open it, the marks as they were)
     const asked = asks?.asked.length ? asks : null
     const of = new Map<SourceUnit, SourceUnit>()
