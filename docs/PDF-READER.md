@@ -9373,6 +9373,14 @@ Two holes left the statement unmade where TeX's bounds hold nothing:
   opener's point, a macro's glyphs and the call's raised digit are read as that piece's ink: unknown); and the lay draws a
   call the part states empty as nothing, proven, as any element so stated.
 
+- **Nothing between means no glyph TeX painted, whatever its Unicode** (the review on #668): pageInk flags a glyph `blank` by
+  its Unicode alone, and a symbol font's mark mapped to a space or a Type 3 glyph of no Unicode paints ink all the same. Read
+  by its Unicode (`inked`), such a mark between a piece's bounds stated the piece empty, the lay drew nothing for it and its
+  unit's mark was erased with the text. Every bounded reading of `boundedEmpty`, this round's and those before it, now reads a
+  glyph as ink where it is a character or where the locate's own reading counts it ink (`locate/lines.ts` `isInk`: its
+  outline, else its advance and its font's band; a form's by its Unicode). Over the lab's 245 papers no statement moves by it
+  (every object byte for byte): no element stated empty there held such a glyph between its bounds.
+
 What stays the doubt it is: an element whose ink exists and was not found, or whose bounds cannot be told (no point of its
 own, text on both sides; a conditional's test or its false branch read as the unit's text, which TeX never sets: there the
 unit's own text is not TeX's, and the original is the right drawing).
