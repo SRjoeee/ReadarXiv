@@ -644,7 +644,7 @@ export function inkSection(samples: readonly string[], from = 0): string {
  * that list into a line (init_math): a line moved. So the carrier stands only before a piece KNOWN to open none: one TeX's
  * display probe set in a paragraph of its own (a vertical box at the measure, as the document's paragraph) with no display
  * started (\everydisplay said none) and no error; every other piece, a probe that errs, stops or is not asked, keeps \axtpma's
- * mark, today's reading, no line moved. A piece the source reader states is a display (a paper's shorthand, `\be … \ee`:
+ * mark (\axtpmm a formula): no point on that empty list, no line moved. A piece the source reader states is a display (a paper's shorthand, `\be … \ee`:
  * PhPiece.closes) is a display here, never carried. `displayPiece`: whether a piece is a display by its class or by the source
  * reader's statement. `carrySamples`: every piece the marking may carry (each first after a display, white space and pieces of
  * no class alone between, or right after such a piece), once, that the probe can set: no parameter sign, no \verb, its braces
