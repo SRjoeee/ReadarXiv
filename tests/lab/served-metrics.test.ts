@@ -1,7 +1,8 @@
 // @vitest-environment node
 // The lab's measurer of the served faces (lab/typeset/served-metrics.mjs), which lays what the tap's tables lack for the display
-// gate's v2 side: a text in a canvas font string measured as the reader's canvas measures it (packages/reader/src/compose/
-// served.ts, `ctx.font = font`). Held to Chrome's own numbers, the tap's tables (each first measure of a font and a text in
+// gate's v2 side: a text in a canvas font string measured as the reader draws it (packages/reader/src/compose/served.ts: a
+// run's small capitals where its face has its own, as its class draws them; Skia synthesizes none where a slice has none, as
+// the class does not). Held to Chrome's own numbers, the tap's tables (each first measure of a font and a text in
 // the browser), where the lab's data and the served faces are at hand (AXT_LAB_DATA, AXT_FACE_TABLES, AXT_FACE_SLICES: none in
 // hosted CI, which skips). M12 (round c4, lane c4-gate): a small-caps font string was measured at its lower-case width, so
 // 2610.40394v1 p33's "LongForm" was laid 3.78 pt short of what Chrome draws.

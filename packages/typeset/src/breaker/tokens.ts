@@ -191,7 +191,12 @@ export type TokensInput = {
   designs: { serif: string; sans: string; mono: string }
   P: TokenRules
   lead: { parts?: { text: string; st: TStyle; gap?: number }[]; gap?: number } | null
-  faces: { of(st: TStyle, cls: 'cjk' | 'latin'): Face; ownSmallCaps(id: string): boolean }
+  /** `ownSmallCaps`: whether a face draws a text's small capitals of its own, letter by letter (@readarxiv/text ownSmallCapsOf,
+   *  `upper` the target's case mapping) */
+  faces: {
+    of(st: TStyle, cls: 'cjk' | 'latin'): Face
+    ownSmallCaps(id: string, text: string, upper: (s: string) => string): boolean
+  }
   /** each text token's range in the unit's plain text (the page's word table) */
   tagWords: boolean
 }
@@ -522,8 +527,11 @@ function cropPartsOf(r: TRes): Record<string, unknown>[] {
 export function tokens(i: TokensInput): Tokens {
   const { unit, resolved, to, designs, P, lead } = i
   const faceOf = (st: TStyle, cls: 'cjk' | 'latin') => i.faces.of(st, cls)
-  const selfCaps = (face: Face | undefined) => !!face?.caps && !(face.id && i.faces.ownSmallCaps(face.id))
-  const plainOf = (face: Face) => (selfCaps(face) ? { ...face, caps: false } : face)
+  // (a piece's small capitals are the face's own where it has one for every lower-case letter of the piece, else the layer's:
+  // one rule a piece, never split inside it, so that a name the face draws whole keeps its kerning)
+  const selfCaps = (face: Face | undefined, s: string) =>
+    !!face?.caps && !(face.id && i.faces.ownSmallCaps(face.id, s, upper))
+  const plainOf = (face: Face, s: string) => (selfCaps(face, s) ? { ...face, caps: false } : face)
   const tokens: Token[] = []
   const plain = i.tagWords ? plainTracker() : null
   const measured = resolved.measured ?? null
@@ -605,7 +613,7 @@ export function tokens(i: TokensInput): Tokens {
       const chunk = m[0]
       if (/^\s+$/.test(chunk)) {
         if (tokens.length && !lastIsSpace() && !tokens.at(-1)!.leadEnd && !tokens.at(-1)!.kernEnd) {
-          const face = plainOf(faceOf(st, 'latin'))
+          const face = plainOf(faceOf(st, 'latin'), chunk)
           tokens.push({ space: true, st, face, w100: 0, ...(afterHead ? { keep: true as const } : {}) })
           if (/[^ \t\n\f\r]/.test(chunk)) hardSpaces.add(tokens.at(-1)!)
         }
@@ -649,10 +657,10 @@ export function tokens(i: TokensInput): Tokens {
           const from = m.index + p.off + po
           const all = p.cls === 'latin' && !!st.upper
           const runs =
-            !all && p.cls === 'latin' && selfCaps(face0)
+            !all && p.cls === 'latin' && selfCaps(face0, s)
               ? caseRuns(s, ratio, upper, smallAt && ((x) => smallAt(from + x)))
               : null
-          const face = runs || all ? plainOf(face0) : face0
+          const face = runs || all ? plainOf(face0, s) : face0
           for (let r = 0, count = runs ? runs.length : 1; r < count; r++) {
             const run = runs?.[r],
               rs = run ? run.s : all ? upper(s) : s,
@@ -1041,7 +1049,7 @@ export function tokens(i: TokensInput): Tokens {
     const capsAt = flags ? (x: number) => !!flags[x] : null
     if (r.sup) {
       for (const run of runs ?? [{ text: r.text, st }]) {
-        const face = plainOf(faceOf(run.st, 'latin'))
+        const face = plainOf(faceOf(run.st, 'latin'), run.text)
         tokens.push({ s: run.text, st: run.st, face, cls: 'latin', w100: 0, sup: true, glue: true, ph: r.mode, k })
       }
     } else if (runs) {

@@ -5,8 +5,9 @@
 // difference fails, named; and the reference itself against the catalogue it serves, which needs no font file.
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { differencesOf, heldOf, REFERENCE } from '../../lab/typeset/face-files.mjs'
+import { differencesOf, heldOf, REFERENCE, smallCapsModule } from '../../lab/typeset/face-files.mjs'
 import { GATES } from '../../lab/release-check/gates.mjs'
+import { SMALL_CAPS } from '../../packages/text/src/font-caps.ts'
 import { FACES, HOLDS, SMCP } from '../../packages/typeset/src/data/faces.ts'
 
 /** a reference of two faces and two alphabets, as face-files.json holds them */
@@ -15,12 +16,18 @@ const reference = {
   letters: { alphabets: { Latn: 'Aa', de: 'AaÄä' } },
   sha256: { faces: { serif: 'a'.repeat(64), caps: 'b'.repeat(64) } },
 }
-/** each face's tables as face-tables.py writes them: its file, its SHA-256, the letters each alphabet leaves unmapped, smcp */
+/** each face's tables as face-tables.py writes them: its file, its SHA-256, the letters each alphabet leaves unmapped, smcp,
+ *  and the code points smcp substitutes (ranges) */
 const tables = () => ({
-  serif: { file: 'Serif.otf', sha256: 'a'.repeat(64), unmapped: {}, smcp: false },
-  caps: { file: 'Caps.otf', sha256: 'b'.repeat(64), unmapped: { de: 'Ää' }, smcp: true },
+  serif: { file: 'Serif.otf', sha256: 'a'.repeat(64), unmapped: {}, smcp: false, smallCaps: [] as number[] },
+  caps: { file: 'Caps.otf', sha256: 'b'.repeat(64), unmapped: { de: 'Ää' }, smcp: true, smallCaps: [0x61, 0x7a] },
 })
-const lists = { faces: ['serif', 'caps'], holds: { serif: ['Latn', 'de'], caps: ['Latn'] }, smcp: ['caps'] }
+const lists = {
+  faces: ['serif', 'caps'],
+  holds: { serif: ['Latn', 'de'], caps: ['Latn'] },
+  smcp: ['caps'],
+  smallCaps: { caps: [0x61, 0x7a] } as Record<string, readonly number[]>,
+}
 
 describe("the face files' tables, against the package's lists", () => {
   it('reads the alphabets a face holds as those its file leaves no letter of unmapped, in the reference order', () => {
@@ -42,12 +49,30 @@ describe("the face files' tables, against the package's lists", () => {
     ])
   })
   it('fails a face claimed in SMCP whose GSUB has no smcp, and one whose GSUB has it that SMCP leaves out', () => {
-    expect(differencesOf(tables(), reference, { ...lists, smcp: ['caps', 'serif'] })).toEqual([
+    expect(differencesOf(tables(), reference, { ...lists, smallCaps: null, smcp: ['caps', 'serif'] })).toEqual([
       "serif: SMCP claims it, its file's GSUB has no smcp feature",
     ])
-    expect(differencesOf(tables(), reference, { ...lists, smcp: [] })).toEqual([
+    expect(differencesOf(tables(), reference, { ...lists, smallCaps: null, smcp: [] })).toEqual([
       "caps: its file's GSUB has the smcp feature, SMCP leaves it out",
     ])
+  })
+  it("fails a face's small capitals that are not the code points its file's smcp substitutes, and a face of SMCP with none", () => {
+    expect(differencesOf(tables(), reference, { ...lists, smallCaps: { caps: [0x61, 0x79] } })).toEqual([
+      "caps: SMALL_CAPS states a-y, its file's smcp substitutes a-z",
+    ])
+    expect(differencesOf(tables(), reference, { ...lists, smallCaps: {} })).toEqual([
+      "caps: in SMCP, no SMALL_CAPS of it (its file's smcp substitutes a-z)",
+    ])
+    expect(differencesOf(tables(), reference, { ...lists, smallCaps: { ...lists.smallCaps, serif: [0x61, 0x61] } })).toEqual([
+      'serif: SMALL_CAPS states it, SMCP does not',
+    ])
+  })
+  it('writes the module the package holds: each face its ranges, faces of one set sharing one entry, read back as written', () => {
+    const t = { ...tables(), twin: { ...tables().caps, file: 'Twin.otf' } }
+    const text = smallCapsModule(t, ['serif', 'caps', 'twin'])
+    expect(text).toContain("'caps': S0")
+    expect(text).toContain("'twin': S0")
+    expect(text.match(/Object\.freeze\(\[/g)?.length).toBe(1)
   })
   it('fails a file not of its binding SHA-256, a file missing, and a face the reference and the catalogue do not share', () => {
     const other = { ...tables(), serif: { ...tables().serif, sha256: 'c'.repeat(64) } }
@@ -60,7 +85,7 @@ describe("the face files' tables, against the package's lists", () => {
     expect(differencesOf(tables(), reference, { ...lists, faces: ['serif', 'caps', 'mono'] })).toEqual([
       'mono: a face of the catalogue, no file in the reference',
     ])
-    expect(differencesOf(tables(), reference, { ...lists, faces: ['serif'], smcp: [] })).toEqual([
+    expect(differencesOf(tables(), reference, { ...lists, faces: ['serif'], smcp: [], smallCaps: null })).toEqual([
       'caps: a file in the reference, no face of the catalogue',
     ])
   })
@@ -78,6 +103,12 @@ describe("the check's reference, against the catalogue it serves", () => {
     // (each block says what it copies and from where)
     for (const block of [r.files, r.letters, r.sha256]) expect([typeof block.copies, typeof block.from]).toEqual(['string', 'string'])
     expect(SMCP.every((id) => Object.hasOwn(r.files.faces, id))).toBe(true)
+    // (the package's small capitals: a face of SMCP each, and none else; each its sorted, disjoint ranges)
+    expect(Object.keys(SMALL_CAPS).sort()).toEqual([...SMCP].sort())
+    for (const r0 of Object.values(SMALL_CAPS)) {
+      expect(r0.length % 2).toBe(0)
+      for (let i = 0; i + 1 < r0.length; i++) expect(r0[i + 1]! >= r0[i]! + (i % 2 ? 2 : 0)).toBe(true)
+    }
   })
 })
 

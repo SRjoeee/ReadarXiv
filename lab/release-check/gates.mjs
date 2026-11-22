@@ -1207,7 +1207,7 @@ export const GATES = [
   // fontTools by AXT_PYTHON, else python3; where either is absent the gate is skipped, saying which)
   {
     id: 'face-files',
-    title: "the typesetter's face coverage (packages/typeset/src/data/faces.ts HOLDS and SMCP) against the face files' own OpenType tables: an alphabet listed for a face where its file's best Unicode cmap maps every letter of it, every such alphabet listed; a face in SMCP where its file's GSUB has `smcp`, no other; every file of its binding SHA-256 (lab/typeset/face-tables.py reads the files with fontTools, lab/typeset/face-files.mjs judges, by lab/typeset/face-files.json)",
+    title: "the typesetter's face coverage (packages/typeset/src/data/faces.ts HOLDS and SMCP) against the face files' own OpenType tables: an alphabet listed for a face where its file's best Unicode cmap maps every letter of it, every such alphabet listed; a face in SMCP where its file's GSUB has `smcp`, no other, and its SMALL_CAPS (@readarxiv/text) the code points that feature substitutes; every file of its binding SHA-256 (lab/typeset/face-tables.py reads the files with fontTools, lab/typeset/face-files.mjs judges, by lab/typeset/face-files.json)",
     tier: 'release',
     stage: 'reader',
     holds: [],

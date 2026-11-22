@@ -134,9 +134,9 @@ export function nameRuns(
   text: string,
   face: Face,
   to: string,
-  ownSmallCaps: (id: string) => boolean,
+  ownSmallCaps: (id: string, text: string, upper: (s: string) => string) => boolean,
 ): { face: Face; runs: { s: string; k: number }[]; text: string } {
-  const self = !!face?.caps && !(face.id && ownSmallCaps(face.id))
+  const self = !!face?.caps && !(face.id && ownSmallCaps(face.id, text, upperOf(to)))
   if (!self) return { face, runs: [{ s: text, k: 1 }], text }
   const runs = caseRuns(text, SMALL_CAPS_RATIO, upperOf(to)).map((r) => ({ s: r.s, k: r.k }))
   return { face: { ...face, caps: false }, runs, text: runs.map((r) => r.s).join('') }
@@ -148,7 +148,7 @@ export function nameScriptRuns(
   faceOf: (cls: 'cjk' | 'latin') => Face,
   to: string,
   quotes: boolean,
-  ownSmallCaps: (id: string) => boolean,
+  ownSmallCaps: (id: string, text: string, upper: (s: string) => string) => boolean,
 ): NameDrawn {
   const re = cjkLeadRe(quotes),
     parts: { cls: 'cjk' | 'latin'; s: string }[] = []
@@ -188,7 +188,7 @@ export type NameInput = {
   P: { cjk?: boolean; cjkQuotes?: boolean; floorMin: number }
   /** the face a run of a style is drawn in (B.faces), and whether a face holds small capitals of its own */
   faceOf: (st: TStyle, cls: 'cjk' | 'latin') => Face
-  ownSmallCaps: (id: string) => boolean
+  ownSmallCaps: (id: string, text: string, upper: (s: string) => string) => boolean
   metrics: Metrics
   /** the name's group: its ink can be hidden (a name whose group the document does not hold stays the original's) */
   shown: boolean
