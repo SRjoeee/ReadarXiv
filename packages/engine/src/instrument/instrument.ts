@@ -32,6 +32,7 @@ import {
 } from '../marks/channels.ts'
 import { groupFacts } from '../marks/faces.ts'
 import { holdsLetter } from '../locate/figure-lines.ts'
+import { isInk } from '../locate/lines.ts'
 import { linkTargetOf, unicodeOf } from '../locate/ink.ts'
 import { ownersOf, ROLE } from '../instrument.ts'
 import { readPdf } from '../read.ts'
@@ -79,7 +80,17 @@ type SrcPiece = SourcePiece
 /** a front end's piece as the adapter's readings read one: its kind and its fields (a group's open `sets`, a text's `s`) */
 type PieceIn = { t: string; s?: string; src?: string; sets?: 0; pre?: string; post?: string; unit?: Unit }
 /** a glyph of B as the readings read it: its character, whether it is blank, its extent */
-type InkGlyph = { u?: string; blank?: boolean; x0: number; x1: number; top: number; bottom: number }
+type InkGlyph = {
+  u?: string
+  blank?: boolean
+  form?: boolean
+  x0: number
+  x1: number
+  ix0?: number
+  ix1?: number
+  top: number
+  bottom: number
+}
 /** a page of B as the adapter's readings take it: its glyphs (the Doc page's), its boxes (stride 4) and their
  *  kinds (`paths`), its points, each glyph's boxes before it */
 export type InkPage = {
@@ -1241,6 +1252,14 @@ const OWN_POINT = /^[pn](\d+)\.(\d+)([abg])$/
 const IMAGE_BOX = -3
 /** a glyph that is ink: a character TeX set, no blank and no space */
 const inked = (g: InkGlyph | undefined): boolean => /\S/.test(g?.u ?? '') && !g?.blank
+/** a glyph TeX painted, whatever its Unicode: a character it set (`inked`), or ink by the locate's own reading of a glyph
+ *  (locate/lines.ts isInk: its outline, else its advance and its font's band; a form's by its Unicode, whose .notdef box PDF.js
+ *  never draws). pageInk's `blank` reads the Unicode alone: a symbol font's mark mapped to a space and a Type 3 glyph of no
+ *  Unicode paint ink all the same, and read as none a piece's bounds would state it set nothing, its mark erased with its unit
+ *  (the review's case on #668). What `boundedEmpty` states empty holds no glyph so painted */
+const painted = (g: InkGlyph | undefined): boolean =>
+  inked(g) ||
+  (!!g && isInk({ u: g.u ?? '', form: !!g.form, ix0: g.ix0 ?? 0, ix1: g.ix1 ?? 0, top: g.top, bottom: g.bottom }))
 /**
  * The pieces TeX's points prove set nothing of their own, as Instrument `empty` pieces. TeX's points
  * bound what TeX set: every piece of a unit lies between the two nearest points TeX shipped around it in the unit's source
@@ -1296,7 +1315,7 @@ export function boundedEmpty(
   }
   const opened = (O: Owners | undefined, j: number, u: number, opener: number | null) =>
     opener !== null && O?.unit[j] === u && O.role[j] === ROLE.element && O.piece[j] === opener
-  /** whether B's stream from `lo` to `hi` holds a glyph or a painted box TeX set but `opener`'s, the piece whose opening point
+  /** whether B's stream from `lo` to `hi` holds a glyph TeX painted (`painted`, whatever its Unicode) or a painted box but `opener`'s, the piece whose opening point
    *  `lo` is (its element's, by the ownership). Another unit's is not passed over: the ownership may have given it the piece's
    *  ink (2608.06701v1 p6's run-in heading `Comparison Against \\sage`, its "SAGE" the next paragraph's label) */
   const holds = (u: number, lo: StreamAt, hi: StreamAt, opener: number | null) => {
@@ -1304,7 +1323,7 @@ export function boundedEmpty(
       const pg = pages[p]!
       const g0 = p === lo[0] ? lo[1] : 0,
         g1 = p === hi[0] ? hi[1] : pg.glyphs.length
-      for (let j = g0; j < g1; j++) if (inked(pg.glyphs[j]) && !opened(glyphs[p], j, u, opener)) return true
+      for (let j = g0; j < g1; j++) if (painted(pg.glyphs[j]) && !opened(glyphs[p], j, u, opener)) return true
       const b0 = p === lo[0] ? lo[2] : 0,
         b1 = p === hi[0] ? hi[2] : (pg.boxes?.length ?? 0) / 4
       for (let j = b0; j < b1; j++) if (!opened(boxes[p], j, u, opener)) return true
@@ -1319,7 +1338,7 @@ export function boundedEmpty(
     for (let p = lo[0]; p < pages.length; p++) {
       const pg = pages[p]!
       for (let j = p === lo[0] ? lo[1] : 0; j < pg.glyphs.length; j++) {
-        if (!inked(pg.glyphs[j]) || opened(glyphs[p], j, u, opener)) continue
+        if (!painted(pg.glyphs[j]) || opened(glyphs[p], j, u, opener)) continue
         const t = (pg.glyphs[j]!.u ?? '').normalize('NFKC').replace(/\s/gu, '')
         const O = glyphs[p]
         return O?.unit[j] === u && O.role[j] === ROLE.text && t && want.startsWith(t)
