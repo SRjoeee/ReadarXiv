@@ -130,7 +130,7 @@ describe('a piece first in the paragraph TeX resumes after a display: its openin
       }[]
     )
       .map((p) => (p.t === 'ph' ? (p.src ?? '') : ''))
-      .find((s) => s.endsWith(`{p0.${k}a}`))
+      .find((s) => new RegExp(`\\{[pn]0\\.${k}a\\}$`).test(s))
   const after = (src: string) =>
     unit('para', [
       { t: 'text', s: 'We define ' },
@@ -139,17 +139,24 @@ describe('a piece first in the paragraph TeX resumes after a display: its openin
       { t: 'ph', src },
       { t: 'text', s: ' shows it.' },
     ])
+  const command = (src: string) => opening(after(src), 3)?.replace(/\{.*$/, '')
 
-  it('a reference, an equation reference, a citation and a URL: one TeX sets on that empty list (\\axtpmm, as an inline formula)', () => {
-    for (const src of ['\\autoref{f}', '\\eqref{e}', '\\cite{k}', '\\url{https://example.org}'])
-      expect([src, opening(after(src), 3)]).toEqual([src, '\\axtpmm{p0.3a}'])
+  it('a piece sure to set something there: the opening mark TeX sets on that empty list (\\axtpmm, as an inline formula)', () => {
+    // (a citation's label, a reference that prints a name or a page, an equation's reference, a footnote's call: marks.ts
+    // OPENS_ON_EMPTY, each form's native case in lab/pdf/spikes/layout-marks-cases.mjs)
+    const sure = ['\\autoref{f}', '\\cref{f}', '\\Cref{f}', '\\pageref{f}', '\\eqref{e}', '\\cite{k}', '\\citep{k}']
+    sure.push('\\citet{k}', '\\parencite{k}', '\\footnotemark')
+    expect(sure.map((src) => [src, command(src)])).toEqual(sure.map((src) => [src, '\\axtpmm']))
   })
 
-  it("a display after a display and a paper's macro keep \\axtpma: no point on the empty list", () => {
+  it("a display after a display, a paper's macro and the forms that may set nothing keep \\axtpma's gobble", () => {
     // (two displays in a row: a mark between them would keep the empty paragraph TeX drops a line; a paper's macro may set
-    // nothing, `\\delete{…}`, and a mark would end the \\ignorespaces amsmath's \\] began before the line end after it)
-    expect(opening(after('\\[ c = d \\]'), 3)).toBe('\\axtpma{p0.3a}')
-    expect(opening(after('\\delete{x}'), 3)).toBe('\\axtpma{p0.3a}')
+    // nothing, `\\delete{…}`, and a mark would end the \\ignorespaces amsmath's \\] began before the line end after it; \\ref,
+    // \\nameref and \\autoref* print the label's stored text alone, none where TeX stored none; \\citeauthor one field of an
+    // entry; code and a URL an argument a paper's own command may set nothing for)
+    const gobble = ['\\[ c = d \\]', '\\delete{x}', '\\ref{f}', '\\nameref{f}', '\\autoref*{f}', '\\citeauthor{k}']
+    gobble.push('\\texttt{x}', '\\url{https://example.org}')
+    expect(gobble.map((src) => [src, command(src)])).toEqual(gobble.map((src) => [src, '\\axtpma']))
   })
 
   it('a reference after text keeps \\axtpma, and an inline formula after a display keeps \\axtpmm', () => {
