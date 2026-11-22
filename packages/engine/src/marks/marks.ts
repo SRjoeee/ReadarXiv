@@ -576,6 +576,17 @@ const rawSign = (s: string): boolean => {
   }
   return false
 }
+/** whether a source holds a parameter sign no backslash escapes: TeX's error in a document's body */
+const paramSign = (s: string): boolean => {
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] === '\\') {
+      i++
+      continue
+    }
+    if (s[i] === '#') return true
+  }
+  return false
+}
 /** a source TeX can set in a box of its own: no comment or parameter sign, no \\verb, its braces balanced, no environment, no
  *  paragraph's end (2608.25210v2's `\\delete{… around 5\\% across …}`, which sets no ink, was never asked for its `\\%`) */
 const boxable = (src: string | undefined): boolean =>
@@ -636,8 +647,9 @@ export function inkSection(samples: readonly string[], from = 0): string {
  * mark, today's reading, no line moved. A piece the source reader states is a display (a paper's shorthand, `\be … \ee`:
  * PhPiece.closes) is a display here, never carried. `displayPiece`: whether a piece is a display by its class or by the source
  * reader's statement. `carrySamples`: every piece the marking may carry (each first after a display, white space and pieces of
- * no class alone between, or right after such a piece), once, that the probe can set: no comment or parameter sign, no \verb,
- * its braces balanced, while its code units fit INK_BUDGET
+ * no class alone between, or right after such a piece), once, that the probe can set: no parameter sign, no \verb, its braces
+ * balanced, while its code units fit INK_BUDGET; a comment in it is the source's own, its line ended after it in the probe as in
+ * the paper (2608.29558v2's `\delete{… \begin{align*}%\label{…} …}`)
  */
 export const displayPiece = (p: PieceLike | null | undefined): boolean =>
   classOf(p) === 'display' || (p?.t === 'ph' && (p as { closes?: number }).closes !== undefined)
@@ -658,7 +670,12 @@ export function carrySamples(units: readonly Unit[]): string[] {
       }
       if (!open || p.t !== 'ph' || !classOf(p) || seen.has(p.src)) continue
       seen.add(p.src)
-      if (rawSign(p.src) || /\\(?:verb|lstinline)(?![A-Za-z@])/.test(p.src) || !balanced(p.src) || p.src.length > room)
+      if (
+        paramSign(p.src) ||
+        /\\(?:verb|lstinline)(?![A-Za-z@])/.test(p.src) ||
+        !balanced(p.src) ||
+        p.src.length > room
+      )
         continue
       out.push(p.src)
       room -= p.src.length
@@ -671,7 +688,7 @@ export function carrySamples(units: readonly Unit[]): string[] {
 export function displaySection(samples: readonly string[]): string {
   const tests = samples.map(
     (src, i) =>
-      `${probeRow('display-at', i)}\\begingroup\\global\\axt@dpfalse\\setbox\\axt@dbox\\vbox{\\hsize\\linewidth\\everydisplay\\expandafter{\\the\\everydisplay\\global\\axt@dptrue}\\noindent${PROBE_LEVEL}${src}\\axt@unwind\\par}\\endgroup${probeRow('display-end', i, '\\ifaxt@dp1\\else0\\fi')}`,
+      `${probeRow('display-at', i)}\\begingroup\\global\\axt@dpfalse\\setbox\\axt@dbox\\vbox{\\hsize\\linewidth\\everydisplay\\expandafter{\\the\\everydisplay\\global\\axt@dptrue}\\noindent${PROBE_LEVEL}${src}\n\\axt@unwind\\par}\\endgroup${probeRow('display-end', i, '\\ifaxt@dp1\\else0\\fi')}`,
   )
   return `${PROBE_UNWIND}\\begingroup\\newbox\\axt@dbox\\newif\\ifaxt@dp${tests.join('\n')}\\endgroup`
 }
