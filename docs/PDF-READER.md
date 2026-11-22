@@ -9223,6 +9223,44 @@ report of 2026-11-21 on production; the released reader did the same).
 - **Versions**: PIPELINE 110 (what the units are); LAYOUT 44 (today's layout maker reads the cut through the same front end);
   the marks digest moves (the front end is in the compile child's closure): every stored paper is prepared and compiled again.
 
+### 18.106 A piece sure to set something, first in the paragraph TeX resumes after a display, has its opening point there (the coordinator's ruling of 2026-11-22)
+
+2601.06943v2 p5: a paragraph, a display `\[ … \]`, then on the next line an `\autoref{…}` and the rest of the paragraph, which runs
+on under a float to page 6. The marked compile set no opening point for the reference: LAYOUT_TEX's `\axtpma` sets nothing on an
+empty list (`\axt@pmc`, `\lastnodetype` −1), and the paragraph TeX resumes after a display is one, so that a mark there would
+not keep the empty paragraph between two displays a line, nor end the `\ignorespaces` amsmath's `\]` began before a macro that
+sets nothing (`\delete{…}`, 2608.29782). The display has no closing point. Its opening point alone then found, as its next mark,
+the reference's closing point, no mark of its unit's next ones: the marking said an unmarked piece followed it (`followsOf`
+`blocked`), the stream's reading owned it nothing (`open, an unmarked piece follows`), the reference had no entry, and both
+inks were read as the unit's text; the locate counted 834 letters where the source writes 821 (`text past its source`, the
+display's 7 and "Figure"), and the whole paragraph stayed the original's, its row answered and never drawn (the owner's report
+of 2026-11-22 on production; the released reader did the same: its dump `laid`, `lost`, the display and the reference LOST).
+
+- **The rule** (`marks/marks.ts` `OPENS_ON_EMPTY`, read by `opensOnEmpty` alone): a piece's opening mark is `\axtpmm`, the
+  one TeX sets on an empty list too, for an inline formula anywhere (its math node follows the mark at once), and for a piece
+  SURE TO SET SOMETHING on the list where it stands first in the paragraph TeX resumes after a display (the piece before it a
+  display, white space alone between). There that paragraph is no empty one with the mark or without it, and the piece's first
+  node stops the skip where it would have stopped: no line moves. Sure, by the commands' own definitions: a citation's label
+  (latex.ltx's `\cite`; natbib's `\citep`, `\citet`, `\citealp`, `\citealt`; biblatex's `\cite`, `\parencite`, `\textcite`,
+  `\autocite`; their capitals, stars and plurals), a reference that prints a name or a page (hyperref's `\autoref`, cleveref's
+  `\cref` and `\Cref`, latex.ltx's `\pageref`), an equation's reference (amsmath's `\eqref`, its parentheses), a footnote's call
+  (latex.ltx's `\@makefnmark`, a box). The gobble stays for a display (a display after a display is its group's), a paper's
+  macro (it may set nothing), and the forms that may set nothing: `\ref`, `\nameref` and `\autoref*` print the label's stored
+  text alone (none where TeX stored none: a `\label` before any counter is stepped), biblatex's one-field commands
+  (`\citeauthor`, `\citeyear`, `\citeurl`, …) an entry without the field, code (`\texttt{}`) and a URL (a paper's own `\url`) an
+  argument with nothing in it; a number a bibliography keeps is never after a display.
+- **Its native cases** (`lab/pdf/spikes/layout-marks-cases.mjs`, `ONLY=lost`: 'a piece first after a display: …', each under
+  pdfLaTeX and latex, with hyperref and without): each form first in a paragraph after `\[ \]` and after amsmath's equation, and
+  ending its paragraph there; the forms that could set nothing on the sure side (an empty key, a key or a label no one defined, a
+  label TeX stored no text for) and the gobble side's beside them (`\ref`, `\nameref`, `\autoref*`): every text item where it was
+  (TeX's DVI to the sp under latex), the log the run reads unchanged, and each new opening point standing in the PDF.
+- **Not covered**: a paper's macro first after a display (the lab's two `\delete{…}`, 2608.29558v2 and 2608.29782v1) keeps the
+  gobble and its paragraph the original's; a piece behind a command that puts nothing on the list (`\noindent`) is not first by
+  the source's order.
+- **Versions**: PIPELINE 111 (the units' states); LAYOUT 45 (today's layout maker writes its marked TeX by the same
+  layoutMarking); the marks digest moves (the marking is in the compile child's closure); TRANSLATE 11 and FORMAT 1 stay: no
+  unit's content, id or wire moves.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server

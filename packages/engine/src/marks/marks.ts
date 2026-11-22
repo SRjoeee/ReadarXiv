@@ -161,6 +161,57 @@ const identifierPiece = identifierSource
  *  number, a link) — a call all the same, which the layer places by its mark */
 const FOOTNOTE_MARK = /^\\footnote(?:mark)?(?![A-Za-z@])/
 
+/**
+ * Where a piece's opening mark is the one TeX sets on an empty list too (LAYOUT_TEX's \axtpmm, not \axtpma's gobble), by its
+ * class: the one place the marking reads it (opensOnEmpty).
+ * - `anywhere`: an inline formula, whose math node follows the mark at once on whatever list it opens.
+ * - `true`, or the forms a pattern matches: a piece SURE TO SET SOMETHING on the list where it stands, by its commands'
+ *   own definitions, so that the paragraph TeX resumes after a display is no empty one with the mark or without it (no line
+ *   is made that TeX would not make) and the mark cuts short no \ignorespaces that \] began (the piece's first act sets a
+ *   node, where the skip would have stopped anyway). Set so where the piece stands first in that paragraph: there \axtpma
+ *   set no point, the display before it, which has no closing point, found no mark of its unit's next ones, and both were
+ *   LOST (2601.06943v2 p5's `\autoref` after a `\[ … \]`; 7 units of the lab's 245 papers, a `\Cref`, a `\cite` or a
+ *   `\citep` first after a display, the other two a paper's `\delete{…}`, which stay so). Each form has its native case (lab/pdf/spikes/layout-marks-cases.mjs, 'a piece first
+ *   after a display: …'): it first in the paragraph there, it ending the paragraph there, and its forms that could set
+ *   nothing — an empty argument, a key or a label no one defined, a label TeX stored no text for.
+ *   - cite: the commands that print a citation's label in their own delimiters — latex.ltx's \cite (`[` … `]`, `[?]` for a
+ *     key no one defined, `[]` for none), natbib's \citep, \citet, \citealp, \citealt (and their capitals and stars), biblatex's
+ *     \cite, \parencite, \textcite, \autocite (and their capitals and plurals). Not the commands that print one field of an
+ *     entry (biblatex's \citeauthor, \citeyear, \citetitle, \citeurl, \citefield …), which an entry without the field sets
+ *     nothing for.
+ *   - ref: the commands that print a name or a page besides the label's stored text — hyperref's \autoref (its link's nodes
+ *     whatever it prints), cleveref's \cref and \Cref (the type's name, `??` for a label no one defined), latex.ltx's \pageref
+ *     (a page's number). Not \ref, \nameref or \autoref*, which print the label's stored text alone: none where TeX stored
+ *     none (a \label before any counter is stepped).
+ *   - eqref: amsmath's \eqref, its parentheses (\tagform@) whatever the label holds.
+ *   - footnote: the call's mark, latex.ltx's \@makefnmark a box whatever \thefootnote prints, and a \nobreak before it.
+ * - `false`: \axtpma's rule, no point on an empty list. A display: two displays in a row, between which TeX drops the empty
+ *   paragraph a mark would keep a line (a display after a display is its group's, own/stream.ts ownedOf). A paper's macro, which
+ *   may set nothing (`\delete{…}`), and a mark would end the \ignorespaces amsmath's \] began before the line end after it.
+ *   Code (`\texttt{}` sets nothing, its argument TeX's to expand) and a URL (a paper's own \url, often \texttt, the same):
+ *   either may set nothing. A number a bibliography keeps: never after a display, no case shows it either way
+ */
+const OPENS_ON_EMPTY: Readonly<Record<MarkClass, 'anywhere' | boolean | RegExp>> = {
+  math: 'anywhere',
+  display: false,
+  cite: /^\\(?:[cC]ite(?:s|[pt]|al[pt])?|[pP]arencites?|[tT]extcites?|[aA]utocites?)\*?(?![A-Za-z@*])/,
+  ref: /^\\(?:autoref|[cC]ref\*?|pageref\*?)(?![A-Za-z@*])/,
+  eqref: true,
+  code: false,
+  url: false,
+  footnote: true,
+  macro: false,
+  number: false,
+}
+/** whether a piece of class `cls` (source `src`) has the opening mark TeX sets on an empty list too (OPENS_ON_EMPTY), where
+ *  `afterDisplay` says it stands first in the paragraph TeX resumes after a display (the piece before it a display, white space
+ *  alone between) */
+export function opensOnEmpty(cls: MarkClass, src: string, afterDisplay: boolean): boolean {
+  const on = OPENS_ON_EMPTY[cls]
+  if (on === 'anywhere') return true
+  return afterDisplay && (on === true || (on instanceof RegExp && on.test(src)))
+}
+
 /** whether a piece is the list backref sets after a bibliography entry (source/latex-front.ts BACKREF_LIST): no source of its own,
  *  its marks LAYOUT_TEX's around the list (layoutMarking's `\\axtbrname`), never a sample of the probe's */
 export const backrefPiece = (p: PieceLike | null | undefined): boolean => p?.t === 'ph' && p.src === BACKREF_LIST
@@ -1827,7 +1878,12 @@ export function readMarkProbe(log: string | null | undefined, samples: readonly 
  *   empty one either way (no line is made), and no \ignorespaces is cut short of a space it would have skipped: the
  *   native case (lab/pdf/spikes/layout-marks-cases.mjs, 'an inline formula first after a display') holds every item in
  *   place. A display after a display keeps \axtpma's rule: it has no point, and own/stream.ts ownedOf gives its group's ink to the
- *   display before it.
+ *   display before it. And before a piece SURE TO SET SOMETHING where it stands (OPENS_ON_EMPTY: a citation's label, a
+ *   reference that prints a name or a page, an equation's reference, a footnote's call) standing first in the paragraph TeX
+ *   resumes after a display: that paragraph is no empty one either way, and the piece's first node stops the \ignorespaces
+ *   where the skip would have stopped. With \axtpma's gobble there the piece had no opening point, the display (no closing
+ *   point) no mark of its unit's next ones, and both their inks were read as the unit's text (2601.06943v2 p5's `\autoref`,
+ *   PDF-READER §18.106). A paper's macro keeps the gobble: it may set nothing (`\delete{…}`, 2608.29782).
  * - **\axtpm{name}, after one; \axthmark{name}, a heading's.** Set in horizontal mode only; \axtpm after the placeholder's
  *   last ink, its trailing glue, penalties and kerns put back after it, and on an empty list nothing: after a display,
  *   where TeX resumes the paragraph, a mark would open a line of its own where the paragraph ends, and TeX's skip of the
@@ -3104,14 +3160,15 @@ export function layoutMarking(
             : raw
       if (said === '2') return [piece]
       const name = `${cls === 'footnote' ? 'n' : 'p'}${i}.${k}`
-      // (an inline formula's opening mark is set on the empty list too: \axtpmm, LAYOUT_TEX. `opens`: the mark that opens the
+      // (an inline formula's opening mark is set on the empty list too, and a piece sure to set something where it stands first
+      // in the paragraph TeX resumes after a display: \axtpmm, LAYOUT_TEX, OPENS_ON_EMPTY. `opens`: the mark that opens the
       // piece after it, which patch writes after the unit's start mark where that mark goes before this piece)
       // (an identifier's \axthpk: it begins with a character, so in vertical mode, where a box's paragraph opens with it, the mark
       // begins the paragraph before that character as TeX would and sets its point there, where \axtpma waits for the next mark
       // (its closing one: 2608.25210v2 p3's \mypython box, the element empty); in horizontal mode \axtpma's)
       const open: PhPiece = {
         t: 'ph',
-        src: `${lead}\\${cls === 'math' ? 'axtpmm' : identifierPiece(p.src) ? 'axthpk' : 'axtpma'}{${name}a}`,
+        src: `${lead}\\${opensOnEmpty(cls, p.src ?? '', classOf(after) === 'display') ? 'axtpmm' : identifierPiece(p.src) ? 'axthpk' : 'axtpma'}{${name}a}`,
         opens: true,
       }
       if (said === '3') {

@@ -22,6 +22,7 @@
 //                                                                  the names' alone; ONLY=unmark: \axt@unmark's alone;
 //                                                                  ONLY=wrappers: the wrappers' alone; ONLY=lost: the LOST
 //                                                                  survey's, an inline formula first after a display, a
+//                                                                  piece sure to set something first after one, a
 //                                                                  superscript or a box glued to a word, a
 //                                                                  display group and a display at a page's foot; ONLY=runin:
 //                                                                  the run-in leads' stream case, F; ONLY=dvi: the DVI
@@ -75,6 +76,9 @@ const BIB = String.raw`\begin{thebibliography}{9}
 \bibitem[Bauthor(2021)]{b} B. Bauthor. Another title. 2021.
 \end{thebibliography}`
 const doc = (pre, body, cls = '\\documentclass{article}') => `${cls}\n${pre}\n\\begin{document}\n${body}\n\\end{document}\n`
+/** each piece first in the paragraph TeX resumes after a display, `\\[ \\]` and amsmath's equation in turn, text after it; then
+ *  the last one again, ending its paragraph there */
+const afterDisplays = pieces => `${pieces.map((p, i) => `${prose(5, () => '')} gives\n${i % 2 ? `\\begin{equation} a_{${i}} = b \\end{equation}` : `\\[ a_{${i}} = b \\]`}\n${p} holds ${prose(5, () => '')}`).join('\n')}\n\n${prose(4, () => '')}\n\\[ c = d \\]\n${pieces.at(-1)}\n\n${prose(4, () => '')}`
 
 /** the documents whose every text item must stay where it is, each also with hyperref loaded */
 const STAY = {
@@ -98,6 +102,18 @@ const STAY = {
   'a superscript or a box glued to a word': { engines: ['pdflatex', 'xelatex'], src: doc('', `${prose(40, i => ['\\textsuperscript{1}', '\\textsuperscript{2,*} and', '\\mbox{$^3$}', '\\textsuperscript{$\\dagger$},'][i % 4])}\n\n\\begin{center}Ann Author\\textsuperscript{1} \\quad Bo Writer\\textsuperscript{1,2,*}\\end{center}`, '\\documentclass[twocolumn]{article}') },
   // amsmath's \\] ends in \\ignorespaces, which skips a macro that sets nothing and the line end after it; a mark set
   // there would end the skip, and the next line begin with a space (2608.29782's \\delete{…} after a display)
+  // a piece SURE TO SET SOMETHING where it stands first in the paragraph TeX resumes after a display (marks.ts OPENS_ON_EMPTY): its
+  // opening mark \\axtpmm, set on that empty list as an inline formula's, its point read by the check below. Each form first in
+  // a paragraph after a display, after an equation, and ending its paragraph there; and the forms that could set nothing: an
+  // empty argument, a key or a label no one defined, a label TeX stored no text for (`top`, before any counter). The forms that
+  // keep the gobble beside them (\\ref, \\nameref, \\autoref*), no point, every item in place all the same (2601.06943v2 p5)
+  'a piece first after a display: latex.ltx\'s \\cite': doc('\\usepackage{amsmath}', `${afterDisplays(['\\cite{a}', '\\cite{b,a}', '\\cite{zz}', '\\cite{}'])}\n${BIB}`),
+  'a piece first after a display: natbib\'s citations': doc('\\usepackage{amsmath}\\usepackage{natbib}', `${afterDisplays(['\\citep{a}', '\\citet{b}', '\\citealp{a}', '\\citealt{b}', '\\Citet{a}', '\\citep*{b}', '\\citep{zz}'])}\n${BIB}`),
+  'a piece first after a display: biblatex\'s citations': doc('\\usepackage{amsmath}\\usepackage{biblatex}', afterDisplays(['\\parencite{a}', '\\textcite{b}', '\\autocite{a}', '\\cite{b}', '\\Cite{a}', '\\cites{a}{b}'])),
+  'a piece first after a display: a reference that prints a name or a page': doc('\\usepackage{amsmath}\\usepackage{hyperref}\\usepackage{cleveref}', `\\label{top}${prose(6, () => '')}\n\\section{Words}\\label{s}\n\\begin{figure}[h]\\centering\\rule{2cm}{1cm}\\caption{A figure.}\\label{f}\\end{figure}\n\\begin{equation} x = y \\label{e} \\end{equation}\n${afterDisplays(['\\ref{f}', '\\ref{top}', '\\nameref{top}', '\\autoref*{top}', '\\autoref{zz}', '\\cref{zz}', '\\autoref{top}', '\\cref{top}', '\\pageref*{s}', '\\cref*{s}', '\\Cref{e}', '\\pageref{f}', '\\cref{f}', '\\autoref{f}'])}`),
+  'a piece first after a display: \\pageref, and \\ref, with no package': doc('\\usepackage{amsmath}', `\\label{top}${prose(6, () => '')}\n\n\\begin{figure}[h]\\centering\\rule{2cm}{1cm}\\caption{A figure.}\\label{f}\\end{figure}\n\n${afterDisplays(['\\ref{f}', '\\ref{top}', '\\pageref{zz}', '\\pageref{f}'])}`),
+  'a piece first after a display: an equation\'s reference': doc('\\usepackage{amsmath}', `\\begin{equation} x = y \\label{e} \\end{equation}\n${afterDisplays(['\\eqref{e}', '\\eqref{zz}'])}`),
+  'a piece first after a display: a footnote\'s call': doc('\\usepackage{amsmath}', afterDisplays(['\\footnote{A note of our own, with words in it.}', '\\footnotemark', '\\footnote{1}'])),
   'a macro that sets nothing after a display': doc('\\usepackage{amsmath}\\newcommand\\delete[1]{}', `${prose(6, () => '')} by\n\\[ a = b \\]\n\\delete{A passage $x$ set aside.}\n${prose(6, () => '')} and\n\\begin{align*} c = d \\end{align*}\n\\delete{More.}\n${prose(6, () => '')}`),
   // subequations with a \\label after its align: \\end's skip of the spaces after it ends at a mark (2608.12255)
   'an environment that skips the spaces after it': doc('\\usepackage{amsmath}', `${prose(8, () => '')} integers $r$\n\t\\begin{subequations}\n\\begin{align} a &= b \\label{eq:a} \\\\ c &= d \\end{align}\n\\label{eq:ab}\n\t\\end{subequations}\n\t${prose(8, () => '')}`),
@@ -197,7 +213,7 @@ function queue(name, src, { engine = 'pdflatex', passes = 2, variants = ['v0', '
   if (engine === 'latex') files = { ...files, '00README.json': JSON.stringify({ sources: [{ usage: 'toplevel', filename: 'main.tex' }], process: { compiler: 'latex' } }) }
   const all = new Map([['main.tex', new TextEncoder().encode(src)], ...Object.entries(files).map(([f, t]) => [f, new TextEncoder().encode(t)])])
   const paper = openPaper(all)
-  if ((STREAM_ONLY && !name.startsWith('stream-')) || (RUNIN_ONLY && !name.startsWith('stream-F-')) || (NAMES_ONLY && !name.startsWith('names-')) || (UNMARK_ONLY && !name.startsWith('unmark-')) || (WRAPPERS_ONLY && !name.startsWith('wrappers-')) || (LOST_ONLY && !name.startsWith('stay-an-inline-formula-first-after-a-display') && !name.startsWith('stay-a-superscript-or-a-box-glued-to-a-word') && !name.startsWith('stream-E-')) || (DVI_ONLY && !/-latex(?:-hyperref)?$/.test(name))) return paper
+  if ((STREAM_ONLY && !name.startsWith('stream-')) || (RUNIN_ONLY && !name.startsWith('stream-F-')) || (NAMES_ONLY && !name.startsWith('names-')) || (UNMARK_ONLY && !name.startsWith('unmark-')) || (WRAPPERS_ONLY && !name.startsWith('wrappers-')) || (LOST_ONLY && !name.startsWith('stay-an-inline-formula-first-after-a-display') && !name.startsWith('stay-a-piece-first-after-a-display') && !name.startsWith('stay-a-superscript-or-a-box-glued-to-a-word') && !name.startsWith('stream-E-')) || (DVI_ONLY && !/-latex(?:-hyperref)?$/.test(name))) return paper
   queued.push({ name, paper, engine, passes, variants, own, trace, files: all })
   return paper
 }
@@ -293,9 +309,10 @@ function dviMoved(a, b) {
   return out
 }
 const READ_LINE = /^(?:AXT-|Missing character: |! LaTeX Error: Unicode character )/
-/** what the layout marks themselves write to the log (LAYOUT_TEX: a unit's alignment, a run's colour), which v0, with none of
- *  them, cannot write: their readings, not something they change */
-const MARKS_OWN_LINE = /^AXT-(?:ALIGN|COLOUR) /
+/** what the layout marks themselves write to the log (LAYOUT_TEX: a unit's alignment, a run's colour, a column's body as TeX
+ *  shipped it; refsTex: a label's type and its names), which v0, with none of them, cannot write: their readings, not something
+ *  they change (AXT-BODY since 70232b1c0 and the references' since refsTex: every case's check read them as changes) */
+const MARKS_OWN_LINE = /^AXT-(?:ALIGN|COLOUR|BODY|REF|REFNAME|REFLANG) /
 /** the log lines the run reads (live.mjs readingsOf) but the layout marks' own, and LaTeX's warnings and errors */
 const readLog = name => lastTexLog(read(name, 'log', 'latin1') ?? '').split('\n').filter(l => (READ_LINE.test(l) && !MARKS_OWN_LINE.test(l)) || /^(?:LaTeX|Package \S+|Class \S+) Warning|^! /.test(l))
 const errorsOf = name => (read(name, 'log', 'latin1') ?? '').match(/^! .*/gm) ?? []
@@ -752,6 +769,13 @@ for (const [name, , engine] of stays) {
       if (m.length) console.log(`note ${label}: dvipdfmx draws ${m.length} text items otherwise, e.g. ${m.slice(0, 2).join('; ')}`)
     } else check(label, !m.length && !newErrors.length && marks > 0, JSON.stringify({ moved: m.slice(0, 6), newErrors, layoutMarks: marks }))
     check(`${label}: the log the run reads and LaTeX's warnings unchanged`, JSON.stringify(logA) === JSON.stringify(logB), JSON.stringify(logB.filter(l => !logA.includes(l)).slice(0, 4)))
+    // (a piece sure to set something first after a display: its opening mark \\axtpmm, no formula after it, and its point
+    // stands in the PDF, set on the empty list TeX resumed the paragraph with)
+    if (name.startsWith('a piece first after a display')) {
+      const opened = [...(read(`${key}-v1`, 'tex', 'latin1') ?? '').matchAll(/\\axtpmm\{([pn]\d+\.\d+a)\}(?!\$|\\\(|\\ensuremath)/g)].map(x => x[1])
+      const unset = opened.filter(n => !b.dests.has(n))
+      check(`${label}: each opening point of a piece first after a display stands`, opened.length > 0 && !unset.length, JSON.stringify({ opened: opened.length, unset }))
+    }
   }
 }
 if (!LOST_ONLY) {

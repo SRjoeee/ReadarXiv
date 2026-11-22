@@ -4,6 +4,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- Fixed: in the PDF reader, a paragraph that goes on after a displayed formula with a reference, a citation or a footnote's mark, such as `\[ … \]` then `\autoref{fig}` on the next line, is translated. It had stayed in the original, though its translation had arrived.
 - Fixed: in the PDF reader, a word in small capitals whose letters the font has no small capitals for, such as Greek in Linux Libertine, or, in a Russian, Ukrainian or Bulgarian translation, the sans and typewriter text of a paper in Computer Modern, is drawn in small capitals made from the font's capitals. It had been drawn in lower case.
 - Fixed: in the PDF reader, a name the paper sets in small capitals, such as `\textsc{…}` in a heading or a paragraph, is followed by the translation after its last letter. The translation had started about one letter before the name ended, drawn over it.
 - Fixed: in the PDF reader, a figure's text that a picture painted over it hides on the page, such as the labels of a mock interface under a pasted screenshot, is no longer translated. Its translation had been drawn over the picture.
