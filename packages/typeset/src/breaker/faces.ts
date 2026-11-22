@@ -26,7 +26,7 @@ import {
 import { FACES } from '../data/faces.ts'
 import type { Face, TStyle } from './tokens.ts'
 
-export { capsLetters, ownSmallCaps } from '@readarxiv/text'
+export { capsLetters, ownSmallCaps, ownSmallCapsOf } from '@readarxiv/text'
 
 /** the slant of a CJK italic run, degrees: the body's own face sheared (docs/PDF-READER.md §18.1) */
 export const CJK_SLANT_DEG = 13

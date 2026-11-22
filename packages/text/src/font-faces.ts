@@ -2,9 +2,10 @@
 // in (FACE_TABLE: its file, source, family, weight, style, size correction, licence and web status; FACES), each face's
 // letters (font-letters.ts HOLDS and SMCP, made from the coverage table), the groups each English family's runs take by
 // style and script (LATIN_GROUPS, OTHER_GROUPS, CM_TEXT), the letters a target is set in (LETTER_SETS), and the readings
-// over them that keep nothing between calls (styled, capsLetters, ownSmallCaps). The engine's role table re-exports them at
+// over them that keep nothing between calls (styled, capsLetters, ownSmallCaps, ownSmallCapsOf). The engine's role table re-exports them at
 // its old path (packages/engine/src/fonts/font-roles.ts: the roles a target draws in, the face a run takes, canDrawIn); the
 // typesetter's B.faces reads them (typeset breaker/faces.ts, data/faces.ts), which keep no copy of these tables.
+import { SMALL_CAPS } from './font-caps.ts'
 import { HOLDS, SMCP } from './font-letters.ts'
 
 export type FaceId = string
@@ -324,3 +325,29 @@ export const capsLetters = (id: string): boolean => CAPS_FACES.has(id)
  *  A run set in small capitals in a face with neither has them drawn by the layer from the face's capitals, at the share of the
  *  size the original's small capitals are set at (layer-proto/layer2.mjs selfCaps), never synthesized by the browser */
 export const ownSmallCaps = (id: string): boolean => CAPS_FACES.has(id) || SMCP.includes(id)
+/** whether sorted inclusive ranges (start and end in turn) hold a code point */
+const inRanges = (r: readonly number[], cp: number): boolean => {
+  let lo = 0,
+    hi = r.length / 2 - 1
+  while (lo <= hi) {
+    const m = (lo + hi) >> 1
+    if (cp < (r[2 * m] as number)) hi = m - 1
+    else if (cp > (r[2 * m + 1] as number)) lo = m + 1
+    else return true
+  }
+  return false
+}
+/** whether a face draws a text's small capitals of its own, letter by letter: Latin Modern's caps face always (its letters are
+ *  them); a face of SMCP where its smcp feature substitutes every lower-case letter of the text (a character `upper`, the
+ *  target's case mapping as the layer's small capitals read it, maps to another: font-caps.ts SMALL_CAPS, the code points its
+ *  file's feature substitutes); else none. A face's feature covers some letters alone (Linux Libertine's no Greek one, CMU
+ *  Sans' and CMU Mono's Greek ones alone), and a letter it does not substitute, asked small capitals of the face, is drawn in
+ *  lower case (no browser's synthesis is asked): the layer then draws the text's small capitals itself, as for a face with
+ *  none (the typesetter's caseRuns). A text with no lower-case letter is the face's as ownSmallCaps says */
+export const ownSmallCapsOf = (id: string, text: string, upper: (s: string) => string): boolean => {
+  if (CAPS_FACES.has(id)) return true
+  if (!SMCP.includes(id)) return false
+  const r = SMALL_CAPS[id] ?? []
+  for (const ch of text) if (upper(ch) !== ch && !inRanges(r, ch.codePointAt(0) as number)) return false
+  return true
+}

@@ -69,7 +69,7 @@ export function figuresOf(
   part: Part,
   members: readonly Placed[],
   rows: Rows,
-  o: { paper: PaperReading; R: RuleParams; metrics: Metrics },
+  o: { paper: PaperReading; R: RuleParams; metrics: Metrics; to?: string },
 ): {
   laid: Map<number, Laid['lines']>
   why: Map<number, Unlaid>
@@ -148,6 +148,7 @@ export function figuresOf(
       floorMin: o.R.floorMin,
       compressMax: o.R.compressMax,
     },
+    ...(o.to ? { to: o.to } : {}),
     metrics: o.metrics,
   })
   const w100 = (s: string, f: Parameters<typeof fontString>[0]) => o.metrics.advance(fontString(f, 100), 100, s)

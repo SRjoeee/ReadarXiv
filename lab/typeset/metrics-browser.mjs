@@ -5,9 +5,10 @@
 // (font string, text) of the tap's metrics tables (baseline/tap/metrics/<pair>.metrics.json.gz) is measured at 100 px:
 //   rules   the spec's (2) and (3), what the reader's Metrics must do: the text cut where its characters' slice changes
 //           (served-metrics' runs: the first family of the string whose face, by CSS matching, has a slice declaring the
-//           character), each run measured alone in the font string itself but never in small capitals (the typesetter fakes
-//           them itself: B.tokens' `sc`; a canvas element's `font-synthesis: none` does not reach its text, the styled mode
-//           shows), a run of CJK characters unkerned and cut between two adjacent CJK punctuation marks (no
+//           character), each run measured alone in the font string itself, in small capitals where the run's face sets its own
+//           (its smcp feature, @readarxiv/text SMCP: the reader's class draws them) and never where it has none (the
+//           typesetter fakes those itself, B.tokens' `sc`; a canvas element's `font-synthesis: none` does not reach its text,
+//           the styled mode shows), a run of CJK characters unkerned and cut between two adjacent CJK punctuation marks (no
 //           text-spacing-trim), the runs' widths summed; the ink their highest ascent, deepest descent and furthest right.
 //           In the whole string, not its run's family alone: no family before the run's declares its characters, so Chrome
 //           sets them in the run's slice, and a character a slice declares but its file lacks (xcharter-regular's slice 5
@@ -18,17 +19,20 @@
 //           the same trim and synthesis; read only, never gated: on Chromium 153 the element's trim reaches its text, its
 //           synthesis does not, and the kana stay kerned)
 // Each against the table's w100 and the Node measurer's (served-metrics.mjs), equal within 1/1000 px. Exit 0 when rules
-// equals the measurer on every measure and every other difference of rules and plain is of a named class (served-check's
-// 14: 8 text-spacing-trim of adjacent CJK punctuation, 2 kana runs Chrome kerns, 4 small capitals Chrome synthesizes on
-// domitian and xcharter), none over its count; else 1. The 14 stand between rules and the table and between plain and the
-// measurer: the table is today's Chrome, which trims, kerns kana and synthesizes; the measurer, the spec's target, does
-// none of these. Offline: a static server on 127.0.0.1 serves the page and the
+// equals the measurer on every measure and every other difference of rules and plain is of a named class (10: 8
+// text-spacing-trim of adjacent CJK punctuation, 2 kana runs Chrome kerns), none over its count; else 1. The 10 stand between
+// rules and the table and between plain and the measurer: the table is today's Chrome, which trims and kerns kana; the
+// measurer, the spec's target, does neither. A small-caps measure is of no named class: Chrome's canvas, the measurer and the
+// table give a face's own small capitals one width (the 4 of the tables, domitian's "ArXiv" 289.0 at 100 px, its file's smcp
+// glyphs, and xcharter's "Gap" and "Props", equal in all three). Offline: a static server on 127.0.0.1 serves the page and the
 // slices, the browser aborts any other request. Lab-data stays where it is: nothing is written. Run from the worktree's root,
 // in the machine's browser slot:
 //   <the lab's heavy-slot.sh> e2e -- node lab/typeset/metrics-browser.mjs
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { join } from 'node:path'
+import { ownSmallCapsOf, SMCP } from '../../packages/text/src/index.ts'
+import { caseRuns, upperOf } from '../../packages/typeset/src/breaker/tokens.ts'
 import { FACES } from '../../packages/typeset/src/data/faces.ts'
 import { readGz, TAP } from '../../packages/typeset/tests/replay/tap.ts'
 import { CJK, faceOf, hasServed, inRanges, parse, SLICES, servedMetrics, TABLES } from './served-metrics.mjs'
@@ -106,11 +110,13 @@ function runsOf(families, font, text) {
 const PUNCT = /[\u3001-\u3003\u3008-\u3011\u3014-\u301f\u30fb\uff01-\uff0f\uff1a-\uff20\uff3b-\uff40\uff5b-\uff65]/u
 const KANA = /[\p{Script=Hiragana}\p{Script=Katakana}\u30fc]/u
 
-/** the parts the rules mode measures: [the font string without small capitals, text, unkerned, the slice's key] */
+/** the parts the rules mode measures: [the font string, its small capitals kept where the run's face sets its own (its smcp
+ *  feature, @readarxiv/text SMCP) and dropped where it has none, as the reader's served.ts partsOf; text, unkerned, the slice's key] */
 function partsOf(string, runs) {
   const out = []
-  const font = string.replace(/^(italic )?small-caps /, '$1')
+  const plain = string.replace(/^(italic )?small-caps /, '$1')
   for (const r of runs) {
+    const font = SMCP.includes(r.face.id) ? string : plain
     if (!r.cjk) {
       out.push([font, r.text, 0, r.s.key])
       continue
@@ -138,10 +144,9 @@ const unicodeRangeOf = (ranges) => {
   return out.join(', ')
 }
 
-/** a difference's named class (served-check's 14), or 'other' */
-const NAMED = { trim: 8, kana: 2, 'small-caps': 4 }
-function classOf(font, text) {
-  if (/^(italic )?small-caps /.test(font)) return 'small-caps'
+/** a difference's named class (the 10 of the header), or 'other' (a small-caps measure among them: none is named) */
+const NAMED = { trim: 8, kana: 2 }
+function classOf(_font, text) {
   const cs = [...text]
   for (let i = 1; i < cs.length; i++) if (PUNCT.test(cs[i - 1]) && PUNCT.test(cs[i])) return 'trim'
   for (let i = 1; i < cs.length; i++) if ((KANA.test(cs[i - 1]) || KANA.test(cs[i])) && CJK.test(cs[i - 1]) && CJK.test(cs[i])) return 'kana'
@@ -178,6 +183,49 @@ const declared = [...families.values()].flatMap((list) => list.flatMap((f) => f.
 const files = new Map(declared.map(({ s }) => [s.name, s.file]))
 const needed = new Set(measures.flatMap((m) => (m.parts ?? []).map((p) => p[3])))
 const unserved = measures.filter((m) => !m.parts)
+
+// ---- small capitals as the typesetter asks them, measured as the reader measures them and drawn as its class draws them
+// Pieces of our own in a face of SMCP, each laid as the typesetter lays a `\textsc` piece (@readarxiv/text ownSmallCapsOf: the
+// face's own small capitals where its smcp substitutes every lower-case letter of the piece, one run asking them; else the
+// layer's, caseRuns: the face's capitals at SHARE of the size, runs of one case, none asked), measured by the rules'
+// parts (each run's in its slices, partsOf: small capitals kept for a face of SMCP) and drawn as an SVG <text> of the reader's
+// class rule (served.ts classOf: font-variant-caps as the run asks, font-synthesis none; each run a <tspan> at its share of the
+// size). The two widths must be one, within the browser's text layout unit (1/64 px) a run. Beside each, for the record, the
+// face's rule the typesetter read before (every piece of a face of SMCP one run asking its small capitals): its measure, its
+// drawing and the piece's lower case.
+/** the share B.tokens sets a faked small capital at where the page states none (its capsK) */
+const SHARE = 0.8
+const SMALL_CAPS_CASES = [
+  ['libertine-regular', 'de', 'Abc'],
+  ['libertine-regular', 'de', 'αβγδ'],
+  ['libertine-regular', 'de', 'Abcδ'],
+  ['cmun-sans-regular', 'ru', 'Abc'],
+  ['cmun-mono-regular', 'ru', 'Abc'],
+  ['cmun-sans-regular', 'ru', 'Абв'],
+  ['cmun-sans-regular', 'ru', 'αβγ'],
+]
+/** a face's runs of a piece under a rule: [the run's text, its share, whether it asks the face's small capitals] */
+const capsRunsOf = (id, to, text, rule) =>
+  rule === 'face' || ownSmallCapsOf(id, text, upperOf(to))
+    ? [[text, 1, true]]
+    : caseRuns(text, SHARE, upperOf(to)).map((r) => [r.s, r.k, false])
+const capsCases = SMALL_CAPS_CASES.map(([id, to, text]) => {
+  const f = FACES[id]
+  const fontOf = (caps) => `${f.style === 'italic' ? 'italic ' : ''}${caps ? 'small-caps ' : ''}${f.weight} 100px "${f.family}"`
+  const ruleOf = (rule) => {
+    const runs = capsRunsOf(id, to, text, rule).map(([s, k, caps]) => {
+      const font = fontOf(caps)
+      const cut = runsOf(families, font, s)
+      if (!cut) throw new Error(`small capitals: no served face holds ${JSON.stringify(s)} in ${font}`)
+      return { s, k, caps, parts: partsOf(font, cut) }
+    })
+    return runs
+  }
+  const plainCut = runsOf(families, fontOf(false), text)
+  return { id, to, text, family: f.family, weight: f.weight, style: f.style, letter: ruleOf('letter'), face: ruleOf('face'), lower: partsOf(fontOf(false), plainCut) }
+})
+for (const c of capsCases) for (const r of [...c.letter, ...c.face]) for (const p of r.parts) needed.add(p[3])
+for (const p of capsCases.flatMap((c) => c.lower)) needed.add(p[3])
 const count = {
   pairs: pairs.length,
   rows,
@@ -305,6 +353,52 @@ try {
     got.forEach(([r, p, s], k) => Object.assign(chunk[k], { rules: r, plain: p, styled: s }))
   }
   out.measureMs = Date.now() - t0
+  // (the small capitals' cases: each slice their parts are in loaded first, then measured on a canvas and drawn in an SVG)
+  out.caps = await page.evaluate(async (cases) => {
+    const keys = new Set(cases.flatMap((c) => [...c.letter, ...c.face].flatMap((r) => r.parts.map((p) => p[3])).concat(c.lower.map((p) => p[3]))))
+    await Promise.all([...keys].map((k) => window.axtFaces.get(k)?.load().catch(() => null)))
+    await document.fonts.ready
+    const ctx = new OffscreenCanvas(8, 8).getContext('2d')
+    const widthOf = (parts) => {
+      let w = 0
+      for (const [pf, pt, flat] of parts) {
+        ctx.font = pf
+        ctx.fontKerning = flat ? 'none' : 'normal'
+        w += ctx.measureText(pt).width
+      }
+      return w
+    }
+    const NS = 'http://www.w3.org/2000/svg'
+    const svg = document.createElementNS(NS, 'svg')
+    svg.setAttribute('width', '2000')
+    svg.setAttribute('height', '300')
+    document.body.append(svg)
+    const drawn = (c, runs) => {
+      const t = document.createElementNS(NS, 'text')
+      t.setAttribute('x', '10')
+      t.setAttribute('y', '200')
+      for (const r of runs) {
+        const span = document.createElementNS(NS, 'tspan')
+        span.setAttribute(
+          'style',
+          `font-family:"${c.family}";font-weight:${c.weight};font-style:${c.style};font-variant-caps:${r.caps ? 'small-caps' : 'normal'};font-synthesis:none;text-spacing-trim:space-all;font-feature-settings:"locl" 0;font-size:${100 * r.k}px`,
+        )
+        span.textContent = r.s
+        t.append(span)
+      }
+      svg.append(t)
+      const w = t.getComputedTextLength()
+      t.remove()
+      return w
+    }
+    return cases.map((c) => ({
+      measured: c.letter.reduce((w, r) => w + widthOf(r.parts) * r.k, 0),
+      drawn: drawn(c, c.letter),
+      faceMeasured: c.face.reduce((w, r) => w + widthOf(r.parts) * r.k, 0),
+      faceDrawn: drawn(c, c.face),
+      lower: widthOf(c.lower),
+    }))
+  }, capsCases)
   out.loadingAfter = await page.evaluate(() => [...document.fonts].filter((f) => f.status === 'loading').length)
 } finally {
   await browser.close()
@@ -359,6 +453,17 @@ for (const mode of ['rules', 'plain']) {
 }
 if (unserved.length) report.push(`unserved (not compared): ${unserved.length}, first ${unserved.slice(0, 3).map((m) => `${m.font} ${JSON.stringify(m.text)}`).join('; ')}`)
 if (out.faces.status.error) failed.push(`${out.faces.status.error} slices failed to load`)
+// (the small capitals' cases: the typesetter's runs measured as drawn, within the layout unit a run; the face's rule beside them)
+const UNIT = 1 / 64
+capsCases.forEach((c, k) => {
+  const m = out.caps[k]
+  const same = Math.abs(m.measured - m.drawn) <= UNIT * c.letter.length
+  const layer = c.letter.some((r) => !r.caps)
+  report.push(
+    `small capitals ${c.id} ${c.to} ${JSON.stringify(c.text)}: ${layer ? "the layer's" : "the face's own"} (${c.letter.map((r) => `${r.s}@${r.k}`).join(' ')}), measured ${m.measured.toFixed(2)}, drawn ${m.drawn.toFixed(2)}${same ? '' : ' DIFFER'}; the face's rule: measured ${m.faceMeasured.toFixed(2)}, drawn ${m.faceDrawn.toFixed(2)}${Math.abs(m.faceMeasured - m.faceDrawn) <= UNIT ? '' : ' (differ)'}, its lower case ${m.lower.toFixed(2)}`,
+  )
+  if (!same) failed.push(`small capitals ${c.id} ${JSON.stringify(c.text)}: measured ${m.measured.toFixed(2)}, drawn ${m.drawn.toFixed(2)}`)
+})
 if (out.loadingAfter) failed.push(`${out.loadingAfter} slices were still loading after the measures`)
 if (offOrigin) failed.push(`${offOrigin} requests off the origin`)
 console.log(JSON.stringify({ chromium: out.chromium, faces: out.faces, measureMs: out.measureMs, offOrigin }))

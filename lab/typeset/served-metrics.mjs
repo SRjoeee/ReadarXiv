@@ -144,9 +144,13 @@ export function servedMetrics() {
     if (!runs.length) a = d = right = left = 0
     for (const r of runs) {
       // (measured at 100 px and scaled to the string's: Skia's canvas parses no size of many decimals, the Korean face's
-      // 95.89999999999999 px, and a glyph's advance scales with its size, unhinted; its small capitals as the string asks them,
-      // as the reader's canvas measures the same font string, packages/reader/src/compose/served.ts: 2610.40394v1 p33's
-      // "LongForm" measured at its lower-case width, 3.78 pt short of what Chrome draws)
+      // 95.89999999999999 px, and a glyph's advance scales with its size, unhinted; its small capitals as the string asks them:
+      // Skia synthesizes none, so a slice with an smcp feature gives its small capitals and one without gives its lower case,
+      // which is what the reader's class draws (`font-variant-caps: small-caps; font-synthesis: none`). The reader's own Metrics
+      // (packages/reader/src/compose/served.ts partsOf) measures a run in small capitals where its face has an smcp feature
+      // (@readarxiv/text SMCP) and in lower case elsewhere, in Chrome's canvas, which synthesizes them for a slice with none:
+      // the two differ there alone. Measured in lower case, 2610.40394v1 p33's "LongForm" was laid 3.78 pt short of what Chrome
+      // draws)
       ctx.font = `${r.face.style === 'italic' ? 'italic ' : ''}${caps ? 'small-caps ' : ''}${r.face.weight} 100px "${r.s.alias}"`
       ctx.fontKerning = r.cjk ? 'none' : 'normal'
       const t = ctx.measureText(r.text)

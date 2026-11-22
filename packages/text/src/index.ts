@@ -25,6 +25,7 @@ export {
   LETTERS,
   OTHER_GROUPS,
   ownSmallCaps,
+  ownSmallCapsOf,
   styled,
   styleOf,
 } from './font-faces.ts'
