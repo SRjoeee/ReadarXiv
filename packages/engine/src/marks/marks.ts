@@ -2699,30 +2699,37 @@ export const CALL_TEX =
  * on it would keep it from being dropped (TeX drops an empty paragraph at its \par and at a display's start: the empty one
  * between two displays would be a line) and cut short the \ignorespaces a LaTeX display ends with, before a macro that expands
  * to nothing and the line end after it: \axtpma sets none there (LAYOUT_TEX's \axt@pmc). On the empty list \axtpmd sets its
- * point in a carrier, `\hbox{<point>}\penalty10939`: a box of nothing (no width, height or depth: no line moves by it), and a
- * sentinel no paper sets (a penalty past 10000, where TeX never breaks; the glue after it no place to break either, as the
- * paragraph's first glue is none), read by \lastpenalty, which takes nothing off. Before it a probe: a \space, which an
- * \ignorespaces in force skips, and which is else set as glue and taken off at once (\unskip); \ignorespaces is issued again
- * after the carrier only where one was. While the list still ends with the sentinel, the piece has set nothing: its closing
- * mark (\axt@pm), and the opening mark of a carried piece after it, put their points in the carrier too (the box taken off
- * with \lastbox and set again with the point in it, the sentinel after it, the probe as before). Where the paragraph ends with
- * nothing else, the carrier is taken back and the list is empty again, as the original's: at any other opening mark (a display
- * after the piece, whose start would break an empty paragraph into a line: TeX drops it so) and at LaTeX's para/end
- * (CARRY_END_TEX). Where anything stands after it, the paragraph was not empty in the original either, and the carrier stays
- * with the points: 2608.29558v2's and 2608.29782v1's `\delete{…}`, a macro that sets nothing between a display and the text after
- * it, has both. In the marked compile's head only where the marking writes an \axtpmd (compile/live.ts originalFiles): every other
- * paper's bytes as before. After LAYOUT_TEX, whose \axt@pmc and \axt@pm it wraps; without LaTeX's para/end (before 2021-06) it
- * is \axtpma. One line. What TeX cannot give back: a paper's macro that takes the list's last penalty off (\unpenalty) takes the
- * sentinel, so where it sets nothing else and ends its paragraph, that paragraph is a line of nothing (the native cases)
+ * point in a carrier, `\hbox{<point>\penalty10939}\penalty10939`: a box of nothing (no width, height or depth: no line moves by
+ * it). The penalty inside it is the carrier's identity, which nothing outside a finished box reaches; the one after it keeps
+ * the set of legal breaks the original's (a penalty past 10000, where TeX never breaks, so that the glue after it is no place
+ * to break either, as the paragraph's first glue is none) and is read by \lastpenalty, which takes nothing off. Before the
+ * carrier a probe: a \space, which an \ignorespaces in force skips, and which is else set as glue and taken off at once;
+ * \ignorespaces is issued again after the carrier only where one was in force. While the list ends with the carrier (\axt@ifcy:
+ * its outer penalty last; or, where a paper's macro took that penalty off, its box last, taken with \lastbox and known by the
+ * penalty inside it, read through \unhcopy in a scratch box, and set back as it was, its outer penalty with it) the piece has
+ * set nothing, and its closing mark and the opening mark of a carried piece after it put their points in the carrier too.
+ * Where the paragraph ends with nothing else, the carrier is taken back and the list is as empty as the original's: at any
+ * other opening mark of ours (a display after the piece, whose start would break an empty paragraph into a line) and at
+ * LaTeX's para/end (CARRY_END_TEX). Where anything stands after it, the paragraph was not empty in the original either, and
+ * the carrier stays with its points: 2608.29558v2's and 2608.29782v1's `\delete{…}`, a macro that sets nothing between a
+ * display and the text after it, has both. A box is read only while a carrier is pending in the paragraph and no box was made,
+ * raised, lowered or unpacked from a register since it: \lastbox sets the box it takes to no shift, so that a raised box of
+ * the paper's could not be set back as it was. \everyhbox and \everyvbox say a box was made; \raise, \lower, \unhbox and
+ * \unhcopy (and expl3's copies of them, \tex_raise:D, …) say so before they act, \unhbox of a void box (LaTeX's \leavevmode)
+ * not. A box of the paper's read so (appended from a register by \box or \copy, which have no shift) is set back as it was.
+ * In the marked compile's head only where the marking writes an \axtpmd (compile/live.ts originalFiles): every other paper's
+ * bytes as before. After LAYOUT_TEX, whose \axt@pmc and \axt@pm it wraps; without LaTeX's para/end (before 2021-06) it is
+ * \axtpma. One line
  */
-export const CARRY_TEX = String.raw`\makeatletter\newbox\axt@cb\def\axtpmd{\ifx\protect\@typeset@protect\expandafter\axt@pmy\else\expandafter\@gobble\fi}\protected\def\axt@pmy{\ifaxt@off\expandafter\@gobble\else\expandafter\axt@pmyb\fi}\def\axt@pmyb{\ifhmode\expandafter\axt@pmyc\else\expandafter\axt@pmv\fi}\def\axt@pmyc{\ifnum\lastnodetype=-1 \expandafter\axt@cnew\else\expandafter\axt@pmyd\fi}\def\axt@pmyd{\axt@ifcy\axt@cadd\axt@pmc@plain}\def\axt@cnew#1{\space\axt@cdo{\hbox{\axt@mark{#1}}\penalty10939\relax}}\def\axt@cadd#1{\space\axt@cdo{\unpenalty\setbox\axt@cb\lastbox\hbox{\unhbox\axt@cb\axt@mark{#1}}\penalty10939\relax}}\def\axt@cback#1{\space\axt@cdo{\unpenalty\setbox\axt@cb\lastbox}}\protected\def\axt@cdo#1{\ifnum\lastnodetype=11 \unskip#1\else#1\expandafter\ignorespaces\fi}\let\axt@pmc@plain\axt@pmc\def\axt@pmc{\axt@ifcy\axt@cback\axt@pmc@plain}\let\axt@pm@plain\axt@pm\protected\def\axt@pm{\axt@ifcy\axt@cadd\axt@pm@plain}\ifdefined\AddToHook\ifdefined\IndentBox\else\let\axt@pmy\axt@pma\fi\else\let\axt@pmy\axt@pma\fi\AtBeginDocument{\ifdefined\pdfstringdefDisableCommands\pdfstringdefDisableCommands{\let\axtpmd\@gobble}\fi}\ifcsname l_text_case_exclude_arg_tl\endcsname\expandafter\g@addto@macro\csname l_text_case_exclude_arg_tl\endcsname{\axtpmd\axt@pmy}\fi\makeatother`
+export const CARRY_TEX = String.raw`\makeatletter\newbox\axt@cb\newbox\axt@cc\newif\ifaxt@cyon\newif\ifaxt@cyb\def\axt@cyhook{\global\axt@cybtrue}\def\axt@cyinstall{\everyhbox\expandafter{\expandafter\axt@cyhook\the\everyhbox}\everyvbox\expandafter{\expandafter\axt@cyhook\the\everyvbox}}\axt@cyinstall\AtBeginDocument{\axt@cyinstall}\newcount\axt@uc\let\axt@raise\raise\protected\def\raise{\axt@cyhook\axt@raise}\let\axt@lower\lower\protected\def\lower{\axt@cyhook\axt@lower}\let\axt@unhbox\unhbox\protected\def\unhbox{\afterassignment\axt@unhbz\global\axt@uc=}\def\axt@unhbz{\ifvoid\axt@uc\else\axt@cyhook\fi\axt@unhbox\axt@uc}\let\axt@unhcopy\unhcopy\protected\def\unhcopy{\afterassignment\axt@unhcz\global\axt@uc=}\def\axt@unhcz{\ifvoid\axt@uc\else\axt@cyhook\fi\axt@unhcopy\axt@uc}\def\axt@cyalias#1#2{\expandafter\ifx\csname#1\endcsname\relax\else\expandafter\let\csname#1\endcsname#2\fi}\axt@cyalias{tex_raise:D}\raise\axt@cyalias{tex_lower:D}\lower\axt@cyalias{tex_unhbox:D}\unhbox\axt@cyalias{tex_unhcopy:D}\unhcopy\def\axtpmd{\ifx\protect\@typeset@protect\expandafter\axt@pmy\else\expandafter\@gobble\fi}\protected\def\axt@pmy{\ifaxt@off\expandafter\@gobble\else\expandafter\axt@pmyb\fi}\def\axt@pmyb{\ifhmode\expandafter\axt@pmyc\else\expandafter\axt@pmv\fi}\def\axt@pmyc{\ifnum\lastnodetype=-1 \expandafter\axt@cnew\else\expandafter\axt@pmyd\fi}\def\axt@pmyd#1{\axt@ifcy{\axt@cadd{#1}}{\axt@pmc@plain{#1}}}\def\axt@ifcy{\ifnum\ifhmode\lastpenalty\else0\fi=10939 \expandafter\@firstoftwo\else\expandafter\axt@ifcyr\fi}\def\axt@ifcyr{\ifnum\ifaxt@cyon\ifaxt@cyb0\else\ifhmode\lastnodetype\else0\fi\fi\else0\fi=1 \expandafter\axt@cyask\else\expandafter\@secondoftwo\fi}\def\axt@cyask#1#2{\space\axt@cyrd{#1}{#2}}\protected\def\axt@cyrd#1#2{\ifnum\lastnodetype=11 \unskip\let\axt@cyig\relax\else\let\axt@cyig\ignorespaces\fi\setbox\axt@cb\lastbox\setbox\axt@cc\hbox{\axt@unhcopy\axt@cb\xdef\axt@cyv{\the\lastpenalty}}\global\axt@cybfalse\box\axt@cb\ifnum\axt@cyv=10939 \penalty10939 \expandafter\@firstoftwo\else\expandafter\@secondoftwo\fi{#1\axt@cyig}{#2\axt@cyig}}\def\axt@cnew#1{\space\axt@cdo{\hbox{\axt@mark{#1}\penalty10939}\penalty10939\global\axt@cyontrue\global\axt@cybfalse\relax}}\def\axt@cadd#1{\space\axt@cdo{\unpenalty\setbox\axt@cb\lastbox\hbox{\axt@unhbox\axt@cb\unpenalty\axt@mark{#1}\penalty10939}\penalty10939\global\axt@cybfalse\relax}}\def\axt@cback{\space\axt@cdo{\unpenalty\setbox\axt@cb\lastbox\global\axt@cyonfalse\relax}}\protected\def\axt@cdo#1{\ifnum\lastnodetype=11 \unskip#1\else#1\expandafter\ignorespaces\fi}\let\axt@pmc@plain\axt@pmc\def\axt@pmc#1{\axt@ifcy{\axt@cback}{\axt@pmc@plain{#1}}}\let\axt@pm@plain\axt@pm\protected\def\axt@pm#1{\axt@ifcy{\axt@cadd{#1}}{\axt@pm@plain{#1}}}\ifdefined\AddToHook\ifdefined\IndentBox\else\let\axt@pmy\axt@pma\fi\else\let\axt@pmy\axt@pma\fi\AtBeginDocument{\ifdefined\pdfstringdefDisableCommands\pdfstringdefDisableCommands{\let\axtpmd\@gobble}\fi}\ifcsname l_text_case_exclude_arg_tl\endcsname\expandafter\g@addto@macro\csname l_text_case_exclude_arg_tl\endcsname{\axtpmd\axt@pmy}\fi\makeatother`
 /**
- * The carrier's end (CARRY_TEX): at LaTeX's para/end, where the list ends with the sentinel, the carrier taken back, so that the
- * paragraph is as empty as the original's and TeX drops it. Before LAYOUT_TEX in the head: para/end is a reversed hook, whose
- * code of the document's top level runs first and in the order it was added, so this runs before every other hook of ours there
- * (POINTS' `qe`, the measures, the code regions), each of which reads an empty list as none. With CARRY_TEX alone; one line
+ * The carrier's end (CARRY_TEX): at LaTeX's para/end, where the list ends with the carrier (\axt@ifcy), the carrier taken back,
+ * so that the paragraph is as empty as the original's and TeX drops it; and no carrier pending after it. Before LAYOUT_TEX in
+ * the head: para/end is a reversed hook, whose code of the document's top level runs first and in the order it was added, so
+ * this runs before every other hook of ours there (POINTS' `qe`, the measures, the code regions), each of which reads an empty
+ * list as none. With CARRY_TEX alone, whose macros it calls; one line
  */
-export const CARRY_END_TEX = String.raw`\makeatletter\def\axt@ifcy{\ifnum\ifhmode\lastpenalty\else0\fi=10939 \expandafter\@firstoftwo\else\expandafter\@secondoftwo\fi}\ifdefined\AddToHook\ifdefined\IndentBox\AddToHook{para/end}{\axt@ifcy{\unpenalty\setbox\axt@cb\lastbox}\relax}\fi\fi\makeatother`
+export const CARRY_END_TEX = String.raw`\makeatletter\ifdefined\AddToHook\ifdefined\IndentBox\AddToHook{para/end}{\axt@ifcy{\unpenalty\setbox\axt@cb\lastbox}{}\global\axt@cyonfalse}\fi\fi\makeatother`
 export const DVI_LAYOUT_TEX = `\\makeatletter\\let\\axt@pdfdo\\axt@destonly\\def\\axt@destonly#1{\\ifnum\\pdfoutput>0 \\axt@pdfdo{#1}\\else\\axt@dvidest{#1}\\fi}${DVI_POINTS_TEX}\\makeatother`
 
 /** a colour piece's name in the log, `c<unit>.<k>` */

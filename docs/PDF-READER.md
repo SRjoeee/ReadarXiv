@@ -9246,13 +9246,17 @@ So no class is left out, and no table of classes is kept.
   before every piece but a display that stands first in the paragraph TeX resumes after a display (white space alone between),
   whatever its class and whether it sets ink, an inline formula's too, and before every piece but a display right after such a
   piece (TeX sets it first where the one before set nothing). On a list that is not empty it is `\axtpma`. On the empty one it
-  sets its point in a carrier, `\hbox{<point>}\penalty10939`: a box of nothing, no width, height or depth, so that no line
-  moves by it, and a sentinel no paper sets, a penalty past 10000 where TeX never breaks (the glue after it no place to break
-  either, as the paragraph's first glue is none), read by `\lastpenalty`, which takes nothing off. Before it a probe, a
-  `\space`: an `\ignorespaces` in force skips it, and it is else set as glue and taken off at once; the carrier's TeX issues
-  `\ignorespaces` again only where one was in force. While the list still ends with the sentinel the piece has set nothing,
-  and its closing mark and the opening mark of a carried piece after it put their points in the carrier too (the box taken
-  off with `\lastbox`, set again with the point in it, the sentinel after it). Where the paragraph ends with nothing else, the
+  sets its point in a carrier, `\hbox{<point>\penalty10939}\penalty10939`: a box of nothing, no width, height or depth, so
+  that no line moves by it. The penalty inside the box is the carrier's identity: nothing outside a finished box reaches it,
+  and inside one it does nothing. The penalty after it keeps the set of legal breaks the original's (past 10000, where TeX
+  never breaks, so that the glue after it is no place to break either, as the paragraph's first glue is none), and is read by
+  `\lastpenalty`, which takes nothing off. Before the carrier a probe, a `\space`: an `\ignorespaces` in force skips it, and it
+  is else set as glue and taken off at once; the carrier's TeX issues `\ignorespaces` again only where one was in force.
+  The list ends with the carrier where its outer penalty is last, or, where a paper's macro took that penalty off
+  (`\unpenalty`), where its box is last: taken with `\lastbox`, known by the penalty inside it (read through `\unhcopy` in a
+  scratch box) and set back as it was, its outer penalty with it. While the list ends with the carrier the piece has set
+  nothing, and its closing mark and the opening mark of a carried piece after it put their points in the carrier too (the box
+  taken off, set again with the point in it). Where the paragraph ends with nothing else, the
   carrier is taken back and the list is as empty as the original's: at any other opening mark of ours (a display after the
   piece, whose start breaks a paragraph that is not empty into a line) and at LaTeX's `para/end` (`\par`, `\@@par` and
   `\endgraf` are all LaTeX's paragraph end, whose `\unskip` runs before the hook). Where anything stands after it, the
@@ -9262,6 +9266,12 @@ So no class is left out, and no table of classes is kept.
   list as none. Both in a paper's head only where the marking writes a carrier (`compile/live.ts` `originalFiles`): every
   other paper's marked TeX as before. `\lastnodetype` after a display, with the carrier and after the take-back reads
   −1, 13 (`\lastpenalty` 10939) and −1 under pdfTeX, XeTeX and LuaTeX alike.
+- **A box is read only where it can be the carrier's**: `\lastbox` sets the box it takes to no shift (TeX §1080), so that a
+  raised box of the paper's, taken to be read, could not be set back as it was. A box is read only while a carrier is pending
+  in the paragraph and no box was made, raised, lowered or unpacked from a register since it: `\everyhbox` and `\everyvbox`
+  say a box was made; `\raise`, `\lower`, `\unhbox` and `\unhcopy` (and expl3's `\tex_raise:D`, `\tex_lower:D`,
+  `\tex_unhbox:D`, `\tex_unhcopy:D`) say so before they act, an `\unhbox` of a void box (LaTeX's `\leavevmode`) not. A box of
+  the paper's read so is one appended from a register by `\box` or `\copy`, which carry no shift: set back exactly.
 - **Why not at the piece's closing mark** (the coordinator's first form: the carrier taken back there where nothing was set):
   the lab's two `\delete{…}` units, a macro that sets nothing between a display and the text after it ("By the mean value
   theorem …", 2608.29558v2; "We give a proof …", 2608.29782v1), would then have no point at all, `followsOf` would still find
@@ -9278,11 +9288,18 @@ So no class is left out, and no table of classes is kept.
   nothing, a whatsit, glue or a penalty, one that reads what stands before it: `\unskip`, `\xspace`, an italic correction,
   `\@ifnextchar[`, `\lastbox`, `\lastskip`, `\unpenalty`), every carried point standing; ending its paragraph (the same,
   `\par` inside, a citation, a reference: where it sets nothing the paragraph dropped as the original's, its carrier taken
-  back), then a display; and two displays in a row, a display inside a paragraph and one ending it, an environment that skips
-  the spaces after it (subequations, a `\label` after its align), a macro that sets nothing after a display: unchanged.
-- **Limits, as found**: a paper's macro that takes the list's last penalty off (`\unpenalty`) takes the sentinel, so that
-  where it sets nothing else and ends its paragraph that paragraph is a line of nothing (its native case fails so, on
-  purpose). A carried piece before a display the marking leaves without an opening mark (it writes none right after a
+  back), then a display; a paper's macro that takes the last penalty off (`\unpenalty`), one that does so and sets ink,
+  `\unskip\unpenalty\unkern` in a row, `\unpenalty\setbox0\lastbox` (which takes the carrier itself: its point is lost, the
+  paragraph as the original's, the unit read as at the base), a box of the paper's own (`\hbox{}`, `\mbox{}`, `\raisebox`, a
+  register's box raised by `\raise`, a register unpacked whose last box is raised), each ending its paragraph and with text
+  after it; and two displays in a row, a display inside a paragraph and one ending it, an environment that skips the spaces
+  after it (subequations, a `\label` after its align), a macro that sets nothing after a display: unchanged.
+- **What the chain does where a line moves in the marked compile** (phase 3's fact, a paper of our own with a paper's macro
+  that takes the last penalty off, a display in its argument, first after a display; at the previous form): the final
+  marked compile set 18 of 33 text items a line lower, and no check of the chain saw it: `align/align.ts` pairs the marked
+  compile's glyphs with arXiv's by their key sequences, a line of no glyph moves none, the page maps by index, and every
+  unit's lines are arXiv's. A moved line in the marked compile is so never seen downstream: the native cases are its gate.
+- **Limits, as found**: a carried piece before a display the marking leaves without an opening mark (it writes none right after a
   paper's macro that may read what follows it) keeps `\axtpma`'s mark: nothing would take its carrier back before that display
   (the native case 'then a display' found it: a line before the display); where such a piece sets ink it has no point, as
   before. A piece behind a command that puts nothing on the list (`\noindent`) is not first by the source's order: as before.
