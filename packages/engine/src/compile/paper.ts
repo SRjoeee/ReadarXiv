@@ -59,6 +59,8 @@ import { DRIVER_OUTPUT_MARK, driverLostInk, driverOutputGiven, driverOutputTrunc
 import {
   completeCalled,
   inkSamples,
+  carrySamples,
+  readDisplayProbe,
   LAYOUT_CLASSES,
   mergeUses,
   probeSamples,
@@ -546,6 +548,8 @@ export async function markedOfPaper(
     return {
       switches: readMarkProbe(log, probeSamples(paper.units, paper.project?.complete)),
       inkless,
+      // (the pieces the display probe set with no display: the only ones a carrier stands before, marks.ts carrySamples)
+      quiet: readDisplayProbe(log, carrySamples(paper.units)),
       texts,
       decorated,
       names: readNameProbe(log),
@@ -566,7 +570,7 @@ export async function markedOfPaper(
       if (isMemoryError(e)) throw e
     }
   }
-  const { switches, texts, decorated, names, lineskip, apart, blamed, log: probeLog } = probe
+  const { switches, texts, decorated, names, lineskip, apart, quiet, blamed, log: probeLog } = probe
   /** the macros the marking gives no point: the probe's, then, where the loop's first pass asked where the document uses them,
    *  those answers taken (`asks`: mergeUses) */
   let inkless = probe.inkless
@@ -592,6 +596,7 @@ export async function markedOfPaper(
       inkless,
       complete,
       apart,
+      quiet,
       ...(unmarked.size ? { unmarked } : {}),
       ...(named ? {} : { names: false }),
       ...(reduced ? { reduced: true } : {}),
