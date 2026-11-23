@@ -244,10 +244,10 @@ export function groupStyleOf(
     faceSet,
   )
   // ---- the unit's own face, its base, each attribute by its own scopes: its own text's (the letters in no group and no switch's
-  // run); where it has none, the text's outside every scope that sets that attribute by its definition (its weight outside
-  // `\textbf{…}` and a `\bfseries` run, its slant outside `\textit{…}`, a `\emph` run's slant read turned back: TeX's own state
-  // around those runs, which their glyphs show for what they do not set); where none, all its text's (the 2026-10-19 reading of
-  // the released reader's measuredStyle, read off TeX's glyphs: no count of a translation's characters decides it)
+  // run; with none, its marks there); where it has none, the text's outside every scope that sets that attribute by its
+  // definition (its weight outside `\textbf{…}` and a `\bfseries` run, its slant outside `\textit{…}`, a `\emph` run's slant read
+  // turned back: TeX's own state around those runs, which their glyphs show for what they do not set); where none, all its
+  // text's. Read off TeX's glyphs alone: no count of a translation's characters decides it (docs/PDF-READER.md §18.111)
   const baseOf = (sets: readonly boolean[], val: (g: StyleGlyph, s: number) => string | undefined) => {
     const direct = new Map<number, string>(),
       outside = new Map<number, string>(),
