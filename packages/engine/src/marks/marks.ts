@@ -686,8 +686,8 @@ export function carrySamples(units: readonly Unit[]): string[] {
         open = true
         continue
       }
-      // (a nested note too, by its source as written: carrySource. Devin on #669: passed over, its \\axtpma set no point on the
-      // empty list TeX resumes the paragraph with, and the paragraph read past its source)
+      // (a nested note too, by its source as written: carrySource; an \\axtpma before it, on the empty list TeX resumes the
+      // paragraph with, sets no point)
       const src = carrySource(p)
       if (!open || src === undefined || !classOf(p) || seen.has(src)) continue
       seen.add(src)
