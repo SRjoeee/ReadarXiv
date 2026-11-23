@@ -88,9 +88,8 @@ describe('the marks our marked TeX defines (marks/marks.ts MARK_CS and UNMARK_CS
     expect(MARK_CS.filter((n) => n in NOT_MARKS)).toEqual([])
     expect([...MARK_CS, ...Object.keys(NOT_MARKS)].sort()).toEqual([...ours].sort())
   })
-  it("are LAYOUT_TEX's, CARRY_TEX's and NAMES_TEX's, each of UNMARK_CS", () => {
-    // (CARRY_TEX defines the carrier's own marks, \\axtpmdpa and \\axtpmdna, which a heading's copy may hold as any other)
-    const ours = defined(LAYOUT_TEX, CARRY_TEX, NAMES_TEX)
+  it("are LAYOUT_TEX's and NAMES_TEX's, each of UNMARK_CS", () => {
+    const ours = defined(LAYOUT_TEX, NAMES_TEX)
     expect(UNMARK_CS.filter((n) => !ours.has(n))).toEqual([])
   })
 
@@ -149,13 +148,13 @@ describe('the marks our marked TeX defines (marks/marks.ts MARK_CS and UNMARK_CS
       sty = dec(out.get('refs.sty'))
     // (each kind written: a front unit's robust lead, a start mark's, a call, a babel name's marks in the style)
     for (const s of [
-      '\\protect\\axthpkpa{',
-      '\\protect\\axtpma',
+      '\\protect\\axthpk{',
+      '\\protect\\axtpma{',
       '\\leavevmode\\axtmark{',
       '\\axtcall{',
-      '\\axtpmd',
-      '\\axttgpg{',
-      '\\axtcolourc{',
+      '\\axtpmd{',
+      '\\axttg{',
+      '\\axtcolour{',
     ])
       expect(main).toContain(s)
     expect(sty).toContain('\\axtnma{abstract}Abstract\\axtnmb{abstract}')
@@ -174,25 +173,17 @@ describe('the marks our marked TeX defines (marks/marks.ts MARK_CS and UNMARK_CS
     }
     const called = headOf(paperOf(MAIN))
     const carried = new Set([...called.mp.text.matchAll(/\\(axt[a-z]+)(?![a-z@])/g)].map((m) => m[1]))
-    expect([...carried].sort()).toEqual([
-      'axtcall',
-      'axtend',
-      'axthmarkhe',
-      'axthmarkhs',
-      'axthpkpa',
-      'axtmark',
-      'axtpmapa',
-    ])
+    expect([...carried].sort()).toEqual(['axtcall', 'axtend', 'axthmark', 'axthpk', 'axtmark', 'axtpma'])
     expect(called.head.startsWith(called.mp.marks)).toBe(true)
     expect(called.mp.marks).toContain(CALL_TEX)
     // (the marked preamble is written before the display probe answers: no carrier in it, nor its TeX in the probe's head)
     expect(called.mp.marks).not.toContain(CARRY_TEX)
     expect(called.mp.marks).not.toContain(CARRY_END_TEX)
-    expect(MARK_CS.filter((n) => !defined(called.head).has(n))).toEqual(['axtpmdna', 'axtpmdpa'])
+    expect(MARK_CS.filter((n) => !defined(called.head).has(n))).toEqual(['axtpmd'])
     // (no author's call anywhere: no CALL_TEX in the marked compile, none in the probe, the probe's bytes as they were)
     const single = headOf(paperOf(MAIN.replace(' \\and Bob Ray', '')))
     expect(single.mp.text).not.toContain('\\axtcall')
     expect(single.head).not.toContain(CALL_TEX)
-    expect(MARK_CS.filter((n) => !defined(single.head).has(n))).toEqual(['axtpmdna', 'axtpmdpa', 'axtcall'])
+    expect(MARK_CS.filter((n) => !defined(single.head).has(n))).toEqual(['axtpmd', 'axtcall'])
   })
 })

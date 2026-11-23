@@ -276,13 +276,13 @@ describe('where the asks stand (askPlan), and the marked files that carry them (
     const main = dec(f.get('main.tex')),
       more = dec(f.get('more.tex'))
     // (before the piece and the point that opens it, so that no mark is parted from its piece)
-    expect(main).toMatch(/Words \\axtask\{0\}\{\\kw\{\}\}\\axtpmapa\{\d+\.\d+\}\\kw\{\}/)
-    expect(main).toMatch(/\\axtask\{1\}\{\\nada\{\}\}\\axtpmapa\{\d+\.\d+\}\\nada\{\}/)
+    expect(main).toMatch(/Words \\axtask\{0\}\{\\kw\{\}\}\\axtpma\{p\d+\.\d+a\}\\kw\{\}/)
+    expect(main).toMatch(/\\axtask\{1\}\{\\nada\{\}\}\\axtpma\{p\d+\.\d+a\}\\nada\{\}/)
     expect(main.split('\n').find((l) => l.startsWith('\\section'))).not.toContain('axtask')
     expect(main.split('\n').find((l) => l.startsWith('\\begin{figure}'))).not.toContain('axtask')
     expect(main).not.toMatch(/axtask\{\d+\}\{\\(?:begingroup|endgroup)/)
     // (a sample's first use in another file asked there; its later uses not)
-    expect(more).toMatch(/\\axtask\{2\}\{\\capt\{\}\}\\axtpmapa\{\d+\.\d+\}\\capt\{\}/)
+    expect(more).toMatch(/\\axtask\{2\}\{\\capt\{\}\}\\axtpma\{p\d+\.\d+a\}\\capt\{\}/)
     expect(main.match(/\\axtask\{\d/g)).toHaveLength(2)
   })
   it('writes ASK_TEX in the head, before the paper’s first byte: every line of the paper where it was, the bytes as without where none is asked', () => {
@@ -337,7 +337,7 @@ describe('where the asks stand (askPlan), and the marked files that carry them (
     expect(plan.asked).toEqual(['\\kw{}'])
     const main = dec(files(p, plan).get('main.tex'))
     expect(main).not.toMatch(/urldef[^\n]*axtask/)
-    expect(main).toMatch(/C \\axtask\{0\}\{\\kw\{\}\}\\axtpmapa\{\d+\.\d+\}\\kw\{\} d\./)
+    expect(main).toMatch(/C \\axtask\{0\}\{\\kw\{\}\}\\axtpma\{p\d+\.\d+a\}\\kw\{\} d\./)
   })
 })
 

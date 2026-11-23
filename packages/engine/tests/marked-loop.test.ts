@@ -509,12 +509,10 @@ describe("the probe's raw log, returned beside the answers read from it", () => 
     }
   })
 })
-/** what the engine asked and made at d5673d033 (this file's cases run there, before Q1), each request and result as digests; the
- *  requests' taken again where round C's gated marks (PDF-READER §18.111) moved every marked request's main file, every result
- *  as it was */
+/** what the engine asked and made at d5673d033 (this file's cases run there, before Q1), each request and result as digests */
 const GOLDEN_AT_BASE: Record<string, unknown> = {
   'a paper: the probe, every pass, the final pass': {
-    asked: ['124b7b404a8f604a', 'fd62a6ec6ed64edb', '7bea5ffeb4eec2a8'],
+    asked: ['5f1f37c8ef8db092', 'f8bf604f842ce399', '66ed7620758abc60'],
     made: {
       pdf: 'ba5627208b38c012',
       log: 'ee997e55c8c8064b',
@@ -529,7 +527,7 @@ const GOLDEN_AT_BASE: Record<string, unknown> = {
     },
   },
   'its bibliography shipped': {
-    asked: ['124b7b404a8f604a', '3c5b6fd1e121ebaf', '7bea5ffeb4eec2a8'],
+    asked: ['5f1f37c8ef8db092', '358a3dbc66252b16', '66ed7620758abc60'],
     made: {
       pdf: 'ba5627208b38c012',
       log: 'ee997e55c8c8064b',
@@ -544,7 +542,7 @@ const GOLDEN_AT_BASE: Record<string, unknown> = {
     },
   },
   'a mark printed: the guard compiles it again, the final pass over the second': {
-    asked: ['124b7b404a8f604a', 'fd62a6ec6ed64edb', '3660cf5412f54372', '6047347171673ede'],
+    asked: ['5f1f37c8ef8db092', 'f8bf604f842ce399', '0e5ab5bc8bf03338', '6964c9cca387d228'],
     made: {
       pdf: 'bca44c74041aebf9',
       log: 'ee997e55c8c8064b',
@@ -564,7 +562,7 @@ const GOLDEN_AT_BASE: Record<string, unknown> = {
     },
   },
   'under latex: the driver output read': {
-    asked: ['a59ed8396975bf48', 'd45998ac28ccd8b1', '2f98fa43e7310e39'],
+    asked: ['fd71859814c2da41', '34d155818ab5093c', 'f01a8461e905ede9'],
     made: {
       pdf: 'ba5627208b38c012',
       log: 'ee997e55c8c8064b',
@@ -579,7 +577,7 @@ const GOLDEN_AT_BASE: Record<string, unknown> = {
     },
   },
   'no final pass asked': {
-    asked: ['124b7b404a8f604a', '70e52c8d9aa47db7'],
+    asked: ['5f1f37c8ef8db092', '73c0c9ecd4d448b1'],
     made: {
       pdf: 'ba5627208b38c012',
       log: 'ee997e55c8c8064b',
@@ -745,9 +743,9 @@ describe("F15 (`asks`): the loop's pass 1 asks the paper's macros where the docu
     const off = await q1(asking(), [draftOf({ 'main.aux': AUX }), fullOf({ 'main.aux': AUX })], { asks: true })
     const on = await q1(asking(), [draftOf({ 'main.aux': AUX }, askedLog), fullOf({ 'main.aux': AUX })], { asks: true })
     // (the probe gave no answer: a point opens it in pass 1; TeX set nothing where it is used: none in pass 2)
-    expect(main(on.asked[1])).toMatch(/\\axtpmapa\{\d+\.\d+\}\\nada\{\}/)
-    expect(main(off.asked[2])).toMatch(/\\axtpmapa\{\d+\.\d+\}\\nada\{\}/)
-    expect(main(on.asked[2])).not.toMatch(/\\axtpmapa\{\d+\.\d+\}\\nada\{\}/)
+    expect(main(on.asked[1])).toMatch(/\\axtpma\{p\d+\.\d+a\}\\nada\{\}/)
+    expect(main(off.asked[2])).toMatch(/\\axtpma\{p\d+\.\d+a\}\\nada\{\}/)
+    expect(main(on.asked[2])).not.toMatch(/\\axtpma\{p\d+\.\d+a\}\\nada\{\}/)
     expect([...(pdfOf(on.made).options.inkless as Iterable<string>)]).toEqual(['\\nada{}'])
     expect([...(pdfOf(off.made).options.inkless as Iterable<string>)]).toEqual([])
   })

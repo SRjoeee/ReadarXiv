@@ -9434,24 +9434,6 @@ the holes below, each closed at its root.
   `{}` box keeps the space the tokenizer skips after the control word, which a closing mark would keep too; that says nothing
   of the opening mark, which a paper's macro keeps on the same answer. Read so for every class (`\footnotemark of …`, first
   after a display too, where its carrier is all that gives the paragraph its opening point).
-- **A heading's marks survive what a class does with its argument** (`marks/marks.ts` `GATED_MARKS`, `markTex`, `markOf`;
-  lane nopoint's survey). LAYOUT_TEX's marks that stand in a paper's argument were expandable gates: `\ifx\protect
-  \@typeset@protect` the mark's `\protected` inner command, else `\@gobble`, so that nothing of ours went into a file or a running
-  head. LaTeX's `\protected@edef` makes `\protect` another, and a class that stores the argument so before setting it took every
-  mark off: REVTeX 4.0 carries textcase v0.06 (1998), whose `\MakeTextUppercase` is a `\protected@edef` and then `\uppercase`,
-  and sets every `\section`'s title through it (aps.rtx's `\@hangfrom@section`); thmtools' proof takes its optional argument
-  through a `\protected@edef` (thm-patch.sty). Sixteen headings of the three REVTeX 4.0 papers of the 245 and one proof's note:
-  printed, no point, unlocated, their text drawn through ink units. Made robust alone (`\protected`) the mark survives the
-  expansion and not the case change: `\uppercase` turns its name's letters to capitals (`h5s` to `H5S`), a point no reading
-  names. So each such mark is now a `\protected` command whose letters are those of its point's name and whose argument is the
-  name's digits and stops alone (`\axtpmapa{5.2}` sets `p5.2a`, `\axthmarkhs{5}` sets `h5s`, `\axtcolourc{5.2}` the colour
-  `c5.2`): no expansion of the argument it stands in (an `\edef`, `\protected@edef`, a `\write`) runs, drops or changes it, and
-  no case change alters a digit or a stop. The points' names are as they were: nothing that reads B changes. What a pass writes
-  of them into a file (a contents list's entry, a label's title) is set nowhere it is read back: `\@starttoc` and
-  `\@outputpage` turn the marks off, `\axt@unmark` takes them out of a title's copy (its list and its prefilter made of the same
-  table, the carrier's marks among them), pdfstringdef gobbles them, and the layout guard reads them by the same list (MARK_CS).
-  One table, `GATED_MARKS`, makes the writer, the reader, the TeX's definitions, the PDF string's and the case change's lists,
-  the guard's list and the unmark list; the mark probe's marks are its forms too. Every paper's marked TeX moves by it.
 - **Their native cases** (our own content, pdfLaTeX, XeLaTeX, LuaLaTeX and latex, with hyperref and without; every text item
   of the marked original at this round's head against the paper's own unmarked compile, to 0.01 pt): the note alone after a
   title's `\maketitle` in a group, after `\renewcommand{\thefootnote}`, of three forced lines in `{\let\thefootnote\relax…}`,

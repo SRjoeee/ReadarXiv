@@ -127,26 +127,7 @@ function optionsOf(r: Seeded, units: readonly Unit[], text: string): Options {
   }
 }
 
-const MARK_NAME = /\\axtbrname\{([^{}]*)\}/g
-/** a gated mark's point (round C's forms, PDF-READER §18.111: the name's letters in the command, NOW.markOf) */
-const GATED_IN = /\\axt(?:pma|pmm|pmd|pm|hpk|tg|hmark|colour)[a-z]{1,2}\{[\d.]+\}/g
-/** one reading moved since that module, by design: each gated mark a command of its form (round C, PDF-READER §18.111); the
- *  module before is held to everything else with its marks written so */
-const OLD_GATED = /\\(axthmark|axtcolour|axthpk|axtpmm|axtpma|axtpmd|axtpm|axttg)\{([a-z])([\d.]+)([a-z]?)\}/g
-const renamed = (src: string) => src.replace(OLD_GATED, (_all, kind: string, pre: string, mid: string, suf: string) => `\\${kind}${pre}${suf}{${mid}}`)
-const seen = new WeakMap<object, unknown>()
-const renamedAll = <T,>(v: T): T => {
-  if (typeof v === 'string') return renamed(v) as T
-  if (Array.isArray(v)) return v.map(renamedAll) as T
-  if (v && typeof v === 'object') {
-    if (seen.has(v)) return seen.get(v) as T
-    const out: Record<string, unknown> = {}
-    seen.set(v, out)
-    for (const [k, x] of Object.entries(v)) out[k] = renamedAll(x)
-    return out as T
-  }
-  return v
-}
+const MARK_NAME = /\\axt(?:pma|pmm|pm|hpk|tg|hmark|brname|colour)\{([^{}]*)\}/g
 
 /** both modules on one project's units under one set of options: the marking, the marks, what is said of each opening mark */
 function same(units: readonly Unit[], classes: Parameters<typeof NOW.layoutMarking>[1], o: Options, r: Seeded, label: string) {
@@ -156,12 +137,12 @@ function same(units: readonly Unit[], classes: Parameters<typeof NOW.layoutMarki
     expect(a, label).toEqual(b)
     return
   }
-  expect(a.value.units, label).toEqual(renamedAll(b.value.units))
-  expect(units.map((u) => a.value.mark(u)), label).toEqual(units.map((u) => renamedAll(b.value.mark(u))))
-  expect(a.value.units.map((u) => a.value.mark(u)), label).toEqual(b.value.units.map((u) => renamedAll(b.value.mark(u))))
+  expect(a.value.units, label).toEqual(b.value.units)
+  expect(units.map((u) => a.value.mark(u)), label).toEqual(units.map((u) => b.value.mark(u)))
+  expect(a.value.units.map((u) => a.value.mark(u)), label).toEqual(b.value.units.map((u) => b.value.mark(u)))
   // (the destinations set: the marked units' marks, some dropped as a log's duplicates would have them)
   const names = new Set<string>()
-  for (const u of a.value.units) for (const p of u.pieces) if (p.t === 'ph') for (const n of [...[...p.src.matchAll(MARK_NAME)].map((m) => m[1]), ...[...p.src.matchAll(GATED_IN)].map((m) => NOW.markOf(m[0])?.name)]) if (n !== undefined && r.next() < 0.85) names.add(n)
+  for (const u of a.value.units) for (const p of u.pieces) if (p.t === 'ph') for (const m of p.src.matchAll(MARK_NAME)) if (m[1] !== undefined && r.next() < 0.85) names.add(m[1])
   const ink = BEFORE.inkSamples(units)
   const said = ink.flatMap((s): [string, string][] => (r.next() < 0.6 ? [[s, r.pick(['BERT', '', '1,024', 'x', 'ab cd', '.', 'Transformer'])]] : []))
   const texts = r.pick<readonly string[] | ReadonlyMap<string, string> | null>([null, said.flat(), new Map(said)])

@@ -64,7 +64,7 @@ describe('the paper\'s own switch: TeX asked what a mark does before what follow
   it('originalFiles passes `switches` on; without `layout` it changes no byte', () => {
     const p = paperOf('\\documentclass{article}\n\\begin{document}\nA claim \\cite{k}. And \\cite{j} again, see \\ref{t}.\n\\end{document}\n')
     const v1 = decode(originalFiles(p, { lines: true, layout: MARK_CLASSES, switches: { '\\cite': '22220000', '\\ref': '00000000' } }))
-    expect(v1).toContain('A claim \\cite{k}. And \\axtpmapa{0.3}\\cite{j}\\axtpmpb{0.3} again')
+    expect(v1).toContain('A claim \\cite{k}. And \\axtpma{p0.3a}\\cite{j}\\axtpm{p0.3b} again')
     expect(decode(originalFiles(p, { lines: true, layout: MARK_CLASSES, switches: null }))).toBe(decode(originalFiles(p, { lines: true, layout: MARK_CLASSES })))
     expect([...askedCommands(p.units)]).toEqual(['\\cite', '\\ref'])
     const t = paperOf(SOURCES.table)

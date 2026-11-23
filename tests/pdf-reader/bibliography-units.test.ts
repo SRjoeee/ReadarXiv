@@ -73,7 +73,7 @@ describe('a numeric \\bibitem bibliography written in the paper (plain, abbrv, u
     }
     // (the year: its opening and closing marks around it, the full stop the placeholder's)
     const year = bib(p)[1]!.pieces.findIndex(x => x.src === '1994.')
-    expect(tex).toContain(`\\axtpmapa{${id(1)}.${year}}1994.\\axtpmpb{${id(1)}.${year}}`)
+    expect(tex).toContain(`\\axtpma{p${id(1)}.${year}a}1994.\\axtpm{p${id(1)}.${year}b}`)
     // (the label's \\bibitem and its key as the paper wrote them)
     expect(tex).toContain('\\bibitem{bengio1994}\n')
   })

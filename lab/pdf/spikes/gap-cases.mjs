@@ -48,7 +48,7 @@ const OUT = resolve(arg('out') ?? join(tmpdir(), `gap-cases-${process.pid}`))
  *  title on lines of its own: its after-skip) and, once a paragraph begins, the horizontal one (a run-in title's skip) */
 const H = (i, cmd, title) =>
   `\\${cmd}` +
-  String.raw`{\axthmarkhs{${i}}${title}\axthmarkhe{${i}}}\message{^^JAXT-SHOW h${i} v \the\lastskip^^J}\leavevmode\message{^^JAXT-SHOW h${i} h \the\lastskip^^J}`
+  String.raw`{\axthmark{h${i}s}${title}\axthmark{h${i}e}}\message{^^JAXT-SHOW h${i} v \the\lastskip^^J}\leavevmode\message{^^JAXT-SHOW h${i} h \the\lastskip^^J}`
 /** a paragraph unit `i` as layoutMarking marks it, with its line probe */
 const P = (i, text) => String.raw`\axtlines{${i}}\leavevmode\axtmark{${i}s}${text}\axtend{${i}e}` + '\n\n'
 const WORDS = 'we show that the considerably larger model of a results in an experimental setting is'.split(' ')
@@ -122,7 +122,7 @@ const CASES = {
     HEADS,
   ],
   hyperref: [doc('\\documentclass{article}', '\\usepackage[colorlinks]{hyperref}'), HEADS],
-  report: [doc('\\documentclass{report}', '', `${String.raw`\chapter{\axthmarkhs{0}A chapter\axthmarkhe{0}}`}\n${BODY}`), HEADS],
+  report: [doc('\\documentclass{report}', '', `${String.raw`\chapter{\axthmark{h0s}A chapter\axthmark{h0e}}`}\n${BODY}`), HEADS],
   revtex: [doc('\\documentclass[aps,pra]{revtex4-2}', ''), HEADS],
   // (a class whose output routine is its own, REVTeX's ltxgrid: no \\@makecol, its pages bracketed whole, in its two-column and its
   // preprint form)

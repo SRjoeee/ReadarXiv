@@ -1010,7 +1010,7 @@ describe('nothing is inserted inside a call or between a subscript and its opera
     expect(units(p)).toEqual([['para', 'Words of the chapter before it.'], ['heading', 'The End of Training', 0], ['para', 'The first paragraph of the last chapter.']])
     const [u, l] = marked(p)
     expect(u).toContain('\\strangechapter{$\\infty$}{The End of Training}\\label{ch:eot}')
-    expect(l).toContain('\\strangechapter{$\\infty$}{\\axthmarkhs{1}The End of Training\\axthmarkhe{1}}\\label{ch:eot}')
+    expect(l).toContain('\\strangechapter{$\\infty$}{\\axthmark{h1s}The End of Training\\axthmark{h1e}}\\label{ch:eot}')
     // the units around it keep their marks and their line probes
     expect(u).toMatch(/\\axtlines\{0\}\s*\\leavevmode\\axtmark\{0s\}Words/)
     expect(u).toMatch(/\\axtlines\{2\}\\leavevmode\\axtmark\{2s\}The first/)
@@ -1028,9 +1028,9 @@ describe('nothing is inserted inside a call or between a subscript and its opera
     ].join('\n\n'))
     expect(units(p)).toEqual([['heading', 'A Chapter Numbered by Hand', 0], ['para', 'Its first words here.'], ['heading', 'The Long Title of It', 1], ['para', 'Words of the section.'], ['heading', 'Notes on the Method', 1], ['para', 'Words of the notes.']])
     for (const text of marked(p)) {
-      expect(text).toMatch(/\\numbered\{3\}\{\$\\aleph\$\}\{(?:\\axthmarkhs\{0\})?A Chapter/)
-      expect(text).toMatch(/\\strangesection\[short\]\{A\}\[Short\]\{(?:\\axthmarkhs\{2\})?The \{Long\} Title of It(?:\\axthmarkhe\{2\})?\}/)
-      expect(text).toMatch(/\\unnumbered\{X\}\{(?:\\axthmarkhs\{4\})?Notes on the Method/)
+      expect(text).toMatch(/\\numbered\{3\}\{\$\\aleph\$\}\{(?:\\axthmark\{h0s\})?A Chapter/)
+      expect(text).toMatch(/\\strangesection\[short\]\{A\}\[Short\]\{(?:\\axthmark\{h2s\})?The \{Long\} Title of It(?:\\axthmark\{h2e\})?\}/)
+      expect(text).toMatch(/\\unnumbered\{X\}\{(?:\\axthmark\{h4s\})?Notes on the Method/)
     }
   })
 
@@ -1074,9 +1074,9 @@ describe('nothing is inserted inside a call or between a subscript and its opera
     for (const text of marked(p)) {
       for (const call of ['\\strangechapter{7}X', '\\strangechapter{$\\infty$}\\Title', '\\plain{3}Y', '\\lead{Name}Z', '\\sys{Name} words']) expect(text).toContain(call)
       // (the layout compile's head point, \\axthpk, stands before the whole call: none of ours between the call and the token it takes)
-      expect(text.replace(/\\axthpkpa\{[^{}]*\}/g, '')).toContain('\\axtlines{3}\\plain{3}Y')
+      expect(text.replace(/\\axthpk\{[^{}]*\}/g, '')).toContain('\\axtlines{3}\\plain{3}Y')
     }
-    expect(marked(p)[1]).toContain('\\axthpkpa{3.0}\\plain{3}Y')
+    expect(marked(p)[1]).toContain('\\axthpk{p3.0a}\\plain{3}Y')
   })
 
   it('a macro whose last command is an operand of the one before it, which TeX does not run (\\string\\section, \\let\\saved\\section), is read as before', () => {

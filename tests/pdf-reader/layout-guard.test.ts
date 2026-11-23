@@ -153,13 +153,13 @@ describe('marksOutOfPlace and auxUnits: a mark of ours a compile wrote where no 
   it('names a mark in a key, a number, or a command\'s argument that is no text: 2610.21201\'s etoc depth tag', () => {
     expect(marksOutOfPlace('\\@writefile{toc}{\\etoc@depthtag {main\\axtend {2e}}}\n')).toEqual(['2e'])
     expect(marksOutOfPlace('\\etoc@depthtag {appendix\\axtend {109e}}\n')).toEqual(['109e'])
-    expect(marksOutOfPlace('\\newlabel{key\\axtend {5e}}{{1}{3}}\n\\newlabel{k}{{1\\axtpmapa {6.2}}{3}{T}{a}{}}\n')).toEqual(['5e', 'p6.2a'])
+    expect(marksOutOfPlace('\\newlabel{key\\axtend {5e}}{{1}{3}}\n\\newlabel{k}{{1\\axtpma {p6.2a}}{3}{T}{a}{}}\n')).toEqual(['5e', 'p6.2a'])
   })
 
   it('reads the files a compile returned, else its main aux, each mark by its unit; never the log, a frame\'s mark or a page\'s columns', () => {
     const files = new Map([
       ['main.toc', enc('\\etoc@depthtag {main\\axtend {2e}}\n')],
-      ['main.aux', enc('\\@writefile{toc}{\\etoc@depthtag {x\\axtpmapa {218.6}}}\\@writefile{toc}{\\etoc@depthtag {\\axthmarkhs {69}\\axtmark {t185s}\\axtcolourc {5.3}\\axtmark {c2-3}\\axtmark {g1a}}}\n')],
+      ['main.aux', enc('\\@writefile{toc}{\\etoc@depthtag {x\\axtpma {p218.6a}}}\\@writefile{toc}{\\etoc@depthtag {\\axthmark {h69s}\\axtmark {t185s}\\axtcolour {c5.3}\\axtmark {c2-3}\\axtmark {g1a}}}\n')],
       ['main.log', enc('l.12 \\axtend {9e}\n')],
     ])
     expect(auxUnits(answer({ ok: true, files }), 1000, 'main')).toEqual(new Set([2, 218, 69, 185, 5]))
@@ -189,7 +189,7 @@ describe('the preamble as the marked original writes it, read by the mark probe:
     const p = front(), mp = markedPreamble(p)
     if (!mp) throw new Error('no marked preamble')
     expect(p.units.slice(0, 2).map(u => u.kind)).toEqual(['heading', 'author'])
-    expect(mp.text).toContain('\\title{\\axthmarkhs{0}A Title\\axthmarkhe{0}}')
+    expect(mp.text).toContain('\\title{\\axthmark{h0s}A Title\\axthmark{h0e}}')
     expect(mp.text).toContain('\\author{\\leavevmode\\axtmark{1s}Ann Lee\\axtend{1e}}')
     expect(mp.text).not.toContain('\\begin{document}')
     // (the probe over it: the paper's own preamble in its place, the line probes inert, and its lines where `first` says)
@@ -237,7 +237,7 @@ describe('the preamble as the marked original writes it, read by the mark probe:
     // (the first probe over the marked preamble, the second over the paper's own, whose answers are taken)
     expect(has(blamed.asked[0], '\\axtmark{1s}')).toBe(true)
     expect(dec(blamed.asked[1]?.overrides.get('main.tex'))).toBe(dec(probeFiles(p, { marks: true }).get('main.tex')))
-    expect([has(blamed.asked[2], '\\axtmark{1s}'), has(blamed.asked[2], '\\axthmarkhs{0}')]).toEqual([false, true])
+    expect([has(blamed.asked[2], '\\axtmark{1s}'), has(blamed.asked[2], '\\axthmark{h0s}')]).toEqual([false, true])
     // (a probe over the marked preamble that ran through with no error of ours there: its answers, one probe, every unit marked)
     const clean = compiler([{ ok: false, log: `${PROBE_LOG}AXT-END\n` }, ran(PDF, '', 3)])
     expect(await markedOfPaper(p, { final: false, compile: clean.compile, pages: 3 })).toEqual({ pdf: PDF, log: expect.any(String), probeLog: expect.any(String), options: expect.any(Object), ms: expect.any(Object) })
@@ -454,7 +454,7 @@ describe('markedOfPaper: the checks after the marked compile, each remedy, and t
     // (TeX read an author block as a command's argument and raised the error in it: the input line is the block's closing
     // brace, in no unit, and the argument's context shows our start mark before the undefined name)
     const ctx = (place: string, rest: string) => `! Undefined control sequence.\n<argument> ...${place}\n${' '.repeat(place.length + 14)}${rest}\nl.7 }\n\n`
-    const log = `${TEX}${ctx('vmode \\axtmark {1s}\\bfseriesYouqing ', 'Fang\\protect \\axtpmmpa {1.3...')}${END}${out(3)}`
+    const log = `${TEX}${ctx('vmode \\axtmark {1s}\\bfseriesYouqing ', 'Fang\\protect \\axtpmm {p1.3...')}${END}${out(3)}`
     const c = compiler([PROBE, ran(PDF, log.slice(TEX.length, log.indexOf(END))), ran(UNMARKED), ran(PDF1)])
     const made = await markedOfPaper(paperOf(), { compile: c.compile })
     expect(made).toMatchObject({ pdf: PDF1, guard: { extra: 2, unmarked: [1], names: true, failed: ['errors'] } })
@@ -463,12 +463,12 @@ describe('markedOfPaper: the checks after the marked compile, each remedy, and t
 
   it('contextUnits: the mark of ours nearest before the place in the innermost context that holds one; none for the paper\'s own error, a name mark\'s or the input line\'s', () => {
     const ctx = (level: string, place: string, rest: string, line = 'l.7 }') => `! Undefined control sequence.\n${level}${place}\n${' '.repeat(level.length + place.length)}${rest}\n${line}\n\n`
-    const one = ctx('<argument> ', '...vmode \\axtmark {1s}\\bfseriesYouqing ', 'Fang\\protect \\axtpmmpa {1.3...')
+    const one = ctx('<argument> ', '...vmode \\axtmark {1s}\\bfseriesYouqing ', 'Fang\\protect \\axtpmm {p1.3...')
     expect(contextUnits(one, 5)).toEqual(new Set([1]))
     // (a placeholder's pair mark, a cell's; the first after the place where none is before it; one past the paper's units)
-    expect(contextUnits(ctx('<argument> ', '... \\axtpmpb {3.11}, \\authorcr \\bfseriesBin ', ''), 5)).toEqual(new Set([3]))
+    expect(contextUnits(ctx('<argument> ', '... \\axtpm {p3.11b}, \\authorcr \\bfseriesBin ', ''), 5)).toEqual(new Set([3]))
     // (a mark the log cut at the line's end keeps its unit's number; one cut at the line's start, `...pm {p3.11b}`, is no mark)
-    expect(contextUnits(ctx('<argument> ', '...pmpb {3.11}, \\authorcr \\bfseriesBin ', 'Liu\\protect \\axtpmmpa {2.17...'), 5)).toEqual(new Set([2]))
+    expect(contextUnits(ctx('<argument> ', '...pm {p3.11b}, \\authorcr \\bfseriesBin ', 'Liu\\protect \\axtpmm {p2.17...'), 5)).toEqual(new Set([2]))
     expect(contextUnits(ctx('\\@author ->', '\\foo ', '\\leavevmode \\axtmark {t4s}Words'), 5)).toEqual(new Set([4]))
     expect(contextUnits(ctx('<argument> ', '...\\axtmark {9s}\\foo ', ''), 5)).toEqual(new Set())
     // (the paper's own error, as the unmarked original has it; a name mark of ours in its context, the names' remedy; marks on
