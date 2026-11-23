@@ -9618,6 +9618,23 @@ expansion took off (all in this section's last item), and the rest are the holes
   moved more than the 17: amsart's titles and the headings of classes whose case change had renamed their marks gain TeX's
   statement of their alignment and skips (a heading's alignment read `j` now TeX's `c`, its skip after it stated). It is held
   back for a round of its own, its expected set those headings too.
+- **Round 3's native cases and corpus** (E, F, G; our own content, the four engines with hyperref and without, every text item of
+  the marked original against the paper's own unmarked compile, to 0.01 pt): E's forms, 40 compiles, 304 items, none moved, each
+  split confirmed by TeX's paragraph points (a `qe` between the two units' points, none inside either); F's, 88 compiles of 11
+  documents in the author block's fragile contexts (`\author`'s argument, `\and`, a tabular in `\author`, a `\protected@edef` of
+  it, IEEEtran's blocks, llncs, amsart, acmart, a row after `\\`, a formula after `\xspace`), none moved against the line's
+  marking and no error, every new point set once, none lost (acmart under XeLaTeX and LuaLaTeX moves 7 and 4 items of its front by
+  up to 0.43 pt under the line's marking as under this round's: the line's, recorded). Over the lab's 245 papers, the chain from
+  the stored compiles against the line's chain of record: E cuts anew 241 units of 3 papers into 250 (2111.09276v1's `\medbreak`s,
+  5 into 13; 2610.21377v1, 1 into 2; 2610.19159v1's `\trajectoryRole`, whose `\par` after its argument ends 235 units before the
+  colour group that opens the next paragraph, their ends moved with no split), their rows asked again; F gives 14 author units of
+  13 papers their marks' ink between the names (each a mark element with its segments where it had none, every unit drawn or laid
+  as before), no unit's kind moving over the 245; G leaves 1,318 units of 77 papers out of what is asked (84,681 asks to 83,372
+  with E's: 1,198 pictures' texts, 77 authors' and places' units a class prints from a store of its own, 43 others), every one
+  unlaid `unlocated: marks`, no part's member naming a unit no units object holds (0 of 156,236), no unit a reader sees losing its
+  row. Every other unit, part and ownership byte for byte. Not covered by E, counted by lane style-23651 over the same papers: a
+  class's command whose body the paper does not ship (acmart's `\institution`, 6 points of 4 papers), `\\` in centred text (5, by
+  design), a definition that ends a table's cell or row (2609.36054v2, 42 points).
 
 ### 18.112 A member's frame, the closed path a reader sees round its lines, bounds its room (2026-11-23)
 
