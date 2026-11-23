@@ -77,6 +77,15 @@ const isMark = (ch: string): boolean => !/^\s$/u.test(ch) && !isLetterOrDigit(ch
  *  compatibility composed */
 const foldMarks = (ch: string): number[] =>
   isMark(ch) ? [...ch.normalize('NFKC')].map((c) => c.codePointAt(0) as number) : fold(ch)
+/** what a command the group table names no face for (ink.ts groupStyleOf: `other`) sets of the face by its definition
+ *  (latex.ltx's \textup and \upshape the shape, \textmd and \mdseries the series, \textnormal and \normalfont both): a scope of
+ *  the attribute it sets, whose text is no reading of the face around it (2608.19071v1's `\textup{Theorem 1.2.}` in an italic
+ *  theorem: its upright full stops no reading of the theorem's marks' slant) */
+const KERNEL_FACE_SETS: [RegExp, { weight: boolean; slant: boolean }][] = [
+  [/^\\(?:textup|upshape)(?![A-Za-z@])/, { weight: false, slant: true }],
+  [/^\\(?:textmd|mdseries)(?![A-Za-z@])/, { weight: true, slant: false }],
+  [/^\\(?:textnormal|normalfont)(?![A-Za-z@])/, { weight: true, slant: true }],
+]
 /** a group or a switch that turns the slant around it (latex.ltx's \emph, \em): its run is the other slant of the text around it */
 const TOGGLES_SLANT = /^\\(?:emph|em)(?![A-Za-z@])/
 
@@ -163,13 +172,14 @@ export function groupStyleOf(
     for (const p of list) {
       if (p.t === 'span') {
         const names = namesFace(p.style)
+        const kernel = names ? undefined : KERNEL_FACE_SETS.find(([re]) => re.test((p.open ?? '').trimStart()))?.[1]
         const s = open(
           cur,
           p,
           null,
           p.style === 'link' || p.style === 'colour',
           names,
-          names ? faceSets(p.style, p.open) : undefined,
+          names ? faceSets(p.style, p.open) : kernel ? { ...kernel, toggles: false } : undefined,
         )
         walk(p.content, s)
         continue
@@ -386,7 +396,13 @@ export function groupStyleOf(
           return `${c.bold ? 'b' : ''}|${c.italic ? 'i' : ''}`
         }),
     )
-    if (mine === undefined || (mine === around && mine === face.value[0])) continue
+    // (stated also where it is the face around it but not the marks' base: the marks inside it are the group's, not the base's,
+    // 2608.03063v1's `\exfield{Input:}` bold, its colon bold, beside a regular `$\cdots$`)
+    if (
+      mine === undefined ||
+      (mine === around && mine === face.value[0] && (marksFace === undefined || mine === marksFace))
+    )
+      continue
     const gs = [...face.direct[s]!].sort((x, y) => x - y).map((q) => glyphs[q] as StyleGlyph)
     const { upper: _upper, fill: _fill, ...st } = styleOf(gs)
     void [_upper, _fill]
