@@ -56,9 +56,22 @@ function paintedOf(inkA: Doc, o: LocateOptions): Map<number, readonly PaintedFra
 
 // ---- the facts of each located member read off the page for the typesetter (facts-pass.ts)
 function facts(w: Work, owned: Owned): void {
-  const { ins, inkA, m, unitB, roleB, pieceB, pageA, framesA } = w.ix
+  const { ins, inkA, m, unitB, roleB, pieceB, pageA, framesA, paintedA } = w.ix
   const { members, units } = w
-  factsOf({ ins, inkA, m, members, owned, pageA, unitB, roleB, pieceB, units, framed: new Set(framesA.keys()) })
+  factsOf({
+    ins,
+    inkA,
+    m,
+    members,
+    owned,
+    pageA,
+    unitB,
+    roleB,
+    pieceB,
+    units,
+    framed: new Set(framesA.keys()),
+    painted: paintedA,
+  })
 }
 
 /** locate's phases, called in the order they run, which is the contract: each phase's file says what it reads of the record

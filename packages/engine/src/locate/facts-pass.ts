@@ -32,6 +32,7 @@ import {
   tailOf,
 } from './facts.ts'
 import { type ColumnCell, columnBoxes, type FreeWord, innerOf } from './columns.ts'
+import { frameOf, framePieces, type PaintedFrame } from './frames.ts'
 import { ON_BASE } from './geometry.ts'
 import { isInk, r2 } from './lines.ts'
 import { WORD_GAP } from './trails.ts'
@@ -91,6 +92,9 @@ interface FactsInput {
   /** the A pages whose lines' measures are TeX's frame (work.ts framesOnA): a measure there is the block's or its column's
    *  even where a line fills it */
   framed?: ReadonlySet<number>
+  /** each A page's closed painted paths that hold text (work.ts Index.paintedA): a member's frame (frames.ts frameOf), whose
+   *  painted lines stand beside its lines */
+  painted?: ReadonlyMap<number, readonly PaintedFrame[]>
 }
 
 function elsOf(content: readonly Piece[], out = new Map<string, Extract<Piece, { t: 'el' }>>()) {
@@ -115,6 +119,7 @@ interface FactsIndex {
   pieceB: Int32Array
   units: readonly InstrumentUnit[]
   framed: ReadonlySet<number>
+  painted: ReadonlyMap<number, readonly PaintedFrame[]>
   gA: (a: number) => DocGlyph
   /** a page's glyphs that are ink whose baseline is within [lo, hi], each with its global index */
   bandOn: (p: number, lo: number, hi: number) => { x0: number; x1: number; y: number; a: number }[]
@@ -163,6 +168,7 @@ function open({
   pieceB,
   units = ins.units,
   framed = new Set<number>(),
+  painted = new Map(),
 }: FactsInput): FactsIndex {
   const gA = (a: number): DocGlyph => {
     const p = (pageA[a] as number) - 1
@@ -282,6 +288,7 @@ function open({
     pieceB,
     units,
     framed,
+    painted,
     gA,
     bandOn,
     boxes,
@@ -1109,9 +1116,24 @@ function readRoom(fx: FactsIndex, r: MemberReading): void {
     if (unit?.cell && side.wall) mem.room.wall = side.wall
   }
   // (the ink that stays beside its text lines, no member's, facts.ts staysOf: a cell's room is its walls', a figure text's
-  // its figure reading's)
+  // its figure reading's. Its frame's painted lines on each page too (frames.ts, docs/PDF-READER.md §18.108): a frame painted
+  // as one path round its text spans across its lines as a box, never beside them, and a single line was widened over its
+  // border; read by its lines, its sides stand beside them as the rules of a frame TeX set apart do)
   if (!unit?.cell && !unit?.figure) {
-    const stays = staysOf(mem.lines, staysOn, blockOf)
+    const sides = new Map<number, InkBox[]>()
+    const on = (p: number): readonly InkBox[] => {
+      let l = sides.get(p)
+      if (!l) {
+        const f = frameOf(
+          fx.painted.get(p),
+          mem.lines.filter((q) => q[0] === p && !(q[9] & 1)),
+        )
+        l = f ? [...staysOn(p), ...framePieces(f)] : (staysOn(p) as InkBox[])
+        sides.set(p, l)
+      }
+      return l
+    }
+    const stays = staysOf(mem.lines, on, blockOf)
     if (stays) mem.room.stays = stays
   }
   // (a figure text's room as its figure reading tells it (figure-text.ts roomOf, its set's cut): along a level run,

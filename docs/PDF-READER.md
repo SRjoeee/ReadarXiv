@@ -9402,6 +9402,57 @@ unit's own text is not TeX's, and the original is the right drawing).
   the original's, as before); TRANSLATE stays (no unit's content, id or wire moves: the rows production holds are kept);
   LAYOUT and the marks digest stay (no TeX moves; today's layout maker reads no instrument of this engine).
 
+### 18.108 A member's frame, the closed path a reader sees round its lines, bounds its room (2026-11-23)
+
+The owner on production, 2601.06943v2 in Japanese, page 1: the abstract's translation is one line longer than the original's
+and its last line is drawn on the bottom border of the rounded frame the abstract stands in. His words: 「如果有边框或边界，文字
+就不要超出这个空间」 (where there is a frame or a boundary, the text should not run out of that space); fixed at the root or not
+at all.
+
+What failed: the room under a run of a member's lines (`Room.runs`, the borrow's, §18.11) and beside a single line
+(`Room.stays`, the widening's) are read from the page's ink by glyph baselines and painted BOXES (`locate/geometry.ts`
+inkIndex: a box by its top; `locate/facts.ts` staysOf: a box wholly before or after a line on its band). A frame TeX's packages
+paint as ONE path round the text (a tcolorbox's two fills, the frame's colour and its ground over it; `\colorbox`'s fill; a
+stroked or filled node; mdframed's TikZ border) has its box's top over the text and spans across every line, so it is never
+under nor beside it: the abstract's next ink was Figure 1's top, 36.95 under the last baseline, where the frame's border stood
+13.70 under it, and the borrow took 18.92 (36.95 less the separation 18.03); the Japanese text, at 0.95 of its size, set its
+sixteenth line 17.61 under the fifteenth, across the border. A frame of separate rules (`\fbox`, framed, mdframed's default)
+was respected already (its bottom rule's top is the next ink, its side rules stay beside the lines), as a table cell's walls
+are. The reader before the cut-over read the page's pixels for both (`freeFor`, `paperTo`), so a painted border stopped it;
+§18.11's rule of TeX's facts replaced the pixels by the box reading.
+
+The rule (`locate/frames.ts`, `geometry.ts` rooms, `facts-pass.ts` readRoom): a member's FRAME on a page is the innermost closed
+path the page paints (every segment's end met by another's, as a figure text's container, §18.26) that a reader sees, whose
+interior holds the middle of every one of the member's text lines there and whose painted lines touch none of them; none for
+a table's cell (its walls, §18.13) or a figure text (its container). Its painted lines are ink: under a run, the highest of
+them wholly under the run's last line across the run is the run's next ink where it is nearer than the glyph or box the page
+states (a line that rises past the line's foot is a side, beside the run, as a rule TeX set beside a paragraph is), and the
+free depth under the last line (`Room.below`) ends there too; beside a line, its pieces on the line's band stay beside it
+(`Room.stays`). The lay is unchanged: it borrows down to the next ink less TeX's separation and widens a line to what stays
+beside it, so inside a frame whose padding is less than a paragraph's separation nothing is borrowed and the size steps down,
+as in a cell. What TeX would do, the box grown with its text, the overlay cannot: the frame is arXiv's painted ink under the
+translation, and growing it would move every block under it on the page, which the reader never does.
+
+A frame is a path a reader SEES, by the page's own operators and no tolerance: a stroke (painted at an alpha over 0), or a fill
+whose colour is not the colour painted under it, the colour of the last fill before it whose region holds its box's four edge
+middles and covers what is under it (opaque, a colour), the paper's white where none; an image, a shading, a pattern, a fill
+that covers nothing whole or a path whose lines were not kept under it is a colour this reading does not know, and the fill is
+seen. A fill of the colour under it with no stroke (mdframed's white ground on the white page), a path at an alpha of 0, a clip
+(which paints nothing) is no frame. pageInk keeps each fill's colour with its lines (`Shape.colour`, read as PDF.js turns every
+colour space into RGB); locate reads the page's closed paths that hold a glyph before its ink step lets A's raw pages go, and
+keeps only those (`Index.paintedA`).
+
+The rule decides by itself what a small fill beside a heading is: one under the heading's words (a chip its text is set on)
+holds the heading's line, and is its frame (its translation widened to the chip's side at most, its size stepping down where it
+is longer); one beside the heading's word, its interior holding none of its line, is no frame of it (the heading's room as
+before, the chip a box that stays beside the line on its band as any).
+
+Not covered: a box TeX sets with no paint (a minipage: no reader's border; TeX's box ends at its content, and a translation
+borrowing under its last paragraph into blank paper crosses nothing); TeX's text edge inside a box (the widening stops at the
+frame's side, its padding inside it; TeX's measure of the box's paragraph is the marked compile's, a later round's); a frame
+broken across a page (on each page an open path, no interior: left as before, counted); a path past pageInk's budget of a
+page's shape numbers (read by its box, as before).
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server

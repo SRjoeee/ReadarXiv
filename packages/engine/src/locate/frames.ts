@@ -220,23 +220,27 @@ export function frameOf(frames: readonly PaintedFrame[] | undefined, lines: read
   return best
 }
 
-/** the highest of a frame's painted lines under `foot` across x0..x1 (a stroke's half width over it): its border's top there;
- *  -Infinity for none */
+/** the highest of a frame's painted lines wholly under `foot` across x0..x1 (a stroke's half width over it): its border's top
+ *  there. A line that rises past `foot` stands beside the run, not under it (a frame's side, as a rule TeX set beside a paragraph
+ *  is no ink under it: geometry.ts inkIndex reads a box by its top); -Infinity for none */
 export function frameUnder(f: PaintedFrame | null, foot: number, x0: number, x1: number): number {
   if (!f) return Number.NEGATIVE_INFINITY
   const e = f.stroke ? f.hw : 0
   if (f.box[2] < x0 - e || f.box[0] > x1 + e || f.box[1] > foot) return Number.NEGATIVE_INFINITY
   let best = Number.NEGATIVE_INFINITY
   for (let i = 0; i + 3 < f.segs.length; i += 4) {
-    const c = clip(f.segs[i] as number, f.segs[i + 1] as number, f.segs[i + 2] as number, f.segs[i + 3] as number, [
+    const ay = f.segs[i + 1] as number,
+      by = f.segs[i + 3] as number
+    if (Math.max(ay, by) + e >= foot) continue
+    const c = clip(f.segs[i] as number, ay, f.segs[i + 2] as number, by, [
       x0 - e,
       Number.NEGATIVE_INFINITY,
       x1 + e,
-      foot - e,
+      Number.POSITIVE_INFINITY,
     ])
     if (c) best = Math.max(best, Math.max(c[1], c[3]) + e)
   }
-  return Math.min(best, foot)
+  return best
 }
 
 /** a frame's painted lines as boxes (each segment's, a stroke's widened by its half width): what stands beside its lines on their
