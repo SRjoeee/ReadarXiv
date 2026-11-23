@@ -3181,6 +3181,18 @@ export function layoutMarking(
     const lettered = (q: Piece) => q.t === 'text' && /\p{L}/u.test(q.s)
     const firstText = lead ? u.pieces.findIndex(lettered) : -1,
       lastText = lead ? u.pieces.findLastIndex(lettered) : -1
+    // (a piece that sets ink between the texts of a front unit — a name's mark in a unit of several names, `Ann Lee\\inst{1},
+    // Bob Ray` — has a point on each side, so that TeX states where its ink begins and ends between the names' (lane own-2's 15
+    // members `unproven`): not taken for letters of the word before it (`bare`), and its closing mark where only a look ahead of
+    // its own command would keep it off and TeX answered nothing for it (`raw`); every other rule of the marking as for any piece:
+    // none after a command that reads what follows it, the opening point of one after a forced break before the break (and its
+    // closing one after it), TeX's answers. PDF-READER §18.111)
+    const between = (k: number): boolean =>
+      firstText >= 0 && k > firstText && k < lastText && BETWEEN_TEXTS(u.pieces[k]!)
+    const closesBetween = (k: number): boolean => {
+      const src = (u.pieces[k] as PhPiece).src ?? ''
+      return between(k) && !(ENDS_IN_CS.test(src) && !identifierPiece(src)) && !/\s$/.test(src) && !ENDS_ENV.test(src)
+    }
     let last: Piece | null = null,
       gap = false,
       beforePrefix: Piece | null = null,
@@ -3220,29 +3232,6 @@ export function layoutMarking(
       if (verbatim.at(-1) === true) return [piece]
       // (a colour piece: its colour written to the log right after it, inside its group, where its run is set: no node)
       if (colourPieceOf(p)) return [piece, { t: 'ph', src: `\\axtcolour{c${i}.${k}}` }]
-      // (a piece that sets ink between the texts of a front unit — a name's mark in a unit of several names, `Ann Lee\\inst{1},
-      // Bob Ray`: its opening mark and its closing one, robust as the unit's are (\\protect), so that TeX states where its ink
-      // begins and ends between the names' (lane own-2's 15 members `unproven`: no point there, the run's ink no one's). The
-      // opening mark waits for the piece's first glyph, so the word before it keeps its letters' kerns; the closing one stands
-      // before the next name's text, at no break TeX could take. Native cases: PDF-READER §18.111)
-      if (
-        lead &&
-        k > firstText &&
-        k < lastText &&
-        firstText >= 0 &&
-        BETWEEN_TEXTS(p) &&
-        on.has(classOf(p)!) &&
-        !none.has(p.src)
-      ) {
-        const c = classOf(p)!,
-          name = `${c === 'footnote' ? 'n' : 'p'}${i}.${k}`
-        if (c === 'macro') opened.add(p)
-        return [
-          { t: 'ph', src: `${lead}\\${c === 'math' ? 'axtpmm' : 'axtpma'}{${name}a}`, opens: true },
-          piece,
-          { t: 'ph', src: `${lead}\\axtpm{${name}b}` },
-        ]
-      }
       // (a placeholder right after a paper's macro that got its opening mark, past white space alone or none, has its marks where
       // TeX answered that its opening mark there moves nothing, the word before it hyphenated as before: aheadSamples. A complete
       // call's too, which its own answer leaves none there; its closing mark is its own answer's. Not in a front unit, whose marks
@@ -3275,7 +3264,8 @@ export function layoutMarking(
         before?.t === 'text' &&
         WORD_END.test(before.s) &&
         !parted.has(p.src) &&
-        !(BOXY.test(p.src!) && !prefixed)
+        !(BOXY.test(p.src!) && !prefixed) &&
+        !between(k)
       ) {
         bare.add(k)
         return [piece]
@@ -3340,7 +3330,7 @@ export function layoutMarking(
       if (
         said === '1' ||
         !closes ||
-        (looks(p) && !(cls === 'footnote' && said === '0')) ||
+        (looks(p) && !(cls === 'footnote' && said === '0') && !(raw === undefined && closesBetween(k))) ||
         (ENDS_IN_CS.test(p.src ?? '') && !identifierPiece(p.src)) ||
         /\s$/.test(p.src ?? '') ||
         ENDS_ENV.test(p.src ?? '')
@@ -3387,6 +3377,9 @@ export function layoutMarking(
         }
         if (f < head) continue
         out[f] = [{ t: 'ph', src: `${lead}\\axtpma{${cls === 'footnote' ? 'n' : 'p'}${i}.${j}a}` }, ...out[f]!]
+        // (in a front unit, its closing one after it where it stands between the unit's texts: `between`)
+        if (closesBetween(j))
+          out[j] = [q, { t: 'ph', src: `${lead}\\axtpm{${cls === 'footnote' ? 'n' : 'p'}${i}.${j}b}` }]
       }
     }
     // (a closing mark after the punctuation mark its piece's command moves: the text after the piece cut after that mark)
