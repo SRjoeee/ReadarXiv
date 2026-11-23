@@ -8,8 +8,8 @@
 // as a frame of separate rules (\fbox, framed, mdframed's default) is already: the room ends at the frame.
 //
 // SEEN, by the page's own operators, no tolerance: a path that strokes (at an alpha over 0, pageInk's `stroke`), or one whose
-// fill has a colour that is not the colour painted under it at one of its box's four edge middles at least (each read just
-// inside its edge): at each, the last opaque fill painted before it whose region holds that point (an image or a shading there,
+// fill has a colour that is not the colour painted under it at one of its four edge middles at least (its path's own, where
+// its box's middle lines cross it; each read just inside its edge): at each, the last opaque fill painted before it whose region holds that point (an image or a shading there,
 // or a fill of no known colour, is a colour this reading does not know: seen), else the paper's white. A fill of the colour
 // under it with no stroke (an mdframed box's white ground on the white page), a path painted at an alpha of 0 (pageInk's
 // `unseen`), a clip (which paints nothing and is no box) are no frame. A pattern's fill is seen.
@@ -97,7 +97,12 @@ export function framesOnPage(raw: PaintedPage | null | undefined, page: DocPage)
     if (U?.has(b)) {
       frame.seen = false
       frame.why = 'alpha 0'
-    } else if (!sh.stroke && sh.colour !== undefined && !sh.pattern && asUnder(b, box, sh.colour, shapes, U, K, B)) {
+    } else if (
+      !sh.stroke &&
+      sh.colour !== undefined &&
+      !sh.pattern &&
+      asUnder(b, box, sh.segs, sh.colour, shapes, U, K, B)
+    ) {
       frame.seen = false
       frame.why = 'as under'
     }
@@ -111,12 +116,15 @@ export function framesOnPage(raw: PaintedPage | null | undefined, page: DocPage)
  *  right and top edges outside it, and a fill flush with those of a fill of its colour under it read the paper's white there */
 const INSIDE = 1e-3
 
-/** whether a fill of `colour` (box `b`, its box `box`) is of the colour painted under it at each of its box's four edge
- *  middles, each read just inside the edge (INSIDE; colourAt): seen where one of them stands on another colour or on one this
- *  reading does not know */
+/** whether a fill of `colour` (box `b`, its box `box`, its path's segments `segs`) is of the colour painted under it at each of
+ *  its four edge middles, each read just inside the edge (INSIDE; colourAt): seen where one of them stands on another colour or
+ *  on one this reading does not know. Its edges are its path's own: from each of its box's edge middles in along the box's
+ *  middle line to the path's outermost crossing there (a rectangle's, a rounded one's or a circle's the box's edge middle itself;
+ *  a turned rectangle's or a diamond's inside its box, where the box's middle stood on the paper outside it) */
 function asUnder(
   b: number,
   box: readonly [number, number, number, number],
+  segs: ArrayLike<number>,
   colour: number,
   shapes: NonNullable<PaintedPage['shapes']>,
   U: ReadonlySet<number> | undefined,
@@ -125,11 +133,32 @@ function asUnder(
 ): boolean {
   const cx = (box[0] + box[2]) / 2,
     cy = (box[1] + box[3]) / 2
+  // (the outermost of the path's crossings of the line x = cx (`across` 0: its least and greatest y) or y = cy (1: x), each
+  // segment's point there, both ends of one lying along it; null where none crosses. Read one by one: a path holds any number
+  // of segments, past any bound on a call's arguments)
+  const outermost = (across: 0 | 1, at: number): [number, number] | null => {
+    let lo = Number.POSITIVE_INFINITY,
+      hi = Number.NEGATIVE_INFINITY
+    for (let i = 0; i + 3 < segs.length; i += 4) {
+      const a = segs[i + across] as number,
+        c = segs[i + 2 + across] as number,
+        a2 = segs[i + 1 - across] as number,
+        c2 = segs[i + 3 - across] as number
+      if ((a - at) * (c - at) > 0) continue
+      const p = a === c ? Math.min(a2, c2) : a2 + ((at - a) / (c - a)) * (c2 - a2),
+        q = a === c ? Math.max(a2, c2) : p
+      if (p < lo) lo = p
+      if (q > hi) hi = q
+    }
+    return lo <= hi ? [lo, hi] : null
+  }
+  const ys = outermost(0, cx),
+    xs = outermost(1, cy)
   const pts = [
-    [cx, box[1] + INSIDE],
-    [cx, box[3] - INSIDE],
-    [box[0] + INSIDE, cy],
-    [box[2] - INSIDE, cy],
+    [cx, (ys ? ys[0] : box[1]) + INSIDE],
+    [cx, (ys ? ys[1] : box[3]) - INSIDE],
+    [(xs ? xs[0] : box[0]) + INSIDE, cy],
+    [(xs ? xs[1] : box[2]) - INSIDE, cy],
   ] as const
   return pts.every(([x, y]) => colourAt(b, x, y, shapes, U, K, B) === colour)
 }
@@ -244,24 +273,24 @@ export function frameOf(frames: readonly PaintedFrame[] | undefined, lines: read
 }
 
 /** the highest of a frame's painted lines wholly under `foot` across x0..x1 (a stroke's half width over it): its border's top
- *  there. A line that rises past `foot` stands beside the run, not under it (a frame's side, as a rule TeX set beside a paragraph
- *  is no ink under it: geometry.ts inkIndex reads a box by its top); -Infinity for none */
+ *  there, each line read by its part across x0..x1 (a diamond's lower edge rises past the foot beyond the run and stands under it
+ *  across it). A line that rises past `foot` across the run stands beside it, not under it (a frame's side, as a rule TeX set
+ *  beside a paragraph is no ink under it: geometry.ts inkIndex reads a box by its top); -Infinity for none */
 export function frameUnder(f: PaintedFrame | null, foot: number, x0: number, x1: number): number {
   if (!f) return Number.NEGATIVE_INFINITY
   const e = f.stroke ? f.hw : 0
   if (f.box[2] < x0 - e || f.box[0] > x1 + e || f.box[1] > foot) return Number.NEGATIVE_INFINITY
   let best = Number.NEGATIVE_INFINITY
   for (let i = 0; i + 3 < f.segs.length; i += 4) {
-    const ay = f.segs[i + 1] as number,
-      by = f.segs[i + 3] as number
-    if (Math.max(ay, by) + e >= foot) continue
-    const c = clip(f.segs[i] as number, ay, f.segs[i + 2] as number, by, [
+    const c = clip(f.segs[i] as number, f.segs[i + 1] as number, f.segs[i + 2] as number, f.segs[i + 3] as number, [
       x0 - e,
       Number.NEGATIVE_INFINITY,
       x1 + e,
       Number.POSITIVE_INFINITY,
     ])
-    if (c) best = Math.max(best, Math.max(c[1], c[3]) + e)
+    if (!c) continue
+    const top = Math.max(c[1], c[3]) + e
+    if (top < foot) best = Math.max(best, top)
   }
   return best
 }

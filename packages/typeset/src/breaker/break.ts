@@ -1017,10 +1017,36 @@ function breakLines(
             stop = true
             continue
           }
-          line.items.push(items[0]!)
-          line.x += items[0]!.w + (items[0]!.asp ?? 0)
-          if (tokens[i + 1]) setToken(i + 1, { ...tokens[i + 1]!, glue: false })
-          i++
+          // (where what is glued after it opens with a character no line starts with (a comma the marks' base sets apart from
+          // its word, tokens.ts marksRuns: drawn alone at the next line's start), the token's last characters go on with it, as
+          // a token holding both is cut above: back to where a line may begin, its first character on this line at least)
+          const next = tokens[i + 1]
+          const chars = !words && !t0.crop && t0.s && next?.glue && next.s ? graphemesOf(t0.s) : []
+          let k = chars.length
+          if (k > 1) {
+            const both = [...chars, ...graphemesOf(next!.s!)]
+            while (k > 1 && cutBarred(both, k)) k--
+          }
+          if (k < chars.length) {
+            const per = chars.map((c) => (P.measure.w100(c, t0.face as Face) * (t0.sc ?? 1) * relOf(t0) * f) / 100)
+            const head = per.slice(0, k).reduce((a, b) => a + b, 0)
+            line.items.push({ t: headOfCut(t0, { s: chars.slice(0, k).join('') }), w: head, shift: 0, asp: 0 })
+            line.x += head
+            const tail = chars.slice(k).join('')
+            setToken(i, {
+              ...t0,
+              s: tail,
+              w100: P.measure.w100(tail, t0.face as Face) * (t0.sc ?? 1) * relOf(t0),
+              glue: false,
+              asp: false,
+              ...wordsAfter(t0, chars.slice(0, k).join('').length),
+            })
+          } else {
+            line.items.push(items[0]!)
+            line.x += items[0]!.w + (items[0]!.asp ?? 0)
+            if (tokens[i + 1]) setToken(i + 1, { ...tokens[i + 1]!, glue: false })
+            i++
+          }
         }
         advance()
         continue

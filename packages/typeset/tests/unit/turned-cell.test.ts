@@ -285,3 +285,21 @@ describe('a link over what a unit set turned holds, laid in its frame (#673)', (
     expect(p.links.map((l) => l[0])).toEqual([link.box])
   })
 })
+
+describe('a page of frames and flows: the review of round 2 into main (#676)', () => {
+  it('waits once for every character a face lacks, the page’s flows’ and its frames’ alike', () => {
+    // (a level paragraph and a turned cell in one face, nothing of it loaded: the page waits for the characters of both; kept by
+    // the face alone, the frame's text stood for the face and the paragraph's were asked by the next lay, a second wait)
+    const waiting: Metrics = { ...metrics(), ready: () => false }
+    const p = layPage(
+      part([[para]], [{ dir: [0, 1], flows: [[cellInFrame(0)]] }]),
+      rows({ 0: 'Rappel', 9: 'Quelques mots' }),
+      rulesFor('fr'),
+      waiting,
+    )
+    const asked = new Map<string, string>()
+    for (const [face, s] of p.wait.faces) asked.set(face, (asked.get(face) ?? '') + s)
+    const all = [...asked.values()].join('')
+    for (const ch of 'RappelQuelquesmots') expect(all, ch).toContain(ch)
+  })
+})

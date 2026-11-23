@@ -68,7 +68,8 @@ export function linksOnA(w: Work, owned: Owned, o: LocateOptions, held: readonly
         }
       }
       // (one over turned glyphs alone: the held member that owns more than half of their glyph points (each turned glyph's
-      // advance centre on its baseline, white space aside, strictly inside one of its boxes, as pointsOf reads a level glyph's),
+      // advance centre on its baseline, white space aside, strictly inside one of its boxes, as pointsOf reads a level glyph's;
+      // every turned glyph of the page under it counted, a held member's or not, as a level glyph of no owner is),
       // within it the element that does, else its text (its label's where they are more than half): read by its frame later,
       // and its characters the annotation's own)
       let turnedText = ''
@@ -76,12 +77,12 @@ export function linksOnA(w: Work, owned: Owned, o: LocateOptions, held: readonly
       const turnedOn = turnedOwner.get(p + 1)
       if (!pts.length && turnedOn) {
         const inside = (x: number, y: number) => read.boxes.some((b) => x > b[0] && x < b[2] && y > b[1] && y < b[3])
-        const tps = [...turnedOn.keys()]
-          .sort((a, b) => a - b)
-          .filter((j) => /\S/.test(T[j]!.u) && inside((T[j]!.ox + T[j]!.ex) / 2, (T[j]!.oy + T[j]!.ey) / 2))
+        const tps = T.flatMap((t, j) => (/\S/.test(t.u) && inside((t.ox + t.ex) / 2, (t.oy + t.ey) / 2) ? [j] : []))
         const by = new Map<Member, [string | null, number][]>()
         for (const j of tps) {
-          const [mem, piece] = turnedOn.get(j)!
+          const on = turnedOn.get(j)
+          if (!on) continue
+          const [mem, piece] = on
           ;(by.get(mem) ?? by.set(mem, []).get(mem)!).push([piece, j])
         }
         const top = [...by].find(([, l]) => 2 * l.length > tps.length)

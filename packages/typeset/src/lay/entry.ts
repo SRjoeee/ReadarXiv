@@ -341,7 +341,13 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
   const members = [...flat.members]
   for (const { sub, dir } of subs) for (const m of sub.members) members.push(turnedOf(m, dir))
   const rows = [...new Set([...flat.wait.rows, ...subs.flatMap((s) => s.sub.wait.rows)])]
-  const faces = [...flat.wait.faces, ...subs.flatMap((s) => s.sub.wait.faces)]
+  // (each face waited for once, for every character its flows and its frames lack: kept by the face alone, the last list stood
+  // for it and the others' characters were asked by the lay after, a wait each)
+  const faces = new Map<string, Set<string>>()
+  for (const [face, s] of [...flat.wait.faces, ...subs.flatMap((x) => x.sub.wait.faces)]) {
+    const has = faces.get(face) ?? faces.set(face, new Set()).get(face)!
+    for (const ch of s) has.add(ch)
+  }
   // (the page's every piece's ink on the pages its crops are cut from, level and framed alike, on the page: a crop laid in a
   // frame is cut clear of a level piece's ink as of another frame's, and a level one of theirs)
   const cropPages = new Set(
@@ -352,7 +358,7 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
   const inks = cropPages.size ? pageInks(part, cropPages) : []
   return {
     ...flat,
-    wait: { rows, faces: [...new Map(faces.map((x) => [x[0], x])).values()] },
+    wait: { rows, faces: [...faces].map(([face, s]): [string, string] => [face, [...s].join('')]) },
     members: rows.length ? members.map((m) => ({ ...m, state: 'waiting' as const, off: 0, lines: [] })) : members,
     links: [...flat.links.filter((l) => l[2] === undefined || !framed.has(l[2])), ...subs.flatMap((s) => s.links)],
     ...(inks.length ? { inks } : {}),

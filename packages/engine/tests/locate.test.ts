@@ -3468,6 +3468,53 @@ describe('an element’s ink is what TeX set for it', () => {
     expect(elementOf(L, '1').size).toBeUndefined()
     expect(elementOf(L, '1').style?.size).toBe(10.4)
   })
+  // RECORDED, NOT BUILT (Devin on #676; #675's second review counted it: 8 text-drawn elements in sized groups over the lab's
+  // 245 papers, 0 of them at the member's size; it fails until it is): an element whose glyphs TeX set at the member's size
+  // inside a group stated at another states no El.size (stated only apart from the member's), and the typesetter draws it at
+  // the group's
+  it.fails('states the size of an element TeX set at the member’s size inside a group of another size (El.size)', () => {
+    const B = docOf([
+      {
+        lines: [
+          { text: 'see ', x: 72, y: 700 },
+          { text: 'small words ', x: 96, y: 700, size: 8 },
+          { text: 'code', x: 150, y: 700 },
+          { text: ' work', x: 180, y: 700 },
+        ],
+      },
+    ])
+    const content = [
+      text('see '),
+      {
+        t: 'span' as const,
+        id: '1',
+        style: 'other' as const,
+        open: '{\\small ',
+        close: '}',
+        content: [text('small words '), { t: 'el' as const, id: '3', kind: 'macro', src: '\\code' }],
+      },
+      text(' work'),
+    ]
+    const ins = ownedBy(
+      B,
+      [
+        {
+          ...paraOf(content, [['3', { cls: 'umacro' }]]),
+          spans: [['1', { cmd: 'small', style: { role: 'serif', size: 8 } }]],
+        },
+      ],
+      [
+        [
+          [0, T, -1],
+          [0, T, -1],
+          [0, E, 3],
+          [0, T, -1],
+        ],
+      ],
+    )
+    const L = locate(ins, B, align(B, B))
+    expect(elementOf(L, '3').size).toBe(10)
+  })
   it('reads the separation to the next member on the row from the member’s ink end, its element’s box with it (§18.60)', () => {
     // (2609.20976v1 p1, JCAP: "Gautam Bhuyan," then his ORCID icon, an element of his unit (a box), then the next name. The join
     // was read from his glyphs' ink end, the icon left out: the icon's crop travels with the name, so the next one was laid the
