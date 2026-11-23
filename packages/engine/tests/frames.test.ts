@@ -145,3 +145,47 @@ describe('the frames a page paints: seen by its own operators', () => {
     expect(frameOf(frames, [crossed])?.b).toBe(0)
   })
 })
+
+describe('the frames a page paints: the review of round 2 into main (#676)', () => {
+  it('reads a turned rectangle’s fill seen by the paint under its own edges, not its box’s', () => {
+    // (a white rectangle turned 45 degrees, (100, 400) (300, 600) (240, 660) (40, 460), over a blue one round it, (100, 380)
+    // (320, 600) (240, 680) (20, 460), our words inside both. Its box's edge middles stand outside it, on the paper: read there,
+    // the white was the paper's colour, unseen, and the frame the blue one past the white's edge)
+    const white = Float32Array.from([100, 400, 300, 600, 300, 600, 240, 660, 240, 660, 40, 460, 40, 460, 100, 400])
+    const blue = Float32Array.from([100, 380, 320, 600, 320, 600, 240, 680, 240, 680, 20, 460, 20, 460, 100, 380])
+    const pg = docOf([
+      {
+        lines: [{ text: 'held', x: 160, y: 530 }],
+        boxes: [
+          [0, 0, 20, 380, 320, 680],
+          [0, 0, 40, 400, 300, 660],
+        ],
+      },
+    ]).pages[0] as DocPage
+    const base = { stroke: false, fill: true, hw: 0.25, opaque: true }
+    const raw = {
+      shapes: new Map<number, S>([
+        [0, { ...base, segs: blue, colour: 0x1f3a93 }],
+        [1, { ...base, segs: white, colour: 0xffffff }],
+      ]),
+    } satisfies PaintedPage
+    expect(framesOnPage(raw, pg).map((f) => [f.b, f.seen, f.why ?? null])).toEqual([
+      [0, true, null],
+      [1, true, null],
+    ])
+  })
+  it('reads a sloped border under a run by its part across the run: a diamond’s lower edges', () => {
+    // (a stroked diamond, (90, 700) (160, 740) (230, 700) (160, 660), a run from 145 to 175 whose foot is 697.5: each lower edge
+    // has an end at 700, over the foot, but across the run it stands at 660 to 668.7, under it; read by its whole edge, no border
+    // was under the run and its room ran past the diamond)
+    const f = {
+      b: 0,
+      box: [90, 660, 230, 740] as [number, number, number, number],
+      segs: Float32Array.from([90, 700, 160, 740, 160, 740, 230, 700, 230, 700, 160, 660, 160, 660, 90, 700]),
+      stroke: true,
+      hw: 0.25,
+      seen: true,
+    }
+    expect(frameUnder(f, 697.5, 145, 175)).toBeCloseTo(668.96, 1)
+  })
+})
