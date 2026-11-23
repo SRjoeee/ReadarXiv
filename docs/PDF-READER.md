@@ -9427,6 +9427,17 @@ trail's statement alone: a piece is laid where the translation sets it, glued th
 (a class's own marks from its lists, REVTeX's affiliation numbers; a separator), or the piece after the name owns its ink by
 its own points, what stands past it stays the trail it was. No mark of TeX's moves.
 
+**A separator before a row's end** (`trails.ts` runEndOf, the coordinator's word of 2026-11-23 on #670). The run of a name's
+trailing ink ends at the next author's call, the separator after the call being that author's lead (MR 5's label, what stands
+on its start's line). Where the called author starts on another row (llncs's `\and \\`, or a row TeX wrapped there: its first
+glyph's box off the member's last line, the trail's own reading of its line), the separator TeX set after the call stands on
+the row of the name it follows and is no lead of the next: it is the member's run, glued after the name, where it holds no
+letter. A separator of a word (", and") is the ink units' whole, translated and laid after the name in its row's flow, as
+between two names of a row. Left no one's, once the names were translated, 2604.10456v1's row-end commas stood alone past its
+shorter rows. The boxes of a run are bounded as its glyphs are, by the next author's call or any unit's mark after the
+member's end point: an icon the next author's block opens with is that author's. The rule reads authors' call points alone:
+no trail outside the author block moves.
+
 - **Reach**, as measured over the lab's 245 papers from the stored compiles: 100 member placements of 25 papers take their run
   (their trail gone), the rooms and joins of 4 papers' rows with them (an ORCID icon that stood beside the row as ink that stays
   is now a member's), 12 papers' link annotations over a run owned by its piece. The reader's own lay, names on, every row its
@@ -9474,8 +9485,12 @@ ends the first inside the unit with a break placeholder, `\\` of kind `break`, a
 3b): the part states its line (`El.ends`, from the last glyph of the line TeX ended there, the maker's), the bundle `El.brk`,
 and the lay's forced-break rule (§18.77, `unit/breaks.ts`) ends the translation's line there. A unit whose lines stand on two
 pages, a biblatex entry's (§19.10), takes the point TeX set after its first page's line, carried after that page's last glyph,
-where nothing TeX set stands between them. An ink unit that echoes a source unit takes that unit's pieces, as before. The ink
-units that hold such a point change their content, so their ids move and their rows are asked again.
+where nothing TeX set stands between them; and, where arXiv's page ends at that line and our compile's does not, the point
+carried before the next page's line, before its first glyph. An ink unit that echoes another unit (a source unit, or an ink unit
+of the same letters before it) takes that unit's pieces; where its breaks stand in its letters is a part of its echo key, so that
+occurrences whose forced breaks differ are not one echo, and an echo keeps its own breaks' places (its content's break elements
+in their order, `locate/ink.ts`). The ink units that hold such a point change their content, so their ids move and their rows are
+asked again.
 
 - **Reach**, over the lab's 245 papers: 10 ink units of 10 papers hold 26 of TeX's forced breaks inside them (8 notes, an orphan
   paragraph of seven lines, a names block), drawn on TeX's lines; 2608.14893v1's note of six author notes, run together in five

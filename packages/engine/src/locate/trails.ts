@@ -54,26 +54,21 @@ export function claimTrails(w: Work, claims: Claims): void {
   // neighbour's: 1706.03762v7's last name (no call after NeurIPS' last block) drawn at 0.875 beside its ‡, 2608.16117v1's
   // "19104," parting its line's runs, two places at 0.8. Ink holding a letter is text, never a trail: a class's "and" between two
   // names is an ink unit's, translated (the walk ends at it); a member of no author block keeps the glue rule alone.
-  // A separator TeX set after the next author's call before a row's end, that author starting on the next row (llncs's
-  // `Hualuo Liu\inst{2} \and \\ Chunjie Zhang`: \and's comma, then \\, \@centercr's paragraph end, or a forced break,
-  // `kb<n>`), stands on the row of the name it follows and is no lead of the next (its start's line and paragraph are
-  // another's, own/own.ts MR 5): the member's run, glued after it, where it holds no letter; a separator of a word (", and")
-  // is the ink units' whole, translated and laid after the name as between two names of a row. Left no one's, the comma stood
+  // A separator TeX set after the next author's call, the called author starting on another row (llncs's
+  // `Hualuo Liu\inst{2} \and \\ Chunjie Zhang`, or a row TeX wrapped there): it stands on the row of the name it follows, no
+  // lead of the next (whose label is what stands on its start's line, own/own.ts MR 5), and is the member's run, glued after
+  // it, where it holds no letter; a separator of a word (", and") is the ink units' whole, translated and laid after the name in
+  // its row's flow, as between two names of a row. The rows read as the trail reads its line (a glyph's box meeting the last
+  // glyph's across): the called author's first glyph off the member's last line is another row. Left no one's, the comma stood
   // at the original row's end, past the shorter translated row (2604.10456v1, rows 1 and 2)
   const paraEndsB: number[] = []
   ;(ins.tex.paragraphEnds ?? []).forEach((l, p) => {
     for (const g of l) paraEndsB.push((m.offB[p] as number) + g)
   })
   paraEndsB.sort((x, y) => x - y)
-  // (TeX's row ends on B, globally: its paragraph ends and its forced breaks)
-  const rowEndsB = [...paraEndsB]
-  B.pages.forEach((pg, p) => {
-    for (const x of pg.marks?.breaks ?? []) rowEndsB.push((m.offB[p] as number) + x.glyph)
-  })
-  rowEndsB.sort((x, y) => x - y)
   const calledOwn = new Set<string>()
   for (const pg of B.pages) for (const x of pg.points ?? []) if (CALL.test(x.name)) calledOwn.add(x.name.slice(0, -1))
-  const runEndOf = (mem: Member): { at: number; line: boolean; rowEnd?: number } | null => {
+  const runEndOf = (mem: Member): { at: number; line: boolean; start?: number } | null => {
     if (!AUTHOR_KINDS.has(mem.kind)) return null
     const p = (pageB[mem.bLast] as number) - 1
     const o = m.offB[p] as number
@@ -84,8 +79,7 @@ export function claimTrails(w: Work, claims: Claims): void {
     for (let j = k + 1; j < pts.length; j++) {
       const x = pts[j]!
       if (CALL.test(x.name)) {
-        // (the called author's start on this page, else the page's end; TeX's first row end on this page between the call and it)
-        const at = o + x.glyph
+        // (and the called author's start on this page, else the page's end: the glyph before which it begins)
         const own = `${x.name.slice(0, -1)}s`
         let start = o + (B.pages[p]?.glyphs.length ?? 0)
         for (let q = j + 1; q < pts.length; q++)
@@ -93,8 +87,7 @@ export function claimTrails(w: Work, claims: Claims): void {
             start = o + pts[q]!.glyph
             break
           }
-        const rowEnd = rowEndsB.find((e) => e > at && e <= start && pageB[e - 1] === p + 1)
-        return { at, line: false, ...(rowEnd !== undefined ? { rowEnd } : {}) }
+        return { at: o + x.glyph, line: false, start }
       }
       if (UNIT_MARK.test(x.name) || BRACKET.test(x.name)) {
         next = o + x.glyph
@@ -180,11 +173,15 @@ export function claimTrails(w: Work, claims: Claims): void {
       trail.push(a)
       prev = g
     }
-    // (the separator TeX set after the next author's call before the row's end, on the member's last line, holding no letter)
-    if (call >= 0 && run?.rowEnd !== undefined) {
+    // (the separator TeX set after the next author's call, the called author's first glyph on another row: on the member's last
+    // line, holding no letter)
+    const first = run?.start !== undefined && run.start < NB ? (m.bToA[run.start] as number) : -1
+    const offRow =
+      first < 0 || pageA[first] !== pageA[end] || gA(first).top <= last.bottom || gA(first).bottom >= last.top
+    if (call >= 0 && run?.start !== undefined && offRow) {
       const said: number[] = []
       let word = false
-      for (let b = call; b < run.rowEnd && b < NB && (unitB[b] as number) < 0; b++) {
+      for (let b = call; b < run.start && b < NB && (unitB[b] as number) < 0; b++) {
         const a = m.bToA[b] as number
         if (a < 0 || !claims.free(a) || pageA[a] !== pageA[end]) continue
         const g = gA(a)
@@ -255,7 +252,18 @@ function runBoxes(
   }
   const at = pg.boxAt
   const from = (at[g0] as number | undefined) ?? pg.kinds.length
-  const to = g1 + 1 < pg.glyphs.length ? (at[g1 + 1] as number) : pg.kinds.length
+  // (bounded as the glyphs are: before the glyph after the run's last, and before the next author's call or any unit's mark
+  // after the member's end point, which the next author's ink is: an icon its block opens with is its own)
+  let to = g1 + 1 < pg.glyphs.length ? (at[g1 + 1] as number) : pg.kinds.length
+  const k = pg.points.findIndex((x) => x.name === `${mem.unit}e`)
+  if (k >= 0)
+    for (let j = k + 1; j < pg.points.length; j++) {
+      const x = pg.points[j]!
+      if (CALL.test(x.name) || UNIT_MARK.test(x.name) || BRACKET.test(x.name)) {
+        to = Math.min(to, x.box)
+        break
+      }
+    }
   const pageOfLast = pageA[m.bToA[mem.bLast] as number] as number
   const out: [number, number, number, number][] = []
   for (let x = from; x < to; x++) {

@@ -446,8 +446,13 @@ export function inkOf(o: InkInput): {
       if (w === `u${u.id}.p`) (first !== null ? x.ph : x.text).push(global(p, g))
       else if (w === `u${u.id}`) x.text.push(global(p, g))
     }
-    // (each forced break the maker states, the last glyph of the line TeX ended at it: the line the facts pass states it ends)
-    if (u.glyphs.breaks?.length) x.breaks = new Map(u.glyphs.breaks.map(([k, [p, g]]) => [String(k), global(p, g)]))
+    // (each forced break the maker states, the last glyph of the line TeX ended at it, its content's break elements in their order,
+    // an echo's the unit it echoes's: the line the facts pass states each ends; an echo's key holds where its breaks stand, so
+    // the two hold as many)
+    const anchors = u.glyphs.breaks ?? []
+    const breakIds = anchors.length ? breaksOf(content) : []
+    if (anchors.length && breakIds.length === anchors.length)
+      x.breaks = new Map(anchors.map(([p, g], q) => [breakIds[q]!, global(p, g)]))
     // (each element its own kept run's glyphs, the maker's, so that each placeholder is drawn by its own run: were the first
     // given them all, every run would be drawn at its place and none at the others')
     if (first !== null) {
@@ -1296,6 +1301,14 @@ function flatOf(content: readonly Piece[], out: TodayPiece[] = []): TodayPiece[]
       flatOf(p.content, out)
       if (p.close !== undefined) out.push({ t: 'close', src: latin1View(p.close) })
     }
+  }
+  return out
+}
+/** a content's forced breaks' element ids, depth first (kind `break`) */
+function breaksOf(content: readonly Piece[], out: string[] = []): string[] {
+  for (const p of content) {
+    if (p.t === 'el' && p.kind === 'break') out.push(p.id)
+    else if (p.t === 'span') breaksOf(p.content, out)
   }
   return out
 }

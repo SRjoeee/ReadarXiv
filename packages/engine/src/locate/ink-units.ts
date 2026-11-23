@@ -222,8 +222,9 @@ export interface TodayInkUnit {
     ph: [number, number][]
     runs?: [number, [number, number][]][]
     label?: [number, number][]
-    /** each forced break's placeholder by its index among the pieces, and the last glyph of the line TeX ended at it (rule 3b) */
-    breaks?: [number, [number, number]][]
+    /** the last glyph ([page, g]) of each line TeX ended at a forced break inside it, in order (rule 3b): its break elements'
+     *  in its content's order, an echo's too (locate/ink.ts) */
+    breaks?: [number, number][]
   }
   rows: InkRows
 }
@@ -913,7 +914,15 @@ function echoKey(u: TodayUnit | undefined): string | null {
         .join(' '),
     ),
   )
-  return s.length < 4 ? null : `${s}#${u.pieces.filter((p) => p.t === 'ph' && statedClassOf(p) !== null).length}`
+  // (and where each of its forced breaks stands in its letters, as an ink unit's key states its own: rule 3b)
+  const at: number[] = []
+  let n = 0
+  for (const p of u.pieces)
+    if (p.t === 'text') n += spellOf(utf8(p.s ?? '')).length
+    else if (p.t === 'ph' && p.kind === 'break') at.push(n)
+  return s.length < 4
+    ? null
+    : `${s}#${u.pieces.filter((p) => p.t === 'ph' && statedClassOf(p) !== null).length}${at.length ? `#${at.join(',')}` : ''}`
 }
 const ECHO_ORDER: Readonly<Record<string, number>> = { heading: 0, caption: 1 }
 
@@ -1200,25 +1209,37 @@ export function inkUnitsOf(
       closeLink()
       while (open.length) pieces.push({ t: 'close', id: open.pop(), src: '}' })
     }
-    const forced: [number, [number, number]][] = []
+    const forced: [number, number][] = []
+    // (where each break stands in the unit's letters: a part of its echo key, so that occurrences whose breaks differ are not one)
+    const breakAt: number[] = []
     lines.forEach((l, li) => {
       // (CHANGED, rule 3b: a line TeX ended at a forced break, its point `kb<n>` after that line's last glyph and before this one's
       // first (B's, carried onto A): a break placeholder there, as a source unit's `\\`, each point one, so that the part states
       // the break and the lay ends the translation's line there (unit/breaks.ts); no kept run goes on over it. The lines' places
       // tell no break: a wrap before a long word ends a line as short. A unit over a page's break, a biblatex entry's (rule 1), has
-      // TeX's point after its first page's line carried after that page's last glyph: there, after the line with nothing TeX set
-      // between them)
+      // TeX's point carried where its partner glyph stands: after its first page's line, after that page's last glyph (our
+      // compile's page end the same), or before the next page's line, before that line's first glyph (arXiv's page ending there and
+      // our compile's not): there, nothing TeX set between the point and the line)
       const prev = li > 0 ? lines[li - 1]! : null
       if (prev) {
         const end = Math.max(...prev.words.flatMap((w) => w.gs))
         const lo = Math.max(...prev.gs),
-          hi = prev.page === l.page ? Math.min(...l.gs) : Number.POSITIVE_INFINITY
-        const G0 = pages[prev.page - 1]?.glyphs ?? []
-        for (const e of pages[prev.page - 1]?.breaks ?? []) {
-          if (e.glyph <= lo || e.glyph > hi) continue
-          if (prev.page !== l.page && G0.slice(lo + 1, e.glyph).some((g) => /\S/u.test(g.u ?? ''))) continue
+          hi = Math.min(...l.gs)
+        const inked = (p: number, a: number, b: number) =>
+          (pages[p - 1]?.glyphs ?? []).slice(a, b).some((g) => /\S/u.test(g.u ?? ''))
+        const at =
+          prev.page === l.page
+            ? (pages[l.page - 1]?.breaks ?? []).filter((e) => e.glyph > lo && e.glyph <= hi)
+            : [
+                ...(pages[prev.page - 1]?.breaks ?? []).filter(
+                  (e) => e.glyph > lo && !inked(prev.page, lo + 1, e.glyph),
+                ),
+                ...(pages[l.page - 1]?.breaks ?? []).filter((e) => e.glyph <= hi && !inked(l.page, e.glyph, hi)),
+              ]
+        for (let q = 0; q < at.length; q++) {
           flushText()
-          forced.push([pieces.length, [prev.page, end]])
+          breakAt.push(spellOf(plain).length)
+          forced.push([prev.page, end])
           pieces.push({ t: 'ph', src: '\\\\', kind: 'break' })
           for (const p of phs) p.open = false
         }
@@ -1333,7 +1354,7 @@ export function inkUnitsOf(
       own: TodayPiece[] = pieces,
       kept: Ph[] = phs
     const spell = spellOf(plain),
-      key = `${spell}#${phs.length}`
+      key = `${spell}#${phs.length}${breakAt.length ? `#${breakAt.join(',')}` : ''}`
     const e = units ? echoOf.get(key) : undefined
     const before = e === undefined && spell.length >= 4 ? inkEchoOf.get(key) : undefined
     if (e !== undefined || before !== undefined) {
@@ -1362,7 +1383,7 @@ export function inkUnitsOf(
         ph: kept.flatMap((p) => p.gs),
         runs: kept.map((p): [number, [number, number][]] => [p.k, p.gs]),
         ...(labelled.length ? { label: labelled } : {}),
-        ...(forced.length && echo === null ? { breaks: forced } : {}),
+        ...(forced.length ? { breaks: forced } : {}),
       },
       rows: rowsOf(id, INK_KIND[cls as keyof typeof INK_KIND], cls, lines, kept, own.length, pages),
     })
