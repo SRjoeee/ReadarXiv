@@ -9957,7 +9957,9 @@ The rule now, one reading of TeX's glyphs:
   member's for an element of several sizes, 59 units' content moved in 5 papers).
 - **The typesetter applies what is stated and reads nothing more**: a translated letter is drawn in what the groups and switches
   around it set over the letters' base, a mark in what they set over the marks' (`Placed.markFace`: a marks' style stack beside
-  the style stack, the same groups, switches and colour runs; a run of marks a part of its own, glued to its word; a symbol
+  the style stack, the same groups, switches and colour runs; a run of marks a part of its own, glued to its word, and where
+  an emergency break lays that word alone on a line, the word's last characters go on with a mark no line starts with, as a
+  token holding both is cut, never the mark alone at the next line's start (`breaker/break.ts`; the review of #676); a symbol
   drawn as text a mark): an author line's separators regular between bold names, a parenthesis inside `\textbf{…}` outside its
   `\textit{…}` upright (2609.19644v1), a bracket in a `\multicolumn` or a bare group regular; the base is the part's style (`breaker/tokens.ts`; the count
   of the row's characters under the groups goes for weight and slant, `baseOf` keeps it for small capitals alone, which the
