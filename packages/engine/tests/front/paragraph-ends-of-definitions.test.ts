@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { openPaper } from '../../src/compile/live.ts'
+import { openPaper, originalFiles } from '../../src/compile/live.ts'
+import { LAYOUT_CLASSES } from '../../src/marks/marks.ts'
 
 // More forms of a definition that ends the paragraph TeX is setting (beside paragraph-macros.test.ts): TeX's vertical commands
 // at the body's top level (TeX inserts \par before each in horizontal mode), LaTeX's \medbreak family inside a body, a body that
@@ -59,6 +60,26 @@ describe('a definition that ends the paragraph in other forms', () => {
       ).units.map((u) => (u.pieces as Piece[]).map((p) => p.s ?? '').join(''))
     expect(textsOf('\\newcommand{\\pitem}[1]{\\par\\noindent #1\\par\\vspace{2pt}}')).toEqual(
       textsOf('\\newcommand{\\pitem}[1]{#1}'),
+    )
+  })
+  it('an author block’s own text is read as before: a block separator of the paper’s that skips vertically (jmlr2e’s \\AND)', () => {
+    // (2608.08872v1: jmlr2e.sty's `\\def\\AND{\\@endauthor\\rm\\hss \\vskip \\interauthorskip \\@startauthor}`, a block separator
+    // the reader already reads as one (FRONT_AND); read as a paragraph's end inside the block, its walk numbered the block's
+    // units otherwise and the marked TeX moved, no unit's text with it)
+    const markedOf = (and: string) => {
+      const sty = `\\def\\maketitle{\\par\\begingroup\\def\\addr{\\small\\it}\\def\\name{\\normalsize\\bf}\\def\\email#1{\\texttt{#1}}\\def\\AND{${and}}\\@author\\endgroup}\n`
+      const main =
+        '\\documentclass{article}\n\\usepackage{jm}\n\\author{\\name Ann Lee\\email a@b.c \\\\\n\t\\addr First Place of Ours\\\\\n\t\\AND\n\t\\name Bob Ray  \\email b@c.d \\\\\n\t\\addr Second Place of Ours\n}\n\\begin{document}\n\t\\title{A Title of Ours}\n\t\\maketitle\n\tWords of ours.\n\\end{document}\n'
+      const paper = openPaper(
+        new Map([
+          ['jm.sty', enc(sty)],
+          ['main.tex', enc(main)],
+        ]),
+      )
+      return new TextDecoder('latin1').decode(originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES }).get('main.tex'))
+    }
+    expect(markedOf('\\@endauthor\\rm\\hss \\vskip \\interauthorskip \\@startauthor')).toEqual(
+      markedOf('\\@endauthor\\rm\\hss \\@startauthor'),
     )
   })
   it('a \\par inside a box’s own text ends that box’s paragraph alone: one unit', () => {
