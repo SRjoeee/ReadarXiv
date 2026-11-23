@@ -9436,7 +9436,9 @@ letter. A separator of a word (", and") is the ink units' whole, translated and 
 between two names of a row. Left no one's, once the names were translated, 2604.10456v1's row-end commas stood alone past its
 shorter rows. The boxes of a run are bounded as its glyphs are, by the next author's call or any unit's mark after the
 member's end point: an icon the next author's block opens with is that author's. The rule reads authors' call points alone:
-no trail outside the author block moves.
+no trail outside the author block moves. Over the lab's 245 papers it moves 6 row-end separators of 3 papers (2610.21491v1's three
+rows TeX wrapped after llncs's comma, 2610.19860v1's one, 1409.0575v3's two "·"), the rows' rooms with them, and 2604.10456v1's
+two commas; nothing else.
 
 - **Reach**, as measured over the lab's 245 papers from the stored compiles: 100 member placements of 25 papers take their run
   (their trail gone), the rooms and joins of 4 papers' rows with them (an ORCID icon that stood beside the row as ink that stays
@@ -9495,8 +9497,9 @@ its break pieces stand where the ink unit's breaks do; else its breaks stay unpl
 asked again.
 
 - **Reach**, over the lab's 245 papers: 10 ink units of 10 papers hold 26 of TeX's forced breaks inside them (8 notes, an orphan
-  paragraph of seven lines, a names block), drawn on TeX's lines; 2608.14893v1's note of six author notes, run together in five
-  lines, now six. A point that ends an ink unit's last line (the next line another unit's) sets no break inside it.
+  paragraph of seven lines, a names block), drawn on TeX's lines, and one ink unit that echoes its source note places its break
+  by its own anchor (2608.02055v1); 2608.14893v1's note of six author notes, run together in five lines, now six. A point that
+  ends an ink unit's last line (the next line another unit's) sets no break inside it.
 
 ## 19. The engine's contract
 
