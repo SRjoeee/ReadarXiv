@@ -9527,7 +9527,9 @@ The rule now, one reading of TeX's glyphs:
   instrument (`marksOf`) states its Style in `SpanAt.style` (its own glyphs' face and its size) and keeps its span's style name,
   so the unit's content, its id and its wire do not move. Two sizes alike to the hundredth of a point are one (the page's grid).
 - **The unit's base** (`locate/group-style.ts`, on A): its weight and slant are its own text's (the letters in no group and in
-  no switch's run); where every letter is a group's, each attribute is read outside the scopes that set it by their
+  no switch's run; its marks are no reading of their own, as the released reader reads them: 2602.23285v2's author line, whose
+  commas between bold names are TeX's regular, read off them drew the names regular where a translation drops their groups);
+  where every letter is a group's, each attribute is read outside the scopes that set it by their
   definition, its weight outside `\textbf{…}` and a `\bfseries` run, its slant outside `\textit{…}`, a `\emph` or `\em` run's
   slant turned back (TeX's state around those runs, which their glyphs show for what they do not set: `\textbf{RQ1:}
   \textit{…}` regular upright, a unit wholly in `\emph` upright); where none, all its text's. `geometry.ts` states that base

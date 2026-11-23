@@ -58,12 +58,6 @@ interface GroupStyle {
  *  paper's macro was read to make names each (marks/faces.ts, `sans-bold`) */
 const SETS_WEIGHT = /(?:^|-)(?:bold|medium)(?:-|$)/
 const SETS_SLANT = /(?:^|-)(?:italic|upright)(?:-|$)/
-/** a letter or a digit, as facts.ts fold keeps one */
-const LETTER_OR_DIGIT = /[\p{L}\p{N}]/u
-/** a character's code points as the second alignment reads them: its letters and digits folded (facts.ts fold), a mark of
- *  punctuation as itself (Unicode's P, compatibility composed) */
-const foldMarks = (ch: string): number[] =>
-  /^\p{P}$/u.test(ch) ? [...ch.normalize('NFKC')].map((c) => c.codePointAt(0) as number) : fold(ch)
 /** a group or a switch that turns the slant around it (latex.ltx's \emph, \em): its run is the other slant of the text around it */
 const TOGGLES_SLANT = /^\\(?:emph|em)(?![A-Za-z@])/
 
@@ -109,12 +103,9 @@ export function groupStyleOf(
   const weightSet: boolean[] = [false]
   const slantSet: boolean[] = [false]
   const turned: boolean[] = [false]
-  // ---- the source's letters, each with its scope; and its letters and marks, each with its scope and whether it is a mark
+  // ---- the source's letters, each with its scope
   const P: number[] = []
   const scopeOf: number[] = []
-  const PM: number[] = []
-  const scopeOfM: number[] = []
-  const markM: boolean[] = []
   const open = (
     cur: number,
     s: Span | null,
@@ -166,18 +157,11 @@ export function groupStyleOf(
       }
       const shown = p.t === 'text' ? p.s : p.t === 'el' ? textOf(p) : undefined
       if (shown === undefined) continue
-      for (const ch of shown) {
+      for (const ch of shown)
         for (const c of fold(ch)) {
           P.push(c)
           scopeOf.push(cur)
         }
-        // (with its marks too, a second reading's: the base's where its own text has no letter, `\textbf{While}:`)
-        for (const c of foldMarks(ch)) {
-          PM.push(c)
-          scopeOfM.push(cur)
-          markM.push(!LETTER_OR_DIGIT.test(String.fromCodePoint(c)))
-        }
-      }
     }
   }
   walk(content, 0)
@@ -244,10 +228,12 @@ export function groupStyleOf(
     faceSet,
   )
   // ---- the unit's own face, its base, each attribute by its own scopes: its own text's (the letters in no group and no switch's
-  // run; with none, its marks there); where it has none, the text's outside every scope that sets that attribute by its
-  // definition (its weight outside `\textbf{…}` and a `\bfseries` run, its slant outside `\textit{…}`, a `\emph` run's slant read
-  // turned back: TeX's own state around those runs, which their glyphs show for what they do not set); where none, all its
-  // text's. Read off TeX's glyphs alone: no count of a translation's characters decides it (docs/PDF-READER.md §18.111)
+  // run; its marks are no reading of their own, docs/PDF-READER.md §18.111: an author line's commas between its bold names are
+  // TeX's regular, and a base read off them drew the names regular where a translation drops their groups); where it has none,
+  // the text's outside every scope that sets that attribute by its definition (its weight outside `\textbf{…}` and a `\bfseries`
+  // run, its slant outside `\textit{…}`, a `\emph` run's slant read turned back: TeX's own state around those runs, which their
+  // glyphs show for what they do not set); where none, all its text's. Read off TeX's glyphs alone: no count of a
+  // translation's characters decides it (docs/PDF-READER.md §18.111)
   const baseOf = (sets: readonly boolean[], val: (g: StyleGlyph, s: number) => string | undefined) => {
     const direct = new Map<number, string>(),
       outside = new Map<number, string>(),
@@ -261,42 +247,8 @@ export function groupStyleOf(
       if (!sets[s]) outside.set(q, v)
       if (s === 0) direct.set(q, v)
     }
-    // (no letter of its own text: its own marks' glyphs, punctuation TeX set outside every group (`\textbf{While}:`, the colon
-    // the text's own, regular), read by a second alignment of the letters and the marks alike)
-    if (!direct.size) {
-      const marks = ownMarks()
-      for (const [q, s] of marks) {
-        const v = val(glyphs[q] as StyleGlyph, s)
-        if (v !== undefined) direct.set(q, v)
-      }
-    }
     const from = direct.size ? direct : outside.size ? outside : every
     return mostOf([...from].sort((x, y) => x[0] - y[0]).map(([, v]) => v))
-  }
-  /** the glyphs of the marks of the unit's own scope (punctuation in no group and no switch's run), by a second alignment of the
-   *  source's letters and marks against the glyphs' (read once, where a base reading asks it) */
-  let marksOwn: [number, number][] | null = null
-  const ownMarks = (): [number, number][] => {
-    if (marksOwn) return marksOwn
-    marksOwn = []
-    if (!markM.some((m, i) => m && scopeOfM[i] === 0)) return marksOwn
-    const GM: number[] = []
-    const gOfM: number[] = []
-    glyphs.forEach((g, q) => {
-      for (const c of foldMarks(g.u)) {
-        GM.push(c)
-        gOfM.push(q)
-      }
-    })
-    const pm =
-      PM.length && GM.length
-        ? lcs(Int32Array.from(PM), Int32Array.from(GM), WORK_PER_LETTER * (PM.length + GM.length)).pairs
-        : []
-    for (let k = 0; k < pm.length; k += 2) {
-      const i = pm[k] as number
-      if (markM[i] && scopeOfM[i] === 0) marksOwn.push([gOfM[pm[k + 1] as number] as number, 0])
-    }
-    return marksOwn
   }
   const weightOf = (g: StyleGlyph) => {
     const c = classifyFont(g.base)
