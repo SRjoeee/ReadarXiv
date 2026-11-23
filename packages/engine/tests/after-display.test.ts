@@ -22,6 +22,7 @@ import {
   carrySamples,
   classNamesTex,
   DVI_LAYOUT_TEX,
+  displayPiece,
   followsOf,
   LAYOUT_TEX,
   LAYOUT_TEX_REDUCED,
@@ -321,6 +322,88 @@ describe('a piece first in the paragraph TeX resumes after a display: its openin
       { t: 'text', s: ' holds.' },
     ])
     expect([opening(u, 1), opening(u, 3)]).toEqual(['\\axtpma{p0.1a}', '\\axtpmm{p0.3a}'])
+  })
+})
+
+describe('a footnote first in the paragraph TeX resumes after a display: its opening mark', () => {
+  // (Devin's finding on #669: a whole `\\footnote{…}` or `\\footnotetext{…}` whose text is one unit is a NESTED piece
+  // (latex-front.ts: the note's text a unit of its own, rendered inside its paragraph's), which carrySamples passes over: its
+  // \\axtpma on that empty list sets no point, the display's opening point finds no mark of its unit's next ones (followsOf
+  // `blocked`), and the paragraph is `text past its source`, at the base before the carrier as at the line's head)
+  const doc = (body: string) =>
+    openPaper(
+      new Map([
+        [
+          'main.tex',
+          new TextEncoder().encode(`\\documentclass{article}\n\\begin{document}\n${body}\n\\end{document}\n`),
+        ],
+      ]),
+    ).project.units
+  /** each nested piece's opening mark as the marking writes it, TeX's display probe answering that every piece it was asked of
+   *  opens no display */
+  const nestedOpenings = (body: string) => {
+    const units = doc(body)
+    const out = layoutMarking(units, MARK_CLASSES, { lines: false, quiet: carrySamples(units) }).units
+    return units.flatMap((u, i) =>
+      u.pieces.flatMap((p, k) =>
+        p.t === 'nested'
+          ? [
+              (out[i]!.pieces as { t: string; src?: string }[])
+                .map((q) => (q.t === 'ph' ? (q.src ?? '') : ''))
+                .find((s) => s.endsWith(`{n${i}.${k}a}`))
+                ?.replace(/\{.*$/, ''),
+            ]
+          : [],
+      ),
+    )
+  }
+
+  it('a whole \\footnote{…} first after a display has the carrier, as every other piece there', () => {
+    expect(
+      nestedOpenings(
+        'We define words here\n\\[ a = b \\]\n\\footnote{One sentence of a note.} shows it, and more words.',
+      ),
+    ).toEqual(['\\axtpmd'])
+  })
+
+  it('a \\footnotetext{…} first after a display has the carrier too', () => {
+    expect(
+      nestedOpenings(
+        'We define words here\n\\[ a = b \\]\n\\footnotetext{A text of no mark.} shows it, and more words.',
+      ),
+    ).toEqual(['\\axtpmd'])
+  })
+
+  it('a note of two paragraphs is no nested piece: the paragraph ends before it, the text after it a unit of its own', () => {
+    const units = doc(
+      'We define words here\n\\[ a = b \\]\n\\footnote{A first paragraph.\n\nA second one.} shows it, and more words.',
+    )
+    expect(units.flatMap((u) => u.pieces.filter((p) => p.t === 'nested'))).toEqual([])
+    const after = units.find((u) => u.pieces.some((p) => p.t === 'text' && p.s.includes('shows it')))!
+    expect(after.pieces.some((p) => displayPiece(p))).toBe(false)
+  })
+
+  it('a \\footnotemark first after a display has the carrier where TeX answered the skipped space the only difference before a word', () => {
+    // (TeX's mark probe in the pinned image: \\footnotemark's code before a word 4, the space after a control word that
+    // TeX's tokenizer skips kept by a closing mark and its opening mark's box the call's own; before a comma '0', carried)
+    const switches = { '\\footnotemark': '00000040' }
+    const marks = (s: string) => {
+      const u = unit('para', [
+        { t: 'text', s: 'We define ' },
+        { t: 'ph', src: '\\[ a = b \\]' },
+        { t: 'text', s: '\n' },
+        { t: 'ph', src: '\\footnotemark' },
+        { t: 'text', s },
+      ])
+      return (
+        layoutMarking([u] as unknown as SourceUnit[], MARK_CLASSES, { lines: false, switches, quiet: quietOf(u) })
+          .units[0]!.pieces as { t: string; src?: string }[]
+      )
+        .map((p) => (p.t === 'ph' ? (p.src ?? '') : ''))
+        .find((x) => x.endsWith('{n0.3a}'))
+        ?.replace(/\{.*$/, '')
+    }
+    expect([marks(', and words.'), marks(' of words.')]).toEqual(['\\axtpmd', '\\axtpmd'])
   })
 })
 
