@@ -513,6 +513,8 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
       page: p,
       paper: {
         faces,
+        // (each member's style its letters' base outside its groups, Part.paper.bases)
+        bases: 1,
         ...(ins.tex.lineskip ? { lineskip: ins.tex.lineskip } : {}),
         ...(babel.length ? { names: babel } : {}),
         ...(named ?? {}),

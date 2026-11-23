@@ -24,7 +24,7 @@ import { type CjkFaces, faceOf, ownSmallCapsOf, type Roles, rolesFor } from '../
 import { classifyFont, familyOfFonts } from '../breaker/font-names.ts'
 import { measure } from '../breaker/measure.ts'
 import { noStart } from '../breaker/script.ts'
-import { capsBaseOf, type TokenRules, type TStyle, tokens as tokensOf } from '../breaker/tokens.ts'
+import { baseOf, type TokenRules, type TStyle, tokens as tokensOf } from '../breaker/tokens.ts'
 import type { Tokens } from '../fit/types.ts'
 import type { Metrics } from '../types.ts'
 import { breakMaps, type Breaks, clsOf, factsOf, statedBreaks, type V0Piece } from '../unit/breaks.ts'
@@ -125,7 +125,14 @@ export function rowPieces(m: Placed, content: readonly OutPiece[]): V0Piece[] {
 
 /** the paper's designs and the roles its faces are set in, from its fonts (Part.paper.faces: each with the glyphs it sets):
  *  the families and designs of its fonts tallied by the glyphs each sets, the most set of each family, and familyOfFonts */
-export type PaperReading = { designs: { serif: string; sans: string; mono: string }; roles: Roles; family: string }
+/** a paper's designs, roles and family as its part's faces read; `bases` whether its part states each member's base
+ *  (Part.paper.bases; a part made before states none) */
+export type PaperReading = {
+  designs: { serif: string; sans: string; mono: string }
+  roles: Roles
+  family: string
+  bases?: boolean
+}
 export function paperOf(fonts: readonly (readonly [string, number])[], to: string, cjkFaces: CjkFaces): PaperReading {
   const tally = new Map<string, number>()
   for (const [name, n] of fonts) {
@@ -600,7 +607,7 @@ export function readMember(i: ReadInput): ReadOut {
     { get: (k: number) => res.get(k) as never },
     {
       // (no measured base: the base is the original's style as the part states it, TeX's glyphs' weight and slant of the unit's
-      // own text (Style; its small capitals by capsBaseOf over its groups))
+      // own text (Style; its small capitals by baseOf over its groups))
       measured: { st: null, fill: m.style.fill ?? 0, pieces: null },
       ...(m.style.sc !== undefined ? { capsRatio: m.style.sc } : {}),
       orig: { size: m.style.size },
@@ -657,6 +664,8 @@ export function readMember(i: ReadInput): ReadOut {
     spacedSource: false,
     to: i.to,
     base: given,
+    // (a part made before states no base of its letters: its groups read out of its glyphs' style by baseOf's count, as before)
+    ...(paper.bases ? {} : { statedBase: false }),
     // (the face TeX set the unit's marks in outside every group, where it is not its letters': a translated mark there is drawn
     // in it, Placed.markFace)
     ...(m.markFace ? { markBase: { bold: !!m.markFace.bold, italic: !!m.markFace.slant } } : {}),
@@ -683,7 +692,10 @@ export function readMember(i: ReadInput): ReadOut {
       ownRow && !i.lead
         ? // (its face the relabel's as a lead's is (leadOf over the unit's base, tokens.ts): the label's weight, slant and fill on
           // the unit's base style)
-          { text: lab.label!.drawn!, st: { ...capsBaseOf(unit, given), ...(leadOf(lab.label)?.parts[0]?.st ?? {}) } }
+          {
+            text: lab.label!.drawn!,
+            st: { ...baseOf(unit, given, !!paper.bases), ...(leadOf(lab.label)?.parts[0]?.st ?? {}) },
+          }
         : null,
     lead: !!i.lead,
     cjkSize,

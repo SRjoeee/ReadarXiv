@@ -65,6 +65,11 @@ const TERMINAL = /^\p{Terminal_Punctuation}+$/u
  *  content; past it the letters not reached are not matched, and their groups state nothing */
 const WORK_PER_LETTER = 256
 
+/** a face declaration (latex.ltx's \em, \itshape, \slshape, \upshape, \bfseries, \mdseries, \scshape, \normalfont and the
+ *  families', LaTeX 2.09's \bf, \it, \sl, \sc, \tt, \rm, \sf): the rest of its group is set in what it sets, which the
+ *  typesetter applies where it stands, so that no group's own face is read off the text after it */
+const FACE_DECLARATION =
+  /^\\(?:em|itshape|slshape|upshape|bfseries|mdseries|scshape|normalfont|ttfamily|rmfamily|sffamily|bf|it|sl|sc|tt|rm|sf)(?![A-Za-z@])/
 /** the face most of glyphs are set in, a math font's glyphs aside where others are there */
 const faceOf = (gs: readonly StyleGlyph[]): string | undefined => {
   const text = gs.filter((g) => classifyFont(g.base).fam !== 'math')
@@ -94,14 +99,16 @@ export function groupFacts(
   const elOf: number[] = []
   /** each character as the source writes it (its case: a faked small capital's reading) */
   const srcCh: string[] = []
+  /** whether a character stands after a face declaration in its own group's text (`{\small \em aside}`: its italic the \em's) */
+  const switched: boolean[] = []
   let els = 0
   const P: number[] = []
   const ranges = new Map<Span, [number, number]>()
   const parent = new Map<Span, Span | null>()
   const depth = new Map<Span, number>()
   {
-    type Frame = { span: Span | null; list: readonly Piece[]; k: number; named: boolean }
-    const stack: Frame[] = [{ span: null, list: content, k: 0, named: false }]
+    type Frame = { span: Span | null; list: readonly Piece[]; k: number; named: boolean; sw: boolean }
+    const stack: Frame[] = [{ span: null, list: content, k: 0, named: false, sw: false }]
     while (stack.length) {
       const top = stack[stack.length - 1] as Frame
       if (top.k >= top.list.length) {
@@ -114,13 +121,15 @@ export function groupFacts(
         ranges.set(p, [group.length, group.length])
         parent.set(p, top.span)
         depth.set(p, stack.length)
-        stack.push({ span: p, list: p.content, k: 0, named: top.named || p.style !== 'other' })
+        stack.push({ span: p, list: p.content, k: 0, named: top.named || p.style !== 'other', sw: false })
         continue
       }
+      if (p.t === 'el' && FACE_DECLARATION.test((p.src ?? '').trim())) top.sw = true
       const shown = p.t === 'text' ? p.s : p.t === 'el' ? textOf(p) : undefined
       const chars = shown === undefined ? ['\ufffc'] : [...shown]
       const el = p.t === 'el' && shown !== undefined ? els++ : -1
       for (const ch of chars) {
+        switched.push(top.sw)
         group.push(top.span)
         srcCh.push(ch)
         named.push(top.named)
@@ -238,9 +247,10 @@ export function groupFacts(
     // ---- its size: the one its own text's glyphs share, where it is not the size the group is drawn at by default
     const size = oneSize(sizedIn(a, b, (i) => group[i] === s))
     const by = inherited(s)
-    // ---- its face: its own text's, where the face around it is another; its size its own where it has one, else the one it
-    // is drawn at by default (a group of several sizes states none)
-    const gs = glyphsIn(a, b, (i) => group[i] === s)
+    // ---- its face: its own text's before any face declaration inside it (the rest the declaration's, which the typesetter
+    // applies where it stands), where the face around it is another; its size its own where it has one, else the one it is
+    // drawn at by default (a group of several sizes states none)
+    const gs = glyphsIn(a, b, (i) => group[i] === s && !switched[i])
     const face = gs.length ? faceOf(gs) : undefined
     const around = face === undefined ? undefined : aroundOf(s)
     if (face !== undefined && around !== undefined && face !== around) {
@@ -254,9 +264,24 @@ export function groupFacts(
       const f = fact(s)
       if (f.style) f.style = { ...f.style, size }
       else {
-        const { upper: _upper, fill: _fill, ...st } = styleOf(gs)
+        // (stated for its size alone: the face at its opening, its own text's before a declaration inside it, else the face
+        // around it, so that the declaration's own face is applied once: `{\small \em aside}` italic, never turned back)
+        const all = glyphsIn(a, b, (i) => group[i] === s)
+        const { upper: _upper, fill: _fill, ...st } = styleOf(gs.length ? gs : all)
         void [_upper, _fill]
-        f.style = { ...st, size }
+        const around = gs.length ? undefined : aroundOf(s)
+        const [role, bold, slant] = around ? around.split('|') : []
+        f.style = around
+          ? {
+              ...st,
+              role: role as Style['role'],
+              ...(bold ? { bold: 1 as const } : { bold: undefined }),
+              ...(slant ? { slant: 1 as const } : { slant: undefined }),
+              size,
+            }
+          : { ...st, size }
+        if (f.style.bold === undefined) delete f.style.bold
+        if (f.style.slant === undefined) delete f.style.slant
       }
       f.sized = true
     }

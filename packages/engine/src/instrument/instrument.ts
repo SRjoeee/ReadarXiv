@@ -467,20 +467,39 @@ export function piecesOf(
   return stack.length ? stack[0]!.outer : level
 }
 /** each source unit's text glyphs on B (the owners' ROLE.text of it), in B's stream order (page by page, each page's in its
- *  order), by unit index: `doc` B's pages as read, `owners` the instrument's glyph owners by page */
+ *  order), by unit index: `doc` B's pages as read, `owners` the instrument's glyph owners by page, and `turned` the owners of
+ *  each page's glyphs TeX set turned (a unit whose text TeX set turned has its glyphs there: its groups' sizes read off them
+ *  as a level unit's are), each set among the level ones by its place in the stream (DocTurned.at), as a style glyph */
 export function textGlyphsOf<G>(
-  doc: { pages: readonly { glyphs: readonly G[] }[] },
+  doc: {
+    pages: readonly {
+      glyphs: readonly G[]
+      turned?: readonly { u: string; base: string; size: number; fill?: number; at: number }[]
+    }[]
+  },
   owners: readonly Owners[],
-): Map<number, G[]> {
-  const out = new Map<number, G[]>()
+  turned: readonly Owners[] = [],
+): Map<number, (G | { u: string; base: string; size: number; fill: number })[]> {
+  const out = new Map<number, (G | { u: string; base: string; size: number; fill: number })[]>()
+  const push = (u: number, g: G | { u: string; base: string; size: number; fill: number }) =>
+    (out.get(u) ?? out.set(u, []).get(u)!).push(g)
   doc.pages.forEach((pg, p) => {
     const O = owners[p]
     if (!O) return
+    const T = turned[p]
+    const tg = pg.turned ?? []
+    let k = 0
+    const turnedTo = (at: number) => {
+      for (; k < tg.length && tg[k]!.at <= at; k++)
+        if (T && T.role[k] === ROLE.text && T.unit[k]! >= 0)
+          push(T.unit[k]!, { u: tg[k]!.u, base: tg[k]!.base, size: tg[k]!.size, fill: tg[k]!.fill ?? -1 })
+    }
     pg.glyphs.forEach((g, j) => {
+      turnedTo(j)
       if (O.role[j] !== ROLE.text || O.unit[j]! < 0) return
-      const u = O.unit[j]!
-      ;(out.get(u) ?? out.set(u, []).get(u)!).push(g)
+      push(O.unit[j]!, g)
     })
+    turnedTo(Number.POSITIVE_INFINITY)
   })
   return out
 }
@@ -2478,7 +2497,7 @@ export async function instrumentOf({
     if (i < units.length) stateDisplays(out[i]!.content, ids, units[i]!.pieces, classesBy[i])
   // (each source unit's groups as TeX set them, read off its text glyphs on B, and its run-in labels: marksOf. The unit's id is
   // its source's, none of these)
-  const textGlyphs = textGlyphsOf(read.doc, glyphs)
+  const textGlyphs = textGlyphsOf(read.doc, glyphs, turnedOwners)
   units.forEach((u, i) => {
     // (an element whose glyphs are the unit's text: a text macro, its text the probe's; a text symbol, its character, own/own.ts)
     const textOf = (el: Extract<Piece, { t: 'el' }>) =>

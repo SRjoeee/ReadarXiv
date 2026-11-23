@@ -86,6 +86,10 @@ const KERNEL_FACE_SETS: [RegExp, { weight: boolean; slant: boolean }][] = [
   [/^\\(?:textmd|mdseries)(?![A-Za-z@])/, { weight: true, slant: false }],
   [/^\\(?:textnormal|normalfont)(?![A-Za-z@])/, { weight: true, slant: true }],
 ]
+/** LaTeX 2.09's font commands, which latex.ltx defines over \normalfont (\DeclareOldFontCommand{\bf}{\normalfont\bfseries}…):
+ *  each sets the weight and the slant both, whatever it names (`\emph{{\bf heading} text}`: its heading upright, no reading
+ *  of the slant around it) */
+const OLD_FONT_COMMANDS = /^\\(?:bf|it|sl|sc|tt|rm|sf)(?![A-Za-z@])/
 /** a group or a switch that turns the slant around it (latex.ltx's \emph, \em): its run is the other slant of the text around it */
 const TOGGLES_SLANT = /^\\(?:emph|em)(?![A-Za-z@])/
 
@@ -121,6 +125,7 @@ export function groupStyleOf(
   faceSwitch: (el: El) => boolean = () => false,
   switchStyle: (el: El) => string | undefined = () => undefined,
   symbolGlyphs: (el: El) => readonly StyleGlyph[] | undefined = () => undefined,
+  spanCmd: (s: Span) => string | undefined = () => undefined,
 ): GroupStyle {
   // ---- the scopes (0 the unit's own): each with the scope around it, the group it is (null: a switch's run, the unit), the
   // attribute a switch's run sets, and whether it sets the fill or the face by its definition (or stands inside one that does);
@@ -164,7 +169,7 @@ export function groupStyleOf(
   /** what a group style sets of the face, by its name, and whether its command turns the slant */
   const faceSets = (style: string | undefined, cmd: string | undefined) => {
     const toggles = TOGGLES_SLANT.test(cmd ?? '')
-    if (style === undefined) return { weight: true, slant: true, toggles }
+    if (style === undefined || OLD_FONT_COMMANDS.test(cmd ?? '')) return { weight: true, slant: true, toggles }
     return { weight: SETS_WEIGHT.test(style), slant: SETS_SLANT.test(style) || toggles, toggles }
   }
   const walk = (list: readonly Piece[], scope: number) => {
@@ -172,14 +177,18 @@ export function groupStyleOf(
     for (const p of list) {
       if (p.t === 'span') {
         const names = namesFace(p.style)
-        const kernel = names ? undefined : KERNEL_FACE_SETS.find(([re]) => re.test((p.open ?? '').trimStart()))?.[1]
+        // (its command: the span's open, or the declaration a bare group began with that the instrument made its command, its
+        // open left `{` (switchesOf: `{\em …}` a group of style italic, SpanAt.cmd `em`), which turns the slant as `\em` does)
+        const cmd = spanCmd(p)
+        const opening = cmd !== undefined && (p.open ?? '').trimStart().startsWith('{') ? `\\${cmd}{` : p.open
+        const kernel = names ? undefined : KERNEL_FACE_SETS.find(([re]) => re.test((opening ?? '').trimStart()))?.[1]
         const s = open(
           cur,
           p,
           null,
           p.style === 'link' || p.style === 'colour',
           names,
-          names ? faceSets(p.style, p.open) : kernel ? { ...kernel, toggles: false } : undefined,
+          names ? faceSets(p.style, opening) : kernel ? { ...kernel, toggles: false } : undefined,
         )
         walk(p.content, s)
         continue

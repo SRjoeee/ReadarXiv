@@ -1151,8 +1151,9 @@ export function readGroupStyle(
   small: ReadonlySet<StyleGlyph>,
 ): void {
   if (!unit || mem.figure || unit.figure || !glyphs.length) return
-  const { gA } = w.ix
+  const { gA, inkA } = w.ix
   const classOf = new Map(unit.classes ?? [])
+  const cmdOf = new Map((unit.spans ?? []).map(([id, x]) => [id, x.cmd]))
   const colourSwitch = (el: Extract<Piece, { t: 'el' }>) => classOf.get(el.id)?.colour !== undefined
   const faceSwitch = (el: Extract<Piece, { t: 'el' }>) => {
     const c = classOf.get(el.id)
@@ -1169,11 +1170,17 @@ export function readGroupStyle(
       const c = classOf.get(el.id)
       return c?.cmd ? commandStyleOf(`\\${c.cmd}`) : undefined
     },
-    // (a symbol the typesetter draws as text where it stands, not raised: its own glyphs)
+    // (a symbol the typesetter draws as text where it stands, not raised: its own glyphs, level or, a turned unit's, turned)
     (el) => {
       const c = classOf.get(el.id)
-      return c?.cls === 'symbol' && c.sym && !c.sym[1] ? (mem.els.get(el.id) ?? []).map(gA) : undefined
+      if (c?.cls !== 'symbol' || !c.sym || c.sym[1]) return undefined
+      return [
+        ...(mem.els.get(el.id) ?? []).map(gA),
+        ...(mem.turnedEls.get(el.id) ?? []).map(([ap, aj]) => turnedStyleGlyph(inkA.pages[ap - 1]!.turned![aj]!)),
+      ]
     },
+    // (a bare group's command the instrument read off its leading declaration, SpanAt.cmd)
+    (sp) => cmdOf.get(sp.id),
   )
   if (g.fill.groups.length) mem.spanFills = g.fill.groups
   if (g.fill.apart && g.fill.own !== undefined) {

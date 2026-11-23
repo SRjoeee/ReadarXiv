@@ -14,7 +14,7 @@ import { type Face, relOf, type Token } from './tokens.ts'
 /** a breaking at a state: its lines, the tokens it laid from (its own copy where it cut one), how many it set of all */
 export type Broken = { lines: LaidLine[]; tokens: Token[]; rest: number; total: number; spilled?: boolean }
 /** a mark that may stand at a line's edge: a laid item's token's mark class, and whether the mark has lost its blank half */
-type EdgeMark = { t: Pick<Token, 'punct'>; cut?: boolean } | null | undefined
+type EdgeMark = { t: Pick<Token, 'punct' | 'st'>; cut?: boolean } | null | undefined
 /** a crop as the breaker reads it (Token.crop, a record there): its rectangle at the original's scale, its page and TeX
  *  baseline, the segment's box it was cut from (`gap.box`), its copy text, its url package's break points (`breaks`: the x
  *  between two of its glyphs and the copy text's UTF-16 code units before it) and the edges a cut left (`cut`: 1 its left, 2
@@ -230,9 +230,11 @@ const noLineStart = (P: Pick<FitParams, 'noStart' | 'noEnd'>): ((ch: string) => 
   const kinsoku = kinsokuOf(P.noStart ?? '', P.noEnd ?? '')
   return (ch) => noStart(ch) || kinsoku.starts(ch)
 }
-const leadOf = (it: EdgeMark, compress: number): number => (it?.t.punct === 'open' && compress >= 1 ? 0.5 : 0)
+// (a mark's blank half, in ems of the size it is drawn at: a group's at its own, TStyle.rel, as its advance is)
+const leadOf = (it: EdgeMark, compress: number): number =>
+  it?.t.punct === 'open' && compress >= 1 ? 0.5 * relOf(it.t) : 0
 const hangOf = (it: EdgeMark, compress: number): number =>
-  it?.t.punct === 'close' && !it.cut && compress < 2 ? 0.5 : 0
+  it?.t.punct === 'close' && !it.cut && compress < 2 ? 0.5 * relOf(it.t) : 0
 /**
  * Tokens into slots, greedily, at font size f: each line { ...slot, items: [{ t, w, shift }] } with the items' natural
  * widths (punctuation compressed as the state allows), the space a line may shrink, and `rest`, the first token left.
@@ -564,22 +566,24 @@ function breakLines(
         tw -= lead
         shift = -lead
       } else if (t.punct && st.compress >= 2) {
-        tw -= half
-        if (t.punct === 'open') shift = -half
+        // (a mark's blank half at the size it is drawn at, a group's at its own, TStyle.rel)
+        tw -= half * relOf(t)
+        if (t.punct === 'open') shift = -half * relOf(t)
       } else if (t.punct && st.compress === 1) {
         if (prev?.punct === 'close') {
           // two marks together: the first loses its trailing blank half (the second keeps its own)
           const last = items.length ? items.at(-1) : line.items.at(-1)
           if (last && !last.cut) {
-            last.w -= half
+            const h = half * relOf(last.t)
+            last.w -= h
             last.cut = true
-            if (items.length) w -= half
-            else line.x -= half
+            if (items.length) w -= h
+            else line.x -= h
           }
         } else if (t.punct === 'open' && prev?.punct) {
           // an opening mark after another mark: its leading blank half
-          tw -= half
-          shift = -half
+          tw -= half * relOf(t)
+          shift = -half * relOf(t)
         }
       }
       // (in ems of the size the token is drawn at: a group's at its own, TStyle.rel)
@@ -698,7 +702,10 @@ function breakLines(
     return (
       gaps > 0 &&
       stretch > STRETCH_MIN * f &&
-      need <= squeezable(all, g.hang > 0, st.compress, P).length * half + gapSqueeze * gaps + 1e-9 &&
+      need <=
+        squeezable(all, g.hang > 0, st.compress, P).reduce((x, it) => x + half * relOf(it.t), 0) +
+          gapSqueeze * gaps +
+          1e-9 &&
       need / gaps < stretch
     )
   }

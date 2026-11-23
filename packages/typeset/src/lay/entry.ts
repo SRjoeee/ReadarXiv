@@ -425,7 +425,10 @@ function layFlows(part: Part, given: Rows, rules: Rules, metrics: Metrics, o: En
   if (waiting.length) return waitAll([])
   const R = rules.set
   const measure = fitMeasure(metrics)
-  const paper = paperOf(part.paper.faces.fonts, rules.target, rules.cjkFaces as never)
+  const paper = {
+    ...paperOf(part.paper.faces.fonts, rules.target, rules.cjkFaces as never),
+    bases: part.paper.bases === 1,
+  }
   // (the free paper two members share on one baseline, each its half: two authors side by side; a cell widens by its own side)
   const shared = sharedPaper(part.flows, page)
   // (the lines of TeX's several members share whole, set centred or flush right: each laid as one run, lay/flow.ts)

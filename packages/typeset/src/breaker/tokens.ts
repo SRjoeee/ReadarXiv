@@ -194,6 +194,9 @@ export type TokensInput = {
   spacedSource: boolean
   to: string
   base: TStyle
+  /** false where the part states no base of its letters (Part.paper.bases absent: a part made before PIPELINE 119), whose
+   *  style is its glyphs' whole: baseOf reads its weight and slant out of its groups by its count, as before */
+  statedBase?: boolean
   /** the face TeX set the unit's marks in outside every group where it is not its letters' (Placed.markFace): a translated
    *  mark outside every group and every face switch's run is drawn in it, a letter in `base` (@readarxiv/text isLetterOrDigit) */
   markBase?: { bold: boolean; italic: boolean }
@@ -313,43 +316,73 @@ function nonSpace(s: string): number {
   }
   return n
 }
-/** whether a declaration is a small capitals switch: latex.ltx's \scshape, article.cls's \sc */
-const capsSwitch = (src: string | undefined): boolean => /^\\(?:sc|scshape)$/.test(src ?? '')
+const GROUP_ITALIC = 1,
+  GROUP_BOLD = 2,
+  GROUP_CAPS = 4
+/** what a declaration sets, as a group's bits: an italic, bold or small capitals switch (\em, \itshape, \bfseries, \sc, …):
+ *  latex.ltx's \em, \itshape, \slshape, \bfseries, \scshape, article.cls's \it, \sl, \bf, \sc */
+const declared = (src: string | undefined): number =>
+  (/^\\(?:em|it|itshape|sl|slshape)$/.test(src ?? '') ? GROUP_ITALIC : 0) |
+  (/^\\(?:bf|bfseries)$/.test(src ?? '') ? GROUP_BOLD : 0) |
+  (/^\\(?:sc|scshape)$/.test(src ?? '') ? GROUP_CAPS : 0)
 /** the unit's base small capitals without what its own groups set, and its declarations: a declaration sets its group from
  *  where it stands, at the unit's top level the rest of it (the \sc rule). Its weight and slant are the part's as stated
- *  (Placed.style: the engine's reading of TeX's glyphs, the unit's own text's, each attribute outside the scopes that set it,
- *  docs/PDF-READER.md §18.114), never read again here: this count of the row's characters under the groups decided a weight
- *  from a translation's wording (2611.23651v2's kicker drawn regular, its every glyph bold). Small capitals are still read so:
- *  the engine states no base of them by scope (not this round) */
-export function capsBaseOf(unit: TokensInput['unit'], base: TStyle): TStyle {
+ *  (`stated`, Part.paper.bases: the engine's reading of TeX's glyphs, the unit's own text's, each attribute outside the scopes
+ *  that set it, docs/PDF-READER.md §18.114), never read again here: this count of the row's characters under the groups decided
+ *  a weight from a translation's wording (2611.23651v2's kicker drawn regular, its every glyph bold). Small capitals are still
+ *  read so: the engine states no base of them by scope (not this round). A part made before states none (`stated` false): its
+ *  style is its glyphs' whole, its weight and slant read out of its groups by the same count, as before */
+export function baseOf(unit: TokensInput['unit'], base: TStyle, stated = true): TStyle {
   let total = 0,
-    after = false,
+    after = 0,
+    inItalic = 0,
+    inBold = 0,
     inCaps = 0,
+    nItalic = 0,
+    nBold = 0,
     nCaps = 0
-  const open: boolean[] = []
+  const open: number[] = []
   for (const p of unit.pieces) {
     if (p.t === 'open') {
       const src = p.src as string
-      // (a bare group a face switch opens is stated with that switch as its command, `\sc{` (SpanAt.cmd: the instrument's
-      // switchesOf), and sets its group's small capitals as the switch inside it did: latex.ltx's \textsc, \scshape)
-      const caps = /^\\(?:textsc|scshape)\b/.test(src) || capsSwitch(/^(\\[A-Za-z]+)\{$/.exec(src)?.[1])
-      open.push(caps)
-      if (caps) nCaps++
+      // (a bare group a face switch opens is stated with that switch as its command, `\em{` (SpanAt.cmd: the instrument's
+      // switchesOf), and sets its group's face as the switch inside it did, declared's: latex.ltx's \textit, \emph, \itshape,
+      // \textsl, \textbf, \bfseries, \textsc, \scshape)
+      const bits =
+        (/^\\(?:textit|emph|itshape|textsl)\b/.test(src) ? GROUP_ITALIC : 0) |
+        (/^\\(?:textbf|bfseries)\b/.test(src) ? GROUP_BOLD : 0) |
+        (/^\\(?:textsc|scshape)\b/.test(src) ? GROUP_CAPS : 0) |
+        declared(/^(\\[A-Za-z]+)\{$/.exec(src)?.[1])
+      open.push(bits)
+      if (bits & GROUP_ITALIC) nItalic++
+      if (bits & GROUP_BOLD) nBold++
+      if (bits & GROUP_CAPS) nCaps++
     } else if (p.t === 'close') {
-      if (open.pop()) nCaps--
-    } else if (p.t === 'ph' && capsSwitch(p.src)) {
-      if (!open.length) after = true
-      else if (!open[open.length - 1]) {
-        open[open.length - 1] = true
-        nCaps++
+      const bits = open.pop() ?? 0
+      if (bits & GROUP_ITALIC) nItalic--
+      if (bits & GROUP_BOLD) nBold--
+      if (bits & GROUP_CAPS) nCaps--
+    } else if (p.t === 'ph' && declared(p.src)) {
+      const bits = declared(p.src)
+      if (!open.length) after |= bits
+      else {
+        const fresh = bits & ~open[open.length - 1]!
+        open[open.length - 1]! |= fresh
+        if (fresh & GROUP_ITALIC) nItalic++
+        if (fresh & GROUP_BOLD) nBold++
+        if (fresh & GROUP_CAPS) nCaps++
       }
     } else if (p.t === 'text') {
       const n = nonSpace(p.s)
       total += n
-      if (nCaps || after) inCaps += n
+      if (nItalic || after & GROUP_ITALIC) inItalic += n
+      if (nBold || after & GROUP_BOLD) inBold += n
+      if (nCaps || after & GROUP_CAPS) inCaps += n
     }
   }
   const out = { ...base }
+  if (!stated && total && base.italic && inItalic >= 0.5 * total) out.italic = false
+  if (!stated && total && base.bold && inBold >= 0.5 * total) out.bold = false
   if (total && base.caps && inCaps >= 0.5 * total) out.caps = false
   return out
 }
@@ -518,8 +551,9 @@ export function tokens(i: TokensInput): Tokens {
   const plain = i.tagWords ? plainTracker() : null
   const measured = resolved.measured ?? null
   const { fill: _fill, ...given } = i.base
-  // (the base as the part states it: TeX's glyphs' weight and slant, the unit's own text's; its small capitals by capsBaseOf)
-  const base: TStyle = measured?.st ? { ...given, ...measured.st } : capsBaseOf(unit, given)
+  // (the base as the part states it: TeX's glyphs' weight and slant, the unit's own text's; its small capitals by baseOf, and a
+  // part made before its weight and slant too: TokensInput.statedBase)
+  const base: TStyle = measured?.st ? { ...given, ...measured.st } : baseOf(unit, given, i.statedBase ?? true)
   if (Number.isInteger(measured?.fill) && measured!.fill! > 0) base.color = hexOf(measured!.fill!)
   const stack: TStyle[] = [{ ...base }]
   const style = () => stack.at(-1)!
@@ -611,10 +645,8 @@ export function tokens(i: TokensInput): Tokens {
         afterHead = false
         continue
       }
-      // (with `markSt`, each run of marks, characters no letter or digit (@readarxiv/text isLetterOrDigit), a part of its own in
-      // that style: a translated mark outside every group drawn in the marks' base, glued to the letters beside it)
-      const parts: { cls: 'cjk' | 'latin'; s: string; off: number; mark: boolean }[] = []
-      let cur: { cls: 'cjk' | 'latin'; s: string; off: number; mark: boolean } | null = null,
+      const parts: { cls: 'cjk' | 'latin'; s: string; off: number }[] = []
+      let cur: { cls: 'cjk' | 'latin'; s: string; off: number } | null = null,
         off = 0
       // (the chunk walked by its grapheme clusters, what a reader sees as one character (UAX #29: script.ts clustersOf, its code
       // points where none joins another), each classed by its first code point: a run that breaks between its characters is cut
@@ -622,32 +654,45 @@ export function tokens(i: TokensInput): Tokens {
       // variation selector stay one token, measured whole. Each part's offset its first unit's, as before)
       for (const ch of clustersOf(chunk)) {
         const cls = cjkLead.test(ch) ? 'cjk' : 'latin'
-        const mark = !!markSt && !isLetterOrDigit(ch)
         if (cls === 'cjk' && !keepAll) {
           cur = null
-          parts.push({ cls, s: ch, off, mark })
+          parts.push({ cls, s: ch, off })
           off += ch.length
           continue
         }
-        if (cur && cur.cls === cls && cur.mark === mark) cur.s += ch
+        if (cur && cur.cls === cls) cur.s += ch
         else {
-          cur = { cls, s: ch, off, mark }
+          cur = { cls, s: ch, off }
           parts.push(cur)
         }
         off += ch.length
       }
+      // (with `markSt`, a piece's runs of marks, characters no letter or digit (@readarxiv/text isLetterOrDigit), each set apart
+      // in that style after the piece's own break points are found (its hyphen's, its slash's: `alpha-` and `beta` stay two
+      // pieces, `alpha`, `-` glued, `beta` its own): a translated mark drawn in the marks' base, glued to its word)
+      const marksRuns = (x: string): { s: string; mark: boolean }[] => {
+        if (!markSt) return [{ s: x, mark: false }]
+        const out: { s: string; mark: boolean }[] = []
+        for (const ch of clustersOf(x)) {
+          const mark = !isLetterOrDigit(ch)
+          const last = out.at(-1)
+          if (last && last.mark === mark) last.s += ch
+          else out.push({ s: ch, mark })
+        }
+        return out
+      }
       parts.forEach((p, n) => {
-        const st0 = p.mark && markSt ? markSt : st
         const pieces =
           p.cls !== 'latin'
             ? [p.s]
-            : st0.fam === 'mono' || /^(?:https?:|www\.)/.test(p.s)
+            : st.fam === 'mono' || /^(?:https?:|www\.)/.test(p.s)
               ? p.s.split(/(?<=[/.\-_#?&=])(?=[^/.\-_#?&=])/)
               : !extra.ph
                 ? p.s.split(/(?<=[A-Za-zÀ-ɏЀ-ӿ][-/])(?=[A-Za-zÀ-ɏЀ-ӿ])/)
                 : [p.s]
         let po = 0
-        pieces.forEach((s, q) => {
+        for (const { s, mark, q, u } of pieces.flatMap((s0, q) => marksRuns(s0).map((x, u) => ({ ...x, q, u })))) {
+          const st0 = mark && markSt ? markSt : st
           const face0 = faceOf(st0, p.cls)
           const from = m.index + p.off + po
           const all = p.cls === 'latin' && !!st0.upper
@@ -669,7 +714,7 @@ export function tokens(i: TokensInput): Tokens {
               cls: p.cls,
               w100: 0,
               ...extra,
-              ...(q > 0 && at === 0 ? { brk: true } : {}),
+              ...(q > 0 && u === 0 && at === 0 ? { brk: true } : {}),
             }
             if (k !== 1) t.sc = k
             if (track && len) {
@@ -686,8 +731,8 @@ export function tokens(i: TokensInput): Tokens {
             if (at > 0) {
               t.glue = true
               t.cont = true
-            } else if (q === 0 && n > 0 && !(!keepAll && (p.cls === 'cjk' || parts[n - 1]!.cls === 'cjk')))
-              t.glue = true
+            } else if (u > 0) t.glue = true
+            else if (q === 0 && n > 0 && !(!keepAll && (p.cls === 'cjk' || parts[n - 1]!.cls === 'cjk'))) t.glue = true
             // (a mark's blank half as its face draws it, measured in the face's own file (script.ts markOf): none where its ink
             // crosses its em's middle, nor where an alphabet's target sets a curly quote in its Latin face, which holds no measure)
             if (p.cls === 'cjk' && s.length === 1) t.punct = markOf(s, face.ids)
@@ -710,7 +755,7 @@ export function tokens(i: TokensInput): Tokens {
             push(t)
           }
           po += s.length
-        })
+        }
       })
     }
   }
@@ -752,7 +797,9 @@ export function tokens(i: TokensInput): Tokens {
   }
   const kernOn = (g: { em?: number; bp?: number; brk: boolean }) => {
     const size = resolved.orig?.size
-    const em = g.em ?? (g.bp !== undefined && size! > 0 ? g.bp / size! : 0)
+    // (an em of the size it is set at: a group's at its own, TStyle.rel, as the letters beside it are; a length in points the
+    // same at every size)
+    const em = g.em !== undefined ? g.em * (style().rel ?? 1) : g.bp !== undefined && size! > 0 ? g.bp / size! : 0
     if (!(em > 0)) return
     while (tokens.at(-1)?.space) tokens.pop()
     const t = tokens.at(-1)

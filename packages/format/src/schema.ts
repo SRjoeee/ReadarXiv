@@ -621,6 +621,11 @@ export const Part = z.object({
     named: z.array(Named).optional(),
     persons: z.array(Person).optional(),
     splits: z.array(Split).optional(),
+    // 1: each member's style is its letters' base outside every group that sets it, and its groups' faces are stated against it
+    // (Placed.style, SpanAt.style, Placed.markFace: docs/PDF-READER.md §18.114). Absent, a part made before (PIPELINE 119): its
+    // style is the face of its glyphs whole, its groups' among them, which a typesetter reads the groups out of by its own count
+    // of the row's characters under them, as it did; so a part stored before is laid as it was (FORMAT stays)
+    bases: z.literal(1).optional(),
   }),
   flows: z.array(z.array(Placed)),
   ties: z.array(Tie).optional(),
