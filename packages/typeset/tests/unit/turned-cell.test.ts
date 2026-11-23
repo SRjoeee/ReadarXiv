@@ -1,5 +1,5 @@
 // A unit the original sets turned (a header's \rotatebox{90}{…}, a sideways float's caption and cells: Part.frames,
-// docs/PDF-READER.md §18.111) is laid in its frame by the ordinary lay, as the translated TeX would set its translation in the
+// docs/PDF-READER.md §18.112) is laid in its frame by the ordinary lay, as the translated TeX would set its translation in the
 // same box before turning it, and stated on the page through the frame's turn: each line from its origin on the page along
 // the turn (its items' `dir`, their places along it), lit in the frame (Laid.lit `dir`), which the reader draws as a figure
 // text's turned run. The page's own flows are laid as they were.
@@ -139,7 +139,7 @@ describe('a unit set turned, laid in its frame', () => {
   })
 })
 
-describe('what is not text in a unit set turned, laid in its frame (docs/PDF-READER.md §18.111)', () => {
+describe('what is not text in a unit set turned, laid in its frame (docs/PDF-READER.md §18.112)', () => {
   /** 2608.12502v1's header cell "Before ($t_1$)" a quarter turned, in its frame: its formula from 448 to 460 on its line */
   const formula: [number, number, number, number, number, number] = [1, 448, -63.4, 460, -53, -60]
   const cell = cellInFrame(0, {

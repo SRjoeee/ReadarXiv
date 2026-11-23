@@ -150,7 +150,7 @@ export function place(
   // glyph of that role is. Its text's are its own, laid in its frame (frames.ts); an element's (a placeholder's, by its piece)
   // travel with it, cut as its crop from the original's turned ink and drawn through its turn; its label's are its label, drawn
   // anew or as its crop. An element's glyph of no piece is ink no piece of the unit's states: the unit stays the original's,
-  // `turned: an element of no piece` (docs/PDF-READER.md §18.111))
+  // `turned: an element of no piece` (docs/PDF-READER.md §18.112))
   const turnedElsB = new Map<string, [number, number][]>()
   let turnedLabelB: [number, number][] = []
   if (turnedB.length && !unit.figure && name === undefined) {

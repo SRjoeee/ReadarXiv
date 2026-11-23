@@ -172,6 +172,12 @@ function project(files: Record<string, string>, latin: readonly string[] = []) {
 function same(files: Map<string, Uint8Array>, label: string, tables = false) {
   const a = outcome(() => now.loadProject(now.inMemory(files), 'main.tex', { tables }))
   const b = outcome(() => BEFORE.loadProject(BEFORE.inMemory(files), 'main.tex', { tables }))
+  // (one reading moved since that module, by design: a unit nested in a unit the walk drops is a unit of its own, PDF-READER
+  // §18.111; the module before is held to everything else with that rule applied to what it gives)
+  if ('value' in b) {
+    const held = new Set(b.value.units.flatMap((u) => u.pieces.flatMap((p) => ((p as { t?: string }).t === 'nested' ? [(p as { unit: unknown }).unit] : []))))
+    for (const u of b.value.units) if (u.nested && !held.has(u)) delete u.nested
+  }
   expect(a, label).toEqual(b)
   if (!('value' in a) || !('value' in b)) return
   const ua = a.value.units, ub = b.value.units

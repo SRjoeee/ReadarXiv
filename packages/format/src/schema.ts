@@ -624,7 +624,7 @@ export const Part = z.object({
   // and its parts): what is not text in the unit is the original's turned ink, cut as a crop and drawn moved along the turn. A
   // typesetter lays a frame as it lays a part's flows, and a reader draws it through its turn. A field of its own: a reader of
   // before strips it and leaves those units the original's,
-  // their groups on, as it did when no part held them (FORMAT stays: ARCHITECTURE.md §5; docs/PDF-READER.md §18.111)
+  // their groups on, as it did when no part held them (FORMAT stays: ARCHITECTURE.md §5; docs/PDF-READER.md §18.112)
   frames: z
     .array(z.object({ dir: z.tuple([num, num]), flows: z.array(z.array(Placed)), ties: z.array(Tie).optional() }))
     .optional(),
