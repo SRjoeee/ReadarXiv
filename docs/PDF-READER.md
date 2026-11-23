@@ -9625,19 +9625,24 @@ expansion took off (all in this section's last item), and the rest are the holes
   the marked original against the paper's own unmarked compile, to 0.01 pt): E's forms, 40 compiles, 304 items, none moved, each
   split confirmed by TeX's paragraph points (a `qe` between the two units' points, none inside either); F's, 88 compiles of 11
   documents in the author block's fragile contexts (`\author`'s argument, `\and`, a tabular in `\author`, a `\protected@edef` of
-  it, IEEEtran's blocks, llncs, amsart, acmart, a row after `\\`, a formula after `\xspace`), none moved against the line's
-  marking and no error, every new point set once, none lost (acmart under XeLaTeX and LuaLaTeX moves 7 and 4 items of its front by
-  up to 0.43 pt under the line's marking as under this round's: the line's, recorded). Over the lab's 245 papers, the chain from
-  the stored compiles against the line's chain of record: E cuts anew 241 units of 3 papers into 250 (2111.09276v1's `\medbreak`s,
-  5 into 13; 2610.21377v1, 1 into 2; 2610.19159v1's `\trajectoryRole`, whose `\par` after its argument ends 235 units before the
-  colour group that opens the next paragraph, their ends moved with no split), their rows asked again; F gives 14 author units of
-  13 papers their marks' ink between the names (each a mark element with its segments where it had none, every unit drawn or laid
-  as before), no unit's kind moving over the 245; G leaves 1,318 units of 77 papers out of what is asked (84,681 asks to 83,372
+  it, IEEEtran's blocks, llncs, amsart, acmart, a row after `\\`, a formula after `\xspace`), 1,240 items, none moved against the
+  line's marking and no error, every new point set once, none lost (acmart under XeLaTeX and LuaLaTeX moves 7 and 4 items of its
+  front by up to 0.43 pt under the line's marking as under this round's: the line's, recorded). Over the lab's 245 papers, the
+  chain from the stored compiles against the line's chain of record (#672's, at the merged line): the marked TeX of 41 papers
+  moves (124 requests; their 61 final compiles, 270,559 text items, none moved); E cuts 6 units of 2 papers into 15 at TeX's 9
+  paragraph ends inside them (2111.09276v1's `\medbreak`s, 2610.21377v1's), none left inside a unit it cut and none made where TeX
+  set none, and ends 235 units of 2610.19159v1 at its `\trajectoryRole`'s `\par` (the colour group after it the next paragraph's),
+  their rows asked again; F gives 9 author units of 8 papers the ink of 27 marks between their names (none lost; 2608.20144v1's
+  second unit's lines read at its names' size, 9.96 pt, no longer its marks' 6.97), no unit's kind moving over the 245, and with
+  the names on the author members the lay leaves `unproven` go from 15 to 7: those left are a mark before another piece (`\aff`
+  before `\orcid`, the second of two `\IEEEauthorrefmark`s, after a command that may read what follows it: 4), `\thanks`'s note
+  numbers (1) and two places of 2610.37818v1 (2); G leaves 1,318 units of 77 papers out of what is asked (84,681 asks to 83,372
   with E's: 1,198 pictures' texts, 77 authors' and places' units a class prints from a store of its own, 43 others), every one
-  unlaid `unlocated: marks`, no part's member naming a unit no units object holds (0 of 156,236), no unit a reader sees losing its
-  row. Every other unit, part and ownership byte for byte. Not covered by E, counted by lane style-23651 over the same papers: a
-  class's command whose body the paper does not ship (acmart's `\institution`, 6 points of 4 papers), `\\` in centred text (5, by
-  design), a definition that ends a table's cell or row (2609.36054v2, 42 points).
+  unlaid `unlocated: marks`, no part's member naming a unit no units object holds (0 of 156,236). The reader's lay with echo rows:
+  drawn 51,603 to 51,612 (E's parts), the not-drawn list 793 lines shorter (G's units), none new. Every other unit, part and
+  ownership byte for byte. Not covered by E, counted by lane style-23651 over the same papers: a class's command whose body the
+  paper does not ship (acmart's `\institution`, 6 points of 4 papers), `\\` in centred text (5, by design), a definition that ends
+  a table's cell or row (2609.36054v2, 42 points).
 
 ### 18.112 A member's frame, the closed path a reader sees round its lines, bounds its room (2026-11-23)
 
