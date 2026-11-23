@@ -192,3 +192,33 @@ describe('a trail that is no piece’s', () => {
     expect(els.get('~')?.ink.length, 'the class’s mark after it, a trail').toBe(1)
   })
 })
+
+describe('the run holds what TeX painted in it, a box too', () => {
+  it('gives an icon the piece after the name draws, no glyph, to the run, with the mark TeX set after it', () => {
+    // (`Ann Lee\orcidlink{0000}` and a class's mark after it, REVTeX's affiliation number: the icon a box TeX painted after the
+    // name, then "2" past it. The run is the piece's ink, the icon in it, drawn once where the translation sets the piece; left
+    // out, the icon stood where TeX set it beside a translation drawn without it)
+    const B = docOf([
+      {
+        lines: [
+          { text: 'Ann Lee', x: 72, y: 700 },
+          { text: '2', x: 72 + 7 * 6 + 8, y: 703.6, size: 7 },
+        ],
+        boxes: [[7, 0, 72 + 7 * 6 + 1, 699, 72 + 7 * 6 + 7, 705]],
+        points: [
+          ['0s', 0],
+          ['0e', 7],
+        ],
+      },
+    ])
+    const units = [authorWith('Ann Lee', [['\\orcidlink{0000}', 'other', '']])]
+    const L = locate(instrumentOf(B, units, [[0, -1]]), B, align(B, B))
+    const mem = L.members.find((m) => m.unit === 0)!
+    expect(mem.elBoxes.get('1'), 'the icon listed as the piece’s').toEqual([[1, 0]])
+    const el = new Map(mem.elements).get('1')!
+    expect(el.ink.length).toBe(1)
+    const [, x0, , x1] = el.ink[0]!
+    expect([x0, x1], 'one box over the icon and the mark').toEqual([72 + 7 * 6 + 1, 72 + 7 * 6 + 8 + 0.6 * 7])
+    expect(L.groups[0]!.boxes[0], 'the icon in the piece’s group').toBe(`${mem.ord}.1.e`)
+  })
+})
