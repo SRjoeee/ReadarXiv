@@ -9562,7 +9562,9 @@ expansion took off (all in this section's last item), and the rest are the holes
   `marks`) is on no page: the false branch of a conditional, the keywords a class stores and never prints, the title IEEEtran
   throws away after `\appendix`. What TeX printed of it, where it printed any, is an ink unit's, asked as that. The units the
   reader asks a translator for held it all the same, its row asked and never shown; it is now left out of them, unless another
-  unit asked names it in its content (a nested unit). Every other unit is asked as before.
+  unit asked names it in its content (a nested unit). The block's names (§19.15) are still read from every unit: an author's unit
+  TeX never set writes the names the block TeX printed draws (2608.14557v1, acmart's), and a unit asked that holds one keeps its
+  form with the name (kind `named`). Every other unit is asked as before.
 - **A piece between the texts of a front unit gets a point on each side** (`marks/marks.ts` `BETWEEN_TEXTS`, layoutMarking
   `between`). An author block's unit of several names sets each name's mark after it, between the unit's texts (`Ann
   Lee\IEEEauthorrefmark{1}, Bob Ray`, `Ann Lee\textsuperscript{1}, Bob Ray`, `Ann Lee\inst{1}, Bob Ray`). The marking gave such

@@ -368,7 +368,9 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
   // (a unit every member of which the locate left unlocated because TeX set no point of it and it owns no glyph of B
   // (`unlocated: marks`, place.ts: the ownership's why 'marks'): a false branch of a conditional, a class's keywords it never
   // prints, a title it throws away. Nothing of it is on a page, and what TeX printed of it, where it printed any, is an ink
-  // unit's, asked as that: it is not asked. One another unit asked names in its content (a nested unit) is kept)
+  // unit's, asked as that: it is not asked. One another unit asked names in its content (a nested unit) is kept, and the names
+  // of the block are read from every unit as before (names.ts: an author's unit TeX never set still writes its names, which the
+  // block TeX printed draws: 2608.14557v1), only what is written left without it)
   const everyMember = new Map<number, boolean>()
   for (const m of members)
     everyMember.set(m.unit, (everyMember.get(m.unit) ?? true) && !m.located && m.cause === 'marks')
@@ -377,6 +379,8 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
     for (const q of u.content as readonly { t: string; unit?: string }[])
       if (q.t === 'unit' && q.unit) named.add(q.unit)
   const neverSet = (u: (typeof all)[number], i: number) => everyMember.get(i) === true && !named.has(u.id)
+  /** the ids asked: of a unit some instance of which TeX set (or another names), and every unit born on A */
+  const asked = new Set<string>()
   const seen = new Set<string>()
   const units: Unit[] = []
   const add = (u: Unit) => {
@@ -385,7 +389,8 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
     units.push(u)
   }
   for (const [i, u] of all.entries()) {
-    if (u.name !== undefined || neverSet(u, i)) continue
+    if (u.name !== undefined) continue
+    if (!neverSet(u, i)) asked.add(u.id)
     add({
       id: u.id,
       kind: u.kind,
@@ -398,13 +403,15 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
       ...(u.entry ? { entry: true as const } : {}),
     })
   }
-  for (const [ord, b] of located.born)
+  for (const [ord, b] of located.born) {
+    asked.add(members[ord]!.id)
     add({
       id: members[ord]!.id,
       kind: b.kind,
       content: b.content,
       ...(bySentence(b.kind) ? { sentences: true as const } : {}),
     })
+  }
   // (the block's names its units hold elsewhere, docs/PDF-READER.md §19.15: each unit's variant right after it, so that a
   // translator is asked for both together)
   const classes = new Map(all.map((u) => [u.id, new Map(u.classes ?? [])]))
@@ -419,6 +426,7 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
     ),
   )
   const written = units.flatMap((u) => {
+    if (!asked.has(u.id)) return []
     const v = names.variants.get(u.id)
     return v ? [u, v] : [u]
   })
