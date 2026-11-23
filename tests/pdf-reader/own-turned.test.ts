@@ -75,6 +75,13 @@ describe('a unit whose text TeX set turned', () => {
     expect(groups.slice(0, 9)).toEqual(Array(9).fill('u0.l'))
     expect(groups.slice(9).every((g) => g === 'u0')).toBe(true)
   })
+  it('leaves a turned unit whose glyphs do not spell its source the original’s, owning none of them', () => {
+    const pages = [page([{ pt: 't0s' }, { turned: 'Recall' }, { pt: 't0e' }])]
+    const r = ownOf(pages, { units: [{ kind: 'cell', pieces: [text('Precision')] }], turned: true })
+    expect(r.units.get(0)?.unhidden).toBe('spell')
+    expect(r.units.get(0)?.turn).toBeUndefined()
+    expect(turnedGroups(r)?.[0]?.every((g) => g === null)).toBe(true)
+  })
   it('leaves a unit whose turned glyphs stand in two turns as it was, counted', () => {
     const pages = [page([{ pt: 't0s' }, { turned: 'Re' }, { turned: 'call', dir: [0, -1] }, { pt: 't0e' }])]
     const r = ownOf(pages, { units: [{ kind: 'cell', pieces: [text('Recall')] }], turned: true })

@@ -456,8 +456,9 @@ export function createComposer(o: ComposerOptions): Composer {
     if (!p && layer) {
       const l = layer
       p = l.part(n).then((part) => {
+        // (and its frames' members, the units TeX set turned (Part.frames): the toggles hold them as any member of their kind)
         if (part && layer === l)
-          for (const f of part.flows)
+          for (const f of [...part.flows, ...(part.frames ?? []).flatMap((x) => x.flows)])
             for (const m of f)
               if (!members.has(m.ord)) {
                 members.set(m.ord, m)

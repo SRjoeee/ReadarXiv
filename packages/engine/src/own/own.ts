@@ -911,7 +911,8 @@ export function ownOf(
     return out
   }
   for (const [id, { s, e }] of turned ? [...textOf].sort((a, b) => a[0] - b[0]) : []) {
-    if (!s || s[0] !== e[0] || !pages[s[0] - 1]!.turned?.length || work > OWN_WORK) continue
+    // (a unit the readings before left the original's — a placeholder whose ink cannot be told apart, its marks — stays so)
+    if (!s || s[0] !== e[0] || !pages[s[0] - 1]!.turned?.length || work > OWN_WORK || unitOf.get(id)?.unhidden) continue
     const p = s[0],
       G = gOwn[p - 1]!,
       pg = pages[p - 1]!
@@ -1262,6 +1263,15 @@ export function ownOf(
       }
     }
     return true
+  }
+  // (a unit set turned that the spell check left the original's owns none of its turned glyphs: no reader takes them for its)
+  for (const [id] of turnedUnits) {
+    if (!unitOf.get(id)?.unhidden) continue
+    for (let p = 1; p <= P; p++) {
+      const T = tOwn[p - 1]!
+      for (let j = 0; j < T.length; j++) if (T[j] === `u${id}` || T[j]?.startsWith(`u${id}.`)) T[j] = null
+    }
+    unitOf.get(id)!.groups.clear()
   }
   const unhidden: Record<string, number> = Object.fromEntries(UNHIDDEN.map((k) => [k, 0]))
   for (const u of unitOf.values()) if (u.unhidden) unhidden[u.unhidden]!++

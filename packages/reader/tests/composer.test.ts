@@ -600,6 +600,40 @@ describe('another target, the toggles (a generation in place)', () => {
   })
 })
 
+describe('a part’s frames (the units TeX set turned, Part.frames)', () => {
+  it('the toggles hold a frame’s member as any member of its kind: a turned cell the original’s with the tables off', async () => {
+    // (the stand-in lay over the page's flows and its frames' members, as layPage lays both)
+    const base = standInLay()
+    const lay = Object.assign(
+      (part: Part, rows: Rows) =>
+        base({ ...part, flows: [...part.flows, ...(part.frames ?? []).flatMap((f) => f.flows)] } as Part, rows),
+      {
+        get calls() {
+          return base.calls
+        },
+      },
+    ) as unknown as ReturnType<typeof standInLay>
+    const part = {
+      ...partOf(1, [member(10, 1, 0, 'para')]),
+      frames: [{ dir: [0, 1], flows: [[member(11, 1, 1, 'cell')]] }],
+    } as unknown as Part
+    const w = world({
+      pages: new Map([[1, part]]),
+      lay,
+      classes: { figures: true, tables: false, heads: true, references: false, names: false },
+    })
+    w.stack.setNear([1])
+    open(w, rowsOf('de', ['u10', 'u11'], true))
+    await settle()
+    w.stack.put(1)
+    expect((w.composer.laid(1) as Page).members.map((m) => [m.ord, m.state])).toEqual([
+      [10, 'laid'],
+      [11, 'refused'],
+    ])
+    expect(w.composer.member(11)).toMatchObject({ ord: 11, kind: 'cell' })
+  })
+})
+
 describe('a generation let go', () => {
   it('a commit of the generation before not in place yet is let go, nothing of it put in place', async () => {
     const w = world()
