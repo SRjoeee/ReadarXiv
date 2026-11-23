@@ -9548,19 +9548,27 @@ expansion took off (all in this section's last item), and the rest are the holes
   argument was set in, one before it the paragraph before the call, as a `\par` written in the source does; so do `\endgraf`,
   TeX's vertical commands (VERTICAL_COMMANDS), LaTeX's `\smallbreak`, `\medbreak` and `\bigbreak` (latex.ltx begins each with
   `\par`), and a call of another of the paper's macros that does (a macro of no argument whose body ends a paragraph and sets no
-  text: `parNamesOf`). The reader walked such a call as a pair round its argument or as an element and kept the label and the
-  title after it one unit: one row, one size, one highlight for the two paragraphs TeX set. Now the unit ends before the call, or
-  after it, where TeX's paragraph does, in a unit of TeX's paragraphs (a paragraph, an abstract, a theorem, a note); a `\medbreak`
-  written between two paragraphs ends the first, as the vertical commands do. A bare group in the body is the body's (a group ends
-  no paragraph), and so is one after a command of no argument (`\noindent{\bfseries #1\par}`); an argument's, a box's or an
-  environment's `\par` is that box's paragraph alone. Not covered: a class's command whose body the paper does not ship (acmart's
-  `\institution`), and `\\` in centred or ragged text, which LaTeX sets as `\par` there, inside one unit by design (one sentence);
-  nor a table's cell, a heading's, a caption's or an author block's own text, whose readings bound them otherwise (jmlr2e's block
-  separator `\AND` skips vertically: read there as a paragraph's end, it renumbered 2608.08872v1's author units); nor a definition
-  that ends a table's cell or row (`&`, `\\` in its body: 2609.36054v2's `\formataffil`). The white space after a call that ends
-  the paragraph, which TeX skips in vertical mode, stays the unit's, as it does before a blank line: a unit TeX's `\par` ended
-  where it ended already keeps its text and its id (2610.21477v1's last `\PromptItem` of each box). The units split move their ids
-  (unitId(kind, content)): their rows are asked again, every other unit's id and row kept.
+  text: `parNamesOf`). Only a command TeX surely acts on counts (texCommands, the reader's own scan of conditionals): none in a
+  branch TeX skips (`#1\iffalse\par\fi`), none an operand (`\let\saved\par`), none in a definition inside the body, none in a
+  conditional whose branch the source cannot tell (`\ifdefined`); and a call of another such macro ends the paragraph on that
+  macro's side of its arguments, before or after them, so that the side travels through a wrapper (`\outer{#1}` calling `\inner`,
+  `\textbf{#1}\par`: after the argument; the review of #674). The source reading decides alone: the units are cut before any
+  compile, and the marked TeX writes their marks, so a cut TeX's paragraph points would not confirm is not undone by that compile;
+  the gate holds as proof instead, every split over the lab's 245 one of TeX's paragraph ends inside the unit it cut, and the
+  reading counts a paragraph's end only where TeX surely makes one. The reader walked such a call as a pair round its argument or
+  as an element and kept the label and the title after it one unit: one row, one size, one highlight for the two paragraphs TeX
+  set. Now the unit ends before the call, or after it, where TeX's paragraph does, in a unit of TeX's paragraphs (a paragraph, an
+  abstract, a theorem, a note); a `\medbreak` written between two paragraphs ends the first, as the vertical commands do. A bare
+  group in the body is the body's (a group ends no paragraph), and so is one after a command of no argument (`\noindent{\bfseries
+  #1\par}`); an argument's, a box's or an environment's `\par` is that box's paragraph alone. Not covered: a class's command whose
+  body the paper does not ship (acmart's `\institution`), and `\\` in centred or ragged text, which LaTeX sets as `\par` there,
+  inside one unit by design (one sentence); nor a table's cell, a heading's, a caption's or an author block's own text, whose
+  readings bound them otherwise (jmlr2e's block separator `\AND` skips vertically: read there as a paragraph's end, it renumbered
+  2608.08872v1's author units); nor a definition that ends a table's cell or row (`&`, `\\` in its body: 2609.36054v2's
+  `\formataffil`). The white space after a call that ends the paragraph, which TeX skips in vertical mode, stays the unit's, as it
+  does before a blank line: a unit TeX's `\par` ended where it ended already keeps its text and its id (2610.21477v1's last
+  `\PromptItem` of each box). The units split move their ids (unitId(kind, content)): their rows are asked again, every other
+  unit's id and row kept.
 - **A unit TeX never sets is not asked of a translator** (`bundle/bundle.ts`, the units). A unit every member of which the locate
   leaves unlocated because TeX set no point of it and it owns no glyph of B (`unlocated: marks`, the ownership's why `marks`) is
   on no page: the false branch of a conditional, the keywords a class stores and never prints, a picture's text, whose glyphs the

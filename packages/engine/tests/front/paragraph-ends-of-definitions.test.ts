@@ -101,26 +101,36 @@ describe('a definition that ends the paragraph in other forms', () => {
     ).toEqual(['Previous sentence. Middle words Following sentence.'])
   })
   it('the side travels through a wrapper: after its argument where the macro it calls ends the paragraph after (the review of #674)', () => {
+    // (each unit's text with its placeholders' sources: the wrapper's call stays a placeholder, its argument no prose of its own)
+    const unitsOf = (preamble: string, body: string) =>
+      openPaper(
+        new Map([['main.tex', enc(`\\documentclass{article}\n${preamble}\n\\begin{document}\n${body}\n\\end{document}\n`)]]),
+      ).units.map((u) =>
+        (u.pieces as { t: string; s?: string; src?: string }[])
+          .map((p) => (p.t === 'text' ? p.s : (p.src ?? '')))
+          .join('')
+          .replace(/\s+/g, ' ')
+          .trim(),
+      )
     expect(
-      saidOf(
+      unitsOf(
         '\\newcommand{\\inner}[1]{\\textbf{#1}\\par}\n\\newcommand{\\outer}[1]{\\inner{#1}}',
         'Previous sentence. \\outer{Middle words} Following sentence.',
       ),
-    ).toEqual(['Previous sentence. Middle words', 'Following sentence.'])
+    ).toEqual(['Previous sentence. \\outer{Middle words}', 'Following sentence.'])
     expect(
-      saidOf(
+      unitsOf(
         '\\newcommand{\\inner}[1]{{\\bfseries #1}\\par}\n\\newcommand{\\outer}[1]{\\inner{#1}}',
         'First words \\outer{label words} Last words.',
       ),
-    ).toEqual(['First words label words', 'Last words.'])
+    ).toEqual(['First words \\outer{label words}', 'Last words.'])
     // (and before it, where the macro it calls ends the paragraph before its argument)
-    const said = saidOf(
-      '\\newcommand{\\innerb}[1]{\\par\\textbf{#1}}\n\\newcommand{\\outerb}[1]{\\innerb{#1}}',
-      'Words before it. \\outerb{A head} and after it.',
-    )
-    expect(said[0]).toBe('Words before it.')
-    expect(said[1]).toMatch(/and after it\.$/)
-    expect(said.length).toBe(2)
+    expect(
+      unitsOf(
+        '\\newcommand{\\innerb}[1]{\\par\\textbf{#1}}\n\\newcommand{\\outerb}[1]{\\innerb{#1}}',
+        'Words before it. \\outerb{A head} and after it.',
+      ),
+    ).toEqual(['Words before it.', '\\outerb{A head} and after it.'])
   })
   it('a \\par inside a box’s own text ends that box’s paragraph alone: one unit', () => {
     expect(

@@ -2360,7 +2360,7 @@ function parNamesOf(texts: readonly string[]) {
         k = skipSpaces(t, m.index + m[0].length)
       const e = (nc ?? nb ?? nd) && t[k] === '{' ? matchGroup(t, k) : -1
       const body = e > 0 ? t.slice(k + 1, e - 1) : ''
-      if (e > 0 && parEndsOf(body, new Set()).length && !setsText(body)) out.add(name)
+      if (e > 0 && parEndsOf(body, new Map()).length && !setsText(body)) out.add(name)
       else other.add(name)
     }
   }
@@ -2376,15 +2376,25 @@ const PAR_COMMANDS: ReadonlySet<string> = new Set(['par', 'endgraf', 'smallbreak
 /** the units the walk makes of TeX's paragraphs, where a definition's paragraph end ends one (resolveParEnds) */
 const PAR_UNITS: ReadonlySet<string> = new Set(['para', 'abstract', 'theorem', 'footnote'])
 /**
- * Where a macro's body ends the paragraph TeX is setting: the offsets, in the body, of each command at its top level that does —
- * \par and PAR_COMMANDS, TeX's vertical commands (VERTICAL_COMMANDS), and a call of one of the paper's own macros that does
- * (`ends`, by name) — read as TeX reads the body: a bare group's content is the body's (a group ends no paragraph:
+ * Where a macro's body ends the paragraph TeX is setting: each place, in the body, at its top level, where a command does —
+ * \par and PAR_COMMANDS, TeX's vertical commands (VERTICAL_COMMANDS): `at` its offset, `end` its own end —, and where a call of one
+ * of the paper's own macros does (`ends`, by name: a Macro, its sides; null a name of no argument, parNamesOf): before its
+ * arguments where that macro ends the paragraph before its prose (`at` the call), after them where it does after (`at` and `end`
+ * the call's end), so that the side travels through a wrapper (`\outer{#1}` calling `\inner`, `\textbf{#1}\par`, ends after
+ * its argument). Read as TeX reads the body: a bare group's content is the body's (a group ends no paragraph:
  * `{\small\bfseries #1}\par`), an argument's, a box's or an environment's is not (\parbox{…\par…}, a minipage's, a
- * \footnote{…}: a paragraph of their own, inside)
+ * \footnote{…}: a paragraph of their own, inside); and a command TeX surely acts on alone (texCommands, its own scan of the
+ * conditionals: not in a branch it skips, `\iffalse\par\fi`; not an operand, `\let\saved\par`; not in a definition's body
+ * inside it; not in a conditional whose branch the source cannot tell, `\ifdefined`)
  */
-function parEndsOf(body: string, ends: ReadonlySet<string>): number[] {
+function parEndsOf(body: string, ends: ReadonlyMap<string, Macro | null>): { at: number; end: number }[] {
   const t = uncommented(body)
-  const out: number[] = []
+  const acted = new Set(
+    texCommands(t)
+      .filter((c) => !c.inDef && c.sure)
+      .map((c) => c.at),
+  )
+  const out: { at: number; end: number }[] = []
   let afterCommand = false
   for (let i = 0; i < t.length; i++) {
     const c = t[i]!
@@ -2399,7 +2409,15 @@ function parEndsOf(body: string, ends: ReadonlySet<string>): number[] {
         afterCommand = false
         continue
       }
-      if (PAR_COMMANDS.has(cmd.name) || VERTICAL_COMMANDS.has(cmd.name) || ends.has(cmd.name)) out.push(i)
+      if (acted.has(i) && (PAR_COMMANDS.has(cmd.name) || VERTICAL_COMMANDS.has(cmd.name)))
+        out.push({ at: i, end: cmd.end })
+      else if (acted.has(i) && ends.has(cmd.name)) {
+        const m = ends.get(cmd.name)
+        const call = m ? macroArgs(t, cmd.end, m, t.length) : null,
+          callEnd = call ? call.end : cmd.end
+        if (!m || m.parBefore) out.push({ at: i, end: i })
+        if (!m || (m.parAfter && (call || !m.params))) out.push({ at: callEnd, end: callEnd })
+      }
       i = cmd.end - 1
       // (a group after a command of no argument, `\noindent{\bfseries #1\par}`, is bare)
       afterCommand = !NO_ARGS.has(cmd.name) && !PAR_COMMANDS.has(cmd.name)
@@ -2432,21 +2450,23 @@ function parEndsOf(body: string, ends: ReadonlySet<string>): number[] {
  * nothing more is read (a name that calls itself adds nothing after its first reading)
  */
 function resolveParEnds(macros: Map<string, Macro>, names: ReadonlySet<string>) {
-  const ends = new Set<string>(names)
+  // (a name of no argument that ends a paragraph, parNamesOf: null, where it stands; one resolved here: its Macro, its sides)
+  const ends = new Map<string, Macro | null>([...names].map((n) => [n, null]))
   // (until nothing moves: a name added, a side set, each only once, so that a macro ending a paragraph through another's, at any
   // depth, is read so)
   for (let moved = true; moved; ) {
     moved = false
     for (const [name, m] of macros) {
-      const at = parEndsOf(m.def, ends)
-      if (!at.length) continue
+      const found = parEndsOf(m.def, ends)
+      if (!found.length) continue
+      const at = found.map((f) => f.at)
       const t = uncommented(m.def)
       const uses = m.prose ? [...t.matchAll(new RegExp(`#${m.prose}(?!\\d)`, 'g'))].map((x) => x.index) : []
       // (a macro of no prose: its body's own first and last commands decide, the call one element)
       const lead = /^\s*/.exec(t)![0].length,
         tail = t.trimEnd().length
       const before = uses.length ? at.some((k) => k < uses[0]!) : at.includes(lead),
-        after = uses.length ? at.some((k) => k > uses.at(-1)!) : at.some((k) => commandAt(t, k).end === tail)
+        after = uses.length ? at.some((k) => k > uses.at(-1)!) : found.some((f) => f.end === tail)
       if (before && !m.parBefore) {
         m.parBefore = true
         moved = true
@@ -2456,7 +2476,7 @@ function resolveParEnds(macros: Map<string, Macro>, names: ReadonlySet<string>) 
         moved = true
       }
       if ((before || after) && !ends.has(name)) {
-        ends.add(name)
+        ends.set(name, m)
         moved = true
       }
     }
