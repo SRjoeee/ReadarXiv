@@ -9720,27 +9720,24 @@ The rule now, one reading of TeX's glyphs:
   baselines are its depth and that height plus \lineskip apart, the later lines of its flow pushed with it; a smaller group
   never moves a line (TeX keeps \baselineskip).
 
-Over the lab's 245 papers (the chain from the line's stored compiles, none made again): every unit, its id and its content the
-same, every glyph's owner the same; 146 of 5,896 parts move (469 placements in 45 papers: 375 groups state a size apart from
-their member's, 7 a style at it, 226 cells wholly in `{\em …}` a base slant turned back, drawn the same, 12 a base weight, 6 a
-base size). The reader's lay over them, every row an echo of its words, against the line's: no member's state moves; 180
-members draw characters otherwise, and each such character matched to arXiv's glyph on its member's lines stands as printed
-(2,188 of 2,190 sized, one of them a comma the measure matched to a superscript's and read by hand; 110 of 126 slanted; 12
-of 53 weighted) but for the marks and the two capitals below; every one of the
-121 groups TeX set at another size than its unit's is drawn at its stated size, TeX's.
+Over the lab's 245 papers (the chain from the line's stored compiles, none made again, against its chain of record, on the line
+of #670, #671 and #672 alike: the same records move): every unit, its id and its content the same, every glyph's owner the
+same; 223 of 5,896 parts move (670 placements in 70 papers: 375 groups state a size apart from their member's, 9 a style at
+it; 185 figure runs of several sizes their style at the member's size; 137 a regular base off its own marks, an author line's
+commas, a colon after `\textbf{While}`, a table head's arrow; 234 cells wholly in `{\em …}` an upright base, drawn the same; 6
+a base size). The reader's lay over them, every row an echo of its words, against the line's: no member's state moves; 142
+members draw characters otherwise, and every such character matched to arXiv's glyph on its member's lines stands as printed
+(2,182 of 2,183 sized within 0.03, and one comma the measure matches to a superscript's, read by hand; 110 of 110 slanted; 12
+of 12 weighted, and two `⋯` read by hand): none moves away from the original's style. The marks outside a unit's groups and a
+figure text's ink small capitals are drawn as the line drew them, as printed; every one of the 121 groups TeX set at another
+size than its unit's is drawn at its stated size, TeX's.
 
 Not this round:
 
-- **The marks outside every group of a unit with no letter of its own** (`\textbf{While} $j \leq n$:`, `\textit{…};`, a table
-  head's `(%) $\uparrow$`): TeX sets them in the face around the groups, regular and upright; the base read off letters alone
-  is the groups' face, and they are drawn in it (57 characters in 39 members of 17 of those papers, which the count of the
-  translation drew as printed). Reading the marks too, tried, drew 20 of the 31 members drawn bold as printed and broke the
-  author line's rule above: which stands is a ruling.
 - **A size TeX was asked for where the paper loads a face at a scale** (NFSS's `s * [0.88]`, 2604.14228v3's 98 bold labels:
-  their glyphs at 8.77 in 9.96 text, the face's x-height matched to the text's): drawn at the glyphs' size in a face of other
-  proportions, they read smaller than printed. The size asked, `\f@size`, which no glyph shows, is the marked compile's to state.
-- **A figure text's group in ink small capitals**: the figure reading states its size, the median of its glyphs (2609.19644v1's
-  "PREDOPT", P and O at 2.51 and the rest at 2.01): drawn at it, its two capitals stand smaller than printed.
+  their glyphs at 8.77 in 9.96 text, the face's x-height matched to the text's): drawn at TeX's glyph size, the size accepted
+  (the coordinator's ruling), in a substitute face of other proportions they may look smaller than printed. The size asked,
+  `\f@size`, which no glyph shows, is the marked compile's to state (the marking's lane).
 - **An element drawn as its text** (`{\tt {\small …}}`, `El.literal`) at its stated `El.style.size`: the lay reads its face, not
   its size (251 such elements in 19 of those papers state another size than their member's).
 - **A size switch at a unit's top level with no group around it** (`text \small more`, a declaration's run, which needs the
