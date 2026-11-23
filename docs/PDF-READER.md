@@ -9523,25 +9523,30 @@ are. The reader before the cut-over read the page's pixels for both (`freeFor`, 
 
 The rule (`locate/frames.ts`, `geometry.ts` rooms, `facts-pass.ts` readRoom): a member's FRAME on a page is the innermost closed
 path the page paints (every segment's end met by another's, as a figure text's container, §18.26) that a reader sees, whose
-interior holds the middle of every one of the member's text lines there and whose painted lines touch none of them; none for
-a table's cell (its walls, §18.13) or a figure text (its container). Its painted lines are ink: under a run, the highest of
-them wholly under the run's last line across the run is the run's next ink where it is nearer than the glyph or box the page
-states (a line that rises past the line's foot is a side, beside the run, as a rule TeX set beside a paragraph is), and the
-free depth under the last line (`Room.below`) ends there too; beside a line, its pieces on the line's band stay beside it
-(`Room.stays`). The lay is unchanged: it borrows down to the next ink less TeX's separation and widens a line to what stays
-beside it, so inside a frame whose padding is less than a paragraph's separation nothing is borrowed and the size steps down,
-as in a cell. What TeX would do, the box grown with its text, the overlay cannot: the frame is arXiv's painted ink under the
-translation, and growing it would move every block under it on the page, which the reader never does.
+interior holds the middle of every one of the member's text lines there and whose painted lines touch none of them; none for a
+table's cell (its walls, §18.13) or a figure text (its container). Its painted lines are ink: under a run, the highest of them
+wholly under the run's last line across the run is the run's next ink where it is nearer than the glyph or box the page states
+(a line that rises past the line's foot is a side, beside the run, as a rule TeX set beside a paragraph is), and the free depth
+under the last line (`Room.below`) ends there too; beside a line, where its path stands at the line's own height stays beside it
+(`Room.stays`): each segment's part within the line's fonts' box (a stroke's half width over and under), so that a sloped side,
+a diamond's or a rounded corner's arc, is a wall where it is at that line and not where its whole box reaches (Devin's review on
+#672: a segment's whole box reached across the line and stood beside none). The lay is unchanged: it borrows down to the next
+ink less TeX's separation and widens a line to what stays beside it, so inside a frame whose padding is less than a paragraph's
+separation nothing is borrowed and the size steps down, as in a cell. What TeX would do, the box grown with its text, the
+overlay cannot: the frame is arXiv's painted ink under the translation, and growing it would move every block under it on the
+page, which the reader never does.
 
 A frame is a path a reader SEES, by the page's own operators and no tolerance: a stroke (painted at an alpha over 0), or a fill
-whose colour is not the colour painted under it at one of its box's four edge middles at least, each read by its own paint:
-the colour of the last fill before it whose region holds that point and covers what is under it (opaque, a colour), the
-paper's white where none; an image, a shading, a pattern, a fill that covers nothing whole or a path whose lines were not kept
-under a point is a colour this reading does not know, and the fill is seen (artwork under part of a white fill is under that
-part: Codex's local review found the four points read as one). A fill of the colour under it with no stroke (mdframed's white ground on the white page), a path at an alpha of 0, a clip
-(which paints nothing) is no frame. pageInk keeps each fill's colour with its lines (`Shape.colour`, read as PDF.js turns every
-colour space into RGB); locate reads the page's closed paths that hold a glyph before its ink step lets A's raw pages go, and
-keeps only those (`Index.paintedA`).
+whose colour is not the colour painted under it at one of its box's four edge middles at least, each read by its own paint a
+thousandth of a point inside its edge (on the edge itself the even-odd test counts a rectangle's right and top outside it, and a
+fill flush with those edges of a fill of its colour read the paper's white: Devin's review on #672): the colour of the last fill
+before it whose region holds that point and covers what is under it (opaque, a colour), the paper's white where none; an image,
+a shading, a pattern, a fill that covers nothing whole or a path whose lines were not kept under a point is a colour this
+reading does not know, and the fill is seen (artwork under part of a white fill is under that part: Codex's local review found
+the four points read as one). A fill of the colour under it with no stroke (mdframed's white ground on the white page), a path
+at an alpha of 0, a clip (which paints nothing) is no frame. pageInk keeps each fill's colour with its lines (`Shape.colour`,
+read as PDF.js turns every colour space into RGB); locate reads the page's closed paths that hold a glyph before its ink step
+lets A's raw pages go, and keeps only those (`Index.paintedA`).
 
 The rule decides by itself what a small fill beside a heading is: one under the heading's words (a chip its text is set on)
 holds the heading's line, and is its frame (its translation widened to the chip's side at most, its size stepping down where it
