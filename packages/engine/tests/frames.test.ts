@@ -162,7 +162,7 @@ describe('the frames a page paints: the review of round 2 into main (#676)', () 
         ],
       },
     ]).pages[0] as DocPage
-    const base = { stroke: false, fill: true, hw: 0.25, opaque: true }
+    const base = { stroke: false, fill: true, hw: 0.25, opaque: true as const }
     const raw = {
       shapes: new Map<number, S>([
         [0, { ...base, segs: blue, colour: 0x1f3a93 }],
