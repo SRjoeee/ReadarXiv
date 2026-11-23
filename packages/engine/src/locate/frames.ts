@@ -16,15 +16,12 @@
 // page's origin: a point (x, y) of the page is (ux x + uy y, -uy x + ux y) in its frame, which the reader turns back by
 // (ux, uy). No origin is chosen: every unit of one turn on a page shares one frame, as the glyphs of a turned table share it.
 import type { Line, Room } from '@readarxiv/format'
-import type { Doc } from '../doc.ts'
+import type { Doc, DocGlyph } from '../doc.ts'
 import { fakedCaps, mostOf, sourceText, styleOf, turnedStyleGlyph, unitSize } from './facts.ts'
 import { field, type Located, type Member, type Work } from './work.ts'
 
-/** two turned glyphs are set in one turn where their directions' components agree within this (own/own.ts TURN_SAME's) */
-const TURN_SAME = 1e-3
-/** two glyphs stand on one line of a frame where their baselines are within this share of their size (lines.ts's) */
-const ON_LINE = 0.5
-const r2 = (v: number) => Math.round(v * 100) / 100
+import { cutLines, r2 } from './lines.ts'
+import { TURN_SAME } from '../own/own.ts'
 
 /** a point of the page in the frame of direction (ux, uy) */
 export const toFrame = (ux: number, uy: number, x: number, y: number): [number, number] => [
@@ -46,9 +43,6 @@ const boxToFrame = (ux: number, uy: number, b: readonly number[]): [number, numb
     Math.max(...c.map((q) => q[1])),
   ]
 }
-
-/** a framed member's glyph in its frame: along its line from its origin to its advance's end, its baseline, its band, its size */
-type FrameGlyph = { x0: number; x1: number; y: number; top: number; bottom: number; size: number; blank: boolean }
 
 /** every box of ink on page `p` of A in the frame of direction (ux, uy), but the member's own turned glyphs (`mine`): its level
  *  glyphs' boxes, its other turned glyphs' bands, its painted boxes (a rule, an image, a fill) */
@@ -76,8 +70,8 @@ function inkBoxesOf(
   return out
 }
 
-/** a framed member's lines in its frame (its glyphs in stream order, cut where the baseline moves), its lead, its measure and
- *  its room: what the typesetter reads of any member, read here in the frame */
+/** a framed member's lines in its frame (its glyphs, seen in the frame as level glyphs, cut into lines by locate's own reading,
+ *  lines.ts cutLines), its lead, its measure and its room: what the typesetter reads of any member, read here in the frame */
 function frameFacts(
   inkA: Doc,
   mem: Member,
@@ -86,40 +80,39 @@ function frameFacts(
   uy: number,
 ): Pick<Member, 'lines' | 'lead' | 'room'> {
   const T = inkA.pages[p - 1]!.turned!
-  const gs: FrameGlyph[] = [...mem.turned]
+  // (each turned glyph as a level glyph of the frame: along its line from its origin to its advance's end, its font's band
+  // about its baseline, its own ink across that band, in stream order)
+  const gs: DocGlyph[] = [...mem.turned]
     .sort((a, b) => a[1] - b[1])
     .map(([, j]) => {
       const t = T[j]!
-      const [x0, y] = toFrame(ux, uy, t.ox, t.oy)
-      const [x1] = toFrame(ux, uy, t.ex, t.ey)
+      const [a, y] = toFrame(ux, uy, t.ox, t.oy)
+      const [b] = toFrame(ux, uy, t.ex, t.ey)
+      const blank = !/\S/.test(t.u)
       return {
-        x0: Math.min(x0, x1),
-        x1: Math.max(x0, x1),
+        u: t.u,
+        code: t.code,
+        font: t.base,
+        base: t.base,
+        x0: Math.min(a, b),
+        x1: Math.max(a, b),
         y,
-        top: y + t.ascent * t.size,
-        bottom: y + t.descent * t.size,
+        top: blank ? y : y + t.ascent * t.size,
+        bottom: blank ? y : y + t.descent * t.size,
         size: t.size,
-        blank: !/\S/.test(t.u),
+        ix0: Math.min(a, b),
+        ix1: blank ? Math.min(a, b) : Math.max(a, b),
+        n: t.n,
+        k: t.k,
+        form: false,
+        blank,
+        fill: t.fill ?? 0,
       }
     })
-  const runs: FrameGlyph[][] = []
-  for (const g of gs) {
-    const last = runs.at(-1),
-      ref = last?.find((x) => !x.blank) ?? last?.[0]
-    if (ref && Math.abs(ref.y - g.y) < ON_LINE * Math.max(ref.size, g.size)) last!.push(g)
-    else runs.push([g])
-  }
-  const lines = runs
-    .map((l) => l.filter((g) => !g.blank))
-    .filter((l) => l.length)
-    .map((l) => ({
-      x0: Math.min(...l.map((g) => g.x0)),
-      x1: Math.max(...l.map((g) => g.x1)),
-      base: l[0]!.y,
-      top: Math.max(...l.map((g) => g.top)),
-      bottom: Math.min(...l.map((g) => g.bottom)),
-      size: Math.max(...l.map((g) => g.size)),
-    }))
+  const lines = cutLines(
+    gs.map((_, i) => i),
+    (i) => ({ page: p, g: gs[i]! }),
+  )
   // (its measure: its lines' extent, read on A as for a unit TeX states none of; its lead: its lines' step, else its own)
   const m0 = Math.min(...lines.map((l) => l.x0)),
     m1 = Math.max(...lines.map((l) => l.x1))

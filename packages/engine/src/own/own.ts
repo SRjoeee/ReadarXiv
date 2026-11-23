@@ -107,8 +107,8 @@ export type OwnOptions = {
   texts?: ReadonlyMap<string | undefined, string> | null
   inkless?: ReadonlySet<string | undefined> | null
   names?: readonly unknown[] | null
-  /** read the units whose text TeX set turned (TURNED): the rebuilt engine's instrument, whose locate lays them in their frame;
-   *  today's layout maker (src/pdf-reader/engine/layout/wrap-final.mjs), which has no frame to lay them in, reads as before */
+  /** read the units whose text TeX set turned (TURNED, readTurned): the instrument's, whose locate lays them in their frame;
+   *  a caller with no frame to lay such a unit in does not ask it, and reads every unit as a level one */
   turned?: boolean
 }
 /** what ownOf gives: each page's glyphs' and boxes' groups, each unit's ownership, each page's displays a unit opens with,
@@ -161,7 +161,7 @@ const START = /^([th]?)(\d+)s$/
 const LABEL_POINT = /^ka\d+$/
 /** two turned glyphs are set in one turn where their directions' components agree within this (a cosine's share: a turn of
  *  the box TeX set is one matrix for all its glyphs, its directions equal but for the PDF's rounding of its numbers) */
-const TURN_SAME = 1e-3
+export const TURN_SAME = 1e-3
 const END = /^([th]?)(\d+)e$/
 /** a rule TeX paints on a line of a unit's text (OT1's \\_, an underline) is no thicker than this share of the line's size:
  *  its rules are a default rule's 0.4 pt (a twentieth of an 8 pt line, a sixtieth of a 24 pt one); a letter's ink, an icon's,
@@ -897,78 +897,27 @@ export function ownOf(
   // caption's label those from TeX's label point to its start (MR 5). Its turn is the one direction of its text's glyphs; where
   // they share none, the unit is left as it was (`spell`: its level glyphs spell nothing), counted. A unit with level text is
   // read as before: the turned glyphs in its range (a figure's axis title TeX set inside a paragraph's range) are none of its
-  const turnedUnits = new Map<number, [number, number]>()
-  let turnedMixed = 0
-  const turnedOf = (p: number, b0: number, b1: number, r: number): number[] => {
-    const T = pages[p - 1]!.turned ?? [],
-      R = regions[p - 1]!,
-      out: number[] = []
-    work += T.length
-    for (let j = 0; j < T.length; j++) {
-      const b = T[j]!.box
-      if (b >= b0 && b < b1 && R.box[b] === r && tOwn[p - 1]![j] === null) out.push(j)
-    }
-    return out
-  }
-  for (const [id, { s, e }] of turned ? [...textOf].sort((a, b) => a[0] - b[0]) : []) {
-    // (a unit the readings before left the original's — a placeholder whose ink cannot be told apart, its marks — stays so)
-    if (!s || s[0] !== e[0] || !pages[s[0] - 1]!.turned?.length || work > OWN_WORK || unitOf.get(id)?.unhidden) continue
-    const p = s[0],
-      G = gOwn[p - 1]!,
-      pg = pages[p - 1]!
-    if (G.some((g, i) => g === `u${id}` && /\S/.test(pg.glyphs[i]!.u ?? ''))) continue
-    const r = at(s)
-    const mine = turnedOf(p, pt(s).box, pt(e).box, r)
-    if (!mine.some((j) => !pg.turned![j]!.blank)) continue
-    const dirs = mine.filter((j) => !pg.turned![j]!.blank).map((j) => pg.turned![j]!)
-    const [ux, uy] = [dirs[0]!.ux, dirs[0]!.uy]
-    if (dirs.some((t) => Math.abs(t.ux - ux) > TURN_SAME || Math.abs(t.uy - uy) > TURN_SAME)) {
-      turnedMixed++
-      continue
-    }
-    for (const j of mine) tOwn[p - 1]![j] = `u${id}`
-    // (its placeholders' turned glyphs: between each one's two points on its page)
-    for (const [name, list] of where) {
-      const m = OPENING.exec(name)
-      if (!m || Number(m[2]) !== id || list.length !== 1 || list[0]![0] !== p) continue
-      const close = where.get(`${m[1]}${m[2]}.${m[3]}b`) ?? []
-      if (close.length !== 1 || close[0]![0] !== p || before(close[0]!, list[0]!)) continue
-      for (const j of mine)
-        if (pg.turned![j]!.box >= pt(list[0]!).box && pg.turned![j]!.box < pt(close[0]!).box)
-          tOwn[p - 1]![j] = `u${id}.p`
-    }
-    // (a caption's label: from TeX's label point before its start, past no end point, to the start)
-    if (units?.[id]?.kind === 'caption')
-      for (let q = s[1] - 1; q >= 0; q--) {
-        const X = pg.points[q]!
-        if (END.test(X.name)) break
-        if (LABEL_POINT.test(X.name)) {
-          for (const j of turnedOf(p, X.box, pt(s).box, r)) tOwn[p - 1]![j] = `u${id}.l`
-          break
-        }
-      }
-    turnedUnits.set(id, [ux, uy])
-  }
+  const tr = turned
+    ? readTurned({
+        pages,
+        regions,
+        gOwn,
+        tOwn,
+        where,
+        textOf,
+        units,
+        refused: (id) => !!unitOf.get(id)?.unhidden,
+        budget: OWN_WORK - work,
+      })
+    : { units: new Map<number, [number, number]>(), mixed: 0, work: 0 }
+  work += tr.work
+  const turnedUnits = tr.units,
+    turnedMixed = tr.mixed
 
   // ---- each unit's groups and pages, and the spell check (§1.3)
   const text = new Map<number, Place[]>(),
-    label = new Map<number, Place[]>(),
-    turnedText = new Map<number, Place[]>(),
-    turnedLabel = new Map<number, Place[]>()
-  for (let p = 1; p <= P; p++) {
-    const T = tOwn[p - 1]!
-    for (let j = 0; j < T.length; j++) {
-      const g = T[j]
-      if (g === null || g === undefined) continue
-      const dot = g.indexOf('.'),
-        id = Number(dot < 0 ? g.slice(1) : g.slice(1, dot))
-      const u = unit(id)
-      u.groups.add(g)
-      u.pages.add(p)
-      if (dot < 0) (turnedText.get(id) ?? turnedText.set(id, []).get(id)!).push([p, j])
-      else if (g.endsWith('.l')) (turnedLabel.get(id) ?? turnedLabel.set(id, []).get(id)!).push([p, j])
-    }
-  }
+    label = new Map<number, Place[]>()
+  const { text: turnedText, label: turnedLabel } = turnedListsOf(tOwn, unit)
   for (let p = 1; p <= P; p++) {
     const G = gOwn[p - 1]!
     for (let i = 0; i < G.length; i++) {
@@ -1071,18 +1020,10 @@ export function ownOf(
     }
     // (a unit set turned: its turn; its turned label a label's form, else left the original's ink, apart from its text as a
     // turned box's label stands before it)
-    const turn = turnedUnits.get(id)
-    if (turn) {
-      u.turn = turn
-      const tl = turnedLabel.get(id)
-      if (tl) {
-        const chars = tl.map(([p, j]) => pages[p - 1]!.turned![j]!.u ?? '').join('')
-        if (!isLabelForm(chars, units?.[id]?.bracketed === true, form)) {
-          for (const [p, j] of tl) tOwn[p - 1]![j] = null
-          u.groups.delete(`u${id}.l`)
-          u.labelKept = true
-        }
-      }
+    if (turnedUnits.has(id)) {
+      turnedOwned(u, id, turnedUnits.get(id)!, turnedLabel.get(id), pages, tOwn, (s) =>
+        isLabelForm(s, units?.[id]?.bracketed === true, form),
+      )
       if (u.labelKept) labelKept++
       continue
     }
@@ -1265,14 +1206,11 @@ export function ownOf(
     return true
   }
   // (a unit set turned that the spell check left the original's owns none of its turned glyphs: no reader takes them for its)
-  for (const [id] of turnedUnits) {
-    if (!unitOf.get(id)?.unhidden) continue
-    for (let p = 1; p <= P; p++) {
-      const T = tOwn[p - 1]!
-      for (let j = 0; j < T.length; j++) if (T[j] === `u${id}` || T[j]?.startsWith(`u${id}.`)) T[j] = null
-    }
-    unitOf.get(id)!.groups.clear()
-  }
+  releaseTurned(
+    [...turnedUnits.keys()].filter((id) => !!unitOf.get(id)?.unhidden),
+    tOwn,
+    unitOf,
+  )
   const unhidden: Record<string, number> = Object.fromEntries(UNHIDDEN.map((k) => [k, 0]))
   for (const u of unitOf.values()) if (u.unhidden) unhidden[u.unhidden]!++
   spell.sort((a, b) => a - b)
@@ -1382,6 +1320,143 @@ export function ownOf(
       turned: { units: [...unitOf].filter(([, u]) => u.turn).length, mixed: turnedMixed },
     },
   }
+}
+
+/** what readTurned reads: ownOf's pages, their regions, its glyphs' and turned glyphs' groups (`tOwn` written here), its points
+ *  by name, its units' text ranges, its units, whether a reading before left a unit the original's, the work it may still do */
+type TurnedContext = {
+  pages: readonly OwnPage[]
+  regions: readonly ReturnType<typeof regionsOf>[]
+  gOwn: readonly (string | null)[][]
+  tOwn: (string | null)[][]
+  where: ReadonlyMap<string, Place[]>
+  textOf: ReadonlyMap<number, TextRange>
+  units: readonly OwnUnit[] | null
+  refused: (id: number) => boolean
+  budget: number
+}
+/**
+ * The units whose text TeX set turned (TURNED): TeX sets a box level and turns it (\rotatebox, a sideways float), so that every
+ * glyph of its text is a turned one (pageInk's `turned`, ink.ts turnedGlyph: a rotation of the page's axes, no mirror nor shear)
+ * and none is level. A unit whose range holds no level glyph of ink and turned ones in its region takes them as its text by
+ * the same rules as level ones: those between its points (by their boxes' places in the stream, a turned glyph's box painted
+ * where it is shown), those between a placeholder's two points its placeholder's (MR 4, the closed reading), and a caption's
+ * label those from TeX's label point to its start (MR 5), each written to `tOwn`. Its turn is the one direction of its text's
+ * glyphs; where they share none, the unit is left as it was (its level glyphs spell nothing: `spell`), counted (`mixed`). A
+ * unit with level text, or one a reading before left the original's (a placeholder whose ink cannot be told apart), is read
+ * as it was: the turned glyphs in its range (a figure's axis title TeX set inside a paragraph's range) are none of its.
+ * Returns each unit's turn by id, the count of those left, and the glyphs visited
+ */
+function readTurned(c: TurnedContext): { units: Map<number, [number, number]>; mixed: number; work: number } {
+  const { pages, regions, gOwn, tOwn, where, units } = c
+  const out = new Map<number, [number, number]>()
+  let mixed = 0,
+    work = 0
+  const pt = ([p, q]: Place): InkPoint => pages[p - 1]!.points[q]!
+  const at = ([p, q]: Place): number => regions[p - 1]!.at[q]!
+  const before = (a: Place, b: Place): boolean => a[0] < b[0] || (a[0] === b[0] && a[1] < b[1])
+  const turnedOf = (p: number, b0: number, b1: number, r: number): number[] => {
+    const T = pages[p - 1]!.turned ?? [],
+      R = regions[p - 1]!,
+      list: number[] = []
+    work += T.length
+    for (let j = 0; j < T.length; j++) {
+      const b = T[j]!.box
+      if (b >= b0 && b < b1 && R.box[b] === r && tOwn[p - 1]![j] === null) list.push(j)
+    }
+    return list
+  }
+  for (const [id, { s, e }] of [...c.textOf].sort((a, b) => a[0] - b[0])) {
+    if (!s || s[0] !== e[0] || !pages[s[0] - 1]!.turned?.length || work > c.budget || c.refused(id)) continue
+    const p = s[0],
+      G = gOwn[p - 1]!,
+      pg = pages[p - 1]!
+    if (G.some((g, i) => g === `u${id}` && /\S/.test(pg.glyphs[i]!.u ?? ''))) continue
+    const r = at(s)
+    const mine = turnedOf(p, pt(s).box, pt(e).box, r)
+    const dirs = mine.filter((j) => !pg.turned![j]!.blank).map((j) => pg.turned![j]!)
+    if (!dirs.length) continue
+    const [ux, uy] = [dirs[0]!.ux, dirs[0]!.uy]
+    if (dirs.some((t) => Math.abs(t.ux - ux) > TURN_SAME || Math.abs(t.uy - uy) > TURN_SAME)) {
+      mixed++
+      continue
+    }
+    for (const j of mine) tOwn[p - 1]![j] = `u${id}`
+    // (its placeholders' turned glyphs: between each one's two points on its page)
+    for (const [name, list] of where) {
+      const m = OPENING.exec(name)
+      if (!m || Number(m[2]) !== id || list.length !== 1 || list[0]![0] !== p) continue
+      const close = where.get(`${m[1]}${m[2]}.${m[3]}b`) ?? []
+      if (close.length !== 1 || close[0]![0] !== p || before(close[0]!, list[0]!)) continue
+      for (const j of mine)
+        if (pg.turned![j]!.box >= pt(list[0]!).box && pg.turned![j]!.box < pt(close[0]!).box)
+          tOwn[p - 1]![j] = `u${id}.p`
+    }
+    // (a caption's label: from TeX's label point before its start, past no end point, to the start)
+    if (units?.[id]?.kind === 'caption')
+      for (let q = s[1] - 1; q >= 0; q--) {
+        const X = pg.points[q]!
+        if (END.test(X.name)) break
+        if (LABEL_POINT.test(X.name)) {
+          for (const j of turnedOf(p, X.box, pt(s).box, r)) tOwn[p - 1]![j] = `u${id}.l`
+          break
+        }
+      }
+    out.set(id, [ux, uy])
+  }
+  return { units: out, mixed, work }
+}
+/** a unit set turned that spells its source: its turn stated; its turned label a label's form (`labelForm`), else left the
+ *  original's ink, apart from its text as a turned box's label stands before it (`labelKept`) */
+function turnedOwned(
+  u: UnitOwned,
+  id: number,
+  turn: [number, number],
+  label: readonly Place[] | undefined,
+  pages: readonly OwnPage[],
+  tOwn: (string | null)[][],
+  labelForm: (s: string) => boolean,
+): void {
+  u.turn = turn
+  if (!label || labelForm(label.map(([p, j]) => pages[p - 1]!.turned![j]!.u ?? '').join(''))) return
+  for (const [p, j] of label) tOwn[p - 1]![j] = null
+  u.groups.delete(`u${id}.l`)
+  u.labelKept = true
+}
+/** the turned glyphs of units `ids` given back to no group (`tOwn`), their groups cleared */
+function releaseTurned(
+  ids: readonly number[],
+  tOwn: (string | null)[][],
+  unitOf: ReadonlyMap<number, UnitOwned>,
+): void {
+  for (const id of ids) {
+    for (const T of tOwn)
+      for (let j = 0; j < T.length; j++) if (T[j] === `u${id}` || T[j]?.startsWith(`u${id}.`)) T[j] = null
+    unitOf.get(id)?.groups.clear()
+  }
+}
+/** each unit's turned text glyphs and turned label glyphs ([page, index among the page's turned]) by id, its groups and pages
+ *  added to its ownership (`unit`) */
+function turnedListsOf(
+  tOwn: readonly (string | null)[][],
+  unit: (id: number) => UnitOwned,
+): { text: Map<number, Place[]>; label: Map<number, Place[]> } {
+  const text = new Map<number, Place[]>(),
+    label = new Map<number, Place[]>()
+  tOwn.forEach((T, i) => {
+    for (let j = 0; j < T.length; j++) {
+      const g = T[j]
+      if (g === null || g === undefined) continue
+      const dot = g.indexOf('.'),
+        id = Number(dot < 0 ? g.slice(1) : g.slice(1, dot))
+      const u = unit(id)
+      u.groups.add(g)
+      u.pages.add(i + 1)
+      if (dot < 0) (text.get(id) ?? text.set(id, []).get(id)!).push([i + 1, j])
+      else if (g.endsWith('.l')) (label.get(id) ?? label.set(id, []).get(id)!).push([i + 1, j])
+    }
+  })
+  return { text, label }
 }
 
 /**

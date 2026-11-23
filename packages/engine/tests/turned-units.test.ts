@@ -118,7 +118,7 @@ describe('a unit whose text TeX set turned, in its frame', () => {
   })
   it('leaves the page’s other members as they read with no turned unit there: a level cell’s lines, room and flow', () => {
     // (held out of every reading of the page until its frame is read: a turned box's in the page's axes widened a table's
-    // measure to it and read a caption's separation against it, chain t2 of lane turned)
+    // measure to it and read a caption's separation against it)
     const units = [unitOf('cell', 'Method 0.91'), unitOf('cell', 'Recall')]
     const framed = runOf(units, ['Recall']).L
     const none = runOf(units, ['Recall'], [0, 1], false).L
