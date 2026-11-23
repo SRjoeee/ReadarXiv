@@ -9445,8 +9445,9 @@ expansion took off (all in this section's last item), and the rest are the holes
 - **Over the lab's 245 papers** (the chain from the stored compiles, against the line's chain of record): exactly the 12 notes
   of 9 papers moved, unlaid (`unlocated: marks`) to drawn, each on as many lines as its ink twin had, their ids unchanged, and
   their 12 ink twins gone (11 `inknotes`, 1 `inkheads`); every other unit and every other paper byte for byte (236 papers; the
-  carrier's one paper of the 245, 2610.35877v1, its marked TeX moved, its output byte for byte). The reader's lay with echo
-  rows: drawn 51,603 -> 51,603, the twins no longer asked, nothing drawn before lost.
+  carrier's one paper of the 245, 2610.35877v1, its marked TeX moved, its output byte for byte). The ten papers' final marked
+  compiles: 123,381 text items, every one where it was. The reader's lay with echo rows: drawn 51,603 -> 51,603, the twins no
+  longer asked, nothing drawn before lost.
 - **What stays, as found**: text TeX never sets is no point of TeX's to find (41 units over the 245: the false branch of
   `\IfFileExists` and of a paper's conditional, the keywords and dates a class stores and never prints, IEEEtran's `\section`
   title after `\appendix`, which the class throws away, the first of two `\title`s, longtable's `\endhead` of a table of one
