@@ -24,7 +24,7 @@ import { END, TRAIL } from './facts.ts'
 import { factsOf } from './facts-pass.ts'
 import { keepArtefacts } from './artefacts.ts'
 import { endMarks } from './end-marks.ts'
-import { frameTurned } from './frames.ts'
+import { frameTurned, holdTurned } from './frames.ts'
 import { frameMeasures, lineGeometry, rooms } from './geometry.ts'
 import { flowsAndTies, rowAligns } from './flows.ts'
 import { leadNames } from './leads.ts'
@@ -57,6 +57,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   const w = open(ins, inkA, m)
   const claims = ownershipOf({ size: w.ix.pageA.length, aToB: m.aToB, unitB: w.ix.unitB })
   placeUnits(w, claims) // 1
+  const held = holdTurned(w) // 1b: the units TeX set turned held out of the page's readings, for their frames
   claimTrails(w, claims) // 2
   keepArtefacts(w, claims) // 3
   unitsMadeOnA(w, claims, o) // 4
@@ -74,7 +75,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   flowsAndTies(w) // 13
   rowAligns(w) // 14
   linksOnA(w, owned, o) // 15
-  const frames = frameTurned(w) // 16: the units TeX set turned, in their frames, off the page's flows and ties
+  const frames = frameTurned(w, held) // 16: the units TeX set turned, read in their frames
   return close(w, owned, frames)
 }
 

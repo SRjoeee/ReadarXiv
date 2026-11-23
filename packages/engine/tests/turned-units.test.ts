@@ -49,10 +49,10 @@ const withTurned = (words: string[], [ux, uy]: [number, number] = [0, 1]): Doc =
   d.pages[0]!.turned = T
   return d
 }
-const runOf = (units: InstrumentUnit[], words: string[], dir?: [number, number]) => {
+const runOf = (units: InstrumentUnit[], words: string[], dir?: [number, number], owned = true) => {
   const B = withTurned(words, dir)
   const A = withTurned(words, dir)
-  const n = B.pages[0]!.turned!.length
+  const n = owned ? B.pages[0]!.turned!.length : 0
   const ins: Instrument = {
     ink: B,
     units,
@@ -115,6 +115,17 @@ describe('a unit whose text TeX set turned, in its frame', () => {
       [400, -72],
     ])
     expect(cap.lead).toBe(12)
+  })
+  it('leaves the page’s other members as they read with no turned unit there: a level cell’s lines, room and flow', () => {
+    // (held out of every reading of the page until its frame is read: a turned box's in the page's axes widened a table's
+    // measure to it and read a caption's separation against it, chain t2 of lane turned)
+    const units = [unitOf('cell', 'Method 0.91'), unitOf('cell', 'Recall')]
+    const framed = runOf(units, ['Recall']).L
+    const none = runOf(units, ['Recall'], [0, 1], false).L
+    expect(none.members[1]!.located).toBe(false)
+    expect(framed.members[0]).toEqual(none.members[0])
+    expect(framed.flows).toEqual(none.flows.filter((f) => !f.includes(1)))
+    expect(framed.ties).toEqual(none.ties)
   })
   it('places a unit turned a quarter the other way in the frame of that turn', () => {
     // (a sideways page's turn the other way: (0, -1), its frame's (x, y) the page's (-y, x))

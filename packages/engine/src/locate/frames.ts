@@ -2,8 +2,11 @@
 // (\rotatebox, `sideways`, `sidewaystable`, a landscape float), so the unit is stated as it stands in its box, unturned: its
 // lines, its leading, its measure and its room read off its glyphs and the page's ink seen through the inverse of its turn,
 // and the turn beside them (Located.frames, Part.frames). The typesetter lays it there as it lays any unit of its kind and
-// the reader draws it through the turn; nothing of it is read in the page's own axes. Locate's last phase (16): the members
-// are placed, their flows and ties made, their links read; a framed member leaves the page's flows and ties for its frame's.
+// the reader draws it through the turn; nothing of it is read in the page's own axes. Two steps of locate: right after the
+// members are placed (phase 1b, holdTurned), a framed member is held out of every reading of the page (its lines, columns,
+// measures, rooms, flows, ties and links are the level page's, and a turned box's in the page's axes would move them: a
+// table's measure widened to a turned header's box, a caption's separation read against it); after the last (phase 16,
+// frameTurned) it is read in its frame and put in its page's frame of its turn (Located.frames).
 //
 // A unit is framed where it is located, no figure text, its text all turned glyphs (own/own.ts TURNED: no level text glyph),
 // on one page, in one turn. One whose glyphs stand in two turns or on two pages is not framed: it stays the original's
@@ -14,6 +17,7 @@
 // (ux, uy). No origin is chosen: every unit of one turn on a page shares one frame, as the glyphs of a turned table share it.
 import type { Line, Room } from '@readarxiv/format'
 import type { Doc } from '../doc.ts'
+import { fakedCaps, mostOf, sourceText, styleOf, turnedStyleGlyph, unitSize } from './facts.ts'
 import { field, type Located, type Member, type Work } from './work.ts'
 
 /** two turned glyphs are set in one turn where their directions' components agree within this (own/own.ts TURN_SAME's) */
@@ -150,17 +154,17 @@ function frameFacts(
   }
 }
 
+/** a member held out of the page's readings to be read in its frame: its page and its turn */
+export type Held = { mem: Member; page: number; dir: [number, number] }
+
 /**
- * Phase 16: each framed member's facts read in its frame and its turn stated (Member.frame); its ord taken off the page's
- * flows and ties into its page's frame of that turn (Located.frames: its own flow, a tie whose members are all of the frame
- * with it). A turned unit that is not framed stays the original's with its reason
+ * Phase 1b, right after the members are placed: each member to be framed held out of the page's readings (its `located`
+ * false until phase 16, so that no reading of the level page's lines, columns, measures, rooms, flows, ties or links meets
+ * it). A turned unit that cannot be framed stays the original's with its reason (`turned: two pages`, `turned: two turns`)
  */
-export function frameTurned(w: Work): Located['frames'] {
+export function holdTurned(w: Work): Held[] {
   const { inkA } = w.ix
-  const flows = field(w, 'flows'),
-    ties = field(w, 'ties')
-  const frames: Located['frames'] = []
-  const frameOf = new Map<number, Located['frames'][number]>()
+  const held: Held[] = []
   for (const mem of w.members) {
     if (!mem.located || mem.figure || mem.fixed || !mem.turned.length || mem.text.length || mem.name !== undefined)
       continue
@@ -179,7 +183,44 @@ export function frameTurned(w: Work): Located['frames'] {
       mem.cause = 'turned: two turns'
       continue
     }
+    mem.located = false
+    held.push({ mem, page: p, dir: [ux, uy] })
+  }
+  return held
+}
+
+/**
+ * Phase 16, after every reading of the page: each held member located again, read in its frame — its style off its turned
+ * glyphs (geometry.ts's reading of a turned run's), its lines, lead, measure and room there — and its turn stated
+ * (Member.frame); put in its page's frame of that turn (Located.frames: its own flow, the cells of one table of that frame
+ * tied as the page's are, by TeX's grid)
+ */
+export function frameTurned(w: Work, held: readonly Held[]): Located['frames'] {
+  const { inkA } = w.ix
+  const frames: Located['frames'] = []
+  const tables = new Map<Located['frames'][number], Map<number, Map<number, number[]>>>()
+  for (const { mem, page: p, dir } of held) {
+    const [ux, uy] = dir
+    mem.located = true
+    const unit = mem.unit >= 0 ? w.units[mem.unit] : undefined
+    const own = mem.turned.map(([ap, aj]) => turnedStyleGlyph(inkA.pages[ap - 1]!.turned![aj]!))
+    const txt = own.filter((g) => /\S/.test(g.u))
+    const source = unit && unit.name === undefined ? sourceText(unit.content) : null
+    const caps = fakedCaps(txt, source, mem.kind.startsWith('ink'))
+    const read = unitSize(caps.small.size ? txt.filter((g) => !caps.small.has(g)) : txt)
+    const size = read ?? mostOf(txt.map((g) => r2(g.size))) ?? 10
+    const { upper: _upper, ...read0 } = styleOf(own, size, source)
+    void _upper
+    mem.style = {
+      ...read0,
+      size,
+      ...(caps.upper ? { upper: 1 as const } : {}),
+      ...(caps.ratio !== undefined ? { sc: caps.ratio } : {}),
+      ...(caps.caps ? { caps: 1 as const } : {}),
+    }
     Object.assign(mem, frameFacts(inkA, mem, p, ux, uy))
+    if (mem.lines.length === 1 && mem.lead === 12) mem.lead = r2(1.2 * size)
+    mem.read.push('measure')
     mem.frame = [ux, uy]
     mem.pages = [p]
     let f = frames.find(
@@ -190,32 +231,24 @@ export function frameTurned(w: Work): Located['frames'] {
       frames.push(f)
     }
     f.flows.push([mem.ord])
-    frameOf.set(mem.ord, f)
-  }
-  // (a turned unit not framed is in no flow either: the page's flows hold what its part lays)
-  const out = new Set(w.members.filter((m) => m.turned.length && !m.figure && !m.located).map((m) => m.ord))
-  for (const o of frameOf.keys()) out.add(o)
-  if (!out.size) return frames
-  for (let i = flows.length - 1; i >= 0; i--) {
-    flows[i] = flows[i]!.filter((o) => !out.has(o))
-    if (!flows[i]!.length) flows.splice(i, 1)
-  }
-  for (let i = ties.length - 1; i >= 0; i--) {
-    const t = ties[i]!
-    const ords = t.rule === 'cells' ? t.cells.flat() : t.ords
-    const fs = new Set(ords.map((o) => frameOf.get(o)))
-    // (a tie whose members are all of one frame: that frame's; else its framed members leave it)
-    if (fs.size === 1 && !fs.has(undefined)) {
-      ;[...fs][0]!.ties.push(t)
-      ties.splice(i, 1)
-      continue
+    if (unit?.cell) {
+      const ts = tables.get(f) ?? tables.set(f, new Map()).get(f)!
+      const t = ts.get(unit.cell.table) ?? ts.set(unit.cell.table, new Map()).get(unit.cell.table)!
+      const key = unit.cell.row * 4096 + unit.cell.col
+      ;(t.get(key) ?? t.set(key, []).get(key)!).push(mem.ord)
     }
-    if (t.rule === 'cells') {
-      t.cells = t.cells.map((row) => row.filter((o) => !out.has(o))).filter((row) => row.length)
-      if (!t.cells.length) ties.splice(i, 1)
-    } else {
-      t.ords = t.ords.filter((o) => !out.has(o))
-      if (t.ords.length < 2) ties.splice(i, 1)
+  }
+  for (const [f, ts] of tables)
+    for (const cells of ts.values())
+      f.ties.push({ rule: 'cells', cells: [...cells].sort((x, y) => x[0] - y[0]).map(([, o]) => o) })
+  // (each was the one member of a flow of its own (phase 13 gives a member not located none it shares) and of no tie: its flow
+  // goes, the page's flows hold what its part lays)
+  const out = new Set(held.map((h) => h.mem.ord))
+  if (out.size) {
+    const flows = field(w, 'flows')
+    for (let i = flows.length - 1; i >= 0; i--) {
+      flows[i] = flows[i]!.filter((o) => !out.has(o))
+      if (!flows[i]!.length) flows.splice(i, 1)
     }
   }
   return frames
