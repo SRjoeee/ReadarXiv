@@ -216,27 +216,30 @@ export function place(
     }
     boxPartners.push([ap, m.boxIndex[p]![x] as number, p, x])
   }
+  // (B's turned glyphs' partners on A by role, each one with none a content difference)
   const turnedA: [number, number][] = []
-  let turnedSame = true
-  /** B's turned glyphs' partners on A, each one with none a content difference */
-  const turnedPartners = (l: readonly [number, number][], out: [number, number][]) => {
-    for (const [p, j] of l) {
-      const ap = m.turnedPage[p]?.[j] ?? 0
-      if (ap === 0) {
-        bad ??= 'content difference: a turned glyph with no partner'
-        continue
-      }
-      const aj = m.turnedIndex[p]![j] as number
-      out.push([ap, aj])
-      const tb = B.pages[p]!.turned![j]!
-      const ta = inkA.pages[ap - 1]!.turned![aj]!
-      if (ap !== p + 1 || Math.abs(ta.ox - tb.ox) > 0.01 || Math.abs(ta.oy - tb.oy) > 0.01) turnedSame = false
-    }
-    return out
+  const turnedElsA = new Map<string, [number, number][]>()
+  const turnedLabelA: [number, number][] = []
+  const turnedAll: [[number, number], [number, number][]][] = turnedB.map((x) => [x, turnedA])
+  for (const [id, l] of turnedElsB) {
+    const out: [number, number][] = []
+    turnedElsA.set(id, out)
+    for (const x of l) turnedAll.push([x, out])
   }
-  turnedPartners(turnedB, turnedA)
-  const turnedElsA = new Map([...turnedElsB].map(([id, l]) => [id, turnedPartners(l, [])] as const))
-  const turnedLabelA = turnedPartners(turnedLabelB, [])
+  for (const x of turnedLabelB) turnedAll.push([x, turnedLabelA])
+  let turnedSame = true
+  for (const [[p, j], out] of turnedAll) {
+    const ap = m.turnedPage[p]?.[j] ?? 0
+    if (ap === 0) {
+      bad ??= 'content difference: a turned glyph with no partner'
+      continue
+    }
+    const aj = m.turnedIndex[p]![j] as number
+    out.push([ap, aj])
+    const tb = B.pages[p]!.turned![j]!
+    const ta = inkA.pages[ap - 1]!.turned![aj]!
+    if (ap !== p + 1 || Math.abs(ta.ox - tb.ox) > 0.01 || Math.abs(ta.oy - tb.oy) > 0.01) turnedSame = false
+  }
   // its A ink by role
   const roleOfB = (b: number): [number, number] => [roleB[b] as number, pieceB[b] as number]
   const roleAt = new Map<number, [number, number]>()
