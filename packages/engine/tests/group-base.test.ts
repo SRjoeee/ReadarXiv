@@ -146,6 +146,20 @@ describe('a unit’s base face, read off TeX’s glyphs', () => {
     expect(g2.own).toEqual(B)
     expect(g2.marks).toEqual(REG)
   })
+  it('a symbol tells the marks’ weight, never their slant (math sets a capital Greek letter upright, whatever the text’s face)', () => {
+    // (2610.20581v1 p4's theorem, italic, `The capillary flux of $\\Omega$ … end of $\\Omega$.`: its period CMTI10, its Ω cmr's
+    // upright; read off them, the marks' base was upright and the period was drawn upright)
+    const th = [
+      t('The flux of '),
+      sym('$\\Omega$', set('Ω', 'CMR10')),
+      t(' is the end of '),
+      sym('$\\Omega$', set('Ω', 'CMR10')),
+      t('.'),
+    ]
+    const g = faces(th, [...set('The flux of', ITALIC), ...set('is the end of', ITALIC), ...set('.', ITALIC)])
+    expect(g.own).toEqual({ bold: false, italic: true })
+    expect(g.marks).toEqual({ bold: false, italic: true })
+  })
   it('a unit of marks alone: its letters’ base its marks’, TeX’s', () => {
     expect(faces([t('(—)')], set('(—)', REGULAR))).toMatchObject({ own: REG, marks: REG })
     expect(faces([group('\\textbf{', 'bold', [t('—')])], set('—', BOLD))).toMatchObject({ own: B, marks: B })

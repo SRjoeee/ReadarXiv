@@ -77,6 +77,40 @@ describe('a translated character outside every group is drawn in the base it sta
     expect(weights(cs, '松原靖子孫智明').every((w) => w === 700)).toBe(true)
     expect(weights(cs, '、')).toEqual([400])
   })
+  it('a mark inside a group is drawn in what the group sets over the marks’ base: a parenthesis in \\textbf outside its \\textit', () => {
+    // (2609.19644v1 p5's cell `\\textbf{\\textit{Refining Ideas (§3.3})`: its letters bold italic, its closing parenthesis
+    // XCharter-Bold, upright: the marks' base bold upright, `\\textbf` setting the weight alone)
+    const cell: Placed = {
+      ...unit({ bold: 1 }),
+      style: { role: 'serif', size: 9.9626, bold: 1, slant: 1, design: 'XCharter-BoldItalic' },
+      spans: [
+        ['1', { cmd: 'textbf' }],
+        ['7', { cmd: 'textit' }],
+      ],
+    }
+    const content: Content = [
+      {
+        t: 'span',
+        id: '1',
+        content: [
+          { t: 'span', id: '7', content: [{ t: 'text', s: 'Ideen verfeinern (' }] },
+          { t: 'text', s: ')' },
+        ],
+      },
+    ]
+    const cs = drawn(cell, content, 'de')
+    expect(weights(cs, ')')).toEqual([700])
+    const items = layPage(
+      part(cell),
+      { get: () => ({ id, ok: true, by: 'test', content }), done: true },
+      rulesFor('de'),
+      metrics,
+    )
+      .members[0]!.lines.flatMap(([, , , its]) => its)
+      .filter((it) => 'face' in it && (it as { s: string }).s.includes(')')) as { face: string; s: string }[]
+    // (the closing parenthesis its own item, upright; the opening one inside \textit italic)
+    expect(items.map((it) => [it.s.trim(), /^italic /.test(it.face)])).toEqual([[')', false]])
+  })
   it('the colon after a bold word stays regular; with no marks’ base stated, a mark is drawn as a letter is', () => {
     const colon: Content = [
       { t: 'span', id: '1', content: [{ t: 'text', s: '当' }] },
