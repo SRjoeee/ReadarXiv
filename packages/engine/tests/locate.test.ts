@@ -4619,11 +4619,12 @@ describe('locate: the face TeX set a unit’s own text in, outside its groups (S
     const tm = partOf(instrumentOf(th.B, [unitWith(tc, { spans: [['1', { cmd: 'emph' }]] })], [[0]]), th.B, th.A)
     expect(tm.style.slant).toBe(1)
   })
-  it('keeps a unit bold whose every letter a bold group holds, its marks between them regular (2602.23285v2’s author line)', () => {
-    // (`\\textbf{Yasuko Matsubara}♣, \\textbf{Jimeng Sun}♡, …`: the commas between the names are TeX's regular, the names'
-    // groups are not `must`, and Microsoft's stored reply moves them to the end, empty. Its own text is its letters', as
-    // today's reader reads it (layer2.mjs measuredStyle, letters and digits alone): none outside the bold groups, so the
-    // unit's face is theirs; read off its commas it was regular, and the names were drawn regular)
+  it('reads a unit whose every letter a bold group holds off its marks between them, TeX’s regular (2602.23285v2’s author line)', () => {
+    // (`\\textbf{Yasuko Matsubara}♣, \\textbf{Jimeng Sun}♡, …`: on arXiv's page the names NimbusRomNo9L-Medi, the commas
+    // between them NimbusRomNo9L-Regu. A run's face is its own glyphs' (the coordinator's ruling of 2026-11-23, PDF-READER
+    // §18.111): the unit's base is the commas', regular, and each name is bold by its `\\textbf`. Read off its letters alone
+    // (§18.14's reading, no ruling of the owner's), the base was bold, and so were the commas, which TeX set regular; a reply
+    // that drops the names' groups (Microsoft's stored one moves them to the end, empty) draws the names in the base)
     const lines = ['Yasuko Matsubara, Jimeng Sun, Takashi']
     const { B, A } = faced(lines, (n, x) => (x === at(16) || x === at(28) ? undefined : 'CMBX10'))
     const content = [
@@ -4641,7 +4642,7 @@ describe('locate: the face TeX set a unit’s own text in, outside its groups (S
       ],
     })
     const m = partOf(instrumentOf(B, [u], [[0]]), B, A)
-    expect(m.style.bold).toBe(1)
+    expect(m.style.bold).toBeUndefined()
   })
   it('reads a unit with no text of its own off its text outside the groups that name a face (RevTeX, every field a group)', () => {
     const lines = ['S. Weinberg, Physical Review Letters of the', 'Society 40, 223 (1978)']

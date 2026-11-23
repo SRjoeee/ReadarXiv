@@ -1195,6 +1195,54 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     expect(placed.plain).toBe('Task: list all the names')
   })
 
+  it('states no size of its own for a figure text’s run whose glyphs stand at several sizes: ink small capitals, drawn at the member’s (2609.19644v1’s "PREDOPT")', () => {
+    // (a run in another face whose capitals TeX set at the size and its small capitals smaller: its median the small capitals',
+    // drawn at it, its capitals stood smaller than printed. A group states a size only where its glyphs share one)
+    const A = docOf([
+      {
+        lines: [
+          'a paragraph whose word',
+          { text: 'PRED list all the names', y: 640, form: true, font: 'ABCDEF+Helvetica' },
+          { text: 'continues on its last line', y: 600 },
+        ],
+      },
+    ])
+    const at = 'a paragraph whose word'.length
+    A.pages[0]!.glyphs.slice(at, at + 4).forEach((g, i) =>
+      Object.assign(g, { font: 'ABCDEF+Helvetica-Bold', base: 'Helvetica-Bold', ...(i > 0 ? { size: 8 } : {}) }),
+    )
+    const { B, ins } = finalOf(A, [unitOf('para', 'a paragraph whose word continues on its last line')])
+    const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
+    const fig = L.members[1]!
+    const addOn = {
+      bytes: new Uint8Array([1, 2, 3]),
+      pages: new Map([[1, { ok: true }]]),
+      groups: new Set(L.groups[0]!.glyphs.filter((g): g is string => g !== null)),
+      ocgs: new Map(),
+      lost: new Set(),
+      stats: {},
+    } as unknown as AddOn
+    const part = [
+      ...bundle({
+        ins,
+        located: L,
+        addOn,
+        original: new Uint8Array(10),
+        paper: { id: '2501.00001', version: 1, pages: 1 },
+        made: 'test',
+      }),
+    ].find((x) => x.kind === 'part')!
+    const placed = read('part', part.bytes, part.digest)
+      .flows.flat()
+      .find((m) => m.kind === 'figure')!
+    const spans = new Map(placed.spans)
+    expect(spans.size).toBe(1)
+    const [style] = [...spans.values()].map((x) => x.style)
+    expect(style).toMatchObject({ role: 'sans', bold: 1, design: 'Helvetica-Bold' })
+    expect(style?.size).toBe(fig.style.size)
+    expect(placed.style.size).toBe(fig.style.size)
+  })
+
   it('states a figure text’s runs by face and by fill: TeX’s line in a picture, a label and its address in the link’s colour, the label a group whose fill it states (2611.03178v1)', () => {
     // (the class's tcolorbox, which pgf draws: "Page:" in \sffamily\bfseries, black, then \texttt's address in the link's colour,
     // TeX's one line: one figure text, its own style the address's (most of its glyphs), the label a group in its face and its

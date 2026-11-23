@@ -44,6 +44,30 @@ describe('a group TeX set at another size than the text around it states its siz
     ]
     expect(groupFacts(content, glyphs).get(small)?.style?.size).toBe(8.9664)
   })
+  it('a group whose glyphs stand at several sizes states none: a median of them is the size of none of its runs', () => {
+    // (its face the text's: nothing stated; its face apart: stated, at the size it is drawn at by default, the unit's)
+    const mixed = group('\\tagline{', [t('Two Sizes')])
+    const content = [t('Words before '), mixed, t(' and after.')]
+    const glyphs = [
+      ...set('Words before', SANS, 9.9626),
+      ...set('Two', SANS, 7.9701),
+      ...set('Sizes', SANS, 11.9552),
+      ...set('and after.', SANS, 9.9626),
+    ]
+    expect(groupFacts(content, glyphs).get(mixed)?.style).toBeUndefined()
+    const bold = group('\\tagline{', [t('Two Sizes')])
+    const faced = groupFacts(
+      [t('Words before '), bold, t(' and after.')],
+      [
+        ...set('Words before', SANS, 9.9626),
+        ...set('Two', SANS_BOLD, 7.9701),
+        ...set('Sizes', SANS_BOLD, 11.9552),
+        ...set('and after.', SANS, 9.9626),
+      ],
+    ).get(bold)
+    expect(faced?.style).toMatchObject({ bold: 1, size: 9.9626 })
+    expect(faced?.sized).toBeUndefined()
+  })
   it('a group at the size around it states none (nothing to draw apart)', () => {
     const same = group('\\tagline{', [t('the same size')])
     const content = [t('Words before '), same, t(' and after.')]
