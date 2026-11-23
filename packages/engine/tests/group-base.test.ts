@@ -1,5 +1,5 @@
 // A unit's base face read off TeX's glyphs on A (packages/engine/src/locate/group-style.ts groupStyleOf, docs/PDF-READER.md
-// §18.112): its own text's glyphs, its marks and the symbols it draws as text included (a run's face is its own glyphs'); where
+// §18.113): its own text's glyphs, its marks and the symbols it draws as text included (a run's face is its own glyphs'); where
 // it has none, each attribute outside the scopes that set it, its weight outside `\textbf{…}` and a `\bfseries` run, its slant
 // outside `\textit{…}`, an `\emph` run's slant turned back, marks and symbols too; where none, all its letters'. The typesetter draws the part's style as the base and reads nothing more: its count
 // of a translation's characters under the groups decided a weight from the reply's wording (2611.23651v2's kicker drawn

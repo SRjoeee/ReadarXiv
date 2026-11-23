@@ -4622,7 +4622,7 @@ describe('locate: the face TeX set a unit’s own text in, outside its groups (S
   it('reads a unit whose every letter a bold group holds off its marks between them, TeX’s regular (2602.23285v2’s author line)', () => {
     // (`\\textbf{Yasuko Matsubara}♣, \\textbf{Jimeng Sun}♡, …`: on arXiv's page the names NimbusRomNo9L-Medi, the commas
     // between them NimbusRomNo9L-Regu. A run's face is its own glyphs' (the coordinator's ruling of 2026-11-23, PDF-READER
-    // §18.112): the unit's base is the commas', regular, and each name is bold by its `\\textbf`. Read off its letters alone
+    // §18.113): the unit's base is the commas', regular, and each name is bold by its `\\textbf`. Read off its letters alone
     // (§18.14's reading, no ruling of the owner's), the base was bold, and so were the commas, which TeX set regular; a reply
     // that drops the names' groups (Microsoft's stored one moves them to the end, empty) draws the names in the base)
     const lines = ['Yasuko Matsubara, Jimeng Sun, Takashi']

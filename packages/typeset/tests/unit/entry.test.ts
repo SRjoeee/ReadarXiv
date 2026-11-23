@@ -2190,7 +2190,7 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
   it('keeps italic a unit a declaration at its start sets italic: its base the state before it, the part’s, toggled', () => {
     // (2608.25210v2-zh p4 t72-t75, cells "{\em response_equality_human}": its glyphs italic; its row's \em toggled an italic
     // base to upright: italic share 0 where today's 0.73-0.78. The part states the base as TeX's glyphs show it before the
-    // switch, the \em run's slant turned back (locate/group-style.ts, docs/PDF-READER.md §18.112): upright, which the \em turns)
+    // switch, the \em run's slant turned back (locate/group-style.ts, docs/PDF-READER.md §18.113): upright, which the \em turns)
     const m = member({
       kind: 'cell',
       style: { role: 'serif', size: 10, design: 'NimbusRomNo9L-ReguItal' },
