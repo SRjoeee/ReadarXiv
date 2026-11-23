@@ -2952,6 +2952,14 @@ const ENDS_ENV = /\\end\s*\{[^{}]*\}\s*$/
 /** a source that ends in a control sequence: TeX skips the spaces after a control word, and a macro of either may look
  *  ahead. Not LaTeX's \), which reads nothing after it */
 const ENDS_IN_CS = /\\(?:[A-Za-z@]+\*?|[^A-Za-z@)])$/
+/** a piece that sets ink between a front unit's texts and may have a point on each side (layoutMarking): an inline formula, or a
+ *  command with an argument (a name's mark, `\\inst{1}`, `\\textsuperscript{1}`, `\\IEEEauthorrefmark{1}`, an ORCID); not a
+ *  command of spacing, a rule or a phantom, which set no ink, nor a forced break */
+const BETWEEN_TEXTS = (p: Piece): boolean =>
+  p.t === 'ph' &&
+  (/^(?:\$|\\\()/.test(p.src ?? '') ||
+    (/^\\[A-Za-z@]+\*?\s*[[{]/.test(p.src ?? '') &&
+      !/^\\(?:[hv]space|[hv]skip|kern|phantom|hphantom|vphantom|rule|vrule|hrule)(?![A-Za-z@])/.test(p.src ?? '')))
 /** a placeholder whose macro may look at what follows it: a paper's macro (\xspace, \@ifnextchar[ after its argument;
  *  \@esphack's \ignorespaces after \todo, \nocite, \marginpar), a footnote's call (fnpct's \footnote moves the
  *  punctuation after it), \xspace itself, and a prefix that applies to the next token (\protect\eqref: a mark between
@@ -3169,6 +3177,10 @@ export function layoutMarking(
     // \protect before it, it is stored as it is and set where the note is: 2610.20484's \texttt and 2610.11256's \href in a
     // \thanks were LOST, their marks gone)
     const lead = front(u) ? ROBUST_LEAD : ''
+    // (a front unit's pieces between its texts: those after its first text of letters and before its last, BETWEEN_TEXTS)
+    const lettered = (q: Piece) => q.t === 'text' && /\p{L}/u.test(q.s)
+    const firstText = lead ? u.pieces.findIndex(lettered) : -1,
+      lastText = lead ? u.pieces.findLastIndex(lettered) : -1
     let last: Piece | null = null,
       gap = false,
       beforePrefix: Piece | null = null,
@@ -3208,6 +3220,29 @@ export function layoutMarking(
       if (verbatim.at(-1) === true) return [piece]
       // (a colour piece: its colour written to the log right after it, inside its group, where its run is set: no node)
       if (colourPieceOf(p)) return [piece, { t: 'ph', src: `\\axtcolour{c${i}.${k}}` }]
+      // (a piece that sets ink between the texts of a front unit — a name's mark in a unit of several names, `Ann Lee\\inst{1},
+      // Bob Ray`: its opening mark and its closing one, robust as the unit's are (\\protect), so that TeX states where its ink
+      // begins and ends between the names' (lane own-2's 15 members `unproven`: no point there, the run's ink no one's). The
+      // opening mark waits for the piece's first glyph, so the word before it keeps its letters' kerns; the closing one stands
+      // before the next name's text, at no break TeX could take. Native cases: PDF-READER §18.111)
+      if (
+        lead &&
+        k > firstText &&
+        k < lastText &&
+        firstText >= 0 &&
+        BETWEEN_TEXTS(p) &&
+        on.has(classOf(p)!) &&
+        !none.has(p.src)
+      ) {
+        const c = classOf(p)!,
+          name = `${c === 'footnote' ? 'n' : 'p'}${i}.${k}`
+        if (c === 'macro') opened.add(p)
+        return [
+          { t: 'ph', src: `${lead}\\${c === 'math' ? 'axtpmm' : 'axtpma'}{${name}a}`, opens: true },
+          piece,
+          { t: 'ph', src: `${lead}\\axtpm{${name}b}` },
+        ]
+      }
       // (a placeholder right after a paper's macro that got its opening mark, past white space alone or none, has its marks where
       // TeX answered that its opening mark there moves nothing, the word before it hyphenated as before: aheadSamples. A complete
       // call's too, which its own answer leaves none there; its closing mark is its own answer's. Not in a front unit, whose marks
