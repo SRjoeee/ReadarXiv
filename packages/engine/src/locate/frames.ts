@@ -7,11 +7,12 @@
 // abstract, a tcolorbox's two fills; 2610.19159v1's boxes). Its painted lines are ink under the member's runs and beside its lines,
 // as a frame of separate rules (\fbox, framed, mdframed's default) is already: the room ends at the frame.
 //
-// SEEN, by the page's own operators, no tolerance: a path that strokes (at an alpha over 0, pageInk's `stroke`), or one whose fill
-// has a colour that is not the colour painted under it at one of its box's four edge middles at least: at each, the last opaque fill
-// painted before it whose region holds that point (an image or a shading there, or a fill of no known colour, is a colour this
-// reading does not know: seen), else the paper's white. A fill of the colour under it with no stroke (an mdframed box's white ground on the white page), a path painted at
-// an alpha of 0 (pageInk's `unseen`), a clip (which paints nothing and is no box) are no frame. A pattern's fill is seen.
+// SEEN, by the page's own operators, no tolerance: a path that strokes (at an alpha over 0, pageInk's `stroke`), or one whose
+// fill has a colour that is not the colour painted under it at one of its box's four edge middles at least (each read just
+// inside its edge): at each, the last opaque fill painted before it whose region holds that point (an image or a shading there,
+// or a fill of no known colour, is a colour this reading does not know: seen), else the paper's white. A fill of the colour
+// under it with no stroke (an mdframed box's white ground on the white page), a path painted at an alpha of 0 (pageInk's
+// `unseen`), a clip (which paints nothing and is no box) are no frame. A pattern's fill is seen.
 // Candidates: closed paths (every segment's end met by another's: closedPath) that are no page's background (0.9 x 0.75 of the
 // page, as geometry.ts inkIndex reads one) and whose interior holds a glyph's middle, the glyph's ink inside the path's box; kept
 // with their lines, the frames the room is read by once A's raw pages are let go (locate.ts reads them before its ink step takes
@@ -105,8 +106,14 @@ export function framesOnPage(raw: PaintedPage | null | undefined, page: DocPage)
   return out
 }
 
+/** how far inside an edge of a fill the paint under it is read there: a thousandth of a point, past the arithmetic's rounding of
+ *  two edges set flush, far under any width a reader sees. On the edge itself the even-odd test (interiorOf) counts a rectangle's
+ *  right and top edges outside it, and a fill flush with those of a fill of its colour under it read the paper's white there */
+const INSIDE = 1e-3
+
 /** whether a fill of `colour` (box `b`, its box `box`) is of the colour painted under it at each of its box's four edge
- *  middles (colourAt): seen where one of them stands on another colour or on one this reading does not know */
+ *  middles, each read just inside the edge (INSIDE; colourAt): seen where one of them stands on another colour or on one this
+ *  reading does not know */
 function asUnder(
   b: number,
   box: readonly [number, number, number, number],
@@ -119,10 +126,10 @@ function asUnder(
   const cx = (box[0] + box[2]) / 2,
     cy = (box[1] + box[3]) / 2
   const pts = [
-    [cx, box[1]],
-    [cx, box[3]],
-    [box[0], cy],
-    [box[2], cy],
+    [cx, box[1] + INSIDE],
+    [cx, box[3] - INSIDE],
+    [box[0] + INSIDE, cy],
+    [box[2] - INSIDE, cy],
   ] as const
   return pts.every(([x, y]) => colourAt(b, x, y, shapes, U, K, B) === colour)
 }
@@ -259,18 +266,39 @@ export function frameUnder(f: PaintedFrame | null, foot: number, x0: number, x1:
   return best
 }
 
-/** a frame's painted lines as boxes (each segment's, a stroke's widened by its half width): what stands beside its lines on their
- *  bands (facts.ts staysOf reads them as it reads a rule TeX set apart) */
-export function framePieces(f: PaintedFrame | null): InkBox[] {
+/** a frame's painted lines where they stand beside its text lines: each segment's part within a line's height (its fonts' box,
+ *  Line[6] to Line[5], a stroke's half width over and under), as a box widened by that half width. What stands beside a line is
+ *  where the path is at the line's own height, for a path of any slope: a sloped edge's whole box reaches across the line (a
+ *  diamond's, a rounded corner's arc) and stood beside none. facts.ts staysOf reads them as it reads a
+ *  rule TeX set apart */
+export function framePieces(f: PaintedFrame | null, lines: readonly Line[]): InkBox[] {
   if (!f) return []
   const e = f.stroke ? f.hw : 0
   const out: InkBox[] = []
-  for (let i = 0; i + 3 < f.segs.length; i += 4) {
-    const ax = f.segs[i] as number,
-      ay = f.segs[i + 1] as number,
-      bx = f.segs[i + 2] as number,
-      by = f.segs[i + 3] as number
-    out.push({ x0: Math.min(ax, bx) - e, x1: Math.max(ax, bx) + e, y0: Math.min(ay, by) - e, y1: Math.max(ay, by) + e })
+  for (const l of lines) {
+    if (l[9] & 1) continue
+    const band: [number, number, number, number] = [
+      Number.NEGATIVE_INFINITY,
+      l[6] - e,
+      Number.POSITIVE_INFINITY,
+      l[5] + e,
+    ]
+    for (let i = 0; i + 3 < f.segs.length; i += 4) {
+      const c = clip(
+        f.segs[i] as number,
+        f.segs[i + 1] as number,
+        f.segs[i + 2] as number,
+        f.segs[i + 3] as number,
+        band,
+      )
+      if (!c) continue
+      out.push({
+        x0: Math.min(c[0], c[2]) - e,
+        x1: Math.max(c[0], c[2]) + e,
+        y0: Math.min(c[1], c[3]) - e,
+        y1: Math.max(c[1], c[3]) + e,
+      })
+    }
   }
   return out
 }

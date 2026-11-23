@@ -1126,11 +1126,9 @@ function readRoom(fx: FactsIndex, r: MemberReading): void {
     const on = (p: number): readonly InkBox[] => {
       let l = sides.get(p)
       if (!l) {
-        const f = frameOf(
-          fx.painted.get(p),
-          mem.lines.filter((q) => q[0] === p && !(q[9] & 1)),
-        )
-        l = f ? [...staysOn(p), ...framePieces(f)] : (staysOn(p) as InkBox[])
+        const text = mem.lines.filter((q) => q[0] === p && !(q[9] & 1))
+        const f = frameOf(fx.painted.get(p), text)
+        l = f ? [...staysOn(p), ...framePieces(f, text)] : (staysOn(p) as InkBox[])
         sides.set(p, l)
       }
       return l
