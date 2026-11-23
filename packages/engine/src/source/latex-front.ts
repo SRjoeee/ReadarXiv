@@ -167,6 +167,9 @@ type Macro = {
   then?: string
   keeps?: Map<number, string>
   words?: boolean
+  /** where its body ends the paragraph TeX is setting, at its top level (parEndsOf): before its prose argument, after it */
+  parBefore?: true
+  parAfter?: true
 }
 /** a definition a bibliography's head makes (bibDefinitions) */
 type BibDef = { params: number; def: string }
@@ -203,6 +206,8 @@ type Ctx = {
   ownAccents: Set<string>
   ownLetters: Set<string>
   macros: Map<string, Macro>
+  /** the paper's macros of no argument that end a paragraph and set no text (parNamesOf) */
+  parNames?: ReadonlySet<string>
   envMacros: Map<string, { side: string; env: string }>
   ifs: Set<string>
   ifValues: Map<string, boolean>
@@ -2335,7 +2340,125 @@ function paperMacros(files: readonly { file: string; text: string }[]) {
       })
     }
   resolveKeeps(out)
+  resolveParEnds(out, parNamesOf(files.map((f) => f.text)))
   return out
+}
+/**
+ * The paper's macros of no argument that end the paragraph TeX is setting and set no text of their own (`\newcommand{\endp}{\par}`,
+ * `\def\sep{\par\vskip 4pt}`): a name every definition of which, in any form (DEFINITION), takes no parameter and has a body
+ * whose top level ends it (parEndsOf). A call of one written in a paragraph ends the unit as \par does (the walk), and a body that
+ * calls one ends a paragraph there (resolveParEnds). A name also defined otherwise is none
+ */
+function parNamesOf(texts: readonly string[]) {
+  const out = new Set<string>(),
+    other = new Set<string>()
+  for (const t of texts.map(uncommented)) {
+    for (const m of t.matchAll(DEFINITION)) {
+      if (m.index > 0 && t[m.index - 1] === '\\') continue
+      const [, nc, nb, nd, nl, nx, ny] = m,
+        name = (nc ?? nb ?? nd ?? nl ?? nx ?? ny)!,
+        k = skipSpaces(t, m.index + m[0].length)
+      const e = (nc ?? nb ?? nd) && t[k] === '{' ? matchGroup(t, k) : -1
+      const body = e > 0 ? t.slice(k + 1, e - 1) : ''
+      if (e > 0 && parEndsOf(body, new Set()).length && !setsText(body)) out.add(name)
+      else other.add(name)
+    }
+  }
+  for (const n of other) out.delete(n)
+  return out
+}
+/**
+ * LaTeX's commands that end the paragraph TeX is setting besides \par and TeX's vertical commands: \endgraf (LaTeX's name for
+ * the primitive \par), and \smallbreak, \medbreak and \bigbreak, which latex.ltx begins with \par
+ * (`\def\medbreak{\par\ifdim\lastskip<\medskipamount…}`)
+ */
+const PAR_COMMANDS: ReadonlySet<string> = new Set(['par', 'endgraf', 'smallbreak', 'medbreak', 'bigbreak'])
+/** the units the walk makes of TeX's paragraphs, where a definition's paragraph end ends one (resolveParEnds) */
+const PAR_UNITS: ReadonlySet<string> = new Set(['para', 'abstract', 'theorem', 'footnote'])
+/**
+ * Where a macro's body ends the paragraph TeX is setting: the offsets, in the body, of each command at its top level that does —
+ * \par and PAR_COMMANDS, TeX's vertical commands (VERTICAL_COMMANDS), and a call of one of the paper's own macros that does
+ * (`ends`, by name) — read as TeX reads the body: a bare group's content is the body's (a group ends no paragraph:
+ * `{\small\bfseries #1}\par`), an argument's, a box's or an environment's is not (\parbox{…\par…}, a minipage's, a
+ * \footnote{…}: a paragraph of their own, inside)
+ */
+function parEndsOf(body: string, ends: ReadonlySet<string>): number[] {
+  const t = uncommented(body)
+  const out: number[] = []
+  let afterCommand = false
+  for (let i = 0; i < t.length; i++) {
+    const c = t[i]!
+    if (c === '\\' && isLetter(t[i + 1] ?? '')) {
+      const cmd = commandAt(t, i)
+      if (cmd.name === 'begin') {
+        // (an environment's content is its own: past its \end)
+        const m = /^\\begin\s*\{([^{}]+)\}/.exec(t.slice(i))
+        const close = m ? t.indexOf(`\\end{${m[1]}}`, i + m[0].length) : -1
+        if (close < 0) break
+        i = close + `\\end{${m![1]}}`.length - 1
+        afterCommand = false
+        continue
+      }
+      if (PAR_COMMANDS.has(cmd.name) || VERTICAL_COMMANDS.has(cmd.name) || ends.has(cmd.name)) out.push(i)
+      i = cmd.end - 1
+      afterCommand = true
+      continue
+    }
+    if (c === '\\') {
+      i++
+      afterCommand = false
+      continue
+    }
+    if (c === '{' || c === '[') {
+      // (a group right after a command, or after its other arguments, is an argument: passed over whole; a bare group is read)
+      if (afterCommand || c === '[') {
+        const e = c === '{' ? matchGroup(t, i) : matchGroup(t, i, '[', ']')
+        if (e < 0) break
+        i = e - 1
+        continue
+      }
+      continue
+    }
+    if (/\s/.test(c)) continue
+    afterCommand = false
+  }
+  return out
+}
+/**
+ * Each of the paper's macros whose body ends a paragraph at its top level (parEndsOf): `parBefore` where one stands before the
+ * first place its prose argument is set (or, a macro with none, before anything else of its body), `parAfter` where one stands
+ * after the last (or after everything else); read through the paper's own macros the body calls, as TeX expands them (a few
+ * rounds: a name that calls itself is a name no reading ends)
+ */
+function resolveParEnds(macros: Map<string, Macro>, names: ReadonlySet<string>) {
+  const ends = new Set<string>(names)
+  for (let round = 0; round < 3; round++) {
+    let moved = false
+    for (const [name, m] of macros) {
+      const at = parEndsOf(m.def, ends)
+      if (!at.length) continue
+      const t = uncommented(m.def)
+      const uses = m.prose ? [...t.matchAll(new RegExp(`#${m.prose}(?!\\d)`, 'g'))].map((x) => x.index) : []
+      // (a macro of no prose: its body's own first and last commands decide, the call one element)
+      const lead = /^\s*/.exec(t)![0].length,
+        tail = t.trimEnd().length
+      const before = uses.length ? at.some((k) => k < uses[0]!) : at.includes(lead),
+        after = uses.length ? at.some((k) => k > uses.at(-1)!) : at.some((k) => commandAt(t, k).end === tail)
+      if (before && !m.parBefore) {
+        m.parBefore = true
+        moved = true
+      }
+      if (after && !m.parAfter) {
+        m.parAfter = true
+        moved = true
+      }
+      if ((before || after) && !ends.has(name)) {
+        ends.add(name)
+        moved = true
+      }
+    }
+    if (!moved) break
+  }
 }
 /** the arguments a call of the paper's macro `h` at s[i] hands it, by parameter number (its optional first where it takes one and
  *  the call writes it), each the text inside its brackets or braces, or its single token; null where the call is not whole */
@@ -4608,8 +4731,16 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
     i = e
     return true
   }
+  // (the end of a paper macro's call whose body ends the paragraph after its prose, parAfter: the unit ends there, at the first
+  // token the walk reads past it, as at a written \par)
+  let parAt = -1
   while (i < to && !ctx.ended) {
     walkSteps++
+    if (parAt >= 0 && i >= parAt) {
+      parAt = -1
+      endText()
+      b.flush()
+    }
     const c = then ? '\\' : s[i]
     // a comment takes its line's end with it; a blank line after it is still \\par, as TeX reads it (`text % note`, then
     // an empty line: two paragraphs, which one unit set as one)
@@ -5375,6 +5506,16 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
     const macro = ctx.macros.get(name),
       own = macro && !(macro.params === 0 && ACCENTS.has(name))
     const call = own && macroArgs(s, end, macro, to)
+    // (a macro whose body ends the paragraph TeX is setting, at its top level (resolveParEnds): before its prose, the unit ends
+    // before the call, as at a written \par; after it, after the call (parAt, above). Where the reader's unit is a paragraph of
+    // TeX's: not a table's cell, whose grid bounds it, nor a heading's, a caption's or an author block's, whose own readings do)
+    if (call && (macro.parBefore || macro.parAfter) && !b.cellMode && PAR_UNITS.has(b.kind ?? 'para')) {
+      if (macro.parBefore) {
+        endText()
+        b.flush()
+      }
+      if (macro.parAfter) parAt = call.end
+    }
     // (one whose body ends the row after its arguments, in a cell (rowEndsAfterOf): a row of its own, its text a cell inside
     // its argument's group, the row ended after the call. Read as a pair, its text ran on into the next row's first cell)
     // (not one that stores its text, which the paper sets elsewhere: a front unit with no mark, below)
@@ -5752,12 +5893,17 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
     // original's. Read inside the unit, 2610.21765v1 p3's `{\bf Protocol …} \vspace{…} \hrule \vspace{…} \textbf{Procedure}` was one
     // unit of two of TeX's paragraphs, the rule between them drawn as an inline element of its translation; before the text, as
     // the rules over that title, nothing ends. A name the paper defines is its own command)
-    if (VERTICAL_COMMANDS.has(name) && !ctx.macros.has(name) && textBegun(b.cur?.pieces ?? [])) b.flush()
+    if (
+      (((VERTICAL_COMMANDS.has(name) || PAR_COMMANDS.has(name)) && !ctx.macros.has(name)) || ctx.parNames?.has(name)) &&
+      textBegun(b.cur?.pieces ?? [])
+    )
+      b.flush()
     b.ph(s.slice(i, e), i, e)
     // a command with a letter name eats the following spaces in TeX; keep them with it
     i = e
   }
   endText()
+  if (parAt >= 0) b.flush()
 }
 
 /**
@@ -7157,6 +7303,7 @@ function readProject(
     ownAccents: ownAccents(ownTexts),
     ownLetters: ownLetters(ownTexts),
     macros: paperMacros(own),
+    parNames: parNamesOf(ownTexts),
     envMacros,
     ifs,
     ifValues,

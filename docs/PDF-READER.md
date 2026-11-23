@@ -9539,6 +9539,21 @@ expansion took off (all in this section's last item), and the rest are the holes
   display too, where its carrier is all that gives the paragraph its opening point); else 2, and no answer at all (an error in
   the call's own box, a call the probe never reached), no mark, as before this round. A 2 or no answer is never read as
   approval: an opening mark kept without TeX's is how a line moves (the review of #671).
+- **A definition that ends a paragraph ends the unit there** (`source/latex-front.ts` `parEndsOf`, `resolveParEnds`,
+  `parNamesOf`; the owner's report on 2611.23651v2, lane style-23651's trace). TeX reads a macro's call as its body: a `\par` at
+  the body's top level after its prose argument (`\newcommand{\eyebrow}[1]{{\small\bfseries\color{kicker}#1}\par}`) ends the
+  paragraph the argument was set in, one before it the paragraph before the call, as a `\par` written in the source does; so do
+  `\endgraf`, TeX's vertical commands (VERTICAL_COMMANDS), LaTeX's `\smallbreak`, `\medbreak` and `\bigbreak` (latex.ltx begins
+  each with `\par`), and a call of another of the paper's macros that does (a macro of no argument whose body ends a paragraph
+  and sets no text: `parNamesOf`). The reader walked such a call as a pair round its argument or as an element and kept the label
+  and the title after it one unit: one row, one size, one highlight for the two paragraphs TeX set. Now the unit ends before the
+  call, or after it, where TeX's paragraph does, in a unit of TeX's paragraphs (a paragraph, an abstract, a theorem, a note); a
+  `\medbreak` written between two paragraphs ends the first, as the vertical commands do. A bare group in the body is the body's
+  (a group ends no paragraph); an argument's, a box's or an environment's `\par` is that box's paragraph alone. Not covered: a
+  class's command whose body the paper does not ship (acmart's `\institution`), and `\\` in centred or ragged text, which LaTeX
+  sets as `\par` there, inside one unit by design (one sentence); nor a table's cell, a heading's, a caption's or an author
+  block's own text, whose readings bound them otherwise. The units split move their ids (unitId(kind, content)): their rows
+  are asked again, every other unit's id and row kept.
 - **Their native cases** (our own content, pdfLaTeX, XeLaTeX, LuaLaTeX and latex, with hyperref and without; every text item
   of the marked original at this round's head against the paper's own unmarked compile, to 0.01 pt): the note alone after a
   title's `\maketitle` in a group, after `\renewcommand{\thefootnote}`, of three forced lines in `{\let\thefootnote\relax…}`,
