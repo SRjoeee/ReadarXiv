@@ -15,13 +15,13 @@
 // The frame: the page's coordinates turned back, the turn's direction (ux, uy) being the frame's x axis on the page, about the
 // page's origin: a point (x, y) of the page is (ux x + uy y, -uy x + ux y) in its frame, which the reader turns back by
 // (ux, uy). No origin is chosen: every unit of one turn on a page shares one frame, as the glyphs of a turned table share it.
-import type { Line, Room } from '@readarxiv/format'
-import type { Doc, DocGlyph } from '../doc.ts'
-import { fakedCaps, mostOf, sourceText, styleOf, turnedStyleGlyph, unitSize } from './facts.ts'
-import { field, type Located, type Member, type Work } from './work.ts'
-
-import { cutLines, r2 } from './lines.ts'
+import type { El, Ink, Line, Room } from '@readarxiv/format'
+import type { Doc, DocGlyph, DocTurned } from '../doc.ts'
 import { TURN_SAME } from '../own/own.ts'
+import { fakedCaps, labelParts, mostOf, sourceText, styleOf, turnedStyleGlyph, unitSize } from './facts.ts'
+import { LABEL_KIND } from './geometry.ts'
+import { cutLines, r2 } from './lines.ts'
+import { field, INKED_CLASSES, type Located, type Member, piecesOf, standsOn, type Work } from './work.ts'
 
 /** a point of the page in the frame of direction (ux, uy) */
 export const toFrame = (ux: number, uy: number, x: number, y: number): [number, number] => [
@@ -44,14 +44,15 @@ const boxToFrame = (ux: number, uy: number, b: readonly number[]): [number, numb
   ]
 }
 
-/** every box of ink on page `p` of A in the frame of direction (ux, uy), but the member's own turned glyphs (`mine`): its level
- *  glyphs' boxes, its other turned glyphs' bands, its painted boxes (a rule, an image, a fill) */
+/** every box of ink on page `p` of A in the frame of direction (ux, uy), but the member's own turned glyphs (`mine`) and boxes
+ *  (`mineBoxes`): its level glyphs' boxes, its other turned glyphs' bands, its painted boxes (a rule, an image, a fill) */
 function inkBoxesOf(
   inkA: Doc,
   p: number,
   ux: number,
   uy: number,
   mine: ReadonlySet<number>,
+  mineBoxes: ReadonlySet<number>,
 ): [number, number, number, number][] {
   const pg = inkA.pages[p - 1]!
   const out: [number, number, number, number][] = []
@@ -64,55 +65,64 @@ function inkBoxesOf(
   })
   for (let b = 0; b < pg.kinds.length; b++) {
     // (a painted path's or an image's box: a glyph set turned is a box of kind -4, read above as its glyph)
-    if ((pg.kinds[b] as number) === -4) continue
+    if ((pg.kinds[b] as number) === -4 || mineBoxes.has(b)) continue
     out.push(boxToFrame(ux, uy, pg.boxes.slice(4 * b, 4 * b + 4)))
   }
   return out
 }
 
-/** a framed member's lines in its frame (its glyphs, seen in the frame as level glyphs, cut into lines by locate's own reading,
- *  lines.ts cutLines), its lead, its measure and its room: what the typesetter reads of any member, read here in the frame */
+/** a turned glyph of A as a level glyph of the frame of direction (ux, uy): along its line from its origin to its advance's
+ *  end, its font's band about its baseline, its own ink across that band */
+function frameGlyph(t: DocTurned, ux: number, uy: number): DocGlyph {
+  const [a, y] = toFrame(ux, uy, t.ox, t.oy)
+  const [b] = toFrame(ux, uy, t.ex, t.ey)
+  const blank = !/\S/.test(t.u)
+  return {
+    u: t.u,
+    code: t.code,
+    font: t.base,
+    base: t.base,
+    x0: Math.min(a, b),
+    x1: Math.max(a, b),
+    y,
+    top: blank ? y : y + t.ascent * t.size,
+    bottom: blank ? y : y + t.descent * t.size,
+    size: t.size,
+    ix0: Math.min(a, b),
+    ix1: blank ? Math.min(a, b) : Math.max(a, b),
+    n: t.n,
+    k: t.k,
+    form: false,
+    blank,
+    fill: t.fill ?? 0,
+  }
+}
+
+/** a framed member's lines in its frame (its text's and its elements' glyphs, seen in the frame as level glyphs, cut into lines
+ *  by locate's own reading, lines.ts cutLines, an element's told apart from its text as a level unit's formula is), its lead,
+ *  its measure and its room: what the typesetter reads of any member, read here in the frame; and the line each of its turned
+ *  glyphs was cut into, by its index among the page's turned */
 function frameFacts(
   inkA: Doc,
   mem: Member,
   p: number,
   ux: number,
   uy: number,
-): Pick<Member, 'lines' | 'lead' | 'room'> {
+): Pick<Member, 'lines' | 'lead' | 'room'> & { lineOf: Map<number, number> } {
   const T = inkA.pages[p - 1]!.turned!
-  // (each turned glyph as a level glyph of the frame: along its line from its origin to its advance's end, its font's band
-  // about its baseline, its own ink across that band, in stream order)
-  const gs: DocGlyph[] = [...mem.turned]
-    .sort((a, b) => a[1] - b[1])
-    .map(([, j]) => {
-      const t = T[j]!
-      const [a, y] = toFrame(ux, uy, t.ox, t.oy)
-      const [b] = toFrame(ux, uy, t.ex, t.ey)
-      const blank = !/\S/.test(t.u)
-      return {
-        u: t.u,
-        code: t.code,
-        font: t.base,
-        base: t.base,
-        x0: Math.min(a, b),
-        x1: Math.max(a, b),
-        y,
-        top: blank ? y : y + t.ascent * t.size,
-        bottom: blank ? y : y + t.descent * t.size,
-        size: t.size,
-        ix0: Math.min(a, b),
-        ix1: blank ? Math.min(a, b) : Math.max(a, b),
-        n: t.n,
-        k: t.k,
-        form: false,
-        blank,
-        fill: t.fill ?? 0,
-      }
-    })
+  // (its text's and its elements' turned glyphs in stream order)
+  const el = new Set([...mem.turnedEls.values()].flatMap((l) => l.map(([, j]) => j)))
+  const own = [...mem.turned, ...[...mem.turnedEls.values()].flat()].map(([, j]) => j).sort((a, b) => a - b)
+  const gs = own.map((j) => frameGlyph(T[j]!, ux, uy))
   const lines = cutLines(
     gs.map((_, i) => i),
     (i) => ({ page: p, g: gs[i]! }),
+    (i) => el.has(own[i]!),
   )
+  const lineOf = new Map<number, number>()
+  lines.forEach((l, q) => {
+    for (const i of l.gs) lineOf.set(own[i]!, q)
+  })
   // (its measure: its lines' extent, read on A as for a unit TeX states none of; its lead: its lines' step, else its own)
   const m0 = Math.min(...lines.map((l) => l.x0)),
     m1 = Math.max(...lines.map((l) => l.x1))
@@ -120,7 +130,14 @@ function frameFacts(
   const lead = steps.length ? r2([...steps].sort((a, b) => a - b)[steps.length >> 1]!) : mem.lead
   // (its room in the frame: along its lines to the nearest ink on their band before and after them; under its last line to the
   // nearest ink across its measure)
-  const others = inkBoxesOf(inkA, p, ux, uy, new Set(mem.turned.map(([, j]) => j)))
+  const others = inkBoxesOf(
+    inkA,
+    p,
+    ux,
+    uy,
+    new Set([...mem.turned, ...[...mem.turnedEls.values()].flat(), ...mem.turnedLabel].map(([, j]) => j)),
+    new Set([...mem.elBoxes.values()].flat().map(([, b]) => b)),
+  )
   const band0 = Math.min(...lines.map((l) => l.bottom)),
     band1 = Math.max(...lines.map((l) => l.top))
   let left = Number.NEGATIVE_INFINITY,
@@ -144,6 +161,92 @@ function frameFacts(
     ),
     lead,
     room,
+    lineOf,
+  }
+}
+
+/**
+ * A framed member's elements as a level member's are stated (geometry.ts lineGeometry), read in its frame: each piece's ink one
+ * box per line of the unit's its glyphs were cut into (`lineOf`), across their advances, on that line's baseline, its rules and
+ * images joined to the line their band meets (a box of their own where they meet none): what the typesetter crops, through the
+ * turn, from the original's turned ink. One of no ink of a class drawn from its ink (INKED_CLASSES) states which of three it is
+ * by the instrument's facts alone: TeX set nothing for it (Instrument `empty`, its points or its probe: a turned glyph is a
+ * painted box between them), it stands outside the unit's text (`outside`), or neither (its ink not found: the typesetter
+ * leaves the unit the original's). B's level stream between its points is no statement here: a turned unit sets none there
+ */
+function frameElements(w: Work, mem: Member, p: number, ux: number, uy: number, lineOf: ReadonlyMap<number, number>) {
+  const { inkA, emptyPiece, outsidePiece } = w.ix
+  const unit = mem.unit >= 0 ? w.units[mem.unit] : undefined
+  if (!unit) return
+  const T = inkA.pages[p - 1]!.turned!
+  const classOf = new Map(unit.classes ?? [])
+  for (const [id, p0] of piecesOf(unit.content)) {
+    if (p0.t !== 'el' && p0.t !== 'unit') continue
+    const kind = p0.t === 'unit' ? 'note-mark' : p0.kind
+    const byLine = new Map<number, Ink>()
+    for (const [, j] of mem.turnedEls.get(id) ?? []) {
+      const g = frameGlyph(T[j]!, ux, uy)
+      const q = lineOf.get(j)
+      if (g.blank || q === undefined) continue
+      const was = byLine.get(q)
+      byLine.set(q, [
+        p,
+        r2(Math.min(was?.[1] ?? g.x0, g.x0)),
+        r2(Math.min(was?.[2] ?? g.bottom, g.bottom)),
+        r2(Math.max(was?.[3] ?? g.x1, g.x1)),
+        r2(Math.max(was?.[4] ?? g.top, g.top)),
+        mem.lines[q]![4],
+      ])
+    }
+    const ink: Ink[] = [...byLine.entries()].sort((a, b) => a[0] - b[0]).map(([, k]) => k)
+    for (const [ap, ai] of mem.elBoxes.get(id) ?? []) {
+      const pg = inkA.pages[ap - 1]!
+      if ((pg.kinds[ai] as number) === -4) continue
+      const [x0, y0, x1, y1] = boxToFrame(ux, uy, pg.boxes.slice(4 * ai, 4 * ai + 4))
+      const j = standsOn(mem.lines, ap, y0, y1, y0)
+      const hit = j >= 0 ? byLine.get(j) : undefined
+      if (hit) {
+        hit[1] = r2(Math.min(hit[1], x0))
+        hit[2] = r2(Math.min(hit[2], y0))
+        hit[3] = r2(Math.max(hit[3], x1))
+        hit[4] = r2(Math.max(hit[4], y1))
+      } else ink.push([ap, r2(x0), r2(y0), r2(x1), r2(y1), j >= 0 ? mem.lines[j]![4] : r2(y0)])
+    }
+    const el: El = { kind, ink }
+    if (classOf.get(id)?.end) el.end = 1
+    const key = `${mem.unit}|${id}`
+    const stated = classOf.get(id)?.cls ?? kind
+    if (!ink.length && INKED_CLASSES.has(stated)) {
+      if (emptyPiece.has(key)) el.text = ''
+      else if (outsidePiece.has(key)) el.keep = 1
+    } else if (!ink.length && (stated === 'symbol' || stated === 'space') && outsidePiece.has(key)) el.keep = 1
+    mem.elements.push([id, el])
+  }
+}
+
+/** a framed member's label read in its frame as a level member's is (geometry.ts, facts-pass.ts readLabel): its glyphs' line,
+ *  its kind, its style, the line of its own it stands on, its name, number and punctuation (facts.ts labelParts), what the
+ *  structural-names rule draws it anew by in the target's words (PDF-READER §19.11) */
+function frameLabel(w: Work, mem: Member, p: number, ux: number, uy: number) {
+  if (!mem.turnedLabel.length) return
+  const T = w.ix.inkA.pages[p - 1]!.turned!
+  const order = [...mem.turnedLabel].sort((a, b) => a[1] - b[1])
+  const lg = order.map(([, j]) => frameGlyph(T[j]!, ux, uy))
+  const L = cutLines(
+    lg.map((_, i) => i),
+    (i) => ({ page: p, g: lg[i]! }),
+  )[0]
+  if (!L) return
+  const on = standsOn(mem.lines, p, L.bottom, L.top, L.base)
+  mem.labelAt = {
+    kind: LABEL_KIND[mem.kind] ?? 'number',
+    ink: [p, r2(L.x0), r2(L.bottom), r2(L.x1), r2(L.top), L.base],
+    style: styleOf(
+      order.map(([, j]) => turnedStyleGlyph(T[j]!)),
+      L.most,
+    ),
+    ...(on >= 0 ? { line: on } : {}),
+    ...labelParts(lg, p),
   }
 }
 
@@ -211,7 +314,10 @@ export function frameTurned(w: Work, held: readonly Held[]): Located['frames'] {
       ...(caps.ratio !== undefined ? { sc: caps.ratio } : {}),
       ...(caps.caps ? { caps: 1 as const } : {}),
     }
-    Object.assign(mem, frameFacts(inkA, mem, p, ux, uy))
+    const { lineOf, ...facts } = frameFacts(inkA, mem, p, ux, uy)
+    Object.assign(mem, facts)
+    frameElements(w, mem, p, ux, uy, lineOf)
+    frameLabel(w, mem, p, ux, uy)
     if (mem.lines.length === 1 && mem.lead === 12) mem.lead = r2(1.2 * size)
     mem.read.push('measure')
     mem.frame = [ux, uy]

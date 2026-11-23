@@ -48,7 +48,7 @@ const TEXT_KINDS = new Set<string>([
 ] satisfies readonly KnownElKind[])
 /** the classes the typesetter draws as the page's text (its lay/read.ts drawnAs: a citation, a reference, a macro) */
 const TEXT_CLASSES = new Set<string>(['cite', 'num', 'macro', 'umacro'] satisfies readonly KnownElClass[])
-const LABEL_KIND: Record<string, Label['kind']> = {
+export const LABEL_KIND: Record<string, Label['kind']> = {
   caption: 'float',
   heading: 'head',
   theorem: 'head',

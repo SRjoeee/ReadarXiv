@@ -35,6 +35,8 @@ export const empty = ({ members }: Work, u: number, kind: string, id: string): M
   elBoxes: new Map(),
   elBoxesB: new Map(),
   turned: [],
+  turnedEls: new Map(),
+  turnedLabel: [],
   lines: [],
   elements: [],
   style: { role: 'serif', size: 10 },
@@ -52,11 +54,18 @@ export const empty = ({ members }: Work, u: number, kind: string, id: string): M
  *  from its ink (INKED_CLASSES; a paper's own macro aside, which the typesetter leaves unproven where it has neither ink nor
  *  text), both its points stated with a glyph of B between them, none of its own; a text macro whose glyphs there are its
  *  unit's text is found as that text (its El.text, the reading between its points). `element not found`, null where none is */
-function notFound(w: Work, u: number, list: readonly number[], boxes: readonly [number, number][]): string | null {
+function notFound(
+  w: Work,
+  u: number,
+  list: readonly number[],
+  boxes: readonly [number, number][],
+  turned: Iterable<string> = [],
+): string | null {
   const { ins, roleB, pieceB, placeSpan, emptyPiece, gB, unitB } = w.ix
   const unit = ins.units[u]!
   if (!unit.classes?.length) return null
-  const found = new Set<number>()
+  // (and the pieces whose turned glyphs it gives them, `turned`, by id: a unit TeX set turned)
+  const found = new Set<number>([...turned].map(Number))
   for (const b of list) if (roleB[b] === ROLE.element && (pieceB[b] as number) >= 0) found.add(pieceB[b] as number)
   for (const [p, x] of boxes)
     if (ins.boxes[p]!.role[x] === ROLE.element && (ins.boxes[p]!.piece[x] as number) >= 0)
@@ -137,20 +146,27 @@ export function place(
     mem.cause = unit.why ?? (boxes.length ? 'no text' : 'no ink')
     return mem
   }
-  // (a source unit whose text TeX set turned (own/own.ts TURNED): its turned glyphs by role. Its text's are its own, laid in its
-  // frame (frames.ts); its label's stay A's ink where they stand, turned (no label of a turned unit is read yet: its translation
-  // is laid after it, as TeX set its text); an element's ink, a glyph or a box, is no crop of a turned unit's yet: such a unit
-  // stays the original's, `turned: an element`, counted (docs/PDF-READER.md §18.108))
+  // (a source unit whose text TeX set turned (own/own.ts TURNED): its turned glyphs by role, each of them the unit's as a level
+  // glyph of that role is. Its text's are its own, laid in its frame (frames.ts); an element's (a placeholder's, by its piece)
+  // travel with it, cut as its crop from the original's turned ink and drawn through its turn; its label's are its label, drawn
+  // anew or as its crop. An element's glyph of no piece is ink no piece of the unit's states: the unit stays the original's,
+  // `turned: an element of no piece` (docs/PDF-READER.md §18.108))
+  const turnedElsB = new Map<string, [number, number][]>()
+  let turnedLabelB: [number, number][] = []
   if (turnedB.length && !unit.figure && name === undefined) {
     const T = ins.turned ?? []
     const roleOf = ([p, j]: [number, number]) => T[p]?.role[j]
-    if (
-      turnedB.some((x) => roleOf(x) === ROLE.element) ||
-      boxes.some(([p, x]) => ins.boxes[p]!.role[x] === ROLE.element)
-    ) {
-      mem.cause = 'turned: an element'
+    const pieceOf = ([p, j]: [number, number]) => T[p]?.piece[j] ?? -1
+    if (turnedB.some((x) => roleOf(x) === ROLE.element && pieceOf(x) < 0)) {
+      mem.cause = 'turned: an element of no piece'
       return mem
     }
+    for (const x of turnedB)
+      if (roleOf(x) === ROLE.element) {
+        const id = String(pieceOf(x))
+        ;(turnedElsB.get(id) ?? turnedElsB.set(id, []).get(id)!).push(x)
+      }
+    turnedLabelB = turnedB.filter((x) => roleOf(x) === ROLE.label)
     turnedB = turnedB.filter((x) => roleOf(x) === ROLE.text)
     if (!turnedB.length && !list.length) {
       mem.cause = 'no ink'
@@ -202,18 +218,25 @@ export function place(
   }
   const turnedA: [number, number][] = []
   let turnedSame = true
-  for (const [p, j] of turnedB) {
-    const ap = m.turnedPage[p]?.[j] ?? 0
-    if (ap === 0) {
-      bad ??= 'content difference: a turned glyph with no partner'
-      continue
+  /** B's turned glyphs' partners on A, each one with none a content difference */
+  const turnedPartners = (l: readonly [number, number][], out: [number, number][]) => {
+    for (const [p, j] of l) {
+      const ap = m.turnedPage[p]?.[j] ?? 0
+      if (ap === 0) {
+        bad ??= 'content difference: a turned glyph with no partner'
+        continue
+      }
+      const aj = m.turnedIndex[p]![j] as number
+      out.push([ap, aj])
+      const tb = B.pages[p]!.turned![j]!
+      const ta = inkA.pages[ap - 1]!.turned![aj]!
+      if (ap !== p + 1 || Math.abs(ta.ox - tb.ox) > 0.01 || Math.abs(ta.oy - tb.oy) > 0.01) turnedSame = false
     }
-    const aj = m.turnedIndex[p]![j] as number
-    turnedA.push([ap, aj])
-    const tb = B.pages[p]!.turned![j]!
-    const ta = inkA.pages[ap - 1]!.turned![aj]!
-    if (ap !== p + 1 || Math.abs(ta.ox - tb.ox) > 0.01 || Math.abs(ta.oy - tb.oy) > 0.01) turnedSame = false
+    return out
   }
+  turnedPartners(turnedB, turnedA)
+  const turnedElsA = new Map([...turnedElsB].map(([id, l]) => [id, turnedPartners(l, [])] as const))
+  const turnedLabelA = turnedPartners(turnedLabelB, [])
   // its A ink by role
   const roleOfB = (b: number): [number, number] => [roleB[b] as number, pieceB[b] as number]
   const roleAt = new Map<number, [number, number]>()
@@ -275,7 +298,7 @@ export function place(
   // nothing between them, or TeX's probe said it sets none). Read as none, it is drawn as nothing while its ink is erased with
   // the unit's text or stays under the translation. A text macro whose glyphs there are the unit's text is found as that text.
   // The unit stays the original's)
-  if (!bad) bad = notFound(w, u, list, boxes)
+  if (!bad) bad = notFound(w, u, list, boxes, turnedElsB.keys())
   if (bad || (!aIdx.length && !turnedA.length)) {
     for (const [a] of unpaired) claims.hold(a)
     mem.cause = bad ?? 'no ink'
@@ -284,7 +307,16 @@ export function place(
   for (const [a, r] of unpaired) roleAt.set(a, r)
   mem.located = true
   if (!aIdx.length) {
-    claims.take(mem, { turned: turnedA })
+    // (and its elements' boxes, a rule or an image TeX set with a placeholder of its: travelling with it as its glyphs)
+    const elBoxes = new Map<string, [number, number][]>(),
+      elBoxesB = new Map<string, [number, number][]>()
+    for (const [ap, ai, p, x] of boxPartners) {
+      const k = ins.boxes[p]!.piece[x] as number
+      if (ins.boxes[p]!.role[x] !== ROLE.element || k < 0) continue
+      ;(elBoxes.get(String(k)) ?? elBoxes.set(String(k), []).get(String(k))!).push([ap, ai])
+      ;(elBoxesB.get(String(k)) ?? elBoxesB.set(String(k), []).get(String(k))!).push([p, x])
+    }
+    claims.take(mem, { turned: turnedA, turnedEls: turnedElsA, turnedLabel: turnedLabelA, elBoxes, elBoxesB })
     mem.place = turnedSame ? 'same' : 'shifted'
     return mem
   }
@@ -331,6 +363,8 @@ export function place(
     elBoxes: new Map<string, [number, number][]>(),
     elBoxesB: new Map<string, [number, number][]>(),
     turned: turnedA,
+    turnedEls: new Map<string, [number, number][]>(),
+    turnedLabel: [] as [number, number][],
   } satisfies Ink
   for (const [a, [role, k]] of [...roleAt].sort((x, y) => x[0] - y[0])) {
     if (role === ROLE.label) ink.label.push(a)

@@ -31,7 +31,7 @@ import type { Layout, Tokens } from '../fit/types.ts'
 import type { Item, Laid, Metrics, Page, Rows, Rules, Unlaid } from '../types.ts'
 import { inkLines } from '../emit/display.ts'
 import { adapt, rectOf, rowLinesOf, sharedPaper } from './adapt.ts'
-import { cropInks } from './clips.ts'
+import { cropInks, pageInks } from './clips.ts'
 import type { FlowMember } from './flow.ts'
 import { figuresOf } from './figures.ts'
 import { keptBefore, type Lead, ledBy, type NameWord } from './lead.ts'
@@ -322,7 +322,14 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
   for (const { sub, dir } of subs) for (const m of sub.members) members.push(turnedOf(m, dir))
   const rows = [...new Set([...flat.wait.rows, ...subs.flatMap((s) => s.sub.wait.rows)])]
   const faces = [...flat.wait.faces, ...subs.flatMap((s) => s.sub.wait.faces)]
-  const inks = [...(flat.inks ?? []), ...subs.flatMap((s) => s.sub.inks ?? [])]
+  // (the page's every piece's ink on the pages its crops are cut from, level and framed alike, on the page: a crop laid in a
+  // frame is cut clear of a level piece's ink as of another frame's, and a level one of theirs)
+  const cropPages = new Set(
+    members.flatMap((m) =>
+      m.state === 'laid' ? m.lines.flatMap((l) => l[3].flatMap((it) => ('src' in it ? [it.src[0]] : []))) : [],
+    ),
+  )
+  const inks = cropPages.size ? pageInks(part, cropPages) : []
   return {
     ...flat,
     wait: { rows, faces: [...new Map(faces.map((x) => [x[0], x])).values()] },

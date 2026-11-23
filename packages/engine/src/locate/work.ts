@@ -38,7 +38,7 @@ export interface Member {
   /** its elements made of a group set wholly in a face of one pitch on lines of their own (Rule 1 by group, PDF-READER §18.22):
    *  TeX's vertical box, its rows kept where TeX set them as a display's are, by piece id */
   ownRows?: Set<string>
-  /** A's glyphs (global) by role; elements by piece id. These seven lists are written by the ownership alone (ownership.ts),
+  /** A's glyphs (global) by role; elements by piece id. These nine lists are written by the ownership alone (ownership.ts),
    *  with the owner of each glyph of `text`, `label` and `els`: read-only everywhere else */
   readonly text: readonly number[]
   readonly label: readonly number[]
@@ -48,8 +48,11 @@ export interface Member {
   readonly elBoxes: ReadonlyMap<string, readonly [number, number][]>
   /** each element box's partner on B ([page index, index]), by piece id, in elBoxes' order: where TeX shipped it in B's stream */
   readonly elBoxesB: ReadonlyMap<string, readonly [number, number][]>
-  /** A's turned glyphs ([page, index among the page's turned]): a figure text set turned */
+  /** A's turned glyphs ([page, index among the page's turned]): a figure text set turned, a unit whose text TeX set turned */
   readonly turned: readonly [number, number][]
+  /** a unit whose text TeX set turned (frames.ts): its elements' turned glyphs by piece id, and its label's */
+  readonly turnedEls: ReadonlyMap<string, readonly [number, number][]>
+  readonly turnedLabel: readonly [number, number][]
   lines: Line[]
   elements: [string, El][]
   /** the elements (by piece id) of a symbol's class whose ink is not that symbol as its reading draws it (a letter or digit among
