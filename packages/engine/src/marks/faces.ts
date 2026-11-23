@@ -14,6 +14,14 @@
 // body in a group of its own, `\rtwo{…}`; a bibliography entry of `\bibinfo{…}` fields), most of its text's outside the groups
 // whose command names their style (an `\emph{…}` journal's face is the command's; none outside: the group is the unit's
 // text, nothing stated).
+// Its size: the size of its own text's glyphs (facts.ts unitSize: their median, up the line, math fonts aside; a faked small
+// capital aside, a lowercase source letter TeX set as a capital, which NFSS draws at its share of the size), stated where it
+// is not the size the group is drawn at by default: the size of the nearest group around it whose size is stated, else the
+// unit's base, its own text's (the glyphs of no group's; where every letter is a group's, all of them). The face compares
+// role, weight and slant, never a size, so a kicker `{\small\bfseries #1}` beside a title `{\fontsize{30}{35}\selectfont
+// \bfseries …}` (both bold, both sans) and `{\small …}` inside a line stated nothing, and their translations were drawn at the
+// unit's one size (2611.23651v2 p1, docs/PDF-READER.md §18.108). A group stated for its size alone keeps its source's style
+// name: the statement is the part's (SpanAt.style), never the unit's content.
 // Its stop: the glyphs
 // TeX set between the glyph of the group's last letter and the glyph of the source's next letter after it, where the source
 // between the two writes no character (white space, or an element whose ink is its own) and both words are matched whole
@@ -28,10 +36,12 @@ import { changeOf, classifyFont, faceKeyOf, fold, mostOf, type StyleGlyph, style
 type Span = Extract<Piece, { t: 'span' }>
 
 /** what TeX set for a group that its source does not say: its face (`style` its glyphs' Style, `change` what it changes of
- *  the face around it, LaTeX's names) where it is not that one's; its stop */
+ *  the face around it, LaTeX's names) where it is not that one's; its size where it is not the size it is drawn at by default
+ *  (`style` then too, `sized`; `change` absent where its face is the face around it); its stop */
 export interface GroupFact {
   style?: Style
   change?: string
+  sized?: true
   stop?: string
 }
 
@@ -71,6 +81,8 @@ export function groupFacts(
   const to: number[] = []
   /** the element a character is of (its text `textOf`'s), by order, -1 the text's own */
   const elOf: number[] = []
+  /** each character as the source writes it (its case: a faked small capital's reading) */
+  const srcCh: string[] = []
   let els = 0
   const P: number[] = []
   const ranges = new Map<Span, [number, number]>()
@@ -99,6 +111,7 @@ export function groupFacts(
       const el = p.t === 'el' && shown !== undefined ? els++ : -1
       for (const ch of chars) {
         group.push(top.span)
+        srcCh.push(ch)
         named.push(top.named)
         quiet.push(shown === undefined || SPACE.test(ch))
         elOf.push(el)
@@ -184,8 +197,31 @@ export function groupFacts(
 
   const out = new Map<Span, GroupFact>()
   const fact = (s: Span): GroupFact => out.get(s) ?? out.set(s, {}).get(s)!
+  /** the size of the glyphs of the letters from `a` to `b` that `keep` keeps, a faked small capital aside (a lowercase source
+   *  letter TeX set as a capital: NFSS's virtual small capitals, at their share of the size, which is no size of the text's) */
+  const sizeIn = (a: number, b: number, keep: (i: number) => boolean): number | undefined => {
+    const gs = glyphsIn(a, b, (i) => {
+      if (!keep(i)) return false
+      const ch = srcCh[i] as string
+      const m = matched[from[i] as number] as number
+      const u = m >= 0 ? (glyphs[gOf[m] as number] as StyleGlyph).u : ''
+      return !(ch !== ch.toUpperCase() && u !== u.toLowerCase() && u === u.toUpperCase())
+    })
+    return unitSize(gs)
+  }
+  /** a size as the page states it, to the hundredth of a point (the coordinates' grid): two sizes TeX set alike */
+  const r2 = (v: number) => Math.round(v * 100) / 100
+  // (the unit's base size: its own text's, the glyphs of no group's; where every letter is a group's, all of them)
+  const base = sizeIn(0, group.length, (i) => group[i] === null) ?? sizeIn(0, group.length, () => true)
+  /** each group's size as stated, by which a group inside it is drawn by default */
+  const stated = new Map<Span, number>()
+  const inherited = (s: Span): number | undefined => {
+    for (let up = parent.get(s) ?? null; up; up = parent.get(up) ?? null) if (stated.has(up)) return stated.get(up)
+    return base
+  }
   /** the stop at each place a group's text ends, the group it is stated on (the innermost of those that end there) */
   const stops = new Map<number, { s: Span; stop: string }>()
+  // (in the order the groups open: a group's statement is read before the groups inside it)
   for (const [s, [a, b]] of ranges) {
     // ---- its face: its own text's, where the face around it is another
     const gs = glyphsIn(a, b, (i) => group[i] === s)
@@ -196,6 +232,20 @@ export function groupFacts(
       void [_upper, _fill]
       fact(s).style = { ...st, size: unitSize(gs) ?? st.size }
       fact(s).change = changeOf(face, around)
+    }
+    // ---- its size: its own text's, where it is not the size the group is drawn at by default
+    const size = sizeIn(a, b, (i) => group[i] === s)
+    const by = inherited(s)
+    if (size !== undefined && by !== undefined && r2(size) !== r2(by)) {
+      stated.set(s, size)
+      const f = fact(s)
+      if (f.style) f.style = { ...f.style, size }
+      else {
+        const { upper: _upper, fill: _fill, ...st } = styleOf(gs)
+        void [_upper, _fill]
+        f.style = { ...st, size }
+      }
+      f.sized = true
     }
     // ---- its stop: TeX's punctuation between its last letter and the source's next one, the source writing none there
     let last = b - 1

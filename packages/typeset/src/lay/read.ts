@@ -24,7 +24,7 @@ import { type CjkFaces, faceOf, ownSmallCapsOf, type Roles, rolesFor } from '../
 import { classifyFont, familyOfFonts } from '../breaker/font-names.ts'
 import { measure } from '../breaker/measure.ts'
 import { noStart } from '../breaker/script.ts'
-import { baseOf, type TokenRules, type TStyle, tokens as tokensOf } from '../breaker/tokens.ts'
+import { capsBaseOf, type TokenRules, type TStyle, tokens as tokensOf } from '../breaker/tokens.ts'
 import type { Tokens } from '../fit/types.ts'
 import type { Metrics } from '../types.ts'
 import { breakMaps, type Breaks, clsOf, factsOf, statedBreaks, type V0Piece } from '../unit/breaks.ts'
@@ -107,9 +107,10 @@ export function rowPieces(m: Placed, content: readonly OutPiece[]): V0Piece[] {
         out.push(e?.nested ? { t: 'nested', k: Number(p.id) } : { t: 'ph', src: srcOfEl(p.id, e), k: Number(p.id) })
       } else {
         const id = Number(p.id)
-        // (the face TeX set it in, where its command names no style the rules know: SpanAt.style)
+        // (the face TeX set it in, where its command names no style the rules know, and the size TeX set it at, where it is not
+        // the size it is drawn at by default: SpanAt.style)
         const st = spans.get(p.id)?.style
-        const face = st ? { face: { role: st.role, bold: st.bold, slant: st.slant } } : {}
+        const face = st ? { face: { role: st.role, bold: st.bold, slant: st.slant, size: st.size } } : {}
         // (a title its source sets in the line with no mark after it: SpanAt.runin, tokens.ts sets the separation after it)
         const runin = spans.get(p.id)?.runin ? { runin: true as const } : {}
         out.push({ t: 'open', src: srcOfSpan(spans.get(p.id)), id, k: id, ...face, ...runin })
@@ -598,8 +599,8 @@ export function readMember(i: ReadInput): ReadOut {
   const resolved = Object.assign(
     { get: (k: number) => res.get(k) as never },
     {
-      // (no measured base: the base is baseOf over the unit's groups from its original's style, TeX's font state as A's
-      // glyphs show it (Style): a majority its own groups set is theirs, not the base's)
+      // (no measured base: the base is the original's style as the part states it, TeX's glyphs' weight and slant of the unit's
+      // own text (Style; its small capitals by capsBaseOf over its groups))
       measured: { st: null, fill: m.style.fill ?? 0, pieces: null },
       ...(m.style.sc !== undefined ? { capsRatio: m.style.sc } : {}),
       orig: { size: m.style.size },
@@ -679,7 +680,7 @@ export function readMember(i: ReadInput): ReadOut {
       ownRow && !i.lead
         ? // (its face the relabel's as a lead's is (leadOf over the unit's base, tokens.ts): the label's weight, slant and fill on
           // the unit's base style)
-          { text: lab.label!.drawn!, st: { ...baseOf(unit, given), ...(leadOf(lab.label)?.parts[0]?.st ?? {}) } }
+          { text: lab.label!.drawn!, st: { ...capsBaseOf(unit, given), ...(leadOf(lab.label)?.parts[0]?.st ?? {}) } }
         : null,
     lead: !!i.lead,
     cjkSize,

@@ -4,7 +4,7 @@
 // Its widths come from Metrics: the table adapter in tests and the gate (the tap's recorded widths), the canvas adapter in
 // the reader.
 import type { Metrics } from '../types.ts'
-import type { Face, Token } from './tokens.ts'
+import { type Face, relOf, type Token } from './tokens.ts'
 
 /** the canvas font string of a face at `px`: a role face's size its correction's share */
 export const fontString = (face: Face, px: number): string =>
@@ -16,9 +16,9 @@ export const fontString = (face: Face, px: number): string =>
 export function measure(tokens: readonly Token[], metrics: Metrics): Token[] {
   const w100 = (s: string, face: Face) => metrics.advance(fontString(face, 100), 100, s)
   return tokens.map((t) => {
-    if (t.space) return { ...t, w100: w100(' ', t.face!) + (t.leadGap ?? 0) }
+    if (t.space) return { ...t, w100: w100(' ', t.face!) * relOf(t) + (t.leadGap ?? 0) }
     if (typeof t.s === 'string' && t.face)
-      return { ...t, w100: w100(t.s, t.face) * (t.sup ? 0.62 : (t.sc ?? 1)) + (t.leadGap ?? 0) }
+      return { ...t, w100: w100(t.s, t.face) * (t.sup ? 0.62 : (t.sc ?? 1)) * relOf(t) + (t.leadGap ?? 0) }
     return t
   })
 }

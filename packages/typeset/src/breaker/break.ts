@@ -9,7 +9,7 @@ import type { FitBlock, FitParams, FitState, LaidItem, LaidLine } from '../fit/t
 import type { Mins } from './hyph.ts'
 import type { FitMeasure } from './measure.ts'
 import type { Slot } from './slots.ts'
-import type { Face, Token } from './tokens.ts'
+import { type Face, relOf, type Token } from './tokens.ts'
 
 /** a breaking at a state: its lines, the tokens it laid from (its own copy where it cut one), how many it set of all */
 export type Broken = { lines: LaidLine[]; tokens: Token[]; rest: number; total: number; spilled?: boolean }
@@ -101,7 +101,7 @@ export function lineExtent(line: { items: readonly LaidItem[] }, f: number, scal
     }
     if (!t.s || t.space || !t.face) continue
     const ink = m.ink100(t.s, t.face),
-      k = (t.sup ? 0.62 : 1) * (t.sc ?? 1),
+      k = (t.sup ? 0.62 : 1) * (t.sc ?? 1) * relOf(t),
       up = t.sup ? 0.36 * f : 0
     ta = Math.max(ta, up + (ink.a * k * f) / 100)
     td = Math.max(td, (ink.d * k * f) / 100 - up)
@@ -918,7 +918,7 @@ function breakLines(
           } else {
             const t = tokens[q]!,
               chars = graphemesOf(t.s as string)
-            const per = chars.map((c) => (P.measure.w100(c, t.face as Face) * (t.sc ?? 1) * f) / 100)
+            const per = chars.map((c) => (P.measure.w100(c, t.face as Face) * (t.sc ?? 1) * relOf(t) * f) / 100)
             let k = 0,
               head = 0
             while (k < chars.length && used + head + per[k]! <= cap) head += per[k++]!
@@ -949,7 +949,7 @@ function breakLines(
               setToken(q, {
                 ...t,
                 s: tail,
-                w100: P.measure.w100(tail, t.face as Face) * (t.sc ?? 1),
+                w100: P.measure.w100(tail, t.face as Face) * (t.sc ?? 1) * relOf(t),
                 glue: false,
                 cont: false,
                 asp: false,
@@ -963,7 +963,7 @@ function breakLines(
           const chars = graphemesOf(t0.s)
           let k = 0,
             used = 0
-          const per = chars.map((c) => (P.measure.w100(c, t0.face as Face) * (t0.sc ?? 1) * f) / 100)
+          const per = chars.map((c) => (P.measure.w100(c, t0.face as Face) * (t0.sc ?? 1) * relOf(t0) * f) / 100)
           while (k < chars.length && used + per[k]! <= cap) used += per[k++]!
           // (in a merged cell's fill, P.words: only where a word ends inside it, the last that fits; none, and the state fails)
           if (words && t0.wordEnds) {
@@ -986,7 +986,7 @@ function breakLines(
           setToken(i, {
             ...t0,
             s: tail,
-            w100: P.measure.w100(tail, t0.face as Face) * (t0.sc ?? 1),
+            w100: P.measure.w100(tail, t0.face as Face) * (t0.sc ?? 1) * relOf(t0),
             glue: false,
             asp: false,
             ...wordsAfter(t0, chars.slice(0, k).join('').length),
@@ -1054,7 +1054,7 @@ function breakLines(
           setToken(i, {
             ...t0,
             s: tail,
-            w100: P.measure.w100(tail, t0.face as Face) * (t0.sc ?? 1),
+            w100: P.measure.w100(tail, t0.face as Face) * (t0.sc ?? 1) * relOf(t0),
             glue: false,
             asp: false,
             ...wordsAfter(t0, cut.at!),

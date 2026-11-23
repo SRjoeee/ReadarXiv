@@ -3,7 +3,7 @@
 // its raise, its fill, its slant; a crop's copy text over it) and where a crop is laid (its ink's top on the line, its width
 // the item's, scaled by the line's scale). The SVG markup and the device pixels are the painter's; this is what they draw,
 // in PDF units on A.
-import type { Face, Token } from '../breaker/tokens.ts'
+import { type Face, relOf, type Token } from '../breaker/tokens.ts'
 import { fontString } from '../breaker/measure.ts'
 import { charsOf, clustersOf } from '../breaker/script.ts'
 import type { FitState, LaidItem, LaidLine, Layout } from '../fit/types.ts'
@@ -28,6 +28,8 @@ export type TextRun = {
   /** each item drawn in it: its index on the line and the UTF-16 offset of its text in the run's */
   items: [number, number][]
   sc?: number
+  /** its size over the line's (its tokens' group's, TStyle.rel) */
+  rel?: number
 }
 export type LineRun = TextRun | { crop: number }
 
@@ -85,11 +87,13 @@ export function lineRuns(line: LaidLine, L: Layout): LineRun[] {
       cur.face.oblique === t.face!.oblique &&
       cur.sup === !!t.sup &&
       cur.color === t.st?.color &&
-      cur.sc === t.sc
+      cur.sc === t.sc &&
+      (cur.rel ?? 1) === relOf(t)
     if (single) {
       if (!sameFace || !cur!.chars) {
         flush()
         run = { face: t.face!, chars: true, sup: false, color: t.st?.color, text: '', xs: [], items: [] }
+        if (relOf(t) !== 1) run.rel = relOf(t)
       }
       const r = run as unknown as TextRun
       r.items.push([n, r.text.length])
@@ -121,6 +125,7 @@ export function lineRuns(line: LaidLine, L: Layout): LineRun[] {
           items: [],
         }
         if (t.sc) run.sc = t.sc
+        if (relOf(t) !== 1) run.rel = relOf(t)
       }
       const r = run as unknown as TextRun
       r.items.push([n, r.text.length])
@@ -158,7 +163,7 @@ export function runEdge(
   }
   const before = run.text.slice(0, at)
   const LF = segOf(line, L).f,
-    f = LF * (run.sup ? 0.62 : 1) * (run.sc ?? 1)
+    f = LF * (run.sup ? 0.62 : 1) * (run.sc ?? 1) * (run.rel ?? 1)
   // (the tracking after each character a reader sees before the edge, a grapheme cluster, as the breaker measures it (tokW) and
   // the drawing's letter spacing sets it)
   return run.xs[0]! + (w100(before, run.face) * f) / 100 + (run.track ? run.track * LF * charsOf(before) : 0)
@@ -269,7 +274,7 @@ export function displayLines(L: Layout, page: number): DisplayLine[] {
         s: run.text,
         x: run.xs[0]!,
         face: fontString(run.face, 100),
-        size: LF * (run.sup ? 0.62 : 1) * (run.sc ?? 1),
+        size: LF * (run.sup ? 0.62 : 1) * (run.sc ?? 1) * (run.rel ?? 1),
       }
       const fill = fillOf(run.color)
       if (fill !== undefined) item.fill = fill

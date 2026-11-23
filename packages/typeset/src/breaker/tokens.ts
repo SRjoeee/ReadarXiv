@@ -25,8 +25,11 @@ import { drawnText, plainTracker, shown, type TextPiece, transformMap } from './
 import { dropMarks, type MarksAfter, type MarksTrace, mergeTail } from '../unit/marks.ts'
 import type { V0Piece } from '../unit/breaks.ts'
 
-/** a run's style as the tokens carry it: its family, weight, slant, small capitals, design, colour, link… */
+/** a run's style as the tokens carry it: its family, weight, slant, small capitals, design, colour, link…; `rel` its size over
+ *  the member's, a group TeX set at another size (SpanAt.style.size over Placed.style.size), by which its tokens are measured,
+ *  their lines' heights read (B.break lineExtent) and drawn (D.display), as `sc` scales a small capitals run */
 export type TStyle = {
+  rel?: number
   fam?: string
   bold?: boolean
   italic?: boolean
@@ -55,6 +58,8 @@ export type Face = {
 export type Fill = readonly [order: 1 | 2, n: number]
 /** a fill with one more of order `o` (TeX's: only the highest order stretches) */
 const fillWith = (f: Fill | undefined, o: 1 | 2): Fill => (!f || o > f[0] ? [o, 1] : o === f[0] ? [o, f[1] + 1] : f)
+/** a token's size over its member's: its group's (TStyle.rel, a group TeX set at another size), else 1 */
+export const relOf = (t: { st?: TStyle | undefined }): number => t.st?.rel ?? 1
 /** a token (layer2.d.mts Token): a run of one face, a space, a crop, or a control token */
 export type Token = {
   s?: string
@@ -278,9 +283,6 @@ const SENTENCE_END = /\p{Sentence_Terminal}$/u
  *  note's mark (engine bundle/run-in.ts's BETWEEN, by the part's El.kind) */
 const BETWEEN = new Set<string>(['space', 'cite', 'note-mark', 'footnote'] satisfies readonly KnownElKind[])
 
-const GROUP_ITALIC = 1,
-  GROUP_BOLD = 2,
-  GROUP_CAPS = 4
 /** a string's UTF-16 code units that are no white space. The comparisons below are ECMAScript's `\s`, its
  *  WhiteSpace and LineTerminator code points (ECMA-262's White Space and Line Terminators: U+0009-U+000D, U+0020, U+00A0,
  *  U+FEFF and the Space_Separator code points U+1680, U+2000-U+200A, U+202F, U+205F, U+3000; U+2028, U+2029): the same 25
@@ -307,67 +309,43 @@ function nonSpace(s: string): number {
   }
   return n
 }
-/** what a declaration sets, as a group's bits: an italic, bold or small capitals switch (\em, \itshape, \bfseries, \sc, …):
- *  latex.ltx's \em, \itshape, \slshape, \bfseries, \scshape, article.cls's \it, \sl, \bf, \sc */
-const declared = (src: string | undefined): number =>
-  (/^\\(?:em|it|itshape|sl|slshape)$/.test(src ?? '') ? GROUP_ITALIC : 0) |
-  (/^\\(?:bf|bfseries)$/.test(src ?? '') ? GROUP_BOLD : 0) |
-  (/^\\(?:sc|scshape)$/.test(src ?? '') ? GROUP_CAPS : 0)
-/** the unit's base style without what its own groups set, and its declarations: a declaration sets its group from where it
- *  stands, at the unit's top level the rest of it (the \sc rule, for every switch: the part's style is the state of the unit's
- *  glyphs, its declarations' already, so that "{\em …}" read over it would toggle an italic base upright where its glyphs
- *  outside its styled pieces stand upright) */
-export function baseOf(unit: TokensInput['unit'], base: TStyle): TStyle {
+/** whether a declaration is a small capitals switch: latex.ltx's \scshape, article.cls's \sc */
+const capsSwitch = (src: string | undefined): boolean => /^\\(?:sc|scshape)$/.test(src ?? '')
+/** the unit's base small capitals without what its own groups set, and its declarations: a declaration sets its group from
+ *  where it stands, at the unit's top level the rest of it (the \sc rule). Its weight and slant are the part's as stated
+ *  (Placed.style: the engine's reading of TeX's glyphs, the unit's own text's, each attribute outside the scopes that set it,
+ *  docs/PDF-READER.md §18.108), never read again here: this count of the row's characters under the groups decided a weight
+ *  from a translation's wording (2611.23651v2's kicker drawn regular, its every glyph bold). Small capitals are still read so:
+ *  the engine states no base of them by scope (not this round) */
+export function capsBaseOf(unit: TokensInput['unit'], base: TStyle): TStyle {
   let total = 0,
-    after = 0,
-    inItalic = 0,
-    inBold = 0,
+    after = false,
     inCaps = 0,
-    nItalic = 0,
-    nBold = 0,
     nCaps = 0
-  const open: number[] = []
+  const open: boolean[] = []
   for (const p of unit.pieces) {
     if (p.t === 'open') {
       const src = p.src as string
-      // (a bare group a face switch opens is stated with that switch as its command, `\em{` (SpanAt.cmd: the instrument's
-      // switchesOf), and sets its group's face as the switch inside it did, declared's: latex.ltx's \textit, \emph, \itshape,
-      // \textsl, \textbf, \bfseries, \textsc, \scshape)
-      const bits =
-        (/^\\(?:textit|emph|itshape|textsl)\b/.test(src) ? GROUP_ITALIC : 0) |
-        (/^\\(?:textbf|bfseries)\b/.test(src) ? GROUP_BOLD : 0) |
-        (/^\\(?:textsc|scshape)\b/.test(src) ? GROUP_CAPS : 0) |
-        declared(/^(\\[A-Za-z]+)\{$/.exec(src)?.[1])
-      open.push(bits)
-      if (bits & GROUP_ITALIC) nItalic++
-      if (bits & GROUP_BOLD) nBold++
-      if (bits & GROUP_CAPS) nCaps++
+      // (a bare group a face switch opens is stated with that switch as its command, `\sc{` (SpanAt.cmd: the instrument's
+      // switchesOf), and sets its group's small capitals as the switch inside it did: latex.ltx's \textsc, \scshape)
+      const caps = /^\\(?:textsc|scshape)\b/.test(src) || capsSwitch(/^(\\[A-Za-z]+)\{$/.exec(src)?.[1])
+      open.push(caps)
+      if (caps) nCaps++
     } else if (p.t === 'close') {
-      const bits = open.pop() ?? 0
-      if (bits & GROUP_ITALIC) nItalic--
-      if (bits & GROUP_BOLD) nBold--
-      if (bits & GROUP_CAPS) nCaps--
-    } else if (p.t === 'ph' && declared(p.src)) {
-      const bits = declared(p.src)
-      if (!open.length) after |= bits
-      else {
-        const fresh = bits & ~open[open.length - 1]!
-        open[open.length - 1]! |= fresh
-        if (fresh & GROUP_ITALIC) nItalic++
-        if (fresh & GROUP_BOLD) nBold++
-        if (fresh & GROUP_CAPS) nCaps++
+      if (open.pop()) nCaps--
+    } else if (p.t === 'ph' && capsSwitch(p.src)) {
+      if (!open.length) after = true
+      else if (!open[open.length - 1]) {
+        open[open.length - 1] = true
+        nCaps++
       }
     } else if (p.t === 'text') {
       const n = nonSpace(p.s)
       total += n
-      if (nItalic || after & GROUP_ITALIC) inItalic += n
-      if (nBold || after & GROUP_BOLD) inBold += n
-      if (nCaps || after & GROUP_CAPS) inCaps += n
+      if (nCaps || after) inCaps += n
     }
   }
   const out = { ...base }
-  if (total && base.italic && inItalic >= 0.5 * total) out.italic = false
-  if (total && base.bold && inBold >= 0.5 * total) out.bold = false
   if (total && base.caps && inCaps >= 0.5 * total) out.caps = false
   return out
 }
@@ -536,7 +514,8 @@ export function tokens(i: TokensInput): Tokens {
   const plain = i.tagWords ? plainTracker() : null
   const measured = resolved.measured ?? null
   const { fill: _fill, ...given } = i.base
-  const base: TStyle = measured?.st ? { ...given, ...measured.st } : baseOf(unit, given)
+  // (the base as the part states it: TeX's glyphs' weight and slant, the unit's own text's; its small capitals by capsBaseOf)
+  const base: TStyle = measured?.st ? { ...given, ...measured.st } : capsBaseOf(unit, given)
   if (Number.isInteger(measured?.fill) && measured!.fill! > 0) base.color = hexOf(measured!.fill!)
   const stack: TStyle[] = [{ ...base }]
   const style = () => stack.at(-1)!
@@ -903,7 +882,12 @@ export function tokens(i: TokensInput): Tokens {
       if (p.runin && spaceless && opensSentence()) runinId = p.id
       const next = openStyle(p, style(), designs)
       const link = LINK_OPEN.test(p.src as string) && p.id !== undefined ? { link: p.id } : {}
-      stack.push({ ...(next ?? style()), ...colourRun(k, p), ...link })
+      // (its size where the part states one, whatever its command: its share of the member's size, as TeX set its own glyphs, so
+      // absolute and held by what it holds; none stated, the size of the group around it)
+      const size = p.face?.size,
+        of = resolved.orig?.size
+      const rel = size! > 0 && of! > 0 ? { rel: size! / of! } : {}
+      stack.push({ ...(next ?? style()), ...rel, ...colourRun(k, p), ...link })
       return
     }
     if (p.t === 'close') {

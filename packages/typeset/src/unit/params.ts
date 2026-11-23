@@ -13,7 +13,7 @@
 // - `cjkSize`: the size correction of the target's CJK body face (B.faces); `lineskip`: TeX's \lineskip and its limit
 //   (the run's LINESKIP, TeX's log); `heading`, `numbered`: U.decor's
 import { median, type Rect } from '../util.ts'
-import { baseOf, type TokensInput, type TStyle } from '../breaker/tokens.ts'
+import { capsBaseOf, type TokensInput, type TStyle } from '../breaker/tokens.ts'
 import type { Block } from './blocks.ts'
 
 /** a CJK target's small capitals at this share of the original's size (a CJK target has no case: docs/PDF-READER.md §18.1) */
@@ -78,7 +78,7 @@ export function unitSizeOf(prep: Original, P: Pick<ParamsRules, 'cjk'>, unit: To
   if (!P?.cjk) return size
   const caps = prep.measured?.st
     ? prep.measured.st.caps
-    : !!prep.orig!.st?.caps && (!unit?.pieces || baseOf(unit, prep.orig!.st!).caps)
+    : !!prep.orig!.st?.caps && (!unit?.pieces || capsBaseOf(unit, prep.orig!.st!).caps)
   return caps ? size! * CJK_CAPS_SIZE : size
 }
 /** the size the unit is laid at, its lines' median height where no glyph was read */

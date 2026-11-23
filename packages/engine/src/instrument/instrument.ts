@@ -490,10 +490,13 @@ const COMMAND = /^\\[A-Za-z@]/
  * What TeX set for a source unit's groups that their source does not say, stated (packages/engine/src/marks/faces.ts over its
  * text glyphs on B, `glyphs`): a group whose command names no style the table knows (its style `other`: a paper's macro, as
  * 2608.25210v2's `\topic{…}` that sets its argument `{\bf #1.}`), set in a face that is not the face around it, states that
- * face (its `style` named for what it changes, its group's facts in `spans` the face's Style); any group the stop TeX set at its
- * end that its source does not write (`stop`). Then the unit's run-in labels `must` (runIns), each group of a face so read a
- * style group. `textOf` the text TeX sets for an element whose glyphs are the unit's text (a text macro's, PieceClass `text`).
- * In place; returns `spans` (spansOf's, by open piece id) with the faces stated
+ * face (its `style` named for what it changes, its group's facts in `spans` the face's Style); any group, of any command or
+ * none, set at another size than it is drawn at by default states its Style with that size in `spans` (its own glyphs' face
+ * and size; its span's style kept as its source names it: the unit's content, and so its wire, do not move); any group the
+ * stop TeX set at its end that its source does not write (`stop`). Then the unit's run-in labels `must` (runIns), each group
+ * of a face so read a style group. `textOf` the text TeX sets for an element whose glyphs are the unit's text (a text macro's,
+ * PieceClass `text`). In place; returns `spans` (spansOf's, by open piece id, with every group a style is stated for, in
+ * the order of their open pieces) with the faces and sizes stated
  */
 export function marksOf(
   content: Piece[],
@@ -506,13 +509,31 @@ export function marksOf(
   const styles = new Map<string, SpanClass['style']>()
   for (const [s, f] of facts) {
     if (f.stop) s.stop = f.stop
-    if (!f.style || s.style !== 'other' || !COMMAND.test(s.open ?? '')) continue
-    s.style = f.change!
-    faced.add(s)
-    styles.set(s.id, f.style)
+    if (!f.style) continue
+    if (f.change && s.style === 'other' && COMMAND.test(s.open ?? '')) {
+      s.style = f.change
+      faced.add(s)
+      styles.set(s.id, f.style)
+    } else if (f.sized) styles.set(s.id, f.style)
   }
   runIns(content, faced)
-  return spans.map(([id, x]) => (styles.has(id) ? [id, { ...x, style: styles.get(id) }] : [id, x]))
+  const out = spans.map(([id, x]): [string, SpanClass] =>
+    styles.has(id) ? [id, { ...x, style: styles.get(id) }] : [id, x],
+  )
+  const listed = new Set(spans.map(([id]) => id))
+  for (const [id, style] of styles) if (!listed.has(id)) out.push([id, { style }])
+  if (out.length === spans.length) return out
+  // (in the order of their open pieces in the content)
+  const at = new Map<string, number>()
+  const walk = (ps: readonly Piece[]) => {
+    for (const p of ps)
+      if (p.t === 'span') {
+        at.set(p.id, at.size)
+        walk(p.content)
+      }
+  }
+  walk(content)
+  return out.sort((a, b) => (at.get(a[0]) ?? Infinity) - (at.get(b[0]) ?? Infinity))
 }
 
 // ---- the layer's reading of an element's source: texToText2, phClass2, textSymbol and phClassProven, by which the part

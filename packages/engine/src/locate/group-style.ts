@@ -47,11 +47,19 @@ interface Face {
 }
 /** what a unit's text is set in by its groups: for its fill and its face, its own (undefined where no glyph of it tells
  *  one), each group's set apart (by its open piece's id: a fill; a face as the Style its own glyphs are set in), and whether
- *  any scope's value is not the one around it */
+ *  any scope's value is not the one around it; `text`, the positions in `glyphs` of its own text's letters, those of no group
+ *  (its base size's) */
 interface GroupStyle {
   fill: { own: number | undefined; groups: [id: string, fill: number][]; apart: boolean }
   face: { own: Face | undefined; groups: [id: string, style: Style][]; apart: boolean }
+  text: number[]
 }
+/** what a group style or a face switch sets of a face: its weight (bold, medium), its slant (italic, upright); a face change a
+ *  paper's macro was read to make names each (marks/faces.ts, `sans-bold`) */
+const SETS_WEIGHT = /(?:^|-)(?:bold|medium)(?:-|$)/
+const SETS_SLANT = /(?:^|-)(?:italic|upright)(?:-|$)/
+/** a group or a switch that turns the slant around it (latex.ltx's \emph, \em): its run is the other slant of the text around it */
+const TOGGLES_SLANT = /^\\(?:emph|em)(?![A-Za-z@])/
 
 /** the steps an alignment may take, per letter of the two sides: a resource bound (myers.ts `work`), never a decision about
  *  content; past it the letters not reached are not read */
@@ -72,7 +80,8 @@ export function hasScopes(content: readonly Piece[], switches: (el: El) => boole
  * The fills and faces `content`'s text is set in on A: `glyphs` the unit's text glyphs on A in stream order; `textOf` the text
  * TeX sets for an element whose glyphs are the unit's text (a text macro's), none for one whose ink is its own;
  * `colourSwitch` whether an element is a colour switch (its run, the rest of its group, set in the fill TeX's log states for
- * it); `faceSwitch` whether it is a face declaration (its run set in the face it names)
+ * it); `faceSwitch` whether it is a face declaration (its run set in the face it names), `switchStyle` the group style it
+ * names (`bold`, `italic`, `mono`: what its run sets of the face; none told, its weight and its slant both)
  */
 export function groupStyleOf(
   content: readonly Piece[],
@@ -80,30 +89,61 @@ export function groupStyleOf(
   textOf: (el: El) => string | undefined = () => undefined,
   colourSwitch: (el: El) => boolean = () => false,
   faceSwitch: (el: El) => boolean = () => false,
+  switchStyle: (el: El) => string | undefined = () => undefined,
 ): GroupStyle {
   // ---- the scopes (0 the unit's own): each with the scope around it, the group it is (null: a switch's run, the unit), the
-  // attribute a switch's run sets, and whether it sets the fill or the face by its definition (or stands inside one that does)
+  // attribute a switch's run sets, and whether it sets the fill or the face by its definition (or stands inside one that does);
+  // of the face, whether it sets the weight, the slant, and whether the slant it is set in is turned (an odd count of \emph and
+  // \em runs around it: the base's slant read as it would be without them)
   const parent: number[] = [-1]
   const span: (Span | null)[] = [null]
   const sw: ('fill' | 'face' | null)[] = [null]
   const fillSet: boolean[] = [false]
   const faceSet: boolean[] = [false]
+  const weightSet: boolean[] = [false]
+  const slantSet: boolean[] = [false]
+  const turned: boolean[] = [false]
   // ---- the source's letters, each with its scope
   const P: number[] = []
   const scopeOf: number[] = []
-  const open = (cur: number, s: Span | null, kind: 'fill' | 'face' | null, setsFill: boolean, setsFace: boolean) => {
+  const open = (
+    cur: number,
+    s: Span | null,
+    kind: 'fill' | 'face' | null,
+    setsFill: boolean,
+    setsFace: boolean,
+    face: { weight: boolean; slant: boolean; toggles: boolean } = { weight: false, slant: false, toggles: false },
+  ) => {
     parent.push(cur)
     span.push(s)
     sw.push(kind)
     fillSet.push((fillSet[cur] as boolean) || setsFill)
     faceSet.push((faceSet[cur] as boolean) || setsFace)
+    weightSet.push((weightSet[cur] as boolean) || face.weight)
+    // (a toggle's slant is the base's turned: its run read back, not set apart)
+    slantSet.push((slantSet[cur] as boolean) || (face.slant && !face.toggles))
+    turned.push((turned[cur] as boolean) !== face.toggles)
     return parent.length - 1
+  }
+  /** what a group style sets of the face, by its name, and whether its command turns the slant */
+  const faceSets = (style: string | undefined, cmd: string | undefined) => {
+    const toggles = TOGGLES_SLANT.test(cmd ?? '')
+    if (style === undefined) return { weight: true, slant: true, toggles }
+    return { weight: SETS_WEIGHT.test(style), slant: SETS_SLANT.test(style) || toggles, toggles }
   }
   const walk = (list: readonly Piece[], scope: number) => {
     let cur = scope
     for (const p of list) {
       if (p.t === 'span') {
-        const s = open(cur, p, null, p.style === 'link' || p.style === 'colour', namesFace(p.style))
+        const names = namesFace(p.style)
+        const s = open(
+          cur,
+          p,
+          null,
+          p.style === 'link' || p.style === 'colour',
+          names,
+          names ? faceSets(p.style, p.open) : undefined,
+        )
         walk(p.content, s)
         continue
       }
@@ -112,7 +152,7 @@ export function groupStyleOf(
         continue
       }
       if (p.t === 'el' && faceSwitch(p)) {
-        cur = open(cur, null, 'face', false, true)
+        cur = open(cur, null, 'face', false, true, faceSets(switchStyle(p), p.src))
         continue
       }
       const shown = p.t === 'text' ? p.s : p.t === 'el' ? textOf(p) : undefined
@@ -187,6 +227,44 @@ export function groupStyleOf(
     'face',
     faceSet,
   )
+  // ---- the unit's own face, its base, each attribute by its own scopes: its own text's (the letters in no group and no switch's
+  // run); where it has none, the text's outside every scope that sets that attribute by its definition (its weight outside
+  // `\textbf{…}` and a `\bfseries` run, its slant outside `\textit{…}`, a `\emph` run's slant read turned back: TeX's own state
+  // around those runs, which their glyphs show for what they do not set); where none, all its text's (the 2026-10-19 reading of
+  // the released reader's measuredStyle, read off TeX's glyphs: no count of a translation's characters decides it)
+  const baseOf = (sets: readonly boolean[], val: (g: StyleGlyph, s: number) => string | undefined) => {
+    const direct = new Map<number, string>(),
+      outside = new Map<number, string>(),
+      every = new Map<number, string>()
+    for (let k = 0; k < pairs.length; k += 2) {
+      const q = gOf[pairs[k + 1] as number] as number
+      const s = scopeOf[pairs[k] as number] as number
+      const v = val(glyphs[q] as StyleGlyph, s)
+      if (v === undefined) continue
+      every.set(q, v)
+      if (!sets[s]) outside.set(q, v)
+      if (s === 0) direct.set(q, v)
+    }
+    const from = direct.size ? direct : outside.size ? outside : every
+    return mostOf([...from].sort((x, y) => x[0] - y[0]).map(([, v]) => v))
+  }
+  const weightOf = (g: StyleGlyph) => {
+    const c = classifyFont(g.base)
+    return c.fam === 'math' ? undefined : c.bold ? 'b' : ''
+  }
+  const slantOf = (g: StyleGlyph, s: number) => {
+    const c = classifyFont(g.base)
+    return c.fam === 'math' ? undefined : c.italic !== (turned[s] as boolean) ? 'i' : ''
+  }
+  const baseWeight = baseOf(weightSet, weightOf),
+    baseSlant = baseOf(slantSet, slantOf)
+  if (baseWeight !== undefined && baseSlant !== undefined) face.value[0] = `${baseWeight}|${baseSlant}`
+  // ---- the unit's own text, its letters in no group (a switch's run at its top level its own): its base size's glyphs
+  const inGroup: boolean[] = []
+  for (let s = 0; s < S; s++) inGroup[s] = s > 0 && (!!span[s] || (inGroup[parent[s] as number] as boolean))
+  const text = new Set<number>()
+  for (let k = 0; k < pairs.length; k += 2)
+    if (!inGroup[scopeOf[pairs[k] as number] as number]) text.add(gOf[pairs[k + 1] as number] as number)
   const faces: [string, Style][] = []
   let faceApart = false
   for (let s = 1; s < S; s++) {
@@ -219,6 +297,7 @@ export function groupStyleOf(
       groups: faces,
       apart: faceApart,
     },
+    text: [...text].sort((x, y) => x - y),
   }
 }
 
