@@ -243,8 +243,11 @@ export { LayoutRefusal } from './json.mjs'
   unit of its own, and the marking, which it calls (layoutMarking), gives a nested note first after a display the carrier
   (PDF-READER §18.111), so that a file of 45 holds a paper with a note written in a paragraph of no text of its own with no
   unit of that note, or such a note after a display with no opening point (the papers of the lab's 245 it reaches:
-  PDF-READER §18.111) */
-export const LAYOUT = '46'
+  PDF-READER §18.111); 47 (with PIPELINE 118): the source reader's cut ends a unit where a definition of the paper's ends the
+  paragraph TeX is setting and reads a row of names that sets llncs's \inst after a name as names, and the marking gives a
+  front unit's piece between its texts a point on each side (PDF-READER §18.111), so that a file of 46 holds such a paper with
+  the two paragraphs one unit, or a name's mark between two names with one point or none */
+export const LAYOUT = '47'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour
  *  piece's run's fill [unit, k, 0xRRGGBB], a key the file holds only where it has a row; and, of a maker of 18 on, `unlaid`,

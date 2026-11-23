@@ -56,6 +56,12 @@ interface BundleInput {
   recovered?: Head['recovered']
 }
 
+/** the kinds of unit the reader reads beyond its lay, which leave the units a translator is asked for never: a heading, which
+ *  its contents list with its row as its title and the original's outline's page where no part places it (packages/reader
+ *  session/contents.ts listedOf: one TeX set whose marks a class took off owns no glyph and is listed so), an abstract, the
+ *  context every batch is given (session/rows.ts contextOf), and a paper's own name, which no page waits on and every theorem
+ *  head of its name reads (packages/typeset lay/entry.ts, PDF-READER §19.14) */
+const READ_BEYOND_LAY: ReadonlySet<string> = new Set(['heading', 'abstract', 'name'])
 /** each member's state in the bundle: why it stays the original's (PrepWhy), and the groups the add-on could not part */
 export interface MemberState {
   why?: PrepWhy
@@ -367,9 +373,47 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
       })
     }
   }
-  // ---- Units: every unit of the instrument's but a babel name's word, those locate made on A (its ink units, kept blocks and
-  // figure texts), and the units born on A
+  // ---- Units: every unit of the instrument's but a babel name's word and a unit TeX never set (below), those locate made on A
+  // (its ink units, kept blocks and figure texts), and the units born on A
   const all = located.units ?? ins.units
+  // (a unit every member of which the locate left unlocated because TeX set no point of it and it owns no glyph of B
+  // (`unlocated: marks`, place.ts: the ownership's why 'marks'): a false branch of a conditional, a class's keywords it never
+  // prints, a picture's text, whose glyphs the figure reading makes its own units of (PDF-READER §18.102), an author's unit a
+  // class prints from its own store. Nothing of it is on a page, and what TeX printed of it, where it printed any, is an ink
+  // unit's, asked as that: it is not asked. One another unit asked names in its content (a nested unit) is kept, so is one of a
+  // kind the reader reads beyond its lay (READ_BEYOND_LAY: a heading, an abstract, a name), and the names
+  // of the block are read from every unit as before (names.ts: an author's unit TeX never set still writes its names, which the
+  // block TeX printed draws: 2608.14557v1), only what is written left without it)
+  const everyMember = new Map<number, boolean>()
+  for (const m of members)
+    everyMember.set(m.unit, (everyMember.get(m.unit) ?? true) && !m.located && m.cause === 'marks')
+  const named = new Set<string>()
+  // (at any depth: a nested unit inside a span, a formatted group, is its unit's too)
+  const nameIn = (ps: readonly Piece[]): void => {
+    for (const q of ps)
+      if (q.t === 'unit') named.add(q.unit)
+      else if (q.t === 'span') nameIn(q.content)
+  }
+  // (and one a part's member names as its text, its own unit or the one its ink unit echoes, placedOf: a unit TeX set without its
+  // points, read off the page as an ink unit of its letters, drawn with that unit's row; the members a part holds, those with a
+  // line, as names.ts reads them below)
+  for (const x of placed) if (typeof x.text === 'string' && x.lines.length) named.add(x.text)
+  const neverSet = (u: (typeof all)[number], i: number) =>
+    everyMember.get(i) === true && !named.has(u.id) && !READ_BEYOND_LAY.has(u.kind)
+  // (the nested units of the units asked alone, and theirs in turn: a note nested in a branch TeX never takes goes with it)
+  const scanned = new Set<number>()
+  for (let grew = true; grew; ) {
+    grew = false
+    for (const [i, u] of all.entries()) {
+      if (scanned.has(i) || neverSet(u, i)) continue
+      scanned.add(i)
+      const before = named.size
+      nameIn(u.content)
+      if (named.size > before) grew = true
+    }
+  }
+  /** the ids asked: of a unit some instance of which TeX set (or another names), and every unit born on A */
+  const asked = new Set<string>()
   const seen = new Set<string>()
   const units: Unit[] = []
   const add = (u: Unit) => {
@@ -377,8 +421,9 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
     seen.add(u.id)
     units.push(u)
   }
-  for (const u of all) {
+  for (const [i, u] of all.entries()) {
     if (u.name !== undefined) continue
+    if (!neverSet(u, i)) asked.add(u.id)
     add({
       id: u.id,
       kind: u.kind,
@@ -391,13 +436,15 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
       ...(u.entry ? { entry: true as const } : {}),
     })
   }
-  for (const [ord, b] of located.born)
+  for (const [ord, b] of located.born) {
+    asked.add(members[ord]!.id)
     add({
       id: members[ord]!.id,
       kind: b.kind,
       content: b.content,
       ...(bySentence(b.kind) ? { sentences: true as const } : {}),
     })
+  }
   // (the block's names its units hold elsewhere, docs/PDF-READER.md §19.15: each unit's variant right after it, so that a
   // translator is asked for both together)
   const classes = new Map(all.map((u) => [u.id, new Map(u.classes ?? [])]))
@@ -412,6 +459,7 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
     ),
   )
   const written = units.flatMap((u) => {
+    if (!asked.has(u.id)) return []
     const v = names.variants.get(u.id)
     return v ? [u, v] : [u]
   })
