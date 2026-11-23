@@ -3247,6 +3247,12 @@ class Builder<F extends WalkFile = WalkFile> {
           .trim()
       )
         prev.trail = [prev.trail, ...shown].filter(Boolean).join(' ')
+      // (a unit nested in this one — a note the footnote branch made a nested piece of it — is a unit of its own once this one
+      // is none: patch writes a nested unit only inside its outer one, so a note left nested in no unit was written as the
+      // paper's own bytes, with no mark, and its forced lines were read off its glyphs as one: `{\let\thefootnote\relax
+      // \footnotetext{…}}`, `\renewcommand{\thefootnote}{…}\footnotetext[1]{…}`, 2604.10456v1 and twelve notes of nine papers
+      // of the lab's 245. Its own pieces, range and id are as they were; only its place among the units is the paper's)
+      for (const p of u.pieces) if (p.t === 'nested') delete p.unit.nested
       return
     }
     const { lead, trail, inner } = displayOutside(u.pieces, this.displays, this.macros)

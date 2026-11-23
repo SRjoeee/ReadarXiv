@@ -9402,6 +9402,52 @@ unit's own text is not TeX's, and the original is the right drawing).
   the original's, as before); TRANSLATE stays (no unit's content, id or wire moves: the rows production holds are kept);
   LAYOUT and the marks digest stay (no TeX moves; today's layout maker reads no instrument of this engine).
 
+### 18.108 Every unit and every piece TeX sets gets its points (the owner's report of 2026-11-23; the coordinator's round 2 of the marking)
+
+A unit whose marks the marked original should carry and on whose page TeX sets no point of it is unlocated (`own/own.ts`
+`ownOf`: no start, no end point; `locate/place.ts` `unlocated: marks`); where TeX printed it, its glyphs are then read as an
+ink unit's (`inknotes`, `inkorphan`), translated with no structure of the source's: 2604.10456v1 (the owner's report) drew a
+note of three forced lines run together in two. Over the lab's 245 papers 74 units were unlocated so (lane nopoint's survey);
+41 of them are text TeX never sets (§18.108's last item), 3 notes REVTeX 4.2 sets as bibliography entries, and the rest are
+the holes below, each closed at its root.
+
+- **A note nested in a unit the walk drops is a unit of its own** (`source/latex-front.ts` Builder `flush`). The walk makes a
+  whole `\footnote{…}`, `\footnotetext{…}` or `\thanks{…}` a unit nested in the paragraph it is building, a nested piece of
+  it. Where that paragraph holds fewer than two letters of its own it is no unit and is dropped: `{\let\thefootnote\relax
+  \footnotetext{…}}`, `\renewcommand{\thefootnote}{1}\footnotetext[1]{…}`, a `\begingroup…\endgroup` of a title's notes. The
+  note was left nested in no unit, and patch writes a nested unit only inside its outer one (`!u.nested` at the top level):
+  the note was written as the paper's own bytes, no mark, no point (12 notes of 9 papers over the 245, and 2604.10456v1's).
+  Now the units nested in a dropped unit are units of their own: written where they stand with their marks (and asked by the
+  ink probe's plan where the document uses a macro, `compile/live.ts` `askPlan`, which skips a nested unit too). Its pieces,
+  its range and its id are as they were (`unitId(kind, content)`); its forced line ends are its own pieces, so its part states
+  each as a break.
+- **A nested note first after a display has the carrier** (`marks/marks.ts` `carrySource`, `carrySamples`; Devin's finding on
+  #669). A whole note whose text is one unit is a nested piece, which `carrySamples` passed over: its `\axtpma` set no point on
+  the empty list TeX resumes the paragraph with, and the paragraph read past its source, as at the base before §18.106. Now a
+  nested piece is asked of the display probe as any piece, by its source as the paper writes it (its command, its unit's
+  pieces as written, what closes it: never a stand-in, so that a note that sets a display says so and keeps `\axtpma`), and
+  carried where the probe says it opens none. The note's own marks and its own paragraph's end run inside the carrier's window
+  (inside the note's insert, while the outer paragraph's carrier is pending); a paragraph that holds a note is never empty
+  (the call's mark, or the insert a `\footnotetext` puts on the list), so its carrier always stays.
+- **A call that ends in a control word, before a word, keeps its opening mark**: TeX's mark probe answers '2' there because its
+  `{}` box keeps the space the tokenizer skips after the control word, which a closing mark would keep too; that says nothing
+  of the opening mark, which a paper's macro keeps on the same answer. Read so for every class (`\footnotemark of …`, first
+  after a display too, where its carrier is all that gives the paragraph its opening point).
+- **Their native cases** (our own content, pdfLaTeX, XeLaTeX, LuaLaTeX and latex, with hyperref and without; every text item
+  of the marked original at this round's head against the paper's own unmarked compile, to 0.01 pt): the note alone after a
+  title's `\maketitle` in a group, after `\renewcommand{\thefootnote}`, of three forced lines in `{\let\thefootnote\relax…}`,
+  two notes in one dropped paragraph, a note in a paragraph of words: 40 compiles, 368 items, none moved, each note's two
+  points set once (none before). A `\footnote`, a `\footnotetext`, a note of two forced lines, one that sets a display, a
+  `\footnotemark` before a word and before a comma, a note then a macro that sets nothing, a note then a citation, each first
+  after `\[ \]` and after an equation and then ending its paragraph, and `\footnotemark` in the middle of a paragraph: 64
+  compiles, none moved, every carried note's opening point set (a note that sets a display: `\axtpma`, as the probe says).
+- **What stays, as found**: text TeX never sets is no point of TeX's to find (41 units over the 245: the false branch of
+  `\IfFileExists` and of a paper's conditional, the keywords and dates a class stores and never prints, IEEEtran's `\section`
+  title after `\appendix`, which the class throws away, the first of two `\title`s, longtable's `\endhead` of a table of one
+  page, a `\footnote` in a float's caption): nothing is on the page to draw, but the unit is cut and asked. REVTeX 4.2 sets a
+  note in the bibliography (3: the entry is its own unit). cas-common copies its abstract verbatim after a look-ahead that takes
+  our line probe, and the layout guard writes that unit as the paper's own (1, `compile/guard.ts` `cutCopyUnits`).
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server
