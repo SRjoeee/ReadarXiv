@@ -95,7 +95,7 @@ describe('a forced break inside a unit read off the ink', () => {
 })
 
 /** pages of notes ([text, y] lines a page, at x 100): each page's lines one unit; `breaks` each page's carried points */
-function notes(pages: [string, number][][], breaks: number[][]) {
+function notes(pages: [string, number][][], breaks: number[][], units: unknown[] | null = null) {
   const lines: Record<string, unknown>[] = []
   const out = pages.map((ls, p) => {
     const glyphs: G[] = []
@@ -129,7 +129,7 @@ function notes(pages: [string, number][][], breaks: number[][]) {
       view: [0, 0, 612, 792],
     }
   })
-  return inkUnitsOf(out as never, { lines } as never)
+  return inkUnitsOf(out as never, { lines } as never, { units: units as never })
 }
 
 describe('a unit that echoes another with forced breaks (the review on #670)', () => {
@@ -142,6 +142,26 @@ describe('a unit that echoes another with forced breaks (the review on #670)', (
     const [a, b] = notes([note, note], [[one], [one]])
     expect(b!.echo).toBe(a!.id)
     expect(b!.glyphs.breaks).toEqual([[2, one - 1]])
+  })
+  it('echoes a source unit by its letters, its own break placed where the source’s break piece stands, else none', () => {
+    // (a note the source writes `Work done at a lab. \\ Project lead.`, set again where no source unit owns it)
+    const src = [
+      {
+        kind: 'footnote',
+        pieces: [
+          { t: 'text', s: 'Work done at a lab. ' },
+          { t: 'ph', src: '\\\\', kind: 'break' },
+          { t: 'text', s: ' Project lead.' },
+        ],
+      },
+    ]
+    const [a] = notes([note], [[one]], src)
+    expect(a!.echo).toBe(0)
+    expect(a!.glyphs.breaks).toEqual([[1, one - 1]])
+    // (TeX set it on one line there, a running head's way: the source's row, its break unplaced, as an echo's was)
+    const [b] = notes([[['Work done at a lab. Project lead.', 100]]], [[]], src)
+    expect(b!.echo).toBe(0)
+    expect(b!.glyphs.breaks).toBeUndefined()
   })
   it('is no echo of an occurrence whose forced breaks differ', () => {
     const [a, b] = notes([note, note], [[one], []])
