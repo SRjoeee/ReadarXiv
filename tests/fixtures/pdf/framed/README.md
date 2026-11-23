@@ -1,6 +1,6 @@
 # framed: a paragraph in a frame painted as one path round it
 
-One page of our own, made as the box's prepare makes a paper's up to the instrument (`docs/PDF-READER.md` §18.111): a paragraph
+One page of our own, made as the box's prepare makes a paper's up to the instrument (`docs/PDF-READER.md` §18.112): a paragraph
 of four lines in a `tcolorbox` (the frame painted as one closed path in the frame's colour and one in the paper's over it, the
 paper's own case of 2601.06943v2's abstract), a paragraph over the frame and one well under it, so that the next ink under the
 framed paragraph is the frame's border and, past it, blank paper and then text: a translation that borrowed the room under its

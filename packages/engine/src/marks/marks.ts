@@ -24,6 +24,7 @@ import {
   markUnits,
   NO_ARG_COMMANDS,
   START_LEAD,
+  writtenSource,
 } from '../source/latex-front.ts'
 import { textless } from '../source/arg-roles.ts'
 import { symbolText } from '../source/text-symbols.ts'
@@ -425,9 +426,11 @@ export function punctuationSection(
       close = `\\axtpm{q${i}b}`
     // (before a punctuation mark the command moves, a ≠ b: the pair as the paper sets it with a word after (m), and with the
     // opening mark before the command and the closing one after the mark it moves (p): equal, both marks go so, 3)
+    // (before a word, a ≠ b is the space TeX's tokenizer skips after a control word, which `{}` keeps: 4 where the box with the
+    // opening mark is the call's own (a = d), its opening mark alone safe; else 2)
     const moved = (f: string) =>
       f === ' x'
-        ? put(2)
+        ? `\\ifx\\axt@qa\\axt@qd${put(4)}\\else${put(2)}\\fi`
         : `${box(i, PUNCT.indexOf(f), 'm', `${src}${f} x`)}${box(i, PUNCT.indexOf(f), 'p', `${open}${src}${f}${close} x`)}\\ifx\\axt@qm\\axt@qp${put(3)}\\else${put(2)}\\fi`
     const each = [...PUNCT, ' x']
       .map(
@@ -653,6 +656,17 @@ export function inkSection(samples: readonly string[], from = 0): string {
  */
 export const displayPiece = (p: PieceLike | null | undefined): boolean =>
   classOf(p) === 'display' || (p?.t === 'ph' && (p as { closes?: number }).closes !== undefined)
+/** a piece's source as the marked TeX writes it, which the display probe is asked of and its answers are matched by: a
+ *  placeholder's own; a nested note's (a whole `\\footnote{…}`, `\\footnotetext{…}`, `\\thanks{…}` whose text is a unit of its
+ *  own) its command, its unit's text as patch writes it (source/latex-front.ts writtenSource: one serialiser, a control word
+ *  ended where the source ended it, a nested note in it the same way) and what closes it — the note's own text, never a
+ *  stand-in, so that a display the note sets says so; anything else, none */
+export function carrySource(p: PieceLike | null | undefined): string | undefined {
+  if (p?.t === 'ph') return p.src
+  if (p?.t !== 'nested') return undefined
+  const n = p as PieceLike & { post?: string; unit?: SourceUnit }
+  return `${n.pre ?? ''}${n.unit ? writtenSource(n.unit) : ''}${n.post ?? ''}`
+}
 export function carrySamples(units: readonly Unit[]): string[] {
   const out: string[] = [],
     seen = new Set<string>()
@@ -668,17 +682,15 @@ export function carrySamples(units: readonly Unit[]): string[] {
         open = true
         continue
       }
-      if (!open || p.t !== 'ph' || !classOf(p) || seen.has(p.src)) continue
-      seen.add(p.src)
-      if (
-        paramSign(p.src) ||
-        /\\(?:verb|lstinline)(?![A-Za-z@])/.test(p.src) ||
-        !balanced(p.src) ||
-        p.src.length > room
-      )
+      // (a nested note too, by its source as written: carrySource; an \\axtpma before it, on the empty list TeX resumes the
+      // paragraph with, sets no point)
+      const src = carrySource(p)
+      if (!open || src === undefined || !classOf(p) || seen.has(src)) continue
+      seen.add(src)
+      if (paramSign(src) || /\\(?:verb|lstinline)(?![A-Za-z@])/.test(src) || !balanced(src) || src.length > room)
         continue
-      out.push(p.src)
-      room -= p.src.length
+      out.push(src)
+      room -= src.length
     }
   }
   return out
@@ -1804,7 +1816,7 @@ export function readMarkProbe(log: string | null | undefined, samples: readonly 
     const i = r.fields[0],
       s = listed[Number(i)],
       codes = r.fields[1]!
-    if (!s || !/^[0123]+$/.test(codes) || codes.length !== FOLLOWERS.length) continue
+    if (!s || !/^[01234]+$/.test(codes) || codes.length !== FOLLOWERS.length) continue
     out[s.command] = [...codes]
       .map((c, j) => {
         const bad = errored.get(`${i}:${j}`)
@@ -3234,8 +3246,7 @@ export function layoutMarking(
         return [piece]
       }
       // (a complete call keeps its opening mark whatever TeX answered for what follows, as any macro of the paper's has it: the
-      // answer is the closing mark's and the next piece's alone. A call that ends in a control word is answered '2' before a word,
-      // TeX's tokenizer skipping the space after it where `{}` keeps it, which says nothing of a mark before the call)
+      // answer is the closing mark's and the next piece's alone)
       // (TeX's answer for a paper's macro is its probed call's: a call of it the probe did not ask about, one short of its
       // arguments or with others, has its opening mark as any macro of the paper's, whatever was answered)
       // (3, before a punctuation mark the command moves in front of its own ink — cite.sty's superscripts, natmove, fnpct —, where
@@ -3243,8 +3254,13 @@ export function layoutMarking(
       // after it, past its first character (`movedAt`); a paper's macro keeps its opening mark alone, as for 2; a text piece whose
       // source is not its text there (an accent's letter joined to it), none)
       const raw = cls === 'macro' && !answered(p) ? undefined : answer(p, next)
+      // (4, before a word: TeX answered that the call's `{}` box differs from the call as the paper sets it — the space its
+      // tokenizer skips after a control word, which a closing mark would keep — and that its box with the opening mark is the
+      // call's own (punctuationSection): its opening mark alone, as for a paper's macro — `\footnotemark of`, first after a display
+      // too, where its carrier is all that gives the paragraph its opening point. Only on that answer: a 2 there (the opening
+      // mark changes the box) and no answer at all keep no mark)
       const said =
-        (raw === '2' || raw === '3') && cls === 'macro'
+        ((raw === '2' || raw === '3') && cls === 'macro') || raw === '4'
           ? '1'
           : raw === '3' &&
               !(
@@ -3265,7 +3281,7 @@ export function layoutMarking(
       // not say so of keeps \\axtpma, and the chain goes on past it)
       const inChain = cls !== 'display' && !displayPiece(p) && (displayPiece(after) || (!!after && chain.has(after)))
       if (inChain) chain.add(p)
-      const carry = inChain && known.has(p.src)
+      const carry = inChain && known.has(carrySource(p))
       if (carry) carried.add(p)
       // (an identifier's \axthpk: it begins with a character, so in vertical mode, where a box's paragraph opens with it, the mark
       // begins the paragraph before that character as TeX would and sets its point there, where \axtpma waits for the next mark
@@ -3416,7 +3432,7 @@ export function layoutMarking(
           open = true
           continue
         }
-        if (!open || carried.has(q) || q.t !== 'ph' || !known.has(q.src)) continue
+        if (!open || carried.has(q) || (q.t !== 'ph' && q.t !== 'nested') || !known.has(carrySource(q))) continue
         let found = false
         for (const list of out)
           for (let j = 0; j < list.length; j++) {

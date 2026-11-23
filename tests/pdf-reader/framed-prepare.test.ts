@@ -1,6 +1,6 @@
 // @vitest-environment node
 // A paragraph in a frame the page paints as one path round it stays inside the frame, from the PDF's paint to the laid page
-// (docs/PDF-READER.md §18.111). The fixture (tests/fixtures/pdf/framed/, ours, CC0; made by scripts/make-tex-fixture.mjs) is a
+// (docs/PDF-READER.md §18.112). The fixture (tests/fixtures/pdf/framed/, ours, CC0; made by scripts/make-tex-fixture.mjs) is a
 // page whose paragraph of four lines stands in a tcolorbox (one closed path in the frame's colour, one in the paper's over it, as
 // 2601.06943v2's abstract stands), blank paper and a paragraph well under it. The back half runs here over the compiles the front
 // half made of it, the instrument over our final pass and prepareBack over the stand-in for arXiv's PDF, and the part it writes

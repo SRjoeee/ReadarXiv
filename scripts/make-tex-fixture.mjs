@@ -6,7 +6,7 @@
 //     through \hl itself; two of them glued inside one word, in a paragraph and in a caption; one at a word's start, its middle
 //     and its end; one run across a line's end (tests/pdf-reader/highlights.test.ts);
 //   - `framed` (framed.tex): a paragraph in a frame tcolorbox paints as one path round it, two fills, room under the frame
-//     (tests/pdf-reader/framed-prepare.test.ts, docs/PDF-READER.md §18.111).
+//     (tests/pdf-reader/framed-prepare.test.ts, docs/PDF-READER.md §18.112).
 // It writes, in the fixture's folder:
 //   - `arxiv.pdf`: the stand-in, what the back half locates on (prepareBack's A);
 //   - `final.pdf`: our final pass, what the instrument reads (B);

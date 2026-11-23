@@ -792,7 +792,7 @@ export function rooms(w: Work): void {
   for (const mem of members)
     if (mem.lines.length) {
       const g = gaps.get(mem)
-      // (its frame on each page, a closed path a reader sees round its text there (frames.ts, docs/PDF-READER.md §18.111): not a
+      // (its frame on each page, a closed path a reader sees round its text there (frames.ts, docs/PDF-READER.md §18.112): not a
       // cell's, whose room is its walls', nor a figure text's, whose container its figure reading reads)
       const framed = !(mem.figure || (mem.unit >= 0 && units[mem.unit]?.cell))
       const frameOn = (page: number) =>
@@ -1016,7 +1016,7 @@ function inkIndex(inkA: Doc): { under: InkUnder; next: InkNext } {
 }
 
 /** the free depth under a member's last line in its column, to the first ink not its own (a page's glyph or box, its frame's
- *  painted line: `tex.frame`, PDF-READER §18.111), the page's bottom edge where there is none; the distance to the next text line
+ *  painted line: `tex.frame`, PDF-READER §18.112), the page's bottom edge where there is none; the distance to the next text line
  *  of its column, baseline to baseline; and, with TeX's facts, the room under each run of its text lines and its paragraph's
  *  separation (Room.runs, Room.sep: what a translation may borrow, PDF-READER §18.11), the next ink there its frame's line where
  *  nearer */

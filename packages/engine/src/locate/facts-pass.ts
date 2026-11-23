@@ -1118,7 +1118,7 @@ function readRoom(fx: FactsIndex, r: MemberReading): void {
     if (unit?.cell && side.wall) mem.room.wall = side.wall
   }
   // (the ink that stays beside its text lines, no member's, facts.ts staysOf: a cell's room is its walls', a figure text's
-  // its figure reading's. Its frame's painted lines on each page too (frames.ts, docs/PDF-READER.md §18.111): a frame painted
+  // its figure reading's. Its frame's painted lines on each page too (frames.ts, docs/PDF-READER.md §18.112): a frame painted
   // as one path round its text spans across its lines as a box, never beside them, and a single line was widened over its
   // border; read by its lines, its sides stand beside them as the rules of a frame TeX set apart do)
   if (!unit?.cell && !unit?.figure) {
