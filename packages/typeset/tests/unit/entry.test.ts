@@ -38,7 +38,7 @@ const member = (o: Partial<Placed> = {}): Placed => ({
 const part = (m: Placed): Part => ({
   format: 1,
   page: 1,
-  paper: { faces: { fonts: [['NimbusRomNo9L-Regu', 100]] } },
+  paper: { faces: { fonts: [['NimbusRomNo9L-Regu', 100]] }, bases: 1 },
   flows: [[m]],
 })
 const rowsOf = (list: Row[], done = false): Rows => {

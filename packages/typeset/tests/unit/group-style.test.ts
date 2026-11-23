@@ -8,9 +8,12 @@
 // run-in test's metric. Words of our own.
 import type { Part, Placed, Row } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
+import { rolesFor } from '../../src/breaker/faces.ts'
 import { layPage } from '../../src/lay/entry.ts'
+import { figuresOf } from '../../src/lay/figures.ts'
+import type { PaperReading } from '../../src/lay/read.ts'
 import { rulesFor } from '../../src/rules-for.ts'
-import type { Metrics, Rows } from '../../src/types.ts'
+import type { Metrics, RuleParams, Rows } from '../../src/types.ts'
 
 const CJK = /[⺀-鿿　-〿＀-￯]/u
 const em = (size: number, t: string) =>
@@ -49,7 +52,7 @@ const unit = (kicker: NonNullable<Placed['spans']>[number][1]): Placed => ({
 const part = (m: Placed): Part => ({
   format: 1,
   page: 1,
-  paper: { faces: { fonts: [['NimbusSanL-Bold', 100]] } },
+  paper: { faces: { fonts: [['NimbusSanL-Bold', 100]] }, bases: 1 },
   flows: [[m]],
 })
 const content: Content = [
@@ -113,3 +116,145 @@ describe('a group’s translation is drawn in the weight and at the size TeX set
     expect(Math.round(step * 100) / 100).toBe(Math.round(run.size * (1 + laid.fit!.track) * 100) / 100)
   })
 })
+
+// A group's size is the size of everything measured inside it: its advance, its ems of explicit glue, its marks' blank halves
+// and their hang, as TeX sets them at the group's size (reviews of #675: a smaller group's bracket at a line's start trimmed
+// by half the member's em, its ink past the line's start; `\quad` inside it measured in the member's ems; a figure label's
+// run of another size drawn at the label's). Words of our own.
+/** a member on one line from x 60 to 536 at 10 pt, its group `3` stated at `size`, its elements `els` */
+const sized = (size: number, els: NonNullable<Placed['els']> = [], align: Placed['align'] = 'l'): Placed => ({
+  ord: 0,
+  kind: 'para',
+  text: id,
+  lead: 12,
+  style: { role: 'serif', size: 10, design: 'NimbusRomNo9L-Regu' },
+  align,
+  lines: [[1, 0, 60, 536, 700, 707, 698, 60, 536, 0, 10]],
+  room: { below: 23, next: 34 },
+  els,
+  spans: [['3', { cmd: 'small', style: { role: 'serif', size } }]],
+})
+/** the drawn items of the member's first line: their text, place and size */
+const itemsOf = (m: Placed, c: Content, to: string) => {
+  const r: Row = { id, ok: true, by: 'test', content: c }
+  const laid = layPage(part(m), { get: (k) => (k === id ? r : undefined), done: true }, rulesFor(to), metrics).members[0]!
+  expect(laid.state).toBe('laid')
+  const [, x0, , items] = laid.lines[0]!
+  return {
+    x0,
+    items: items.flatMap((it) =>
+      'src' in it ? [] : [{ s: (it as { s: string }).s, x: (it as { x: number }).x, size: it.size as number }],
+    ),
+  }
+}
+
+describe('a group’s size is the size of everything measured inside it', () => {
+  it('a smaller group’s opening bracket at a line’s start loses its own blank half, not the member’s: its ink in the line', () => {
+    // (a 5 pt group in 10 pt text: its bracket's blank half 2.5 pt; trimmed by 5, its ink stood 2.5 pt before the line's start)
+    const { x0, items } = itemsOf(
+      sized(5),
+      [
+        { t: 'span', id: '3', content: [{ t: 'text', s: '（文字）' }] },
+        { t: 'text', s: '正文的字。' },
+      ],
+      'zh',
+    )
+    const open = items.find((it) => it.s.startsWith('（'))!
+    expect(open.size).toBeCloseTo(items.find((it) => it.s.startsWith('正'))!.size / 2, 6)
+    expect(open.x).toBeCloseTo(x0 - 0.5 * open.size, 6)
+  })
+  it('an em of explicit glue inside a group is an em of the group’s size; a length in points the same at every size', () => {
+    const quad: NonNullable<Placed['els']>[number][1] = { kind: 'zero', cmd: 'hspace', glue: [1, 'em', 1], ink: [] }
+    const pt: NonNullable<Placed['els']>[number][1] = { kind: 'zero', cmd: 'hspace', glue: [6, 'bp', 1], ink: [] }
+    const gap = (size: number, el: NonNullable<Placed['els']>[number][1]) => {
+      const { items } = itemsOf(
+        sized(size, [['5', el]]),
+        [
+          {
+            t: 'span',
+            id: '3',
+            content: [
+              { t: 'text', s: 'A' },
+              { t: 'el', id: '5' },
+              { t: 'text', s: 'B' },
+            ],
+          },
+        ],
+        'de',
+      )
+      const a = items.find((it) => it.s.trim() === 'A')!
+      const b = items.find((it) => it.s.trim() === 'B')!
+      return { em: (b.x - a.x - em(a.size, 'A')) / a.size, pt: b.x - a.x - em(a.size, 'A') }
+    }
+    // (a 20 pt group in 10 pt text: its \hspace{1em} 20 pt, an em of its own)
+    expect(gap(20, quad).em).toBeCloseTo(1, 6)
+    expect(gap(5, quad).em).toBeCloseTo(1, 6)
+    expect(gap(20, pt).pt).toBeCloseTo(gap(10, pt).pt, 6)
+  })
+  it('a figure label’s run of another size is measured and drawn at its own size, on the label’s baseline', () => {
+    // (a plot's label at 12 pt, its bold suffix `{\scriptsize\bfseries (b)}` at 7: drawn at the label's size, it took the room
+    // of a 12 pt run)
+    const label: Placed = {
+      ord: 7,
+      kind: 'figure',
+      text: 'u7',
+      plain: 'Gain (b)',
+      lines: [[1, 0, 100, 160, 200, 208, 198, 100, 160]],
+      style: { role: 'serif', size: 12, design: 'NimbusRomNo9L-Regu' },
+      spans: [['s1', { style: { role: 'serif', size: 7, bold: 1 } }]],
+      room: { side: [60, 400] },
+      align: 'l',
+    } as unknown as Placed
+    const row = {
+      ok: true,
+      content: [
+        { t: 'text', s: 'Gewinn ' },
+        { t: 'span', id: 's1', content: [{ t: 'text', s: '(fett)' }] },
+      ],
+    } as unknown as Row
+    const paper = {
+      designs: { serif: 'times', sans: 'helvetica', mono: 'courier' },
+      roles: rolesFor('de', 'times', null),
+    } as unknown as PaperReading
+    const R = { cjkQuotes: false, floorMin: 0.6, centredPunct: false, compressMax: 2 } as RuleParams
+    const got = figuresOf({ page: 1, ties: [] } as unknown as Part, [label], { get: () => row } as unknown as Rows, {
+      paper,
+      R,
+      metrics,
+    })
+    const items = (got.laid.get(7)?.[0]?.[3] ?? []) as { s: string; x: number; size: number }[]
+    const main = items.find((it) => it.s.startsWith('Gewinn'))!
+    const bold = items.find((it) => it.s.includes('fett'))!
+    expect(bold.size / main.size).toBeCloseTo(7 / 12, 6)
+    // (the bold run after the label's, by the label's advance at its size)
+    expect(bold.x - main.x).toBeCloseTo(em(main.size, main.s), 6)
+  })
+  it('a part made before states no base: its style the face of its glyphs whole, the groups read out of it as before', () => {
+    // (a unit wholly inside \emph: a part made before states its style italic, its glyphs'; the typesetter's count takes the
+    // \emph out, and its translation is drawn italic. A part of today states the base upright, which the \emph turns)
+    const emph = (style: Placed['style'], bases: boolean) => {
+      const m: Placed = {
+        ...sized(10),
+        style,
+        spans: [['3', { cmd: 'emph' }]],
+      }
+      const r: Row = { id, ok: true, by: 'test', content: [{ t: 'span', id: '3', content: [{ t: 'text', s: 'Ein Satz' }] }] }
+      const pt = part(m)
+      const laid = layPage(
+        bases ? pt : { ...pt, paper: { faces: pt.paper.faces } },
+        { get: (k) => (k === id ? r : undefined), done: true },
+        rulesFor('de'),
+        metrics,
+      ).members[0]!
+      expect(laid.state).toBe('laid')
+      return laid.lines.flatMap(([, , , items]) =>
+        items.flatMap((it) => ('src' in it ? [] : [/^italic /.test((it as { face: string }).face)])),
+      )
+    }
+    const italic = { role: 'serif' as const, size: 10, slant: 1 as const, design: 'NimbusRomNo9L-ReguItal' }
+    const upright = { role: 'serif' as const, size: 10, design: 'NimbusRomNo9L-ReguItal' }
+    expect(emph(italic, false).every(Boolean)).toBe(true)
+    expect(emph(upright, true).every(Boolean)).toBe(true)
+  })
+})
+

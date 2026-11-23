@@ -39,7 +39,7 @@ const unit = (markFace: Placed['markFace']): Placed => ({
 const part = (m: Placed): Part => ({
   format: 1,
   page: 1,
-  paper: { faces: { fonts: [['NimbusRomNo9L-Medi', 100]] } },
+  paper: { faces: { fonts: [['NimbusRomNo9L-Medi', 100]] }, bases: 1 },
   flows: [[m]],
 })
 /** each drawn character of the member with its face's weight */
@@ -118,5 +118,38 @@ describe('a translated character outside every group is drawn in the base it sta
     ]
     expect(weights(drawn(unit({}), colon), '：')).toEqual([400])
     expect(weights(drawn(unit(undefined), colon), '：')).toEqual([700])
+  })
+  it('a word’s hyphen or slash keeps its break point where the marks are drawn apart: a line ends `alpha-`, the next opens `beta`', () => {
+    // (the marks set apart from the letters before the hyphen's break was found: `alpha`, `-` and `beta` glued, the break taken
+    // before the hyphen, a line opening `-beta`. A narrow measure of 34 pt: `alpha-` fits, `alpha-beta` does not)
+    const narrow = (markFace: Placed['markFace']): Placed => ({
+      ...unit(markFace),
+      style: { role: 'serif', size: 9.9626, design: 'NimbusRomNo9L-Regu' },
+      spans: [],
+      lines: [0, 1, 2, 3].map(
+        (k) => [1, 0, 60, 94, 700 - 12 * k, 707 - 12 * k, 698 - 12 * k, 60, 94, 0, 9.96] as Placed['lines'][number],
+      ),
+    })
+    const linesOf = (markFace: Placed['markFace'], s: string) => {
+      const r: Row = { id, ok: true, by: 'test', content: [{ t: 'text', s }] }
+      const laid = layPage(
+        part(narrow(markFace)),
+        { get: (k) => (k === id ? r : undefined), done: true },
+        rulesFor('de'),
+        metrics,
+      ).members[0]!
+      expect(laid.state).toBe('laid')
+      return laid.lines.map(([, , , items]) =>
+        items
+          .map((it) => ('s' in it ? (it as { s: string }).s : ''))
+          .join('')
+          .trim(),
+      )
+    }
+    const before = linesOf(undefined, 'alpha-beta gamma')
+    expect(before[0]).toBe('alpha-')
+    expect(linesOf({ bold: 1 }, 'alpha-beta gamma')).toEqual(before)
+    // (a slash likewise: `input/output` breaks after its slash)
+    expect(linesOf({ bold: 1 }, 'input/output')).toEqual(linesOf(undefined, 'input/output'))
   })
 })

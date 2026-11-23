@@ -216,6 +216,55 @@ describe('a unit’s base face, read off TeX’s glyphs', () => {
     expect(one.groups[0]?.[1].size).toBe(8)
     expect(one.several).toEqual([])
   })
+  it('a bare group `{\\em …}` the instrument stated with its command: its glyphs italic, its base upright, \\em turned back', () => {
+    // (switchesOf takes a bare group's leading `\\em` for its command: the group's style italic, its open `{`, SpanAt.cmd `em`,
+    // which the typesetter opens as `\\em{` and turns the base's slant by; read off its open alone, the base was italic and the
+    // translation of an upright cell `{\\em Response rate}` drawn upright)
+    const cell = group('{', 'italic', [t('Response rate')])
+    const cmd = new Map([[(cell as { id: string }).id, 'em']])
+    const read = (content: Piece[], glyphs: StyleGlyph[]) =>
+      groupStyleOf(
+        content,
+        glyphs,
+        () => undefined,
+        () => false,
+        () => false,
+        () => undefined,
+        () => undefined,
+        (sp) => cmd.get(sp.id),
+      ).face.own
+    expect(read([cell], set('Response rate', ITALIC))).toEqual(REG)
+  })
+  it('LaTeX 2.09’s `\\bf` inside `\\emph`: it sets the slant too (\\normalfont\\bfseries), its glyphs no vote for the slant around it', () => {
+    // (`\\emph{{\\bf A long bold heading} text}`: the heading upright bold, the rest italic; read as setting the weight alone, the
+    // heading's upright glyphs turned by \\emph outvoted the rest and the base was italic, the emphasis then drawn upright)
+    const head = group('{', 'bold', [t('A long bold heading')])
+    const cmd = new Map([[(head as { id: string }).id, 'bf']])
+    const content = [group('\\emph{', 'italic', [head, t(' text')])]
+    const glyphs = [...set('A long bold heading', BOLD), ...set('text', ITALIC)]
+    const g = groupStyleOf(
+      content,
+      glyphs,
+      () => undefined,
+      () => false,
+      () => false,
+      () => undefined,
+      () => undefined,
+      (sp) => cmd.get(sp.id),
+    ).face
+    expect(g.own).toEqual(REG)
+    // (a `\\bf` switch inside the group likewise)
+    const sw = [group('\\emph{', 'italic', [group('{', 'other', [el('\\bf'), t(' A long bold heading')]), t(' text')])]
+    const g2 = groupStyleOf(
+      sw,
+      glyphs,
+      () => undefined,
+      () => false,
+      (e) => e.src === '\\bf',
+      (e) => (e.src === '\\bf' ? 'bold' : undefined),
+    ).face
+    expect(g2.own).toEqual(REG)
+  })
   it('its own text: the positions of the letters of no group, a switch’s run at its top level its own', () => {
     const content = [t('Some words '), group('{', 'other', [el('\\small'), t(' set small')]), t(' end')]
     const glyphs = [...set('Some words', REGULAR), ...set('set small', REGULAR, 9), ...set('end', REGULAR)]

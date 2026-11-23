@@ -43,10 +43,19 @@ const withTurned = (words: string[], fontOf: (line: number, j: number) => string
   d.pages[0]!.turned = T
   return d
 }
-const located = (units: InstrumentUnit[], words: string[], fontOf: (line: number, j: number) => string) => {
+const located = (
+  units: InstrumentUnit[],
+  words: string[],
+  fontOf: (line: number, j: number) => string,
+  pieceOf: (line: number) => number = () => -1,
+) => {
   const B = withTurned(words, fontOf)
   const A = withTurned(words, fontOf)
   const n = B.pages[0]!.turned!.length
+  // (each turned glyph the unit's text, or an element's where `pieceOf` names its piece by its line)
+  const lineOf = words.flatMap((w, li) => [...w].map(() => li))
+  const piece = Int32Array.from(lineOf, (li) => pieceOf(li))
+  const role = Uint8Array.from(lineOf, (li) => (pieceOf(li) >= 0 ? ROLE.element : ROLE.text))
   const ins: Instrument = {
     ink: B,
     units,
@@ -59,9 +68,7 @@ const located = (units: InstrumentUnit[], words: string[], fontOf: (line: number
       return O
     }),
     boxes: B.pages.map((pg) => ownersOf(pg.kinds.length)),
-    turned: [
-      { unit: new Int32Array(n).fill(1), role: new Uint8Array(n).fill(ROLE.text), piece: new Int32Array(n).fill(-1) },
-    ],
+    turned: [{ unit: new Int32Array(n).fill(1), role, piece }],
     tex: {},
     made: { compiler: 'pdflatex', tree: '2025', front: 'test' },
   }
@@ -103,5 +110,36 @@ describe('a unit TeX set turned reads its base face off its turned glyphs', () =
     expect(cap.frame).toEqual([0, 1])
     expect(cap.style.slant).toBeUndefined()
     expect(cap.style.bold).toBeUndefined()
+  })
+  it('a symbol it draws as text where it stands, set turned: its turned glyph tells the marks’ weight, as a level one’s', () => {
+    // (a sideways table's head `\\textbf{Mean tokens} $\\downarrow$`: the arrow cmsy's, regular, its glyph the element's turned
+    // glyph (Member.turnedEls); read off the level elements' glyphs alone, it had none, and the marks' base was the letters', bold)
+    const content: Piece[] = [
+      { t: 'span', id: '0', style: 'bold', open: '\\textbf{', close: '}', content: [text('Mean tokens')] },
+      text(' '),
+      { t: 'el', id: '2', kind: 'math', src: '$\\downarrow$' },
+    ]
+    const head: InstrumentUnit = {
+      id: unitId('cell', content),
+      kind: 'cell',
+      content,
+      spans: [['0', { cmd: 'textbf' }]],
+      classes: [['2', { cls: 'symbol', sym: ['↓'] }]],
+    }
+    const para: InstrumentUnit = {
+      id: unitId('para', [text('Method 0.91')]),
+      kind: 'para',
+      content: [text('Method 0.91')],
+    }
+    const L = located(
+      [para, head],
+      ['Mean', 'tokens', '↓'],
+      (li) => (li === 2 ? 'CMSY10' : 'CMBX10'),
+      (li) => (li === 2 ? 2 : -1),
+    )
+    const cell = L.members[1]!
+    expect(cell.frame).toEqual([0, 1])
+    expect(cell.style.bold).toBe(1)
+    expect(cell.markFace).toEqual({})
   })
 })

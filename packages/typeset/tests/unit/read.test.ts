@@ -15,7 +15,8 @@ const metrics: Metrics = {
   ink: () => [0.7, 0.2, 0],
 }
 const P = rulesFor('de').set as never
-const paper = paperOf([['NimbusRomNo9L-Regu', 100]], 'de', null)
+// (a part the engine makes states each member's base: Part.paper.bases)
+const paper = { ...paperOf([['NimbusRomNo9L-Regu', 100]], 'de', null), bases: true }
 const member = (o: Partial<Placed> = {}): Placed => ({
   ord: 3,
   kind: 'para',

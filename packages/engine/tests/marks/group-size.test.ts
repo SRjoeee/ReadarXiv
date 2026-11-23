@@ -6,6 +6,8 @@
 // Words of our own.
 import type { Piece } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
+import { textGlyphsOf } from '../../src/instrument/instrument.ts'
+import { ownersOf, ROLE } from '../../src/instrument.ts'
 import type { StyleGlyph } from '../../src/locate/facts.ts'
 import { groupFacts } from '../../src/marks/faces.ts'
 
@@ -22,6 +24,7 @@ const group = (open: string, content: Piece[]): Piece & { t: 'span' } => ({
 })
 const SANS_BOLD = 'NimbusSanL-Bold'
 const SANS = 'NimbusSanL-Regu'
+const SANS_ITALIC = 'NimbusSanL-ReguItal'
 /** a text as TeX sets it: a glyph for each character that is no white space, in one font at one size */
 const set = (s: string, base: string, size: number): StyleGlyph[] =>
   [...s].filter((c) => !/\s/.test(c)).map((u) => ({ u, base, size, fill: -1 }))
@@ -73,5 +76,38 @@ describe('a group TeX set at another size than the text around it states its siz
     const content = [t('Words before '), same, t(' and after.')]
     const glyphs = [...set('Words before the same size and after.', SANS, 9.9626)]
     expect(groupFacts(content, glyphs).get(same)?.style).toBeUndefined()
+  })
+  it('a size-only group whose face a declaration inside it sets: the face at its opening stated, the declaration’s applied once', () => {
+    // (`{\\small \\em aside}` in upright text: its glyphs italic by its `\\em`, which the typesetter applies where it stands; stated
+    // with its glyphs' italic, the group opened italic and the `\\em` turned it upright)
+    const aside = group('{', [el('\\small'), el('\\em'), t(' an aside')])
+    const content = [t('The words before '), aside, t(' and after.')]
+    const glyphs = [
+      ...set('The words before', SANS, 9.9626),
+      ...set('an aside', SANS_ITALIC, 8.9664),
+      ...set('and after.', SANS, 9.9626),
+    ]
+    const st = groupFacts(content, glyphs).get(aside)?.style
+    expect(st?.size).toBe(8.9664)
+    expect(st?.slant).toBeUndefined()
+    expect(st?.role).toBe('sans')
+  })
+  it('a unit whose text TeX set turned: its groups’ sizes read off its turned glyphs, as a level unit’s are', () => {
+    // (a sideways table's head `Results {\\small (estimated)}`: its glyphs on B all turned, the owners' `turned`; read off its level
+    // glyphs alone, it had none, and its group was drawn at the size around it)
+    const small = group('{', [el('\\small'), t(' (estimated)')])
+    const content = [t('Results '), small]
+    const turned = [...set('Results', SANS, 9.9626), ...set('(estimated)', SANS, 7.9701)].map((g, j) => ({
+      ...g,
+      at: 0,
+      k: j,
+    }))
+    const doc = { pages: [{ glyphs: [] as StyleGlyph[], turned }] }
+    const T = ownersOf(turned.length)
+    T.unit.fill(0)
+    T.role.fill(ROLE.text)
+    const read = textGlyphsOf(doc, [ownersOf(0)], [T]).get(0) ?? []
+    expect(read.map((g) => g.u).join('')).toBe('Results(estimated)')
+    expect(groupFacts(content, read).get(small)?.style?.size).toBe(7.9701)
   })
 })
