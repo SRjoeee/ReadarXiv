@@ -22,6 +22,7 @@
 //                                                                  the names' alone; ONLY=unmark: \axt@unmark's alone;
 //                                                                  ONLY=wrappers: the wrappers' alone; ONLY=lost: the LOST
 //                                                                  survey's, an inline formula first after a display, a
+//                                                                  piece sure to set something first after one, a
 //                                                                  superscript or a box glued to a word, a
 //                                                                  display group and a display at a page's foot; ONLY=runin:
 //                                                                  the run-in leads' stream case, F; ONLY=dvi: the DVI
@@ -42,6 +43,7 @@ import { OWNED, OWNED_HOW } from '../../../src/pdf-reader/engine/layout/stream.m
 import { boxDiff, pageBoxes } from './layout-marks-compare.mjs'
 import { openPaper, originalFiles, probeFiles } from '../../../src/pdf-reader/engine/pipeline/live.mjs'
 import { checkCompileImage, COMPILE_IMAGE, PLATFORM } from './compile-image.mjs'
+import { carrySamples, readDisplayProbe } from '../../../packages/engine/src/marks/marks.ts'
 
 // (the image of the pin or COMPILE_IMAGE, here as the compile cache keys name it)
 await checkCompileImage()
@@ -75,6 +77,13 @@ const BIB = String.raw`\begin{thebibliography}{9}
 \bibitem[Bauthor(2021)]{b} B. Bauthor. Another title. 2021.
 \end{thebibliography}`
 const doc = (pre, body, cls = '\\documentclass{article}') => `${cls}\n${pre}\n\\begin{document}\n${body}\n\\end{document}\n`
+/** each piece first in the paragraph TeX resumes after a display, `\\[ \\]` and amsmath's equation in turn, text after it; then
+ *  (`ending`) the last one again, ending its paragraph there */
+const afterDisplays = (pieces, ending = true) => `${pieces.map((p, i) => `${prose(5, () => '')} gives\n${i % 2 ? `\\begin{equation} a_{${i}} = b \\end{equation}` : `\\[ a_{${i}} = b \\]`}\n${p} holds ${prose(5, () => '')}`).join('\n')}${ending ? `\n\n${prose(4, () => '')}\n\\[ c = d \\]\n${pieces.at(-1)}\n\n${prose(4, () => '')}` : ''}`
+/** each piece ending the paragraph TeX resumes after a display, `\\[ \\]` and amsmath's equation in turn */
+const endings = pieces => pieces.map((p, i) => `${prose(5, () => '')} gives\n${i % 2 ? `\\begin{equation} a_{${i}} = b \\end{equation}` : `\\[ a_{${i}} = b \\]`}\n${p}\n\n`).join('') + prose(4, () => '')
+/** the engines a case of the carrier runs under (latex is added to every case) */
+const ENGINES3 = ['pdflatex', 'xelatex', 'lualatex']
 
 /** the documents whose every text item must stay where it is, each also with hyperref loaded */
 const STAY = {
@@ -85,7 +94,7 @@ const STAY = {
   'a macro reading an optional argument by \\@ifnextchar[ after it': doc('\\makeatletter\\newcommand\\opt{\\@ifnextchar[\\opt@x{\\opt@x[none]}}\\def\\opt@x[#1]{opt(#1)}\\makeatother', `${prose(24, i => (i % 2 ? ' \\opt[a] then' : ' \\opt and'))}`),
   'an inline formula opening a paragraph': doc('', Array.from({ length: 6 }, (_, i) => `$x_${i}$ is ${prose(8, j => (j % 3 ? '' : ` $y_${j}$`))}`).join('\n\n')),
   // two displays in a row: TeX drops the empty paragraph between them, which a mark would keep (2608.20051)
-  'two displays in a row': doc('\\usepackage{amsmath}', `${prose(6, () => '')} define\n\\[ a = b \\]\n\\[ c = d \\]\n\\begin{equation} e = f \\end{equation}\n$$ g = h $$\n${prose(6, () => '')}`),
+  'two displays in a row': { engines: ENGINES3, src: doc('\\usepackage{amsmath}', `${prose(6, () => '')} define\n\\[ a = b \\]\n\\[ c = d \\]\n\\begin{equation} e = f \\end{equation}\n$$ g = h $$\n${prose(6, () => '')}`) },
   // an inline formula first in the paragraph TeX resumes after a display: its opening mark is set on that empty list
   // (\\axtpmm), which no line is made of and no \\ignorespaces is cut short by: the formula's math-on follows at once
   // (the LOST survey of 2026-10-15: 2608.16117's $\\hat r^\\alpha$ and $(a_1,a_2,a_3)$); a display after a display and
@@ -98,10 +107,52 @@ const STAY = {
   'a superscript or a box glued to a word': { engines: ['pdflatex', 'xelatex'], src: doc('', `${prose(40, i => ['\\textsuperscript{1}', '\\textsuperscript{2,*} and', '\\mbox{$^3$}', '\\textsuperscript{$\\dagger$},'][i % 4])}\n\n\\begin{center}Ann Author\\textsuperscript{1} \\quad Bo Writer\\textsuperscript{1,2,*}\\end{center}`, '\\documentclass[twocolumn]{article}') },
   // amsmath's \\] ends in \\ignorespaces, which skips a macro that sets nothing and the line end after it; a mark set
   // there would end the skip, and the next line begin with a space (2608.29782's \\delete{…} after a display)
-  'a macro that sets nothing after a display': doc('\\usepackage{amsmath}\\newcommand\\delete[1]{}', `${prose(6, () => '')} by\n\\[ a = b \\]\n\\delete{A passage $x$ set aside.}\n${prose(6, () => '')} and\n\\begin{align*} c = d \\end{align*}\n\\delete{More.}\n${prose(6, () => '')}`),
+  // every piece but a display that stands first in the paragraph TeX resumes after a display, whatever its class and whether it
+  // sets ink: its opening mark \\axtpmd, its point in a carrier (marks.ts CARRY_TEX) the paragraph takes back where the piece set
+  // nothing; each form first in a paragraph after `\\[ \\]` and after an equation, then ending its paragraph there. 'a piece first
+  // after a display: …': every point stands (the check below); 'a paper's macro first after a display: …': text after each, every
+  // point stands; '… ending its paragraph': the points of the pieces that set nothing taken back with their carriers, the empty
+  // paragraph TeX drops dropped. Under pdfLaTeX, XeLaTeX, LuaLaTeX and latex, with hyperref and without (2601.06943v2 p5)
+  'a piece first after a display: latex.ltx\'s \\cite': { engines: ENGINES3, src: doc('\\usepackage{amsmath}', `${afterDisplays(['\\cite{a}', '\\cite{b,a}', '\\cite{zz}', '\\cite{}'])}\n${BIB}`) },
+  'a piece first after a display: cite.sty\'s \\cite': { engines: ENGINES3, src: doc('\\usepackage{amsmath}\\usepackage{cite}', `${afterDisplays(['\\cite{a}', '\\cite{b,a}', '\\cite{zz}'])}\n${BIB}`) },
+  'a piece first after a display: cite.sty [super]\'s \\cite': { engines: ENGINES3, src: doc('\\usepackage{amsmath}\\usepackage[super]{cite}', `${afterDisplays(['\\cite{a}', '\\cite{b,a}', '\\cite{zz}'])}\n${BIB}`) },
+  'a piece first after a display: natbib\'s citations': { engines: ENGINES3, src: doc('\\usepackage{amsmath}\\usepackage{natbib}', `${afterDisplays(['\\citep{a}', '\\citet{b}', '\\citealp{a}', '\\citealt{b}', '\\Citet{a}', '\\citep*{b}', '\\citeauthor{a}', '\\citep{zz}'])}\n${BIB}`) },
+  'a piece first after a display: biblatex\'s citations': { engines: ENGINES3, src: doc('\\usepackage{amsmath}\\usepackage{biblatex}', afterDisplays(['\\parencite{a}', '\\textcite{b}', '\\autocite{a}', '\\cite{b}', '\\Cite{a}', '\\cites{a}{b}', '\\citeauthor{a}'])) },
+  'a piece first after a display: a reference': { engines: ENGINES3, src: doc('\\usepackage{amsmath}\\usepackage{hyperref}\\usepackage{cleveref}', `\\label{top}${prose(6, () => '')}\n\\section{Words}\\label{s}\n\\begin{figure}[h]\\centering\\rule{2cm}{1cm}\\caption{A figure.}\\label{f}\\end{figure}\n\\begin{equation} x = y \\label{e} \\end{equation}\n${afterDisplays(['\\ref{f}', '\\ref{top}', '\\nameref{top}', '\\autoref*{top}', '\\autoref{zz}', '\\cref{zz}', '\\autoref{top}', '\\cref{top}', '\\pageref*{s}', '\\cref*{s}', '\\Cref{e}', '\\pageref{f}', '\\cref{f}', '\\autoref{f}'])}`) },
+  'a piece first after a display: \\pageref, and \\ref, with no package': { engines: ENGINES3, src: doc('\\usepackage{amsmath}', `\\label{top}${prose(6, () => '')}\n\n\\begin{figure}[h]\\centering\\rule{2cm}{1cm}\\caption{A figure.}\\label{f}\\end{figure}\n\n${afterDisplays(['\\ref{f}', '\\ref{top}', '\\pageref{zz}', '\\pageref{f}'])}`) },
+  'a piece first after a display: an equation\'s reference': { engines: ENGINES3, src: doc('\\usepackage{amsmath}', `\\begin{equation} x = y \\label{e} \\end{equation}\n${afterDisplays(['\\eqref{e}', '\\eqref{zz}'])}`) },
+  'a piece first after a display: a footnote\'s call': { engines: ENGINES3, src: doc('\\usepackage{amsmath}', afterDisplays(['\\footnote{A note of our own, with words in it.}', '\\footnotemark', '\\footnote{1}'])) },
+  'a piece first after a display: a URL and code': { engines: ENGINES3, src: doc('\\usepackage{amsmath}\\usepackage{hyperref}', afterDisplays(['\\url{https://example.org/a/b}', '\\href{https://example.org}{a link}', '\\texttt{code}', '\\url{}', '\\texttt{x_1}'])) },
+  // (a carrier and a table's marked cells in one paper: the carrier's TeX takes no name of the cells' statements, \\axt@tec's)
+  'a piece first after a display: and a table in the same paper': { engines: ENGINES3, src: doc('\\usepackage{amsmath}', `${afterDisplays(['\\cite{a}', '\\ref{zz}'])}\n\n\\begin{tabular}{ll} a cell of words & another cell of words \\\\ more words here & and the last words \\end{tabular}\n\n${prose(4, () => '')}\n${BIB}`) },
+  // (behind a command of no mark: \\noindent, which sets nothing, a \\label's whatsit, a group's brace; the local review's)
+  'a piece first after a display: behind a command of no mark': { engines: ENGINES3, src: doc('\\usepackage{amsmath}', `${afterDisplays(['\\noindent\\cite{a}', '\\label{q1}\\cite{b}', '{\\cite{a}}', '\\noindent $x$'])}\n${BIB}`) },
+  // (Devin's finding on #667: a second display through a paper's shorthand — \\be … \\ee by \\def or \\newcommand to equation,
+  // to \\[ \\], to $$ —, a macro whose body is a display, one nested in another, an environment of the paper's own: never a
+  // carrier before one, TeX's display probe or the source reader saying it is a display; text after it, and ending its paragraph)
+  'a display of the paper\'s own after a display': { engines: ENGINES3, src: doc('\\usepackage{amsmath}\\def\\be{\\begin{equation}}\\def\\ee{\\end{equation}}\\newcommand\\bs{\\begin{equation*}}\\newcommand\\es{\\end{equation*}}\\newcommand\\bd{\\[}\\newcommand\\ed{\\]}\\def\\bdd{$$}\\def\\edd{$$}\\newcommand\\eqn[1]{\\begin{equation}#1\\end{equation}}\\newcommand\\eqnn[1]{\\eqn{#1}}\\newenvironment{myeq}{\\begin{equation}}{\\end{equation}}', `${afterDisplays(['\\be c = d \\ee', '\\bs c = d \\es', '\\bd c = d \\ed', '\\bdd c = d \\edd', '\\eqn{c = d}', '\\eqnn{c = d}', '\\begin{myeq} c = d \\end{myeq}'])}`) },
+  'a piece first after a display: an inline formula': { engines: ENGINES3, src: doc('\\usepackage{amsmath}', afterDisplays(['$x_1$', '\\(y\\)', '\\ensuremath{z}'])) },
+  'a piece first after a display: a paper\'s macro that sets ink': { engines: ENGINES3, src: doc('\\usepackage{amsmath}\\newcommand\\name{Name}\\newcommand\\tool[1]{\\textsc{#1}}', afterDisplays(['\\name{}', '\\tool{Tool}', '\\name'])) },
+  'a paper\'s macro first after a display: one that sets nothing, text after it': { engines: ENGINES3, src: doc('\\usepackage{amsmath}\\newcommand\\delete[1]{}\\newcommand\\nothing{}', afterDisplays(['\\delete{A passage $x$ set aside.}', '\\nothing', '\\delete{More.}'], false)) },
+  'a paper\'s macro first after a display: one that sets a whatsit, glue or a penalty, text after it': { engines: ENGINES3, src: doc('\\usepackage{amsmath}\\makeindex\\newcommand\\lab[1]{\\label{#1}}\\newcommand\\idx[1]{\\index{#1}}\\newcommand\\gap{\\hspace{1em}}\\newcommand\\pen{\\penalty100 }\\newcommand\\nob{\\nobreak}', afterDisplays(['\\lab{l1}', '\\idx{word}', '\\gap', '\\pen', '\\nob'], false)) },
+  'a paper\'s macro first after a display: one that reads what stands before it, text after it': { engines: ENGINES3, src: doc('\\usepackage{amsmath}\\usepackage{xspace}\\makeatletter\\newcommand\\us{\\unskip}\\newcommand\\xs{X\\xspace}\\newcommand\\ic{\\/}\\newcommand\\opt{\\@ifnextchar[\\opt@x{\\opt@x[none]}}\\def\\opt@x[#1]{(#1)}\\newcommand\\lb{\\setbox0\\lastbox}\\newcommand\\ls{\\hskip\\lastskip}\\newcommand\\up{\\unpenalty}\\makeatother', afterDisplays(['\\us', '\\xs', '\\ic', '\\opt', '\\opt[a]', '\\lb', '\\ls', '\\up'], false)) },
+  'a paper\'s macro first after a display: ending its paragraph': { engines: ENGINES3, src: doc('\\usepackage{amsmath}\\usepackage{xspace}\\makeindex\\makeatletter\\newcommand\\delete[1]{}\\newcommand\\nothing{}\\newcommand\\lab[1]{\\label{#1}}\\newcommand\\idx[1]{\\index{#1}}\\newcommand\\gap{\\hspace{1em}}\\newcommand\\pen{\\penalty100 }\\newcommand\\us{\\unskip}\\newcommand\\xs{X\\xspace}\\newcommand\\ic{\\/}\\newcommand\\lb{\\setbox0\\lastbox}\\newcommand\\ls{\\hskip\\lastskip}\\newcommand\\up{\\unpenalty}\\newcommand\\pp{\\par}\\newcommand\\name{Name}\\makeatother', `${endings(['\\delete{A passage set aside.}', '\\nothing', '\\lab{l2}', '\\idx{other}', '\\gap', '\\pen', '\\us', '\\xs', '\\ic', '\\lb', '\\ls', '\\pp', '\\name', '\\cite{a}', '\\ref{l2}'])}\n${BIB}`) },
+  // (a macro that takes the list's last penalty off takes the carrier's outer penalty: the carrier is then known by the penalty
+  // inside its box, marks.ts CARRY_TEX; ending its paragraph, the paragraph dropped as the original's)
+  'a paper\'s macro first after a display: one that takes the last penalty off, ending its paragraph': { engines: ENGINES3, src: doc('\\usepackage{amsmath}\\newcommand\\up{\\unpenalty}', endings(['\\up', '\\up'])) },
+  // (a box of the paper's after the carrier, made, raised, copied raised from a register or unpacked from one with a raised box
+  // last: never taken for the carrier's, set as it was; the original has a line there, ours the same)
+  'a paper\'s macro first after a display: a box of its own, ending its paragraph': { engines: ENGINES3, src: doc('\\usepackage{amsmath}\\newsavebox\\savedX\\newsavebox\\savedY\\newcommand\\rb{\\raisebox{2pt}{X}}\\newcommand\\rc{\\raise2pt\\copy\\savedX}\\newcommand\\uc{\\unhcopy\\savedY}\\newcommand\\hb{\\hbox{}}', `\\sbox\\savedX{X}\\sbox\\savedY{A\\raisebox{2pt}{Y}}${endings(['\\hb', '\\mbox{}', '\\rb', '\\rc', '\\uc'])}`) },
+  'a paper\'s macro first after a display: a box of its own, text after it': { engines: ENGINES3, src: doc('\\usepackage{amsmath}\\newsavebox\\savedX\\newsavebox\\savedY\\newcommand\\rb{\\raisebox{2pt}{X}}\\newcommand\\rc{\\raise2pt\\copy\\savedX}\\newcommand\\uc{\\unhcopy\\savedY}\\newcommand\\hb{\\hbox{}}', `\\sbox\\savedX{X}\\sbox\\savedY{A\\raisebox{2pt}{Y}}${afterDisplays(['\\hb', '\\mbox{}', '\\rb', '\\rc', '\\uc'], false)}`) },
+  // (a macro that takes the last penalty off and sets ink; that takes a glue, a penalty and a kern off in a row; and one that
+  // takes the carrier itself, \\unpenalty then \\lastbox: its point lost with it, no line moved, the unit read as at the base)
+  'a paper\'s macro first after a display: one that takes the last penalty off and more, ending its paragraph': { engines: ENGINES3, src: doc('\\usepackage{amsmath}\\newcommand\\upi{\\unpenalty X}\\newcommand\\uuu{\\unskip\\unpenalty\\unkern}\\newcommand\\ulb{\\unpenalty\\setbox0\\lastbox}', endings(['\\upi', '\\uuu', '\\ulb'])) },
+  'a paper\'s macro first after a display: one that takes the last penalty off and more, text after it, ending its paragraph or not': { engines: ENGINES3, src: doc('\\usepackage{amsmath}\\newcommand\\upi{\\unpenalty X}\\newcommand\\uuu{\\unskip\\unpenalty\\unkern}\\newcommand\\ulb{\\unpenalty\\setbox0\\lastbox}', afterDisplays(['\\upi', '\\uuu', '\\ulb'], false)) },
+  'a paper\'s macro first after a display: then a display': { engines: ENGINES3, src: doc('\\usepackage{amsmath}\\newcommand\\delete[1]{}\\newcommand\\pp{\\par}', `\\label{top}${prose(6, () => '')} by\n\\[ m = n \\]\n\\ref{top}\n\\[ o = p \\]\n${prose(6, () => '')} by\n\\[ a = b \\]\n\\delete{x}\n\\[ c = d \\]\n${prose(6, () => '')} and\n\\begin{equation} e = f \\end{equation}\n\\delete{y}\n\\begin{equation} g = h \\end{equation}\n${prose(4, () => '')}\n\\[ p = q \\]\n\\pp\n${prose(4, () => '')}`) },
+  'a macro that sets nothing after a display': { engines: ENGINES3, src: doc('\\usepackage{amsmath}\\newcommand\\delete[1]{}', `${prose(6, () => '')} by\n\\[ a = b \\]\n\\delete{A passage $x$ set aside.}\n${prose(6, () => '')} and\n\\begin{align*} c = d \\end{align*}\n\\delete{More.}\n${prose(6, () => '')}`) },
   // subequations with a \\label after its align: \\end's skip of the spaces after it ends at a mark (2608.12255)
-  'an environment that skips the spaces after it': doc('\\usepackage{amsmath}', `${prose(8, () => '')} integers $r$\n\t\\begin{subequations}\n\\begin{align} a &= b \\label{eq:a} \\\\ c &= d \\end{align}\n\\label{eq:ab}\n\t\\end{subequations}\n\t${prose(8, () => '')}`),
-  'a display inside a paragraph, and one ending it': doc('\\usepackage{amsmath}', `${prose(8, () => '')}\n\\[ a = b + c \\]\n${prose(8, i => (i === 3 ? ' $z$' : ''))}\n\\begin{equation} c = d \\end{equation}\n${prose(6, () => '')} \\begin{align} e &= f \\\\ g &= h \\end{align} ${prose(6, () => '')}\n\n${prose(6, () => '')}\n\\[ p = q \\]\n\n${prose(6, () => '')}`),
+  'an environment that skips the spaces after it': { engines: ENGINES3, src: doc('\\usepackage{amsmath}', `${prose(8, () => '')} integers $r$\n\t\\begin{subequations}\n\\begin{align} a &= b \\label{eq:a} \\\\ c &= d \\end{align}\n\\label{eq:ab}\n\t\\end{subequations}\n\t${prose(8, () => '')}`) },
+  'a display inside a paragraph, and one ending it': { engines: ENGINES3, src: doc('\\usepackage{amsmath}', `${prose(8, () => '')}\n\\[ a = b + c \\]\n${prose(8, i => (i === 3 ? ' $z$' : ''))}\n\\begin{equation} c = d \\end{equation}\n${prose(6, () => '')} \\begin{align} e &= f \\\\ g &= h \\end{align} ${prose(6, () => '')}\n\n${prose(6, () => '')}\n\\[ p = q \\]\n\n${prose(6, () => '')}`) },
   'a footnote\'s call': doc('', `${prose(20, i => (i % 3 ? '' : `\\footnote{A note ${i} with $n_${i}$.}`))}. ${prose(8, i => (i === 4 ? '\\footnote{Last.}.' : ''))}`),
   'a footnote\'s call with footmisc': doc('\\usepackage[hang]{footmisc}', `${prose(20, i => (i % 3 ? '' : `\\footnote{A note ${i}.}`))}. ${prose(8, i => (i === 4 ? '\\footnote{Last.}.' : ''))}`),
   'natbib\'s \\citep[p.~3]{a}': doc('\\usepackage{natbib}', `${prose(24, i => [' \\citep[p.~3]{a}', ' \\citet{b}', ' \\citep{a,b}.', '~\\citep[see][]{a}'][i % 4])}\n\n${BIB}`),
@@ -197,7 +248,7 @@ function queue(name, src, { engine = 'pdflatex', passes = 2, variants = ['v0', '
   if (engine === 'latex') files = { ...files, '00README.json': JSON.stringify({ sources: [{ usage: 'toplevel', filename: 'main.tex' }], process: { compiler: 'latex' } }) }
   const all = new Map([['main.tex', new TextEncoder().encode(src)], ...Object.entries(files).map(([f, t]) => [f, new TextEncoder().encode(t)])])
   const paper = openPaper(all)
-  if ((STREAM_ONLY && !name.startsWith('stream-')) || (RUNIN_ONLY && !name.startsWith('stream-F-')) || (NAMES_ONLY && !name.startsWith('names-')) || (UNMARK_ONLY && !name.startsWith('unmark-')) || (WRAPPERS_ONLY && !name.startsWith('wrappers-')) || (LOST_ONLY && !name.startsWith('stay-an-inline-formula-first-after-a-display') && !name.startsWith('stay-a-superscript-or-a-box-glued-to-a-word') && !name.startsWith('stream-E-')) || (DVI_ONLY && !/-latex(?:-hyperref)?$/.test(name))) return paper
+  if ((STREAM_ONLY && !name.startsWith('stream-')) || (RUNIN_ONLY && !name.startsWith('stream-F-')) || (NAMES_ONLY && !name.startsWith('names-')) || (UNMARK_ONLY && !name.startsWith('unmark-')) || (WRAPPERS_ONLY && !name.startsWith('wrappers-')) || (LOST_ONLY && !name.startsWith('stay-an-inline-formula-first-after-a-display') && !name.startsWith('stay-a-piece-first-after-a-display') && !name.startsWith('stay-a-paper-s-macro-first-after-a-display') && !/^stay-(?:a-display-of-the-paper-s-own-after-a-display|two-displays-in-a-row|a-macro-that-sets-nothing-after-a-display|an-environment-that-skips-the-spaces-after-it|a-display-inside-a-paragraph-and-one-ending-it)(?:-|$)/.test(name) && !name.startsWith('stay-a-superscript-or-a-box-glued-to-a-word') && !name.startsWith('stream-E-')) || (DVI_ONLY && !/-latex(?:-hyperref)?$/.test(name))) return paper
   queued.push({ name, paper, engine, passes, variants, own, trace, files: all })
   return paper
 }
@@ -210,6 +261,9 @@ function prepare() {
   for (const q of queued) {
     const switches = q.own ? readMarkProbe(read(`${q.name}-probe`, 'log', 'latin1') ?? '', probeSamples(q.paper.units)) : null
     q.switches = switches
+    // (the display probe's answers, as the run reads them: the pieces a carrier may stand before, marks.ts carrySamples)
+    const quiet = q.own ? readDisplayProbe(read(`${q.name}-probe`, 'log', 'latin1') ?? '', carrySamples(q.paper.units)) : null
+    q.quiet = quiet
     q.names = q.own ? readNameProbe(read(`${q.name}-probe`, 'log', 'latin1') ?? '') : null
     for (const v of q.variants) {
       const d = join(dir, `${q.name}-${v}`)
@@ -218,7 +272,7 @@ function prepare() {
       for (const [path, bytes] of q.files) writeFileSync(join(d, path), bytes)
       // v1np: v1 with no points, LAYOUT_TEX as it was before them
       // (under latex, v1np is v1 with no DVI point: POINTS_TEX's own sets nothing in DVI mode)
-      for (const [path, bytes] of originalFiles(q.paper, v === 'v0' ? { lines: true, transcode: false } : { lines: true, layout: MARK_CLASSES, switches })) writeFileSync(join(d, path), v === 'v1np' && path === 'main.tex' ? latin1Bytes(latin1(bytes).replace(q.engine === 'latex' ? DVI_POINTS_TEX : POINTS_TEX, '')) : bytes)
+      for (const [path, bytes] of originalFiles(q.paper, v === 'v0' ? { lines: true, transcode: false } : { lines: true, layout: MARK_CLASSES, switches, quiet })) writeFileSync(join(d, path), v === 'v1np' && path === 'main.tex' ? latin1Bytes(latin1(bytes).replace(q.engine === 'latex' ? DVI_POINTS_TEX : POINTS_TEX, '')) : bytes)
       jobs.push({ name: `${q.name}-${v}`, engine: q.engine, passes: q.passes, trace: q.trace })
     }
   }
@@ -293,9 +347,11 @@ function dviMoved(a, b) {
   return out
 }
 const READ_LINE = /^(?:AXT-|Missing character: |! LaTeX Error: Unicode character )/
-/** what the layout marks themselves write to the log (LAYOUT_TEX: a unit's alignment, a run's colour), which v0, with none of
- *  them, cannot write: their readings, not something they change */
-const MARKS_OWN_LINE = /^AXT-(?:ALIGN|COLOUR) /
+/** what the layout marks themselves write to the log (LAYOUT_TEX: a unit's alignment, a run's colour, a column's body as TeX
+ *  shipped it, a cell's end (\\axt@te); refsTex: a label's type and its names), which v0, with none of them, cannot write: their
+ *  readings, not something they change (AXT-BODY since 70232b1c0, the references' since refsTex and AXT-CELL since the cells'
+ *  statements: every case's check read them as changes, a cell's case at the base among them) */
+const MARKS_OWN_LINE = /^AXT-(?:ALIGN|COLOUR|BODY|REF|REFNAME|REFLANG|CELL) /
 /** the log lines the run reads (live.mjs readingsOf) but the layout marks' own, and LaTeX's warnings and errors */
 const readLog = name => lastTexLog(read(name, 'log', 'latin1') ?? '').split('\n').filter(l => (READ_LINE.test(l) && !MARKS_OWN_LINE.test(l)) || /^(?:LaTeX|Package \S+|Class \S+) Warning|^! /.test(l))
 const errorsOf = name => (read(name, 'log', 'latin1') ?? '').match(/^! .*/gm) ?? []
@@ -752,6 +808,15 @@ for (const [name, , engine] of stays) {
       if (m.length) console.log(`note ${label}: dvipdfmx draws ${m.length} text items otherwise, e.g. ${m.slice(0, 2).join('; ')}`)
     } else check(label, !m.length && !newErrors.length && marks > 0, JSON.stringify({ moved: m.slice(0, 6), newErrors, layoutMarks: marks }))
     check(`${label}: the log the run reads and LaTeX's warnings unchanged`, JSON.stringify(logA) === JSON.stringify(logB), JSON.stringify(logB.filter(l => !logA.includes(l)).slice(0, 4)))
+    // (a piece first after a display, or right after such a piece: its opening mark \\axtpmd, the carrier's. With text after it
+    // every such point stands in the PDF, whatever the piece set; ending its paragraph, or before a display, the points of the
+    // pieces that set nothing are taken back with their carriers, and those standing are printed)
+    if (/first after a display/.test(name)) {
+      const opened = [...(read(`${key}-v1`, 'tex', 'latin1') ?? '').matchAll(/\\axtpmd\{([pn]\d+\.\d+a)\}/g)].map(x => x[1])
+      const unset = opened.filter(n => !b.dests.has(n))
+      if (/ending its paragraph|then a display/.test(name)) console.log(`note ${label}: ${opened.length - unset.length} of ${opened.length} carried points stand; taken back ${JSON.stringify(unset)}`)
+      else check(`${label}: each opening point of a piece first after a display stands`, opened.length > 0 && !unset.length, JSON.stringify({ opened: opened.length, unset }))
+    }
   }
 }
 if (!LOST_ONLY) {
@@ -1031,7 +1096,10 @@ for (const s of NAMES_ONLY || UNMARK_ONLY || WRAPPERS_ONLY ? [] : LOST_ONLY ? st
   const byName = new Map(m.owned.map(e => [e[0], e]))
   // the pieces the marking marked (the probe's switch as v1 was compiled with): the others have no point by design
   const design = new Set()
-  for (const c of layoutMarking(units, MARK_CLASSES, { lines: false, switches: queued.find(q => q.name === s.key)?.switches ?? {} }).units) for (const p of c.pieces) { const x = p.t === 'ph' && /^\\axtpm[am]\{([pn]\d+\.\d+a)\}$/.exec(p.src ?? ''); if (x) design.add(x[1]) }
+  // (the carrier's \\axtpmd among them: an older scan knew \\axtpma and \\axtpmm alone, and read a carried piece with no point as
+  // one unmarked by design, judged by nothing; `carriedBlind` counts the pieces that scan left out)
+  const carriedBlind = []
+  for (const c of layoutMarking(units, MARK_CLASSES, { lines: false, switches: queued.find(q => q.name === s.key)?.switches ?? {}, quiet: queued.find(q => q.name === s.key)?.quiet ?? null }).units) for (const p of c.pieces) { const x = p.t === 'ph' && /^\\axtpm([amd])\{([pn]\d+\.\d+a)\}$/.exec(p.src ?? ''); if (x) { design.add(x[2]); if (x[1] === 'd') carriedBlind.push(x[2]) } }
   const tally = {}, bad = [], seen = new Map()
   units.forEach((u, i) => u.pieces.forEach((p, k) => {
     const cls = classOf(p)
@@ -1056,6 +1124,7 @@ for (const s of NAMES_ONLY || UNMARK_ONLY || WRAPPERS_ONLY ? [] : LOST_ONLY ? st
   // E: not vacuous — a display at a page's foot owned past its column's end, a group, a formula after a display marked
   if (s.name === 'E') check(`${label}: a display past its column's end, a display group and a formula first after a display among them`, (tally["open, past its column's end"] ?? 0) >= 1 && (tally['open, with the displays after it'] ?? 0) === 1 && (tally['in the display before it'] ?? 0) === 2 && !tally['no point'], JSON.stringify(tally))
   console.log(`note ${label}: ${points} points (${brackets} of brackets), ${named} pieces named; ${JSON.stringify(tally)}; with no point, ${none.owned.length} pieces own anything`)
+  if (carriedBlind.length) console.log(`note ${label}: carried pieces (\\axtpmd) ${carriedBlind.length}, of which with an ownership record ${carriedBlind.filter(n => byName.has(n)).length}, with none (the older scan's blind spot) ${carriedBlind.filter(n => !byName.has(n)).length} ${JSON.stringify(carriedBlind.filter(n => !byName.has(n)))}`)
   // A's display across a page: the stream holds its rows in order, the running foot and head and the footnote between
   // them outside the column bodies
   if (s.name === 'A') {
