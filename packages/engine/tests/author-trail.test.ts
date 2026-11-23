@@ -228,7 +228,7 @@ describe('a separator TeX set between two names, at a row’s end', () => {
   // sets its separator after the call point of the author it opens, `<i>c`; the separator before a name on its row is that name's
   // lead, but one TeX set before a row's end (`\\`, a centred block's paragraph end) stands on the row of the name it follows,
   // its next name on the next row. Left no one's, it stood at the original row's end, past a shorter translated row)
-  const rows = (rowEndAnd: boolean) => {
+  const rows = (rowEndAnd: boolean, wrapped = false) => {
     const sep = rowEndAnd ? ', and' : ','
     const B = docOf([
       {
@@ -265,8 +265,8 @@ describe('a separator TeX set between two names, at a row’s end', () => {
     )
     // (each line's unit: a name its unit's, its mark and every separator no unit's)
     const ins = instrumentOf(B, units, [[0, -1, -1, 1, -1, -1, 2, -1, -1, 3, -1]])
-    // (TeX's paragraph end after the first row: the centred block's `\\`)
-    ins.tex = { paragraphEnds: [[17 + sep.length]] }
+    // (TeX's paragraph end after the first row: the centred block's `\\`; none where TeX wrapped the row there)
+    ins.tex = wrapped ? {} : { paragraphEnds: [[17 + sep.length]] }
     return locate(ins, B, align(B, B))
   }
   const inkOf = (L: ReturnType<typeof locate>, u: number) => {
@@ -277,6 +277,9 @@ describe('a separator TeX set between two names, at a row’s end', () => {
     // (Bob's \inst{2} and the comma TeX set after the call of Cy's `\and`, before the row's end: one run, its piece's ink)
     expect(inkOf(rows(false), 1)).toEqual([1, 166.2, 176.4])
   })
+  it('is so where TeX wrapped the row there too: the next name’s first glyph on another row', () => {
+    expect(inkOf(rows(false, true), 1)).toEqual([1, 166.2, 176.4])
+  })
   it('leaves a separator before a name on the name’s row the next name’s lead, as before', () => {
     // (Ann's run her \inst{1} alone: the comma before Bob, after Bob's call, on Bob's row, is Bob's lead)
     expect(inkOf(rows(false), 0)).toEqual([1, 114, 118.2])
@@ -285,5 +288,36 @@ describe('a separator TeX set between two names, at a row’s end', () => {
   })
   it('leaves a separator holding a word at a row’s end to the ink units, whole (", and" translated as between names)', () => {
     expect(inkOf(rows(true), 1)).toEqual([1, 166.2, 170.4])
+  })
+})
+
+describe('the bound of a run’s boxes', () => {
+  it('is the next author’s call, as for its glyphs: an icon the next call paints before its name is none of the run', () => {
+    // (`Ann Lee\inst{1} \and \orcidlink{…}Bob Ray`: the icon the second author's block opens with, painted after its call
+    // point `1c` and before its name: the second's, never cropped with the first's marks)
+    const B = docOf([
+      {
+        lines: [
+          { text: 'Ann Lee', x: 72, y: 700 },
+          { text: '1', x: 114, y: 703.6, size: 7 },
+          { text: 'Bob Ray', x: 132, y: 700 },
+        ],
+        boxes: [[8, 0, 124, 699, 130, 705]],
+        points: [
+          ['0s', 0],
+          ['0e', 7],
+          ['1c', 8],
+          ['1s', 8],
+          ['1e', 15],
+        ],
+      },
+    ])
+    // (TeX's order: the call point, then the icon, then the second name's start: the call's box count before the icon)
+    B.pages[0]!.points.find((x) => x.name === '1c')!.box = 0
+    const units = [authorWith('Ann Lee', [['\\inst{1}', 'other', '1']]), authorWith('Bob Ray', [])]
+    const L = locate(instrumentOf(B, units, [[0, -1, 1]]), B, align(B, B))
+    const ann = L.members.find((m) => m.unit === 0)!
+    expect(ann.elBoxes.get('1') ?? [], 'the icon none of the first run').toEqual([])
+    expect(new Map(ann.elements).get('1')!.ink[0]?.[3]).toBe(118.2)
   })
 })

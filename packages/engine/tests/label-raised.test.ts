@@ -21,13 +21,19 @@ type G = {
   top: number
   bottom: number
 }
-/** a page from runs: each run its text, its baseline, its size, its x; `pt` a point before the next glyph */
-function page(items: ({ pt: string } | { s: string; y: number; size: number; x: number })[]) {
+/** a page from runs: each run its text, its baseline, its size, its x; `pt` a point before the next glyph, `para` TeX's
+ *  paragraph point `q<n>` there (marks.ts POINTS_TEX, kept apart: the page's `paras`) */
+function page(items: ({ pt: string } | { para: string } | { s: string; y: number; size: number; x: number })[]) {
   const glyphs: G[] = []
   const points: { name: string; glyph: number; box: number }[] = []
+  const paras: { name: string; glyph: number; box: number }[] = []
   for (const it of items) {
     if ('pt' in it) {
       points.push({ name: it.pt, glyph: glyphs.length, box: 0 })
+      continue
+    }
+    if ('para' in it) {
+      paras.push({ name: it.para, glyph: glyphs.length, box: 0 })
       continue
     }
     let x = it.x
@@ -50,6 +56,7 @@ function page(items: ({ pt: string } | { s: string; y: number; size: number; x: 
   return {
     glyphs,
     points,
+    paras,
     boxes: [] as number[],
     paths: [] as number[],
     boxAt: glyphs.map(() => 0),
@@ -114,5 +121,35 @@ describe('a number TeX set at a unit’s first line start, raised as a script', 
     const g = groupsOf(ownOf(pages, { units }), pages)
     expect(g.u0).toBe('AnnLee')
     expect(g['u1.l'] ?? '').toMatch(/^1?$/)
+  })
+})
+
+describe('a glyph TeX set in the paragraph before a unit’s, on the same row', () => {
+  // (acmart's author grid: each author a paragraph of its own, set side by side on one row; the "*" TeX set after the first
+  // name, raised, no unit's, stands on the second name's row, its box meeting that line's extent, and between the first's end
+  // mark and the second's start: by the line alone it read as the second name's label, carried before its translation across
+  // the row. It is the first paragraph's: TeX's point `q<n>` at the second paragraph's start bounds the label)
+  const row = (para: boolean) =>
+    page([
+      { pt: '0s' },
+      { s: 'AnnLee', y: 652.14, size: 11.96, x: 117.82 },
+      { pt: '0e' },
+      { s: '*', y: 654.54, size: 8, x: 162 },
+      ...(para ? [{ para: 'q2' }] : []),
+      { pt: '1s' },
+      { s: 'BoRay', y: 652.14, size: 11.96, x: 269.91 },
+      { pt: '1e' },
+    ])
+  const units2 = [
+    { kind: 'author', src: 'Ann Lee' },
+    { kind: 'author', src: 'Bo Ray' },
+  ]
+  it('is no label of the next paragraph’s unit', () => {
+    const pages = [row(true)]
+    expect(groupsOf(ownOf(pages, { units: units2 }), pages)['u1.l']).toBeUndefined()
+  })
+  it('where TeX states no paragraph there, the row reads as before: the mark is the next name’s lead', () => {
+    const pages = [row(false)]
+    expect(groupsOf(ownOf(pages, { units: units2 }), pages)['u1.l']).toBe('*')
   })
 })
