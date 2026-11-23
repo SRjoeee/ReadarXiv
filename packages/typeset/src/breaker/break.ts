@@ -149,15 +149,16 @@ const urlCut = (t: BreakToken, room: number, scale: number, least: boolean) => {
 const kernOf = (t: Pick<Token, 'kernW'>, f: number): number => ((t.kernW ?? 0) * f) / 100
 /** a token's own width at size f: no kern after it (B.tokens' kernOn's `kernW`), which its item holds apart (kernOf) */
 /** what tokW reads of a token: the breaker's and the walk's (fit/walk.ts fitLays' bound) */
-type Measured = Pick<Token, 'cw' | 'space' | 'w100' | 'cls' | 's'> & { crop?: unknown }
+type Measured = Pick<Token, 'cw' | 'space' | 'w100' | 'cls' | 's' | 'st'> & { crop?: unknown }
 const tokW = (t: Measured, f: number, st: FitState, scale: number): number => {
   if (t.crop) return (t.cw as number) * scale
   if (t.space) return (t.w100 * f) / 100
   let w = (t.w100 * f) / 100
   // (the tracking after each character a reader sees, a grapheme cluster (script.ts charsOf), as the drawing's letter spacing is
-  // set after each (CSS Text 3 §8.2, a typographic character unit): a decomposed Hangul syllable one character, not three)
-  if (t.cls === 'cjk') w += st.track * f * charsOf(t.s as string)
-  else if (st.trackLatin) w += st.trackLatin * f * charsOf(t.s as string)
+  // set after each (CSS Text 3 §8.2, a typographic character unit): a decomposed Hangul syllable one character, not three; in
+  // ems of the size the token is drawn at, a group's at its own, TStyle.rel)
+  if (t.cls === 'cjk') w += st.track * f * relOf(t) * charsOf(t.s as string)
+  else if (st.trackLatin) w += st.trackLatin * f * relOf(t) * charsOf(t.s as string)
   return w
 }
 /**
@@ -581,7 +582,8 @@ function breakLines(
           shift = -half
         }
       }
-      const asp = t.asp && (line.items.length || items.length) ? P.autospace * f : 0
+      // (in ems of the size the token is drawn at: a group's at its own, TStyle.rel)
+      const asp = t.asp && (line.items.length || items.length) ? P.autospace * f * relOf(t) : 0
       // (`kern`: the explicit glue after it, an advance of its own beside its width, which trim drops at a line's end: no part of
       // what it draws, a crop's image, a word's box)
       const kern = kernOf(t, f)
@@ -1041,7 +1043,8 @@ function breakLines(
           if (words && t0.wordEnds && !t0.wordEnds.includes(pts[q]!)) continue
           const head = `${word.slice(0, pts[q])}-`
           const hw =
-            (P.measure.w100(head, t0.face as Face) * f) / 100 + (st.trackLatin ? st.trackLatin * f * head.length : 0)
+            (P.measure.w100(head, t0.face as Face) * relOf(t0) * f) / 100 +
+            (st.trackLatin ? st.trackLatin * f * relOf(t0) * head.length : 0)
           if (hw <= room + 0.01) {
             cut = { head, hw, at: pts[q] }
             break

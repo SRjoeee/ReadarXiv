@@ -166,7 +166,11 @@ export function runEdge(
     f = LF * (run.sup ? 0.62 : 1) * (run.sc ?? 1) * (run.rel ?? 1)
   // (the tracking after each character a reader sees before the edge, a grapheme cluster, as the breaker measures it (tokW) and
   // the drawing's letter spacing sets it)
-  return run.xs[0]! + (w100(before, run.face) * f) / 100 + (run.track ? run.track * LF * charsOf(before) : 0)
+  return (
+    run.xs[0]! +
+    (w100(before, run.face) * f) / 100 +
+    (run.track ? run.track * LF * (run.rel ?? 1) * charsOf(before) : 0)
+  )
 }
 
 /** a run of text as it is drawn: an Item, with what the drawing sets beside it (its raise, tracking, slant) */
@@ -280,7 +284,7 @@ export function displayLines(L: Layout, page: number): DisplayLine[] {
       if (fill !== undefined) item.fill = fill
       if (run.chars && run.xs.length > 1) item.dx = run.xs.map((x) => x - run.xs[0]!)
       if (run.sup) item.rise = LF * 0.36
-      if (!run.chars && run.track) item.track = run.track * LF
+      if (!run.chars && run.track) item.track = run.track * LF * (run.rel ?? 1)
       if (run.face.oblique) {
         item.skew = 1
         item.slant = run.face.oblique

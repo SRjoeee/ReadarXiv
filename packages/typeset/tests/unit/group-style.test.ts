@@ -96,4 +96,20 @@ describe('a group’s translation is drawn in the weight and at the size TeX set
     const kicker = of(cs, '现场笔记')[0]!.size
     expect(Math.round((kicker / title) * 1000) / 1000).toBe(Math.round((9.9626 / 29.8879) * 1000) / 1000)
   })
+  it('a group at its own size steps its characters and its tracking at that size, not the member’s', () => {
+    // (the fit's tracking is in ems of the size a character is drawn at: the kicker's at its own, as the breaker measures it and
+    // the drawing spaces it)
+    const laid = layPage(
+      part(unit({ cmd: 'tagline', style: { role: 'sans', size: 9.9626, bold: 1 } })),
+      rows(),
+      rulesFor('zh'),
+      metrics,
+    ).members[0]!
+    const run = laid.lines.flatMap(([, , , items]) => items).find((it) => 'face' in it && it.s.startsWith('现'))! as {
+      size: number
+      dx?: number[]
+    }
+    const step = run.dx![1]! - run.dx![0]!
+    expect(Math.round(step * 100) / 100).toBe(Math.round(run.size * (1 + laid.fit!.track) * 100) / 100)
+  })
 })

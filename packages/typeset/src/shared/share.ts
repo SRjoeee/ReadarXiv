@@ -50,7 +50,7 @@ export function inkEndOf(line: LaidLine, L: Layout, m: FitMeasure): number {
   // (a word's tracking, drawn as letter spacing after each of its characters (each a grapheme cluster, script.ts charsOf), stands
   // before its last one's ink; a CJK character laid alone carries its own after it, in its advance)
   const track = t.sup ? 0 : ((t.cls === 'cjk' ? S.state?.track : S.state?.trackLatin) ?? 0)
-  let x = it.x! + (r * k * f) / 100 + track * f * Math.max(0, charsOf(t.s!) - 1)
+  let x = it.x! + (r * k * f) / 100 + track * f * relOf(t) * Math.max(0, charsOf(t.s!) - 1)
   // (an oblique face skews its glyphs about the baseline: its ink's top-right corner stands its height times the slant further on)
   if (t.face!.oblique)
     x +=
