@@ -9782,7 +9782,8 @@ mechanism for a turned header cell, a turned caption of several lines and a side
   its room along its lines to the nearest ink on their band and under its last line to the nearest ink across its measure,
   every glyph, turned glyph and painted box of the page seen through the inverse turn; the cells of one table in a frame tied
   by TeX's grid as the page's are (`Located.frames`). Not framed: a unit on two pages or in two turns (`turned: two pages`,
-  `turned: two turns`).
+  `turned: two turns`), or one whose text glyphs are all white space, its ink its pieces' (`turned: no text of ink`: no text
+  of its own to lay nor ink to read its turn by; read for it, the reading threw and the paper's prepare with it).
 - **The part** (`Part.frames`): by turn, its direction and its flows and ties, each member stated in the frame, its lines'
   page the page's; a page that held nothing else to lay has a part for them, its flows none. FORMAT stays 1, by the format's
   own rule (ARCHITECTURE.md §5): a reader of before strips the field (zod's object strips what it does not know), lays the

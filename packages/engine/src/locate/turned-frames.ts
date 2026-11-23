@@ -9,8 +9,8 @@
 // frameTurned) it is read in its frame and put in its page's frame of its turn (Located.frames).
 //
 // A unit is framed where it is located, no figure text, its text all turned glyphs (own/own.ts TURNED: no level text glyph),
-// on one page, in one turn. One whose glyphs stand in two turns or on two pages is not framed: it stays the original's
-// (`turned: two turns`, `turned: two pages`).
+// on one page, in one turn. One whose glyphs stand in two turns or on two pages, or whose text glyphs are all white space, is
+// not framed: it stays the original's (`turned: two turns`, `turned: two pages`, `turned: no text of ink`).
 //
 // The frame: the page's coordinates turned back, the turn's direction (ux, uy) being the frame's x axis on the page, about the
 // page's origin: a point (x, y) of the page is (ux x + uy y, -uy x + ux y) in its frame, which the reader turns back by
@@ -325,7 +325,8 @@ export type Held = { mem: Member; page: number; dir: [number, number] }
 /**
  * Phase 1b, right after the members are placed: each member to be framed held out of the page's readings (its `located`
  * false until phase 16, so that no reading of the level page's lines, columns, measures, rooms, flows, ties or links meets
- * it). A turned unit that cannot be framed stays the original's with its reason (`turned: two pages`, `turned: two turns`)
+ * it). A turned unit that cannot be framed stays the original's with its reason (`turned: two pages`, `turned: two turns`,
+ * `turned: no text of ink`: its text glyphs all white space)
  */
 export function holdTurned(w: Work): Held[] {
   const { inkA } = w.ix
@@ -342,6 +343,13 @@ export function holdTurned(w: Work): Held[] {
     const p = [...pages][0]!
     const T = inkA.pages[p - 1]!.turned!
     const set = mem.turned.map(([, j]) => T[j]!).filter((t) => /\S/.test(t.u))
+    // (its text all white space, its ink its pieces' (two formulas and the glyph pdfTeX's \pdfinterwordspaceon sets between
+    // them): no text of its own to lay, nor ink to read its turn by; the original's)
+    if (!set.length) {
+      mem.located = false
+      mem.cause = 'turned: no text of ink'
+      continue
+    }
     const [ux, uy] = [set[0]!.ux, set[0]!.uy]
     if (set.some((t) => Math.abs(t.ux - ux) > TURN_SAME || Math.abs(t.uy - uy) > TURN_SAME)) {
       mem.located = false
