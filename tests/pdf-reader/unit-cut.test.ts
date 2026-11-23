@@ -36,6 +36,9 @@ import { wrapped } from './helpers/ocg-wrapped'
 //   made-bbl     PIPELINE 30's \bibliography (made-bibliography.test.ts): the paragraph that runs into it ends there, the job's
 //                .bbl BibTeX makes or none
 //   authors-box  PIPELINE 32's author block of \centerline rows (author-places.test.ts, 2010.11929v2)
+//   par-defs     PIPELINE 118's paragraphs a paper's definition ends (paragraph-macros.test.ts): a \par after the argument, a
+//                \medbreak at the body's head, a macro of no argument that is \par, a call last in its box
+//   llncs-rows   PIPELINE 118's names after `\\` in an llncs \author, each with its \inst: names, not places
 // A source's structural names are its units too (bundleUnitsOf, after the source's): each recorded as `name: <its text>`.
 // So are the units the wrap cuts of our pages after them (PIPELINE 31): the ink units (layout/ink-units.mjs) of a few pages written
 // here, each recorded whole (kind, echo, its pieces' text and sources), and the figure units of the figures fixture
@@ -87,6 +90,15 @@ C.~Wang and S.~Shang, ${QUOTES}Building pipelines,'' in \emph{Proc. ACM}, 2025, 
   // PIPELINE 32's: ICLR 2021's author block, each row a \\centerline (2010.11929v2): names, then places, all after the others
   'authors-box': () => new Map([
     ['main.tex', enc('\\documentclass{article}\n\\author{\\centerline{Alexey Dosovitskiy$^{*}$, Lucas Beyer$^{*}$} \\vspace{1mm}\\\\\n\\centerline{\\textbf{Xiaohua Zhai$^{*}$}} \\\\\n\\centerline{$^*$equal technical contribution} \\\\\n\\centerline{Google Research, Brain Team} \\\\\n\\centerline{\\texttt{a@google.com}} \\\\\n}\n\\begin{document}\n\\maketitle\nThe body.\n\\end{document}\n')],
+  ]),
+  // PIPELINE 118's: a definition that ends the paragraph TeX is setting, before or after its argument (2611.23651v2's \eyebrow)
+  'par-defs': () => new Map([
+    ['main.tex', enc('\\documentclass{article}\n\\newcommand{\\eyebrow}[1]{{\\small\\bfseries #1}\\par}\n\\newcommand{\\pb}[1]{\\medbreak\\noindent\\textbf{#1}}\n\\newcommand{\\endp}{\\par}\n\\newcommand{\\kick}[1]{{\\small #1}\\endp}\n\\newcommand{\\pitem}[1]{\\par\\noindent #1\\par\\vspace{2pt}}\n\\begin{document}\n\\eyebrow{Field notes} A small title of ours.\n\nWords of the paragraph before it. \\pb{A head} and the words of the next one.\n\n\\kick{Notes} More words of ours.\n\\begin{center}\n\\pitem{Words in a box.}\n\\end{center}\n\\end{document}\n')],
+  ]),
+  // PIPELINE 118's: llncs's names after `\\`, each with its \inst, names (MARK_AFTER), the places in \institute
+  'llncs-rows': () => new Map([
+    ['llncs.cls', enc(LLNCS + '\\def\\inst#1{$^{#1}$}\\def\\institute#1{}\n')],
+    ['main.tex', enc('\\documentclass{llncs}\n\\title{A Title of Ours}\n\\author{Ann Lee\\inst{1} \\and Bob Ray\\inst{2} \\\\ Cy Day\\inst{1} \\and Di Fox\\inst{2}}\n\\institute{First Place \\and Second Place}\n\\begin{document}\n\\maketitle\nWords of ours.\n\\end{document}\n')],
   ]),
   'made-bbl': () => new Map([
     ['main.tex', enc('\\documentclass{article}\n\\begin{document}\nNormalization helps \\cite{ba}.\nThe paragraph runs into it.\n\\bibliographystyle{plain}\n\\bibliography{refs}\n\\end{document}\n')],
