@@ -45,6 +45,22 @@ describe('a definition that ends the paragraph in other forms', () => {
       ),
     ).toEqual(['Field notes', 'A small title of ours.'])
   })
+  it('the white space after a call TeX’s \\par ends is still the unit’s: a unit that ended there already keeps its text', () => {
+    const textsOf = (def: string) =>
+      openPaper(
+        new Map([
+          [
+            'main.tex',
+            enc(
+              `\\documentclass{article}\n${def}\n\\begin{document}\n\\begin{center}\n\\pitem{Words of ours.}\n\\end{center}\n\\end{document}\n`,
+            ),
+          ],
+        ]),
+      ).units.map((u) => (u.pieces as Piece[]).map((p) => p.s ?? '').join(''))
+    expect(textsOf('\\newcommand{\\pitem}[1]{\\par\\noindent #1\\par\\vspace{2pt}}')).toEqual(
+      textsOf('\\newcommand{\\pitem}[1]{#1}'),
+    )
+  })
   it('a \\par inside a box’s own text ends that box’s paragraph alone: one unit', () => {
     expect(
       saidOf(
