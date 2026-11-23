@@ -328,7 +328,8 @@ export function probeSamples(units: readonly Unit[], complete: CompleteGiven | n
 }
 /** the key of a front piece's answer in the probe's switches: its source as it stands, a key no command's name can be */
 export const frontKey = (src: string): string => `front ${src}`
-/** at most this many front pieces a paper's probe asks about (probeSamples' `front`) */
+/** at most this many front pieces a paper's probe asks about (probeSamples' `front`): twice the most a paper of the lab's corpus
+ *  asks, measured over its 245 papers (2608.15334v1's 31; 147 samples in 38 papers) */
 export const FRONT_PROBE_MAX = 64
 /** the pieces between a front unit's texts that set ink (BETWEEN_TEXTS), by index: after its first text of letters and before
  *  its last (layoutMarking's `between`, probeSamples' `front`) */
