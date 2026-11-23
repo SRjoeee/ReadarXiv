@@ -389,13 +389,24 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
       if (q.t === 'unit') named.add(q.unit)
       else if (q.t === 'span') nameIn(q.content)
   }
-  for (const u of all) nameIn(u.content)
   // (and one a part's member names as its text, its own unit or the one its ink unit echoes, placedOf: a unit TeX set without its
   // points, read off the page as an ink unit of its letters, drawn with that unit's row; the members a part holds, those with a
   // line, as names.ts reads them below)
   for (const x of placed) if (typeof x.text === 'string' && x.lines.length) named.add(x.text)
   const neverSet = (u: (typeof all)[number], i: number) =>
     everyMember.get(i) === true && !named.has(u.id) && !READ_BEYOND_LAY.has(u.kind)
+  // (the nested units of the units asked alone, and theirs in turn: a note nested in a branch TeX never takes goes with it)
+  const scanned = new Set<number>()
+  for (let grew = true; grew; ) {
+    grew = false
+    for (const [i, u] of all.entries()) {
+      if (scanned.has(i) || neverSet(u, i)) continue
+      scanned.add(i)
+      const before = named.size
+      nameIn(u.content)
+      if (named.size > before) grew = true
+    }
+  }
   /** the ids asked: of a unit some instance of which TeX set (or another names), and every unit born on A */
   const asked = new Set<string>()
   const seen = new Set<string>()
