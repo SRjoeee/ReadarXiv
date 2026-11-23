@@ -1,12 +1,24 @@
 // Phase 2 of locate (locate.ts): each member's trail, the ink TeX set right after its last glyph that no unit owns,
-// claimed as its element TRAIL.
-// Reads: the index; the record's `members`; the ownership (a glyph another member holds is no trail).
-// Writes: the ownership (each trail taken by its member, its element TRAIL), `trailSep` (assigned: an author's trail's gap,
-// which phase 6 states).
+// claimed as its element TRAIL, or, an author's member's whose source writes pieces after its name that own no ink, as the
+// first of those pieces' (runOf).
+// Reads: the index; the record's `members` and `units`; the ownership (a glyph another member holds is no trail).
+// Writes: the ownership (each trail taken by its member, its element TRAIL or its run's first piece), `trailSep` (assigned:
+// an author's trail's gap, which phase 6 states), `runShared` (assigned: the run's other pieces, which phase 6 states empty).
+import type { Piece } from '@readarxiv/format'
 import { TRAIL } from './facts.ts'
 import { isInk, r2 } from './lines.ts'
 import type { Claims } from './ownership.ts'
-import { AUTHOR_KINDS, assign, BRACKET, CALL, lettersIn, type Member, UNIT_MARK, type Work } from './work.ts'
+import {
+  AUTHOR_KINDS,
+  assign,
+  BRACKET,
+  CALL,
+  INKED_CLASSES,
+  lettersIn,
+  type Member,
+  UNIT_MARK,
+  type Work,
+} from './work.ts'
 
 /** a word ends where two glyphs stand this share of their size apart, and a trail with it (the ink units' word rule,
  *  ink-units.ts wordsOf's WORD_GAP); a table's entry no unit is read by its words (facts-pass.ts readColumns) */
@@ -71,6 +83,8 @@ export function claimTrails(w: Work, claims: Claims): void {
   }
   // (an author's trail past a word's gap: the gap TeX set before it, by member ord)
   const trailSep = new Map<number, number>()
+  // (the pieces of a run but its first, by `${unit}|${piece}`: their ink the first's, each stated empty by phase 6)
+  const runShared = new Set<string>()
   for (const mem of members) {
     if (!mem.located || mem.fixed || mem.figure || mem.kind === 'cell' || mem.name !== undefined || mem.bLast < 0)
       continue
@@ -142,8 +156,64 @@ export function claimTrails(w: Work, claims: Claims): void {
       prev = g
     }
     if (!trail.length) continue
+    // (ONE OWNER PER INK: an author's member whose source writes pieces after its name that own no ink — llncs's `\inst{1}`, a
+    // class's `\textsuperscript{…}`, `\inst{…}\orcidID{…}`, an `\IEEEauthorrefmark` list —, set past the end mark where a front
+    // unit's marks state no point between them (marks.ts: no mark of a piece after a front unit's last text): what TeX set
+    // there is those pieces' ink, never a trail of no piece beside them, which left each piece stating no ink and no text, and
+    // the typesetter, which cannot tell a piece TeX set nothing for from one whose ink was not found, refused the member
+    // `unproven`: every name of the block drawn in the original, whatever the translator gave (2604.10456v1's eleven). The run
+    // is the first piece's ink, a crop of TeX's own setting drawn where the translation sets that piece; each other piece of
+    // the run is stated empty (El.text '', phase 6), its ink in the first's, so that the run is drawn once, in TeX's order,
+    // wherever a translation sets the pieces and whatever their order. One gap TeX set before the run (`sep`) is the trail's
+    // statement alone: the run's first piece is laid where the translation sets it, glued there as a piece is)
+    const pieces = AUTHOR_KINDS.has(mem.kind) ? runOf(w, mem) : []
+    if (pieces.length) {
+      claims.take(mem, { els: new Map([[pieces[0]!, trail]]) })
+      for (const id of pieces.slice(1)) runShared.add(`${mem.unit}|${id}`)
+      continue
+    }
     claims.take(mem, { els: new Map([[TRAIL, trail]]) })
     if (sep !== undefined) trailSep.set(mem.ord, sep)
   }
   assign(w, 'trailSep', trailSep)
+  assign(w, 'runShared', runShared)
+}
+
+/** a unit's pieces in the source's order, a group's inside where it stands: its texts, its elements and nested units */
+function flatOf(content: readonly Piece[], out: Piece[] = []): Piece[] {
+  for (const p of content) {
+    if (p.t === 'span') flatOf(p.content, out)
+    else out.push(p)
+  }
+  return out
+}
+
+/**
+ * The pieces a member's trail is the ink of, in the source's order: those its unit's source writes after its last text and
+ * after the last piece that owns ink, each of a class drawn from its ink (INKED_CLASSES) that owns no glyph and no box of its
+ * own, is not stated to set nothing (the instrument's `empty`) and was not set before the unit's start (`outside`); a piece of
+ * no ink of its own (a space, a switch) passed over. None where the source writes no such piece: the trail is then ink of no
+ * piece (a class's separator, a mark of the class's own lists), and stays the member's trail
+ */
+function runOf(w: Work, mem: Member): string[] {
+  const unit = w.units[mem.unit]
+  if (!unit) return []
+  const { emptyPiece, outsidePiece } = w.ix
+  const classOf = new Map(unit.classes ?? [])
+  const seq = flatOf(unit.content)
+  const run: string[] = []
+  for (let k = seq.length - 1; k >= 0; k--) {
+    const p = seq[k]!
+    if (p.t === 'text') {
+      if (/\S/.test(p.s)) break
+      continue
+    }
+    if (p.t !== 'el' && p.t !== 'unit') continue
+    if ((mem.els.get(p.id)?.length ?? 0) > 0 || (mem.elBoxes.get(p.id)?.length ?? 0) > 0) break
+    const key = `${mem.unit}|${p.id}`
+    const stated = classOf.get(p.id)?.cls ?? (p.t === 'unit' ? 'note-mark' : p.kind)
+    if (!INKED_CLASSES.has(stated) || emptyPiece.has(key) || outsidePiece.has(key)) continue
+    run.unshift(p.id)
+  }
+  return run
 }

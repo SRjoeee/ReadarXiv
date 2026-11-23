@@ -24,7 +24,9 @@
 //   4c. the closing punctuation TeX sets after the unit's end mark (amsthm's ")" after a theorem's note where the body begins on
 //      a line of its own, a bibliography style's stop after an entry): the glyphs right after the mark, on that line, in no
 //      group, each TAIL_PUNCT abutting the one before it — the unit's text, which the layer draws again after its translation;
-//   5. a label: the glyphs on the start's first glyph's baseline between the previous unit's end mark and the start, the
+//   5. a label: the glyphs on the start's line — each glyph's box meeting the extent of the unit's own glyphs TeX set on its
+//      first glyph's baseline, whatever its size and raise, in the paragraph TeX began at its last point `q<n>` before the
+//      start — between the previous unit's end mark and the start, the
 //      placeholders' and names' ranges passed over — but the closing punctuation a head sets abutting the unit before it, that
 //      unit's text (amsthm's "(Note).") —; none for a table cell; a caption's by TeX's call alone: what TeX set from the label
 //      point before its \fnum@<type> (`ka<k>`, marks/marks.ts) to its start, whatever line it stands on (IEEEtran's "TABLE I"
@@ -175,6 +177,8 @@ const BRACKET = /^[bf][se]\d+$/
 
 /** a text's evidence for the spell check: its letters and digits, without their accents, lower case (stream.ts's) */
 export { spellOf }
+/** a coordinate on a hundredth, as the engine states its numbers (one box's glyphs share one baseline there) */
+const r2 = (v: number): number => Math.round(v * 100) / 100
 /** a head's joint between a babel name and its unit's text, as a label holds it: its punctuation alone */
 const JOINT = /^[.:;,\u2013\u2014-]{1,2}$/u
 
@@ -475,13 +479,38 @@ export function ownOf(
     const lead: { glyphs: Place[] } = { glyphs: [] }
     let g = S.glyph - 1
     work += S.glyph + q
-    // (a caption's label is TeX's call's, from its label point on, on any line; no baseline is read for it)
+    // (a caption's label is TeX's call's, from its label point on, on any line; no line is read for it)
     const caption = units?.[id]?.kind === 'caption'
     let called = false
+    // (the start's line: its extent the unit's own text glyphs TeX set on its first glyph's baseline (one box's glyphs share one
+    // baseline, equal on a hundredth), up to its end point on this page; and the paragraph it stands in, from TeX's point at its
+    // start, `q<n>` (marks.ts POINTS_TEX at LaTeX's para/begin, before \everypar sets an item's label): what TeX set before that
+    // point is another paragraph's)
+    const line = { bottom: F.bottom, top: F.top }
+    {
+      const E = textOf.get(id)!.e
+      const to = E[0] === p ? pt(E).glyph : pg.glyphs.length
+      const base = r2(F.y)
+      work += to - S.glyph
+      for (let i = S.glyph; i < to; i++) {
+        const G = pg.glyphs[i]!
+        if (gOwn[p - 1]![i] !== `u${id}` || r2(G.y) !== base) continue
+        if (G.bottom < line.bottom) line.bottom = G.bottom
+        if (G.top > line.top) line.top = G.top
+      }
+    }
+    let from = 0
+    for (const x of pg.paras ?? []) if (x.glyph <= S.glyph && x.glyph > from && R.glyph[x.glyph] === r) from = x.glyph
+    // (a glyph TeX set before the start on the start's line: its box meeting the line's extent across, whatever its size and
+    // raise (a script, the reading the trail rule takes for a raised mark, locate/trails.ts), in the paragraph. llncs sets the
+    // first institute's number, `\noindent$^{1}$\enspace`, in the size around the block before the institutes' own
+    // \scriptsize: a script of 5.98 pt raised 3.81 over a line of 6.97 pt, which a band of half the larger size refused, left
+    // standing at the original line's start while the translation was centred (2604.10456v1); the released engine's band reached
+    // 0.75 of the size up (make.mjs labelOf): neither number is TeX's)
     const glyphAt = (i: number) => {
       if (R.glyph[i] !== r || gOwn[p - 1]![i] !== null) return
       const G = pg.glyphs[i]!
-      if (caption || Math.abs(G.y - F.y) < 0.5 * Math.max(G.size, F.size)) lead.glyphs.push([p, i])
+      if (caption || (i >= from && G.bottom < line.top && G.top > line.bottom)) lead.glyphs.push([p, i])
     }
     let qq = q - 1
     // (the placeholders the walk passed over, each its unit and the glyphs between its points: not yet claimed, this pass

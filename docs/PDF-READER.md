@@ -9402,6 +9402,58 @@ unit's own text is not TeX's, and the original is the right drawing).
   the original's, as before); TRANSLATE stays (no unit's content, id or wire moves: the rows production holds are kept);
   LAYOUT and the marks digest stay (no TeX moves; today's layout maker reads no instrument of this engine).
 
+### 18.108 One owner per ink: what TeX set after an author's name is the pieces' its source writes there (the coordinator's ruling of 2026-11-23)
+
+An author's unit is its name and what its source writes after it: llncs's `\inst{1}`, a class's `\textsuperscript{…}`,
+`\inst{…}\orcidID{…}`, an `\IEEEauthorrefmark` list. The marking writes the unit's end mark after its last text and no
+point of a piece after it in a front unit's marks (marks.ts: a piece after a front unit's last text gets none, an end there
+may be another copy's), so TeX sets those pieces past the end point, and locate claimed what it set there as the member's
+trail (§18.59: `El.trail`, an element of no piece) while each piece stated no ink and no text. The typesetter cannot tell a
+piece TeX set nothing for from one whose ink was not found (§18.107), and refused the member `unproven`: every name of
+2604.10456v1's block drawn in the original though the translator answered each, the connector between them translated.
+
+The rule (`locate/trails.ts` `runOf`): the ink TeX set after the name's end point is the pieces' the source writes there,
+never a trail beside them. Where an author's member has a trail and its unit's source writes, after its last text and after
+its last piece that owns ink, pieces of a class drawn from their ink that own no glyph and no box, are not stated empty by
+the instrument and were not set before the unit's start, the trail is the first of those pieces' ink (one box a line, TeX's
+own setting, drawn as a crop where the translation sets that piece) and every other piece of the run is stated empty
+(`El.text ''`, phase 6): TeX states no point between them, so the run is drawn once, whole, in TeX's order, wherever a
+translation sets the pieces and in whatever order it returns them; a reply that sets text between them draws the run at the
+first and nothing at the others (the typesetter's tests, `unit/read.test.ts`). The trail's gap before it (`El.sep`) is the
+trail's statement alone: a piece is laid where the translation sets it, glued there. Where the source writes no such piece
+(a class's own marks from its lists, REVTeX's affiliation numbers; a separator), or the piece after the name owns its ink by
+its own points, what stands past it stays the trail it was. No mark of TeX's moves: the marking is another lane's.
+
+### 18.109 A label is what TeX set before the start on the start's line, by the line's extent, in its paragraph (the coordinator's ruling of 2026-11-23)
+
+A unit's label is what TeX set before its start mark on its first line (`own/own.ts` MR 5). That line was read as a band of
+half the larger size round the start glyph's baseline: llncs sets the first institute's number, `\noindent$^{1}$\enspace`,
+in the size around the block (\small) before the institutes' own `\scriptsize`, a script of 5.98 pt raised 3.81 over a line
+of 6.97 pt, past the band's 3.485; the number was no unit's and stood at the original line's start while the translation was
+centred, far from its text (2604.10456v1 p1), where every later institute's number, set after `\scriptsize`, was its unit's
+label and glued before the translation. The released engine took a band to 0.75 of the size above (`make.mjs` labelOf).
+Neither number is TeX's. Now a glyph is on the start's line where its box meets that line's extent across (the reading the
+trail rule takes for a raised mark, §18.59): the extent of the unit's own glyphs TeX set on its first glyph's baseline (one
+box's glyphs share one baseline, equal on a hundredth), up to its end point on the page; and only after TeX's point at the
+paragraph's start (`q<n>`, LaTeX's para/begin, which runs before `\everypar` sets an item's label), what TeX set before that
+point being another paragraph's. TeX keeps two lines' boxes apart by `\lineskip` at least, so no glyph of the line above or
+below meets the line's extent. A caption's label stays TeX's call's, read on any line (§18.34).
+
+### 18.110 A unit read off the ink keeps the forced line ends TeX set inside it (the coordinator's ruling of 2026-11-23)
+
+A unit no source unit owns (an ink unit, §19.10: a note with no unit, an orphan, the names the class prints) is read off its
+glyphs, its lines joined as one paragraph's; a note of three lines TeX ended at `\\` (2604.10456v1 p1's `$^{\#}$ … \\
+$^{\dagger}$ … \\ $^{*}$ …`) was translated and laid head to tail in two lines. A short line is no fact of a forced break (a
+wrap before a long word ends a line as short); TeX's is: the marked compile sets a point `kb<n>` where LaTeX's `\@gnewline`
+(every `\\` and `\newline` in a paragraph) or `\break` ends a line in horizontal mode (§18.77, marks.ts BREAKS_TEX), none
+for a centred block's `\\` (`\@centercr`, which ends a paragraph, and paragraph ends part ink units already) or a table's
+row. Carried onto A as the paragraph points are (`locate/ink.ts` carry), each such point between two lines of an ink unit
+ends the first inside the unit with a break placeholder, `\\` of kind `break`, as a source unit's (`locate/ink-units.ts` rule
+3b): the part states its line (`El.ends`, from the last glyph of the line TeX ended there, the maker's), the bundle `El.brk`,
+and the lay's forced-break rule (§18.77, `unit/breaks.ts`) ends the translation's line there. An ink unit that echoes a
+source unit takes that unit's pieces, as before. The ink units that hold such a point change their content, so their ids
+move and their rows are asked again.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server

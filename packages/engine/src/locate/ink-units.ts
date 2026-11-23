@@ -44,6 +44,9 @@
 //      (a note of addresses alone is then no unit, a kept block that says so, `address`; a line of no text word, an address or a
 //      URL TeX broke onto a line of its own, is the next line of the unit its line before belongs to in one of TeX's paragraphs as
 //      the compile marked them, and starts none: CHANGED);
+//  3b. a line TeX ended at a forced break (its point `kb<n>` after the line's last glyph, B's, carried onto A: marks.ts
+//      BREAKS_TEX) ends its line inside the unit with a break placeholder, `\\` of kind `break`, as a source unit's: no line's
+//      shortness tells a break (CHANGED);
 //   5. echo: a unit whose letters (own/stream.ts spellOf) and count of kept runs equal a source unit's letters and count of
 //      visible placeholders (a heading first, then a caption, then any) takes that unit's pieces, each visible placeholder
 //      placed by its kept run in turn, and is drawn with its row: the contents read as the headings they repeat, and no
@@ -119,6 +122,8 @@ export interface InkPage {
   points?: readonly TodayPoint[]
   paras?: readonly TodayPoint[]
   paraEnds?: readonly ParaEnd[]
+  /** where TeX ended a line at a forced break (B's `kb<n>`, carried by locate): a unit's break element (rule 3b) */
+  breaks?: readonly TodayPoint[]
   view?: readonly number[]
   boxes?: readonly number[]
   paths?: readonly number[]
@@ -217,6 +222,8 @@ export interface TodayInkUnit {
     ph: [number, number][]
     runs?: [number, [number, number][]][]
     label?: [number, number][]
+    /** each forced break's placeholder by its index among the pieces, and the last glyph of the line TeX ended at it (rule 3b) */
+    breaks?: [number, [number, number]][]
   }
   rows: InkRows
 }
@@ -1193,7 +1200,25 @@ export function inkUnitsOf(
       closeLink()
       while (open.length) pieces.push({ t: 'close', id: open.pop(), src: '}' })
     }
+    const forced: [number, [number, number]][] = []
     lines.forEach((l, li) => {
+      // (CHANGED, rule 3b: a line TeX ended at a forced break, its point `kb<n>` after that line's last glyph and before this one's
+      // first (B's, carried onto A): a break placeholder there, as a source unit's `\\`, each point one, so that the part states
+      // the break and the lay ends the translation's line there (unit/breaks.ts); no kept run goes on over it. The lines' places
+      // tell no break: a wrap before a long word ends a line as short)
+      const prev = li > 0 ? lines[li - 1]! : null
+      if (prev && prev.page === l.page) {
+        const end = Math.max(...prev.words.flatMap((w) => w.gs))
+        const lo = Math.max(...prev.gs),
+          hi = Math.min(...l.gs)
+        for (const e of pages[l.page - 1]?.breaks ?? []) {
+          if (e.glyph <= lo || e.glyph > hi) continue
+          flushText()
+          forced.push([pieces.length, [l.page, end]])
+          pieces.push({ t: 'ph', src: '\\\\', kind: 'break' })
+          for (const p of phs) p.open = false
+        }
+      }
       // (its label, the glyphs its first line begins with that the class set before its text: kept as the original's, no text of
       // the unit's, its glyphs the unit's still, claimed and erased with its line, so that the reader keeps them where they stand;
       // CHANGED: stated, `labelled`, as the glyphs of the unit's label)
@@ -1333,6 +1358,7 @@ export function inkUnitsOf(
         ph: kept.flatMap((p) => p.gs),
         runs: kept.map((p): [number, [number, number][]] => [p.k, p.gs]),
         ...(labelled.length ? { label: labelled } : {}),
+        ...(forced.length && echo === null ? { breaks: forced } : {}),
       },
       rows: rowsOf(id, INK_KIND[cls as keyof typeof INK_KIND], cls, lines, kept, own.length, pages),
     })
