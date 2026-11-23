@@ -4043,7 +4043,8 @@ A first version also matched punctuation, so that RevTeX's own fill was read off
 page 1 it read the author line `\textbf{Yasuko Matsubara}♣, \textbf{Jimeng Sun}♡, …` regular off its commas, and the stored
 reply moves the names' `\textbf` groups to the end, empty: the names, bold on arXiv's page, by today and by round 6, would have
 been drawn regular. Read off letters alone, as today reads them, the line has no text of its own and stays bold; RevTeX's own
-fill is read outside its links.
+fill is read outside its links. (The face's base reads its marks again since §18.111, the coordinator's ruling of 2026-11-23:
+a run's face is its own glyphs', and the commas are TeX's regular; the fill reads letters alone still.)
 
 Over the 88 papers (each member once), 476 members in 47 papers change their base face, every one by losing it: italic to
 upright 305, bold to regular 171; none takes an italic or a bold it did not have. 464 groups state a face (169 bare groups,
@@ -9520,20 +9521,34 @@ translation was drawn at the title's size and in a regular weight. Two causes, b
 
 The rule now, one reading of TeX's glyphs:
 
-- **A group's size** (`marks/faces.ts` groupFacts, on B, TeX's own output): its own text's glyphs' size (facts.ts unitSize: the
-  median up the line, math fonts aside; a faked small capital aside, a lowercase source letter TeX set as a capital, which NFSS
-  draws at its share and the lay already draws so), stated where it is not the size the group is drawn at by default: the size
-  of the nearest group around it whose size is stated, else the unit's base. Any group, of a command or a bare one: the
-  instrument (`marksOf`) states its Style in `SpanAt.style` (its own glyphs' face and its size) and keeps its span's style name,
-  so the unit's content, its id and its wire do not move. Two sizes alike to the hundredth of a point are one (the page's grid).
-- **The unit's base** (`locate/group-style.ts`, on A): its weight and slant are its own text's (the letters in no group and in
-  no switch's run; its marks are no reading of their own, as the released reader reads them: 2602.23285v2's author line, whose
-  commas between bold names are TeX's regular, read off them drew the names regular where a translation drops their groups);
-  where every letter is a group's, each attribute is read outside the scopes that set it by their
-  definition, its weight outside `\textbf{…}` and a `\bfseries` run, its slant outside `\textit{…}`, a `\emph` or `\em` run's
-  slant turned back (TeX's state around those runs, which their glyphs show for what they do not set: `\textbf{RQ1:}
-  \textit{…}` regular upright, a unit wholly in `\emph` upright); where none, all its text's. `geometry.ts` states that base
-  always. Its size, where the unit has text of its own beside its groups, is that text's; where every letter is a group's, the
+- **A group's size** (`marks/faces.ts` groupFacts, on B, TeX's own output): the one size its own text's glyphs share (facts.ts
+  oneSize: up the line, math fonts aside, two sizes alike to the hundredth of a point one, the page's grid; a faked small
+  capital aside, a lowercase source letter TeX set as a capital, which NFSS draws at its share and the lay already draws so),
+  stated where it is not the size the group is drawn at by default: the size of the nearest group around it whose size is
+  stated, else the unit's base. Any group, of a command or a bare one: the instrument (`marksOf`) states its Style in
+  `SpanAt.style` (its own glyphs' face and its size) and keeps its span's style name, so the unit's content, its id and its
+  wire do not move. **A group whose glyphs stand at several sizes states none** (the coordinator's ruling: a median of them
+  is the size of none of its runs): a face stated on it is stated at the size it is drawn at by default; a group whose face
+  `group-style.ts` states on A, and a figure text's run in another face (`ink.ts` figureRuns), at the member's size
+  (`bundle.ts`), so that the figure text's own rule draws it, as before this section (2609.19644v1 p11's "PREDOPT" in ink
+  small capitals, P and O at 2.51 and the rest at 2.01: drawn at their median, its capitals stood smaller than printed).
+- **The unit's base** (`locate/group-style.ts`, on A): **a run's face is its own glyphs'** (the coordinator's ruling): its
+  weight and slant are those of its glyphs that stand outside every group and every switch's run, its marks included (read by
+  an alignment of its letters and marks alike) and the glyphs of a symbol it draws as text where it stands (a math font's
+  weight read for a symbol: an arrow from cmsy is regular, from cmbsy bold; its slant none, math italic being the letters'
+  design). A colon, a semicolon, an arrow are glyphs TeX set in a face: `\textbf{While} $j \leq n$:`'s colon is regular, a
+  cell's `\textit{Messi}; \textit{Copa del Rey};` semicolons upright, the arrow of `\textbf{Mean tokens}~$\downarrow$` regular,
+  and 2602.23285v2's author line `\textbf{Yasuko Matsubara}♣, \textbf{Jimeng Sun}♡, …` regular (arXiv's names
+  NimbusRomNo9L-Medi, its commas NimbusRomNo9L-Regu; the engine's test of it, which asserted the names' bold for the base off
+  §18.14's letters-alone reading, records no ruling of the owner's and is updated to the glyphs: each name is bold by its
+  `\textbf`, and a reply that drops their groups draws them regular). Where it has none, each attribute is read off its glyphs,
+  marks and symbols too, outside the scopes that set it by their definition, its weight outside `\textbf{…}` and a `\bfseries`
+  run, its slant outside `\textit{…}`, a `\emph` or `\em` run's slant turned back (TeX's state around those runs, which their
+  glyphs show for what they do not set: `\textbf{RQ1:} \textit{…}` regular upright, a unit wholly in `\emph` upright; a
+  `\multicolumn`'s or a link's text is in the face around it, the arrow of `\multicolumn{2}{c}{\textbf{Overall}$\uparrow$}`
+  regular). Where none, its letters', all of them: no glyph of the original then stands in that face, and what a translation
+  sets outside its groups there takes the face its groups share (a kicker and a title both bold: bold; a reply that drops the
+  groups draws them as printed). `geometry.ts` states that base always. Its size, where the unit has text of its own beside its groups, is that text's; where every letter is a group's, the
   median of them all (the size most of its text is set at, by which the lay's knobs, its size steps and its pitch's em, are
   read): the base is then the size of no run the translation keeps in a group, and every group whose glyphs differ states its own.
 - **The typesetter applies what is stated and reads nothing more**: the base is the part's style (`breaker/tokens.ts`; the count
