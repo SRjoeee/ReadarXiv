@@ -119,7 +119,7 @@ describe('a placeholder that may read the token after it: a prefix past white sp
     ])
     // (glued, the pair's marks stand before the prefix)
     expect(marked('\\begin{figure}\\caption{See \\protect\\eqref{eq:1} for the words here.}\\end{figure}')).toEqual([
-      'See [\\axtpma{p0.2a}][\\protect][\\eqref{eq:1}][\\axtpm{p0.2b}] for the words here.',
+      'See [\\axtpmapa{0.2}][\\protect][\\eqref{eq:1}][\\axtpmpb{0.2}] for the words here.',
     ])
     // (a second \protect: the piece after it is the first's next token's, as TeX reads the pair)
     expect(marked('Words before \\protect\\protect\\ref{fig:a} and words after it here.')).toEqual([
@@ -135,7 +135,7 @@ describe('a placeholder that may read the token after it: a prefix past white sp
     ])
     // (a control word that reads nothing after it, the kernel's \relax: the citation has both its marks)
     expect(marked('The model\\relax \\cite{a} is good and words here.')).toEqual([
-      'The model[\\relax] [\\axtpma{p0.3a}][\\cite{a}][\\axtpm{p0.3b}] is good and words here.',
+      'The model[\\relax] [\\axtpmapa{0.3}][\\cite{a}][\\axtpmpb{0.3}] is good and words here.',
     ])
   })
 })

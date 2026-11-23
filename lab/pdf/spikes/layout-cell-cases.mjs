@@ -56,7 +56,7 @@ const doc = (pre, body, cls = 'article') => `\\documentclass${cls === 'article' 
 const LONG = 'a text longer than any cell'
 /** a cell whose last piece stands after its end mark with its opening mark alone, as layoutMarking writes a cell's trailing piece
  *  whose source ends in a control word or whose class may read ahead (`\checkmark`, a paper's macro, `\textsuperscript{…}`) */
-const T = (i, text, piece, k = 3) => `\\leavevmode\\axtmark{t${i}s}${text}\\axtend{t${i}e} \\axtpma{p${i}.${k}a}${piece} `
+const T = (i, text, piece, k = 3) => `\\leavevmode\\axtmark{t${i}s}${text}\\axtend{t${i}e} \\axtpmapa{${i}.${k}}${piece} `
 /** the end cases' own macros: a paper's macros of one letter each */
 const OWN = '\\newcommand{\\ok}{v}\\newcommand{\\B}{B}'
 

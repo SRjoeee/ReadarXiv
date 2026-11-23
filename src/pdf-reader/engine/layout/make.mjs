@@ -39,7 +39,7 @@ import { checkBoxes, pageRules } from './cell-rules.mjs'
 import { isMemoryError } from '@readarxiv/engine'
 import { drawDataOf } from '../pipeline/draw-data.mjs'
 import { DRAW_HELD_MAX } from '../layer-proto/draw.mjs'
-import { backrefPiece, classOf, colourPieceOf, followsOf, headEnd, headsOf, INK_ANY, layoutMarking, leadStep, markAt, symbolText, vetoTwice } from './marks.mjs'
+import { backrefPiece, classOf, colourPieceOf, followsOf, headEnd, headsOf, INK_ANY, layoutMarking, leadStep, markAt, markOf as gatedMarkOf, symbolText, vetoTwice } from './marks.mjs'
 import { OWNED, OWNED_HOW } from './stream.mjs'
 import { HEAD_ABUT, HEAD_PUNCT, TAIL_PUNCT } from './own.mjs'
 import { readAnnots } from '../layer-proto/links.mjs'
@@ -1077,7 +1077,8 @@ export async function makerOf({ units, marks, base, OPS, paper, pdfjs, text = nu
     copies.forEach((c, i) => {
       for (const p of c.pieces) {
         // (a front matter unit's marks robust: \protect before each, marks.mjs layoutMarking; \axtpmd a carrier's opening mark)
-        const m = p.t === 'ph' && /^(?:\\protect)?\\axtpm[amd]?\{[pn](\d+)\.(\d+)([ab])\}$/.exec(p.src ?? '')
+        const g = p.t === 'ph' ? gatedMarkOf(p.src) : null
+        const m = g && /^axtpm[amd]?$/.test(g.kind) && /^[pn](\d+)\.(\d+)([ab])$/.exec(g.name)
         // (backref's list: both its marks, which LAYOUT_TEX's hook sets around the list by the name the entry gives it)
         const named = p.t === 'ph' && /^\\axtbrname\{p(\d+)\.(\d+)\}$/.exec(p.src ?? '')
         if (named && Number(named[1]) === i) { design.set(`${i}.${named[2]}`, { open: true, close: true }); continue }

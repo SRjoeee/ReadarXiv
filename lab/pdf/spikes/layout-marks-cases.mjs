@@ -405,14 +405,14 @@ const unmarkUnit = String.raw`\makeatletter
 \cmp{a copy of a mark}{\def\x{\foo{a}b}}
 {\cmp{in a group}{\def\x{\axtpm{g}h}}}
 \cmp{the same list outside}{\def\x{\axtpm{g}h}}
-{{\cmp{in two groups}{\def\x{\axthmark{h1s}T \axtpma{p}$x$}}}}
-\cmp{outside, another}{\def\x{\axthmark{h1s}T \axtpma{q}$x$}}
-\cmp{outside, the first again}{\def\x{\axthmark{h1s}T \axtpma{p}$x$}}
+{{\cmp{in two groups}{\def\x{\axthmarkhs{1}T \axtpma{p}$x$}}}}
+\cmp{outside, another}{\def\x{\axthmarkhs{1}T \axtpma{q}$x$}}
+\cmp{outside, the first again}{\def\x{\axthmarkhs{1}T \axtpma{p}$x$}}
 \cmp{a mark whose argument is a group}{\def\x{\axtpm{{q}}k}}
 \cmp{a mark with no argument group}{\def\x{\axtpm x}}
 \cmp{a mark with no argument group again}{\def\x{\axtpm x}}
 \cmp{the result as a list}{\def\x{b}}
-\def\@currentlabelname{\axthmark{h2s}Sec \axtpm{p1}$y$\axthmark{h2e}}
+\def\@currentlabelname{\axthmarkhs{2}Sec \axtpm{p1}$y$\axthmarkhe{2}}
 \begingroup\cmp{label 1}{\let\x\@currentlabelname}\endgroup
 \begingroup\cmp{label 2}{\let\x\@currentlabelname}\endgroup
 \begingroup\escapechar=-1 \cmp{label 3, escapechar -1}{\let\x\@currentlabelname}\endgroup

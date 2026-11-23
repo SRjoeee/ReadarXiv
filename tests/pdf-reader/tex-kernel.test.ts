@@ -50,24 +50,24 @@ describe('the table', () => {
 describe('the maker: a placeholder after an ink-free control sequence keeps its marks', () => {
   for (const sym of ['\\@', '\\/', '\\-', '\\relax', '\\nolinebreak', '\\ignorespaces', '\\unskip', '\\leavevmode', '\\!']) {
     it(`"Fig.${sym} \\ref{x}": the \\ref has both marks, ${sym} none`, () => {
-      expect(marked([text('see Fig.'), ph(sym), text(' '), ph('\\ref{x}'), text(' for it')])).toEqual(['text', `ph ${sym}`, 'text', 'ph \\axtpma{p0.3a}', 'ph \\ref{x}', 'ph \\axtpm{p0.3b}', 'text'])
+      expect(marked([text('see Fig.'), ph(sym), text(' '), ph('\\ref{x}'), text(' for it')])).toEqual(['text', `ph ${sym}`, 'text', 'ph \\axtpmapa{0.3}', 'ph \\ref{x}', 'ph \\axtpmpb{0.3}', 'text'])
     })
   }
   it('"et al.\\@ \\cite{x}": the citation has both marks', () => {
-    expect(marked([text('Smith et al.'), ph('\\@'), text(' '), ph('\\cite{x}'), text(' show')])).toEqual(['text', 'ph \\@', 'text', 'ph \\axtpma{p0.3a}', 'ph \\cite{x}', 'ph \\axtpm{p0.3b}', 'text'])
+    expect(marked([text('Smith et al.'), ph('\\@'), text(' '), ph('\\cite{x}'), text(' show')])).toEqual(['text', 'ph \\@', 'text', 'ph \\axtpmapa{0.3}', 'ph \\cite{x}', 'ph \\axtpmpb{0.3}', 'text'])
   })
   it('a LaTeX text symbol reads nothing after it either: "\\S\\ref{x}" keeps the \\ref\'s marks, the symbol its opening mark as before', () => {
-    expect(marked([text('in '), ph('\\S'), ph('\\ref{x}'), text(' we')])).toEqual(['text', 'ph \\axtpma{p0.1a}', 'ph \\S', 'ph \\axtpma{p0.2a}', 'ph \\ref{x}', 'ph \\axtpm{p0.2b}', 'text'])
-    expect(marked([text('rate 50 '), ph('\\%'), text(' '), ph('\\cite{x}'), text(' agree')])).toEqual(['text', 'ph \\axtpma{p0.1a}', 'ph \\%', 'text', 'ph \\axtpma{p0.3a}', 'ph \\cite{x}', 'ph \\axtpm{p0.3b}', 'text'])
+    expect(marked([text('in '), ph('\\S'), ph('\\ref{x}'), text(' we')])).toEqual(['text', 'ph \\axtpmapa{0.1}', 'ph \\S', 'ph \\axtpmapa{0.2}', 'ph \\ref{x}', 'ph \\axtpmpb{0.2}', 'text'])
+    expect(marked([text('rate 50 '), ph('\\%'), text(' '), ph('\\cite{x}'), text(' agree')])).toEqual(['text', 'ph \\axtpmapa{0.1}', 'ph \\%', 'text', 'ph \\axtpmapa{0.3}', 'ph \\cite{x}', 'ph \\axtpmpb{0.3}', 'text'])
   })
   it('guard: a paper\'s macro, which may look ahead, still takes the marks of the piece after it', () => {
-    expect(marked([text('see '), ph('\\bert'), text(' '), ph('\\ref{x}'), text(' for it')])).toEqual(['text', 'ph \\axtpma{p0.1a}', 'ph \\bert', 'text', 'ph \\ref{x}', 'text'])
+    expect(marked([text('see '), ph('\\bert'), text(' '), ph('\\ref{x}'), text(' for it')])).toEqual(['text', 'ph \\axtpmapa{0.1}', 'ph \\bert', 'text', 'ph \\ref{x}', 'text'])
     // \protect is a prefix of the next token alone (PREFIX_WORDS): the pair is marked as one, its opening mark before the prefix
-    expect(marked([text('see '), ph('\\protect'), ph('\\ref{x}'), text(' now')])).toEqual(['text', 'ph \\axtpma{p0.2a}', 'ph \\protect', 'ph \\ref{x}', 'ph \\axtpm{p0.2b}', 'text'])
+    expect(marked([text('see '), ph('\\protect'), ph('\\ref{x}'), text(' now')])).toEqual(['text', 'ph \\axtpmapa{0.2}', 'ph \\protect', 'ph \\ref{x}', 'ph \\axtpmpb{0.2}', 'text'])
     // and after a macro that looks ahead the pair is not marked: the macro's look ahead is the pair's
-    expect(marked([text('see '), ph('\\bert'), ph('\\protect'), ph('\\ref{x}'), text(' now')])).toEqual(['text', 'ph \\axtpma{p0.1a}', 'ph \\bert', 'ph \\protect', 'ph \\ref{x}', 'text'])
+    expect(marked([text('see '), ph('\\bert'), ph('\\protect'), ph('\\ref{x}'), text(' now')])).toEqual(['text', 'ph \\axtpmapa{0.1}', 'ph \\bert', 'ph \\protect', 'ph \\ref{x}', 'text'])
     // and a kernel macro that starts with \@ is a macro, not the symbol
-    expect(marked([text('see '), ph('\\@ifnextchar'), text(' '), ph('\\ref{x}'), text(' now')])).toEqual(['text', 'ph \\axtpma{p0.1a}', 'ph \\@ifnextchar', 'text', 'ph \\ref{x}', 'text'])
+    expect(marked([text('see '), ph('\\@ifnextchar'), text(' '), ph('\\ref{x}'), text(' now')])).toEqual(['text', 'ph \\axtpmapa{0.1}', 'ph \\@ifnextchar', 'text', 'ph \\ref{x}', 'text'])
   })
   it('no class, and the maker\'s INVISIBLE reads each entry (a break hint with its priority) and no kernel macro that starts like one', () => {
     for (const src of [...MEMBERS, ...BREAK_HINTS.map(w => `\\${w}[2]`)]) {

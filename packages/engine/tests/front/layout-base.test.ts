@@ -113,7 +113,7 @@ describe('markTextOf reads the marks\' own grammar (a review of 431)', () => {
   it('an address or a word with axt@ in it is no mark; the marks are, as TeX prints them in a monospace or OT1 roman face', () => {
     for (const text of ['Contact: j.saxt@uni-example.de', 'see taxt@ion and \\axtonomy', 'AXT@corp {12s}']) expect(markTextOf([text]).pages, text).toEqual([])
     expect(markTextOf(['Code is at \\axt@pma{p176.4a}https://x.org']).pages).toEqual([1])
-    for (const text of ['\\axtmark{12s}', '\\axtend{n7.0b}', '\\axtlines{3}', '\\axthmark{h4s}', '\\axtpm{p0.5b}', '\\axt@hm{h2e}']) expect(markTextOf([text]).pages, text).toEqual([1])
+    for (const text of ['\\axtmark{12s}', '\\axtend{n7.0b}', '\\axtlines{3}', '\\axthmarkhs{4}', '\\axtpmpb{0.5}', '\\axt@hm{h2e}']) expect(markTextOf([text]).pages, text).toEqual([1])
     // (OT1 roman: the backslash a left quote, a brace an en dash and a double acute)
     expect(markTextOf(['\u201caxtmark\u2013p1.0a\u02dd']).pages).toEqual([1])
     expect([...markTextOf(['\u201caxtmark\u2013p1.0a\u02dd']).units]).toEqual([1])

@@ -161,7 +161,14 @@ const NUMBER = /^(?:[^\s\p{L}\\{}$%#&^_~]*\d[^\s\p{L}\\{}$%#&^_~]*|10\.\d{4,9}\/
  *  and 2610.22195v1's prompts) its glyphs were read as the unit's text, the unit left unlocated */
 const identifierPiece = identifierSource
 /** an opening mark of ours as the layout marking writes it: its unit and piece */
-const OPENING_MARK = /\\axt(?:pm[amd]?|hpk)\{[pn](\d+)\.(\d+)a\}$/
+const openingOf = (src: string | undefined): [unit: number, piece: number] | null => {
+  const g = markOf(src)
+  const m =
+    g && g.kind !== 'axtpm' && g.kind !== 'axttg' && g.kind !== 'axthmark' && g.kind !== 'axtcolour'
+      ? /^[pn](\d+)\.(\d+)a$/.exec(g.name)
+      : null
+  return m ? [Number(m[1]), Number(m[2])] : null
+}
 /** a footnote's call: \footnotemark, and a \footnote whose note the scanner made no unit of (fewer than two letters: a
  *  number, a link) — a call all the same, which the layer places by its mark */
 const FOOTNOTE_MARK = /^\\footnote(?:mark)?(?![A-Za-z@])/
@@ -421,8 +428,8 @@ export function punctuationSection(
   const put = (d: number) => `\\xdef\\axt@qo{\\axt@qo${d}}`
   const tests = samples.map(({ src, call, glued }, n) => {
     const i = from + n,
-      open = `\\axtpma{q${i}a}`,
-      close = `\\axtpm{q${i}b}`
+      open = markTex('axtpma', `q${i}a`),
+      close = markTex('axtpm', `q${i}b`)
     // (before a punctuation mark the command moves, a ≠ b: the pair as the paper sets it with a word after (m), and with the
     // opening mark before the command and the closing one after the mark it moves (p): equal, both marks go so, 3)
     const moved = (f: string) =>
@@ -436,7 +443,7 @@ export function punctuationSection(
       )
       .join('')
     const again = call
-      ? `\\begingroup${box(i, 7, 'a', `${src}${src}`)}${box(i, 7, 'e', `${src}\\axtpma{q${i}c}${src}`)}\\endgroup\\ifx\\axt@qa\\axt@qe${put(0)}\\else${put(2)}\\fi`
+      ? `\\begingroup${box(i, 7, 'a', `${src}${src}`)}${box(i, 7, 'e', `${src}${markTex('axtpma', `q${i}c`)}${src}`)}\\endgroup\\ifx\\axt@qa\\axt@qe${put(0)}\\else${put(2)}\\fi`
       : glued
         ? `\\begingroup${box(i, 7, 'a', `${src}${glued}`)}${box(i, 7, 'b', `${src}{}${glued}`)}${box(i, 7, 'c', `${open}${src}${close}${glued}`)}\\endgroup\\ifx\\axt@qa\\axt@qb\\ifx\\axt@qa\\axt@qc${put(0)}\\else${put(1)}\\fi\\else${put(2)}\\fi`
         : put(0)
@@ -484,9 +491,9 @@ export function aheadSection(samples: readonly AheadSample[]): string {
     `${probeRow('ahead-at', j, n)}\\global\\setbox\\axt@qbox\\box\\voidb@x\\gdef\\axt@qn{}\\axt@qreset${PROBE_LEVEL}\\setbox\\axt@qbox\\hbox{way ${body} \\unskip\\xdef\\axt@qn{\\the\\lastnodetype\\ifinner\\ifhmode/in\\fi\\fi}}\\axt@unwind\\xdef\\axt@q${n}{\\the\\wd\\axt@qbox/\\the\\ht\\axt@qbox/\\the\\dp\\axt@qbox/\\axt@qn}`
   const put = (d: number) => `\\xdef\\axt@qo{${d}}`
   const tests = samples.map(({ src, gap, follows, math }, j) => {
-    const open = `\\axtpma{q${j}a}`,
-      close = `\\axtpm{q${j}b}`,
-      next = `\\${math ? 'axtpmm' : 'axtpma'}{q${j}c}`
+    const open = markTex('axtpma', `q${j}a`),
+      close = markTex('axtpm', `q${j}b`),
+      next = markTex(math ? 'axtpmm' : 'axtpma', `q${j}c`)
     const boxes = `${box(j, 'w', `${src}${gap}${follows}`)}${box(j, 'a', `${src}${gap}${follows}`)}${box(j, 'c', `${open}${src}${close}${gap}${next}${follows}`)}${box(j, 'd', `${open}${src}${gap}${next}${follows}`)}\\gdef\\axt@qend{2}${box(j, 'g', `${open}${src}${gap}\\axt@qat${next}${follows}`)}`
     const word = BOXY.test(follows) ? put(1) : put(2)
     return `\\begingroup${boxes}\\endgroup\\ifx\\axt@qa\\axt@qd\\ifcase\\axt@qend\\relax\\ifx\\axt@qa\\axt@qc${put(0)}\\else${put(1)}\\fi\\or${word}\\else${put(2)}\\fi\\else${put(2)}\\fi${probeRow('ahead', j, '\\axt@qo')}\\gdef\\axt@qo{}\\noindent\\par`
@@ -2378,6 +2385,77 @@ export function classNamesTex(texts: readonly string[]): string {
   return `\\makeatletter\\ifdefined\\axt@nmall\\ifdefined\\axt@nmwrap\\g@addto@macro\\axt@nmall{\\ifaxt@nmon${wraps}\\fi}\\fi\\fi\\makeatother`
 }
 
+/**
+ * The marks of ours that stand in a paper's argument and LAYOUT_TEX (CARRY_TEX the carrier's) defines, each by its kind (what
+ * the marking means by it, its inner command set where TeX typesets it) and its forms: the letters of its point's name, before and
+ * after the name's digits, are in the command (`\\axtpmapa{5.2}` sets the point `p5.2a`), its argument the digits and stops
+ * alone; every one `\\protected` (PDF-READER §18.111). So no expansion of the argument it stands in runs, drops or changes it
+ * (an `\\edef`, LaTeX's `\\protected@edef`: REVTeX 4.0's textcase, thmtools' proof note; a `\\write`), and no case change alters
+ * it (`\\uppercase`, `\\MakeUppercase`): the point TeX sets bears the name the reading looks for. The gates they replace took
+ * `\\@gobble`'s branch wherever `\\protect` was not `\\@typeset@protect`, an expansion's as a file's: the 17 headings' points of
+ * the lab's 245 papers. What a pass writes of them into a file is set nowhere it is read back (`\\@starttoc` and `\\@outputpage`
+ * turn the marks off, `\\axt@unmark` takes them out of a title's copy, pdfstringdef gobbles them): one list, the marking's
+ * writer (markTex), its reader (markOf), the TeX's definitions, the PDF string's and the case change's lists, MARK_CS and
+ * UNMARK_CS are all made of it. The probe's marks are its forms too (`q<i>a`, `q<i>b`, `q<i>c`: no point of a probe's is read)
+ */
+export const GATED_MARKS = {
+  axtpma: { inner: 'axt@pma', forms: ['pa', 'na', 'qa', 'qc'] },
+  axtpmm: { inner: 'axt@pmm', forms: ['pa', 'na', 'qc'] },
+  axtpmd: { inner: 'axt@pmy', forms: ['pa', 'na'] },
+  axtpm: { inner: 'axt@pm', forms: ['pb', 'nb', 'qb'] },
+  axthpk: { inner: 'axt@hpk', forms: ['pa'] },
+  axttg: { inner: 'axt@gp', forms: ['pg'] },
+  axthmark: { inner: 'axt@hm', forms: ['hs', 'he'] },
+  axtcolour: { inner: 'axt@colour', forms: ['c'] },
+} as const
+/** a gated mark's kind (GATED_MARKS) */
+export type GatedKind = keyof typeof GATED_MARKS
+/** every gated mark's command, its kind and its form, longest first (a reader's alternation takes the whole name) */
+const GATED_FORMS: readonly { cs: string; kind: GatedKind; pre: string; suf: string }[] = (
+  Object.entries(GATED_MARKS) as [GatedKind, (typeof GATED_MARKS)[GatedKind]][]
+)
+  .flatMap(([kind, g]) => g.forms.map((f) => ({ cs: `${kind}${f}`, kind, pre: f[0]!, suf: f.slice(1) })))
+  .sort((a, b) => b.cs.length - a.cs.length || (a.cs < b.cs ? -1 : 1))
+/** every gated mark's command (GATED_MARKS' forms) */
+export const GATED_CS: readonly string[] = GATED_FORMS.map((f) => f.cs)
+const FORM_OF = new Map(GATED_FORMS.map((f) => [f.cs, f]))
+/** the mark of `kind` for the point named `name` as the marked source writes it: `\\<kind><its letters>{<its digits>}` */
+export function markTex(kind: GatedKind, name: string): string {
+  const m = /^([a-z])([\d.]+)([a-z]?)$/.exec(name),
+    f = m && FORM_OF.get(`${kind}${m[1]}${m[3]}`)
+  if (!m || !f) throw new Error(`no ${kind} mark sets a point named ${name}`)
+  return `\\${f.cs}{${m[2]}}`
+}
+/** a gated mark as the marked source writes it (a front unit's `\\protect` before it), its kind and its point's name; else null */
+const GATED_SRC = new RegExp(String.raw`^(?:\\protect\s*)?\\(${GATED_CS.join('|')})\{([\d.]+)\}$`)
+export function markOf(src: string | null | undefined): { kind: GatedKind; name: string } | null {
+  const m = GATED_SRC.exec(src ?? '')
+  const f = m && FORM_OF.get(m[1]!)
+  return f ? { kind: f.kind, name: `${f.pre}${m![2]}${f.suf}` } : null
+}
+/** the same mark as another kind's (the carrier's for an opening mark, or back), its `\\protect` kept */
+export const asKind = (src: string, kind: GatedKind): string => {
+  const g = markOf(src)
+  if (!g) throw new Error(`not a gated mark: ${src}`)
+  return `${/^\\protect\s*/.exec(src)?.[0] ?? ''}${markTex(kind, g.name)}`
+}
+/** the TeX that defines the gated marks of `kinds`: each form \\protected, its inner command given the point's whole name */
+export const gatedDefs = (kinds: readonly GatedKind[]): string =>
+  GATED_FORMS.filter((f) => kinds.includes(f.kind))
+    .map((f) => `\\protected\\def\\${f.cs}#1{\\${GATED_MARKS[f.kind].inner}{${f.pre}#1${f.suf}}}`)
+    .join('')
+/** the gated marks of `kinds` each let to \\@gobble (a PDF string's), or listed for l3text's case change to leave its argument */
+const gatedLets = (kinds: readonly GatedKind[]): string =>
+  GATED_FORMS.filter((f) => kinds.includes(f.kind))
+    .map((f) => `\\let\\${f.cs}\\@gobble`)
+    .join('')
+const gatedList = (kinds: readonly GatedKind[]): string =>
+  GATED_FORMS.filter((f) => kinds.includes(f.kind))
+    .map((f) => `\\${f.cs}`)
+    .join('')
+/** the kinds LAYOUT_TEX defines (CARRY_TEX the carrier's, where its window's TeX is) */
+const LAYOUT_KINDS: readonly GatedKind[] = ['axtpma', 'axtpmm', 'axtpm', 'axthpk', 'axttg', 'axthmark', 'axtcolour']
+
 /** the control sequences of ours the marked source carries, each with one argument that names its unit (compile/guard.ts
  *  unitOfMark: a unit's own `216s`, `2e`, `14`, a cell's `t…`, a heading's `h…`, a placeholder's or a footnote call's `p…` or
  *  `n…`, a colour piece's `c…`): the names the layout guard reads them by wherever TeX writes our source back — an error's line
@@ -2389,21 +2467,7 @@ export function classNamesTex(texts: readonly string[]): string {
  *  pass's, its argument a sample's index: taken out of every file that pass wrote, and never the pass the guard reads). The TeX's
  *  own lists are not made of it: each is what its place needs (UNMARK_CS, the PDF string's and the case change's), and the
  *  marked source's bytes stay as they are */
-export const MARK_CS = [
-  'axtmark',
-  'axtend',
-  'axtlines',
-  'axtpma',
-  'axtpmm',
-  'axtpmd',
-  'axtpm',
-  'axthpk',
-  'axttg',
-  'axthmark',
-  'axtcolour',
-  'axtcall',
-  'axtbrname',
-] as const
+export const MARK_CS: readonly string[] = ['axtmark', 'axtend', 'axtlines', ...GATED_CS, 'axtcall', 'axtbrname']
 /** a babel name's marks around its own text: NAMES_TEX's wrapper writes them, and literalNames into a style's literal name */
 const NAME_CS = ['axtnma', 'axtnmb'] as const
 /** a front unit's marks' lead, right before each (layoutMarking `lead`): robust where a class stores the unit's text with
@@ -2425,7 +2489,7 @@ export const withoutOurMarks = (text: string): string => text.replace(OURS, '')
  *  can carry (\axtpma, \axtpmm, \axtpm, \axthpk, \axttg, \axthmark) and a babel name's (\axtnma, \axtnmb). One list: UNMARK_TEX builds the regex's
  *  alternation and the prefilter from it, so the two cannot drift. Each a macro our TeX defines: \axtpma, \axtpmm, \axtpm,
  *  \axthpk, \axttg and \axthmark LAYOUT_TEX's, \axtnma and \axtnmb NAMES_TEX's (held to them by tests/mirrors.test.ts) */
-export const UNMARK_CS = ['axtpma', 'axtpmm', 'axtpm', 'axthpk', 'axttg', 'axthmark', 'axtnma', 'axtnmb'] as const
+export const UNMARK_CS: readonly string[] = [...GATED_CS, 'axtnma', 'axtnmb']
 
 /** a babel name's marks as a pass writes them into the aux and the lists \@starttoc reads (NAMES_TEX: `\protect \axtnma {<key>}`
  *  and `\axtnmb`), inert where they are read (\@starttoc's \axt@off, pdfstringdef, the nameref names' unmark). Only these:
@@ -2480,8 +2544,8 @@ const UNMARK_TEX = [
  */
 const BACKREF_TEX = [
   '\\gdef\\axt@brname{}\\protected\\def\\axtbrname#1{\\gdef\\axt@brname{#1}}',
-  '\\def\\axt@bra{\\ifx\\axt@brname\\@empty\\else\\expandafter\\axt@brgo\\fi}\\def\\axt@brgo{\\expandafter\\axtpma\\expandafter{\\axt@brname a}}',
-  '\\def\\axt@brb{\\ifx\\axt@brname\\@empty\\else\\expandafter\\axt@brend\\fi}\\def\\axt@brend{\\expandafter\\axtpm\\expandafter{\\axt@brname b}\\global\\let\\axt@brname\\@empty}',
+  '\\def\\axt@bra{\\ifx\\axt@brname\\@empty\\else\\expandafter\\axt@brgo\\fi}\\def\\axt@brgo{\\expandafter\\axt@pma\\expandafter{\\axt@brname a}}',
+  '\\def\\axt@brb{\\ifx\\axt@brname\\@empty\\else\\expandafter\\axt@brend\\fi}\\def\\axt@brend{\\expandafter\\axt@pm\\expandafter{\\axt@brname b}\\global\\let\\axt@brname\\@empty}',
   '\\long\\def\\axt@brAltW#1#2#3#4{\\axt@bra\\axt@brAlt{#1}{#2}{#3}{#4}\\axt@brb}\\long\\def\\axt@brOneW#1{\\axt@bra\\axt@brOne#1\\axt@brb}',
   '\\ifdefined\\AddToHook\\AddToHook{begindocument/end}{\\ifdefined\\BR@backref\\ifdefined\\backrefalt\\ifx\\backrefalt\\BR@BackrefAltUnused\\else\\let\\axt@brAlt\\backrefalt\\let\\backrefalt\\axt@brAltW\\fi\\fi\\ifdefined\\backref\\let\\axt@brOne\\backref\\let\\backref\\axt@brOneW\\fi\\fi}\\fi',
 ].join('')
@@ -2583,18 +2647,12 @@ export const LAYOUT_TEX = [
   '\\protected\\def\\axt@gp#1{\\ifaxt@off\\else\\expandafter\\gdef\\csname axt@gp@#1\\endcsname{\\axt@pm{#1}}\\expandafter\\aftergroup\\csname axt@gp@#1\\endcsname\\fi}',
   '\\protected\\def\\axt@hm#1{\\ifaxt@off\\else\\axt@align{#1}\\ifhmode\\relax\\axt@holdtrue\\axt@put{#1}\\axt@holdfalse\\fi\\fi}',
   '\\protected\\def\\axt@colour#1{\\ifaxt@off\\else\\ifdefined\\current@color\\message{^^JAXT-COLOUR #1 \\current@color^^J}\\fi\\fi\\ignorespaces}',
-  '\\def\\axtpma{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@pma\\else\\expandafter\\@gobble\\fi}',
-  '\\def\\axtpmm{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@pmm\\else\\expandafter\\@gobble\\fi}',
-  '\\def\\axtpm{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@pm\\else\\expandafter\\@gobble\\fi}',
-  '\\def\\axthpk{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@hpk\\else\\expandafter\\@gobble\\fi}',
-  '\\def\\axttg{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@gp\\else\\expandafter\\@gobble\\fi}',
-  '\\def\\axthmark{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@hm\\else\\expandafter\\@gobble\\fi}',
-  '\\def\\axtcolour{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@colour\\else\\expandafter\\@gobble\\fi}',
+  gatedDefs(LAYOUT_KINDS),
   '\\ifdefined\\AddToHook\\AddToHook{cmd/@starttoc/before}{\\global\\axt@offtrue}\\AddToHook{cmd/@starttoc/after}{\\global\\axt@offfalse}\\AddToHook{cmd/@outputpage/before}{\\axt@offtrue}',
   '\\AddToHook{package/gettitlestring/after}{\\let\\axt@title@of\\GetTitleString\\long\\def\\GetTitleString#1{\\def\\axt@title{#1}\\axt@unmark\\axt@title\\expandafter\\axt@title@of\\expandafter{\\axt@title}}}',
   '\\AddToHook{package/nameref/after}{\\ifdefined\\NR@sanitize@labelname\\let\\axt@NRsanitize\\NR@sanitize@labelname\\def\\NR@sanitize@labelname{\\axt@unmark\\@currentlabelname\\axt@NRsanitize}\\fi}\\fi',
-  '\\AtBeginDocument{\\ifdefined\\pdfstringdefDisableCommands\\pdfstringdefDisableCommands{\\let\\axtmark\\@gobble\\let\\axtend\\@gobble\\let\\axtpma\\@gobble\\let\\axtpmm\\@gobble\\let\\axtpm\\@gobble\\let\\axthpk\\@gobble\\let\\axttg\\@gobble\\let\\axthmark\\@gobble\\let\\axtcolour\\@gobble\\let\\axtnma\\@gobble\\let\\axtnmb\\@gobble\\let\\axt@nma\\@gobble\\let\\axt@nmb\\@gobble}\\fi}',
-  '\\ifcsname l_text_case_exclude_arg_tl\\endcsname\\expandafter\\g@addto@macro\\csname l_text_case_exclude_arg_tl\\endcsname{\\axtmark\\axtend\\axt@pma\\axt@pmm\\axt@pm\\axt@hpk\\axt@gp\\axt@hm\\axtcolour\\axt@colour\\axtnma\\axtnmb\\axt@nma\\axt@nmb}\\fi',
+  `\\AtBeginDocument{\\ifdefined\\pdfstringdefDisableCommands\\pdfstringdefDisableCommands{\\let\\axtmark\\@gobble\\let\\axtend\\@gobble${gatedLets(LAYOUT_KINDS)}\\let\\axtnma\\@gobble\\let\\axtnmb\\@gobble\\let\\axt@nma\\@gobble\\let\\axt@nmb\\@gobble}\\fi}`,
+  `\\ifcsname l_text_case_exclude_arg_tl\\endcsname\\expandafter\\g@addto@macro\\csname l_text_case_exclude_arg_tl\\endcsname{\\axtmark\\axtend\\axt@pma\\axt@pmm\\axt@pm\\axt@hpk\\axt@gp\\axt@hm\\axt@colour${gatedList(LAYOUT_KINDS)}\\axtnma\\axtnmb\\axt@nma\\axt@nmb}\\fi`,
   BACKREF_TEX,
   UNMARK_TEX,
   NAMES_TEX,
@@ -2831,7 +2889,7 @@ export const CALL_TEX =
  * bytes as before. After LAYOUT_TEX, whose \axt@pmc and \axt@pm it wraps; without LaTeX's para/end (before 2021-06) it is
  * \axtpma. One line
  */
-export const CARRY_TEX = String.raw`\makeatletter\newbox\axt@cb\newbox\axt@cyc\newif\ifaxt@cyon\newif\ifaxt@cyb\def\axt@cyhook{\ifaxt@cyon\global\axt@cybtrue\fi}\def\axt@cyinstall{\everyhbox\expandafter{\expandafter\axt@cyhook\the\everyhbox}\everyvbox\expandafter{\expandafter\axt@cyhook\the\everyvbox}}\axt@cyinstall\AtBeginDocument{\axt@cyinstall}\let\axt@raise\raise\protected\def\axt@raisew{\axt@cyhook\axt@raise}\let\axt@lower\lower\protected\def\axt@lowerw{\axt@cyhook\axt@lower}\let\axt@unhbox\unhbox\protected\def\axt@unhboxw#1{\ifx#1\voidb@x\else\axt@cyhook\fi\axt@unhbox#1}\let\axt@unhcopy\unhcopy\protected\def\axt@unhcopyw#1{\ifx#1\voidb@x\else\axt@cyhook\fi\axt@unhcopy#1}\def\axt@cyset#1#2{\expandafter\ifx\csname#1\endcsname\relax\else\expandafter\global\expandafter\let\csname#1\endcsname#2\fi}\def\axt@cywrap{\global\let\raise\axt@raisew\global\let\lower\axt@lowerw\global\let\unhbox\axt@unhboxw\global\let\unhcopy\axt@unhcopyw\axt@cyset{tex_raise:D}\axt@raisew\axt@cyset{tex_lower:D}\axt@lowerw\axt@cyset{tex_unhbox:D}\axt@unhboxw\axt@cyset{tex_unhcopy:D}\axt@unhcopyw}\def\axt@cyunwrap{\global\let\raise\axt@raise\global\let\lower\axt@lower\global\let\unhbox\axt@unhbox\global\let\unhcopy\axt@unhcopy\axt@cyset{tex_raise:D}\axt@raise\axt@cyset{tex_lower:D}\axt@lower\axt@cyset{tex_unhbox:D}\axt@unhbox\axt@cyset{tex_unhcopy:D}\axt@unhcopy}\def\axtpmd{\ifx\protect\@typeset@protect\expandafter\axt@pmy\else\expandafter\@gobble\fi}\protected\def\axt@pmy{\ifaxt@off\expandafter\@gobble\else\expandafter\axt@pmyb\fi}\def\axt@pmyb{\ifhmode\expandafter\axt@pmyc\else\expandafter\axt@pmv\fi}\def\axt@pmyc{\ifnum\lastnodetype=-1 \expandafter\axt@cnew\else\expandafter\axt@pmyd\fi}\def\axt@pmyd#1{\axt@ifcy{\axt@cadd{#1}}{\axt@pmc@plain{#1}}}\def\axt@ifcy{\ifnum\ifhmode\lastpenalty\else0\fi=10939 \expandafter\@firstoftwo\else\expandafter\axt@ifcyr\fi}\def\axt@ifcyr{\ifnum\ifaxt@cyon\ifaxt@cyb0\else\ifhmode\lastnodetype\else0\fi\fi\else0\fi=1 \expandafter\axt@cyask\else\expandafter\@secondoftwo\fi}\def\axt@cyask#1#2{\space\axt@cyrd{#1}{#2}}\protected\def\axt@cyrd#1#2{\ifnum\lastnodetype=11 \unskip\let\axt@cyig\relax\else\let\axt@cyig\ignorespaces\fi\setbox\axt@cb\lastbox\setbox\axt@cyc\hbox{\axt@unhcopy\axt@cb\xdef\axt@cyv{\the\lastpenalty}}\global\axt@cybfalse\box\axt@cb\ifnum\axt@cyv=10939 \penalty10939 \expandafter\@firstoftwo\else\expandafter\@secondoftwo\fi{#1\axt@cyig}{#2\axt@cyig}}\def\axt@cnew#1{\space\axt@cdo{\hbox{\axt@mark{#1}\penalty10939}\penalty10939\global\axt@cyontrue\global\axt@cybfalse\axt@cywrap\relax}}\def\axt@cadd#1{\space\axt@cdo{\unpenalty\setbox\axt@cb\lastbox\hbox{\axt@unhbox\axt@cb\unpenalty\axt@mark{#1}\penalty10939}\penalty10939\global\axt@cybfalse\relax}}\def\axt@cback{\space\axt@cdo{\unpenalty\setbox\axt@cb\lastbox\global\axt@cyonfalse\axt@cyunwrap\relax}}\protected\def\axt@cdo#1{\ifnum\lastnodetype=11 \unskip#1\else#1\expandafter\ignorespaces\fi}\let\axt@pmc@plain\axt@pmc\def\axt@pmc#1{\axt@ifcy{\axt@cback}{\axt@pmc@plain{#1}}}\let\axt@pm@plain\axt@pm\protected\def\axt@pm#1{\axt@ifcy{\axt@cadd{#1}}{\axt@pm@plain{#1}}}\ifdefined\AddToHook\ifdefined\IndentBox\else\let\axt@pmy\axt@pma\fi\else\let\axt@pmy\axt@pma\fi\AtBeginDocument{\ifdefined\pdfstringdefDisableCommands\pdfstringdefDisableCommands{\let\axtpmd\@gobble}\fi}\ifcsname l_text_case_exclude_arg_tl\endcsname\expandafter\g@addto@macro\csname l_text_case_exclude_arg_tl\endcsname{\axtpmd\axt@pmy}\fi\makeatother`
+export const CARRY_TEX = String.raw`\makeatletter\newbox\axt@cb\newbox\axt@cyc\newif\ifaxt@cyon\newif\ifaxt@cyb\def\axt@cyhook{\ifaxt@cyon\global\axt@cybtrue\fi}\def\axt@cyinstall{\everyhbox\expandafter{\expandafter\axt@cyhook\the\everyhbox}\everyvbox\expandafter{\expandafter\axt@cyhook\the\everyvbox}}\axt@cyinstall\AtBeginDocument{\axt@cyinstall}\let\axt@raise\raise\protected\def\axt@raisew{\axt@cyhook\axt@raise}\let\axt@lower\lower\protected\def\axt@lowerw{\axt@cyhook\axt@lower}\let\axt@unhbox\unhbox\protected\def\axt@unhboxw#1{\ifx#1\voidb@x\else\axt@cyhook\fi\axt@unhbox#1}\let\axt@unhcopy\unhcopy\protected\def\axt@unhcopyw#1{\ifx#1\voidb@x\else\axt@cyhook\fi\axt@unhcopy#1}\def\axt@cyset#1#2{\expandafter\ifx\csname#1\endcsname\relax\else\expandafter\global\expandafter\let\csname#1\endcsname#2\fi}\def\axt@cywrap{\global\let\raise\axt@raisew\global\let\lower\axt@lowerw\global\let\unhbox\axt@unhboxw\global\let\unhcopy\axt@unhcopyw\axt@cyset{tex_raise:D}\axt@raisew\axt@cyset{tex_lower:D}\axt@lowerw\axt@cyset{tex_unhbox:D}\axt@unhboxw\axt@cyset{tex_unhcopy:D}\axt@unhcopyw}\def\axt@cyunwrap{\global\let\raise\axt@raise\global\let\lower\axt@lower\global\let\unhbox\axt@unhbox\global\let\unhcopy\axt@unhcopy\axt@cyset{tex_raise:D}\axt@raise\axt@cyset{tex_lower:D}\axt@lower\axt@cyset{tex_unhbox:D}\axt@unhbox\axt@cyset{tex_unhcopy:D}\axt@unhcopy}${gatedDefs(['axtpmd'])}\protected\def\axt@pmy{\ifaxt@off\expandafter\@gobble\else\expandafter\axt@pmyb\fi}\def\axt@pmyb{\ifhmode\expandafter\axt@pmyc\else\expandafter\axt@pmv\fi}\def\axt@pmyc{\ifnum\lastnodetype=-1 \expandafter\axt@cnew\else\expandafter\axt@pmyd\fi}\def\axt@pmyd#1{\axt@ifcy{\axt@cadd{#1}}{\axt@pmc@plain{#1}}}\def\axt@ifcy{\ifnum\ifhmode\lastpenalty\else0\fi=10939 \expandafter\@firstoftwo\else\expandafter\axt@ifcyr\fi}\def\axt@ifcyr{\ifnum\ifaxt@cyon\ifaxt@cyb0\else\ifhmode\lastnodetype\else0\fi\fi\else0\fi=1 \expandafter\axt@cyask\else\expandafter\@secondoftwo\fi}\def\axt@cyask#1#2{\space\axt@cyrd{#1}{#2}}\protected\def\axt@cyrd#1#2{\ifnum\lastnodetype=11 \unskip\let\axt@cyig\relax\else\let\axt@cyig\ignorespaces\fi\setbox\axt@cb\lastbox\setbox\axt@cyc\hbox{\axt@unhcopy\axt@cb\xdef\axt@cyv{\the\lastpenalty}}\global\axt@cybfalse\box\axt@cb\ifnum\axt@cyv=10939 \penalty10939 \expandafter\@firstoftwo\else\expandafter\@secondoftwo\fi{#1\axt@cyig}{#2\axt@cyig}}\def\axt@cnew#1{\space\axt@cdo{\hbox{\axt@mark{#1}\penalty10939}\penalty10939\global\axt@cyontrue\global\axt@cybfalse\axt@cywrap\relax}}\def\axt@cadd#1{\space\axt@cdo{\unpenalty\setbox\axt@cb\lastbox\hbox{\axt@unhbox\axt@cb\unpenalty\axt@mark{#1}\penalty10939}\penalty10939\global\axt@cybfalse\relax}}\def\axt@cback{\space\axt@cdo{\unpenalty\setbox\axt@cb\lastbox\global\axt@cyonfalse\axt@cyunwrap\relax}}\protected\def\axt@cdo#1{\ifnum\lastnodetype=11 \unskip#1\else#1\expandafter\ignorespaces\fi}\let\axt@pmc@plain\axt@pmc\def\axt@pmc#1{\axt@ifcy{\axt@cback}{\axt@pmc@plain{#1}}}\let\axt@pm@plain\axt@pm\protected\def\axt@pm#1{\axt@ifcy{\axt@cadd{#1}}{\axt@pm@plain{#1}}}\ifdefined\AddToHook\ifdefined\IndentBox\else\let\axt@pmy\axt@pma\fi\else\let\axt@pmy\axt@pma\fi\AtBeginDocument{\ifdefined\pdfstringdefDisableCommands\pdfstringdefDisableCommands{${gatedLets(['axtpmd'])}}\fi}\ifcsname l_text_case_exclude_arg_tl\endcsname\expandafter\g@addto@macro\csname l_text_case_exclude_arg_tl\endcsname{${gatedList(['axtpmd'])}\axt@pmy}\fi\makeatother`
 /**
  * The carrier's end (CARRY_TEX): at LaTeX's para/end, where the list ends with the carrier (\axt@ifcy), the carrier taken back,
  * so that the paragraph is as empty as the original's and TeX drops it; and no carrier pending after it. Before LAYOUT_TEX in
@@ -3146,7 +3204,7 @@ export function layoutMarking(
     // routine's heads, are gobbled in a PDF string and written to no file (the gate, LAYOUT_TEX), set no destination in a box
     // never shipped, and a title's end mark alone is set where TeX sets the title, its first occurrence the unit's where the
     // class sets it again (own/own.ts ownOf). Left with no mark, the title's ink had no group: 2610.22195v1 p1u0 stayed English)
-    if (u.kind === 'heading') return { start: `\\axthmark{h${i}s}`, end: `\\axthmark{h${i}e}` }
+    if (u.kind === 'heading') return { start: markTex('axthmark', `h${i}s`), end: markTex('axthmark', `h${i}e`) }
     // (the front matter's units: their unit marks, no line probe, which would act on the class's own paragraph)
     // (and an author's call the source states before it, source/latex-front.ts CALLED_AT: its point `<i>c`, CALL_TEX)
     const f = front(u)
@@ -3204,7 +3262,7 @@ export function layoutMarking(
       else if (p.t === 'close') verbatim.pop()
       if (verbatim.at(-1) === true) return [piece]
       // (a colour piece: its colour written to the log right after it, inside its group, where its run is set: no node)
-      if (colourPieceOf(p)) return [piece, { t: 'ph', src: `\\axtcolour{c${i}.${k}}` }]
+      if (colourPieceOf(p)) return [piece, { t: 'ph', src: markTex('axtcolour', `c${i}.${k}`) }]
       // (a placeholder right after a paper's macro that got its opening mark, past white space alone or none, has its marks where
       // TeX answered that its opening mark there moves nothing, the word before it hyphenated as before: aheadSamples. A complete
       // call's too, which its own answer leaves none there; its closing mark is its own answer's. Not in a front unit, whose marks
@@ -3291,11 +3349,11 @@ export function layoutMarking(
       // (its closing one: 2608.25210v2 p3's \mypython box, the element empty); in horizontal mode \axtpma's)
       const open: PhPiece = {
         t: 'ph',
-        src: `${lead}\\${carry ? 'axtpmd' : cls === 'math' ? 'axtpmm' : identifierPiece(p.src) ? 'axthpk' : 'axtpma'}{${name}a}`,
+        src: `${lead}${markTex(carry ? 'axtpmd' : cls === 'math' ? 'axtpmm' : identifierPiece(p.src) ? 'axthpk' : 'axtpma', `${name}a`)}`,
         opens: true,
       }
       if (said === '3') {
-        movedAt.set(k, { t: 'ph', src: `${lead}\\axtpm{${name}b}` })
+        movedAt.set(k, { t: 'ph', src: `${lead}${markTex('axtpm', `${name}b`)}` })
         return [open, piece]
       }
       if (cls === 'macro') opened.add(p)
@@ -3314,7 +3372,7 @@ export function layoutMarking(
         ENDS_ENV.test(p.src ?? '')
       )
         return [open, piece]
-      return [open, piece, { t: 'ph', src: `${lead}\\axtpm{${name}b}` }]
+      return [open, piece, { t: 'ph', src: `${lead}${markTex('axtpm', `${name}b`)}` }]
     })
     // (a placeholder the marking passes over after a forced break (passedOver) has its opening point before the break, before the
     // first of a run of breaks: nothing may stand between a break and what follows it — a table's row begins with its own first
@@ -3354,7 +3412,10 @@ export function layoutMarking(
           break
         }
         if (f < head) continue
-        out[f] = [{ t: 'ph', src: `${lead}\\axtpma{${cls === 'footnote' ? 'n' : 'p'}${i}.${j}a}` }, ...out[f]!]
+        out[f] = [
+          { t: 'ph', src: `${lead}${markTex('axtpma', `${cls === 'footnote' ? 'n' : 'p'}${i}.${j}a`)}` },
+          ...out[f]!,
+        ]
       }
     }
     // (a closing mark after the punctuation mark its piece's command moves: the text after the piece cut after that mark)
@@ -3387,7 +3448,7 @@ export function layoutMarking(
         ENDS_ENV.test(m!.src)
       )
         continue
-      out[k] = [...out[k]!, { t: 'ph', src: `\\axtpm{p${i}.${k}b}` }]
+      out[k] = [...out[k]!, { t: 'ph', src: markTex('axtpm', `p${i}.${k}b`) }]
     }
     // (a prefixed piece's opening mark before its prefix)
     for (let k = 1; k < out.length; k++) {
@@ -3414,10 +3475,10 @@ export function layoutMarking(
       for (const k of bare) {
         if (out[k]!.length !== 1 || (k > 0 && prefixWord(u.pieces[k - 1]!.t === 'ph' ? u.pieces[k - 1]!.src : null)))
           continue
-        if (k < head) out[k] = [{ t: 'ph', src: `${lead}\\axthpk{p${i}.${k}a}` }, ...out[k]!]
+        if (k < head) out[k] = [{ t: 'ph', src: `${lead}${markTex('axthpk', `p${i}.${k}a`)}` }, ...out[k]!]
         // (right after the last text alone: the end mark stands between the two, nothing of the paper's — `\\urldef\\tempurl`,
         // whose first defines the next token, 2608.25210v2's .bbl)
-        else if (!lead && k === lastText + 1) out[k] = [{ t: 'ph', src: `\\axttg{p${i}.${k}g}` }, ...out[k]!]
+        else if (!lead && k === lastText + 1) out[k] = [{ t: 'ph', src: markTex('axttg', `p${i}.${k}g`) }, ...out[k]!]
       }
     }
     // (a piece behind pieces of no mark of ours after a display, white space alone besides — `\\noindent`, `\\label{…}`, a
@@ -3443,9 +3504,9 @@ export function layoutMarking(
             // (the opening marks of the marking's own pass alone: the head point a paper's macro of no mark gets at the unit's
             // head, \\axthpk, is that piece's, which TeX sets before the unit's start mark, not a carrier's)
             if (r.t !== 'ph' || !r.opens) continue
-            const m = OPENING_MARK.exec(r.src ?? '')
-            if (!m || Number(m[1]) !== i || Number(m[2]) !== k) continue
-            list[j] = { ...r, src: (r.src ?? '').replace(/\\axt(?:pm[am]?|hpk)\{/, '\\axtpmd{') }
+            const m = openingOf(r.src)
+            if (!m || m[0] !== i || m[1] !== k) continue
+            list[j] = { ...r, src: asKind(r.src ?? '', 'axtpmd') }
             found = true
           }
         if (found) carried.add(q)
@@ -3460,8 +3521,8 @@ export function layoutMarking(
       const opensAt = (n: number) =>
         out.some((list) =>
           list.some((q) => {
-            const m = q.t === 'ph' ? OPENING_MARK.exec(q.src ?? '') : null
-            return !!m && Number(m[1]) === i && Number(m[2]) === n
+            const m = q.t === 'ph' ? openingOf(q.src) : null
+            return !!m && m[0] === i && m[1] === n
           }),
         )
       for (let k = u.pieces.length - 1; k >= 0; k--) {
@@ -3481,13 +3542,16 @@ export function layoutMarking(
         }
         if (!held) continue
         const p = u.pieces[k]!,
-          kept =
+          kept = (
             classOf(p) === 'math' ? 'axtpmm' : identifierPiece(p.t === 'ph' ? p.src : undefined) ? 'axthpk' : 'axtpma'
+          ) as GatedKind
         for (const list of out)
           for (let j = 0; j < list.length; j++) {
             const q = list[j]!
-            if (q.t === 'ph' && q.src?.endsWith(`\\axtpmd{${classOf(p) === 'footnote' ? 'n' : 'p'}${i}.${k}a}`))
-              list[j] = { ...q, src: q.src.replace(/\\axtpmd\{/, `\\${kept}{`) }
+            if (q.t !== 'ph') continue
+            const g = markOf(q.src)
+            if (g?.kind === 'axtpmd' && g.name === `${classOf(p) === 'footnote' ? 'n' : 'p'}${i}.${k}a`)
+              list[j] = { ...q, src: asKind(q.src, kept) }
           }
         carried.delete(p)
       }

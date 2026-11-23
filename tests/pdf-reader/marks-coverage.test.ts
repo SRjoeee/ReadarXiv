@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { SourceUnit } from '../../packages/engine/src/source/latex-front.ts'
 import { completeMacros, definitionsNested, frontMarks, inMemory, loadProject } from '../../packages/engine/src/source/latex-front.ts'
 import { bblProvides, openPaper, probeFiles } from '../../packages/engine/src/compile/live.ts'
-import { AHEAD_PROBE_MAX, aheadKey, aheadSamples, type CommandSample, completeCall, completeCalled, followsOf, headsOf, INK_BUDGET, inkSamples, layoutMarking, leadSamples, MARK_CLASSES, markProbeTex, probeSamples, readInkAnswers, readInkApart, readInkProbe, readInkTexts, readMarkProbe } from '../../packages/engine/src/marks/marks.ts'
+import { AHEAD_PROBE_MAX, aheadKey, aheadSamples, type CommandSample, completeCall, completeCalled, followsOf, headsOf, INK_BUDGET, inkSamples, layoutMarking, leadSamples, MARK_CLASSES, markOf, markProbeTex, probeSamples, readInkAnswers, readInkApart, readInkProbe, readInkTexts, readMarkProbe } from '../../packages/engine/src/marks/marks.ts'
 import { symbolText } from '../../packages/engine/src/source/text-symbols.ts'
 
 // The layout marks a placeholder gets where what stands beside it was guessed at: the paper's own macro taken to look ahead
@@ -27,7 +27,7 @@ const marksOf = (u: SourceUnit, o: Parameters<typeof layoutMarking>[2]) => {
   pieces.forEach((p, j) => {
     if (p.t !== 'ph' || /^\\axt/.test(p.src ?? '')) return
     const before = pieces[j - 1]?.src ?? '', after = pieces[j + 1]?.src ?? ''
-    out[p.src ?? ''] = `${/^\\axtpm[am]\{/.test(before) ? 'a' : ''}${/^\\axtpm\{/.test(after) ? 'b' : ''}`
+    out[p.src ?? ''] = `${/^axtpm[am]$/.test(markOf(before)?.kind ?? '') ? 'a' : ''}${markOf(after)?.kind === 'axtpm' ? 'b' : ''}`
   })
   return out
 }
@@ -150,7 +150,7 @@ describe('the mark probe asks about the complete macros\' calls, apart from the 
     expect(at('LAYOUT-PROBE 1 ink-at 0')).toBeGreaterThan(at('LAYOUT-PROBE 1 punct-at 0 0 a'))
     expect(at('LAYOUT-PROBE 1 lineskip')).toBeGreaterThan(at('LAYOUT-PROBE 1 ink-at 0'))
     expect(at('LAYOUT-PROBE 1 punct-at 1 0 a')).toBeGreaterThan(at('LAYOUT-PROBE 1 lineskip'))
-    expect(tex).toContain('\\axtpma{q1a}\\cls{x}\\axtpm{q1b}')
+    expect(tex).toContain('\\axtpmaqa{1}\\cls{x}\\axtpmqb{1}')
     // (and a paper with none of its own asks as before)
     expect(markProbeTex(probeSamples([u]), ['\\cls{x}'])).toBe(markProbeTex([{ src: '\\cite{a}', call: false } as CommandSample], ['\\cls{x}']))
     expect(markProbeTex(probeSamples([u]), ['\\cls{x}'])).not.toContain('punct-at 1 ')
@@ -250,7 +250,7 @@ describe('a complete macro glued to the placeholder after it (2610.21098\'s \\Ha
     const tex = markProbeTex(samples)
     expect(tex).toContain('way \\share{}\\% \\unskip')
     expect(tex).toContain('way \\share{}{}\\% \\unskip')
-    expect(tex).toContain('way \\axtpma{q1a}\\share{}\\axtpm{q1b}\\% \\unskip')
+    expect(tex).toContain('way \\axtpmaqa{1}\\share{}\\axtpmqb{1}\\% \\unskip')
     // (a follower that is a comment's start, or a call followed by text, asks nothing more)
     expect(probeSamples([unit([ph('\\share{}'), ph('\\\\%x')])], [['share', 0]])).toEqual([{ command: '\\share', src: '\\share{}', call: false, own: true }])
     expect(probeSamples([unit([ph('\\share{}'), text('%')])], [['share', 0]])).toEqual([{ command: '\\share', src: '\\share{}', call: false, own: true }])
@@ -263,11 +263,11 @@ describe('a complete macro glued to the placeholder after it (2610.21098\'s \\Ha
   it('layoutMarking: a call glued to that follower gets its closing mark where TeX answered 0 for it; else, and against another placeholder, its opening mark alone', () => {
     const switches = { '\\share': '00000000', '\\cite': '00000000' }
     const marked = (codes: string) => ((layoutMarking([u], MARK_CLASSES, { lines: false, complete: { share: 0 }, switches: { ...switches, '\\share': codes } }).units[0]?.pieces ?? []) as Piece[]).map(p => p.src ?? p.s).join('')
-    expect(marked('00000000')).toContain('\\axtpma{p0.1a}\\share{}\\axtpm{p0.1b}\\%')
-    expect(marked('00000000')).toContain('\\axtpma{p0.4a}\\share{}\\axtpm{p0.4b}\\%')
+    expect(marked('00000000')).toContain('\\axtpmapa{0.1}\\share{}\\axtpmpb{0.1}\\%')
+    expect(marked('00000000')).toContain('\\axtpmapa{0.4}\\share{}\\axtpmpb{0.4}\\%')
     // (before \\cite{a}, a follower the probe did not ask about: no closing mark)
-    expect(marked('00000000')).toContain('\\axtpma{p0.7a}\\share{}\\cite{a}')
-    for (const codes of ['00000001', '00000002', '0000000x']) expect(marked(codes)).toContain('\\axtpma{p0.1a}\\share{}\\%')
+    expect(marked('00000000')).toContain('\\axtpmapa{0.7}\\share{}\\cite{a}')
+    for (const codes of ['00000001', '00000002', '0000000x']) expect(marked(codes)).toContain('\\axtpmapa{0.1}\\share{}\\%')
   })
 })
 
@@ -276,10 +276,10 @@ describe('a command that sets the punctuation mark after it before its own ink (
   it('the probe sets each such follower\'s pair with a word after it, as the paper sets it and with its opening mark before the command and its closing one after the mark', () => {
     const tex = markProbeTex(probeSamples([u]))
     expect(tex).toContain('way \\cite{a}. x \\unskip')
-    expect(tex).toContain('way \\axtpma{q0a}\\cite{a}.\\axtpm{q0b} x \\unskip')
-    expect(tex).toContain('way \\axtpma{q0a}\\cite{a};\\axtpm{q0b} x \\unskip')
+    expect(tex).toContain('way \\axtpmaqa{0}\\cite{a}.\\axtpmqb{0} x \\unskip')
+    expect(tex).toContain('way \\axtpmaqa{0}\\cite{a};\\axtpmqb{0} x \\unskip')
     // (a word after it: no such box)
-    expect(tex).not.toContain('\\cite{a} x\\axtpm{q0b}')
+    expect(tex).not.toContain('\\cite{a} x\\axtpmqb{0}')
   })
   it('readMarkProbe: 3 where the two are equal, an error in either box 2', () => {
     const samples = probeSamples([u])
@@ -289,12 +289,12 @@ describe('a command that sets the punctuation mark after it before its own ink (
   it('layoutMarking: on 3, the opening mark before the command and the closing one after the mark it moves, inside the text after it', () => {
     const marked = (switches: Record<string, string>) => ((layoutMarking([u], MARK_CLASSES, { lines: false, switches }).units[0]?.pieces ?? []) as Piece[]).map(p => p.src ?? p.s).join('')
     const got = marked({ '\\cite': '33330000', '\\ref': '00000000' })
-    expect(got).toContain('in the air \\axtpma{p0.1a}\\cite{a}.\\axtpm{p0.1b} Next words, \\axtpma{p0.3a}\\cite{b},\\axtpm{p0.3b} more \\axtpma{p0.5a}\\ref{c}\\axtpm{p0.5b}; and \\axtpma{p0.7a}\\cite{d}\\axtpm{p0.7b} x.')
+    expect(got).toContain('in the air \\axtpmapa{0.1}\\cite{a}.\\axtpmpb{0.1} Next words, \\axtpmapa{0.3}\\cite{b},\\axtpmpb{0.3} more \\axtpmapa{0.5}\\ref{c}\\axtpmpb{0.5}; and \\axtpmapa{0.7}\\cite{d}\\axtpmpb{0.7} x.')
     // (2: no mark, as before)
     expect(marked({ '\\cite': '22220000', '\\ref': '00000000' })).toContain('in the air \\cite{a}. Next words, \\cite{b}, more')
     // (a text piece whose source is the text's at its head, an accent's letter joined after it: cut there all the same)
     const v = unit([text('the air '), ph('\\cite{a}'), { t: 'text', s: '.é', src: '.\\\'e' } as Piece])
-    expect(((layoutMarking([v], MARK_CLASSES, { lines: false, switches: { '\\cite': '33330000' } }).units[0]?.pieces ?? []) as Piece[]).map(p => p.src ?? p.s).join('')).toContain('\\axtpma{p0.1a}\\cite{a}.\\axtpm{p0.1b}\\\'e')
+    expect(((layoutMarking([v], MARK_CLASSES, { lines: false, switches: { '\\cite': '33330000' } }).units[0]?.pieces ?? []) as Piece[]).map(p => p.src ?? p.s).join('')).toContain('\\axtpmapa{0.1}\\cite{a}.\\axtpmpb{0.1}\\\'e')
   })
   it('followsOf: the mark that opens the text after a piece of an asked class, which its closed ink holds first', () => {
     const f = followsOf([u], new Set(['p0.1a', 'p0.1b', 'p0.3a', 'p0.3b', 'p0.5a', 'p0.5b', 'p0.7a', 'p0.7b']))
@@ -347,14 +347,14 @@ describe('a paper\'s macro that looks ahead, before a placeholder (2609.20976\'s
     expect(at('LAYOUT-PROBE 1 ahead-at 0 w')).toBeGreaterThan(at('LAYOUT-PROBE 1 ink-at 1'))
     expect(at('LAYOUT-PROBE 1 ahead-at 2 d')).toBeGreaterThan(at('LAYOUT-PROBE 1 ahead-at 0 w'))
     expect(tex).toContain('way \\snr $\\geq 50$ \\unskip')
-    expect(tex).toContain('way \\axtpma{q0a}\\snr\\axtpm{q0b} \\axtpmm{q0c}$\\geq 50$ \\unskip')
-    expect(tex).toContain('way \\axtpma{q0a}\\snr \\axtpmm{q0c}$\\geq 50$ \\unskip')
-    expect(tex).toContain('way \\axtpma{q1a}\\lgnrm \\axtpma{q1c}\\footnote{\\url{https://x.org}} \\unskip')
-    expect(tex).toContain('way \\axtpma{q2a}\\name{x}\\axtpm{q2b}\\axtpma{q2c}\\cite{a} \\unskip')
+    expect(tex).toContain('way \\axtpmaqa{0}\\snr\\axtpmqb{0} \\axtpmmqc{0}$\\geq 50$ \\unskip')
+    expect(tex).toContain('way \\axtpmaqa{0}\\snr \\axtpmmqc{0}$\\geq 50$ \\unskip')
+    expect(tex).toContain('way \\axtpmaqa{1}\\lgnrm \\axtpmaqc{1}\\footnote{\\url{https://x.org}} \\unskip')
+    expect(tex).toContain('way \\axtpmaqa{2}\\name{x}\\axtpmqb{2}\\axtpmaqc{2}\\cite{a} \\unskip')
     // (and what the list ends with where the placeholder's mark goes, which no box's width shows: a word there TeX would hyphenate
     // with a whatsit after it, and not with a citation's box — none on the citation; on a formula, whose mark boxes itself, its
     // opening mark alone)
-    expect(tex).toContain('way \\axtpma{q2a}\\name{x}\\axt@qat\\axtpma{q2c}\\cite{a} \\unskip')
+    expect(tex).toContain('way \\axtpmaqa{2}\\name{x}\\axt@qat\\axtpmaqc{2}\\cite{a} \\unskip')
     const rows = tex.split('\n')
     expect(rows.find(r => r.includes('ahead 0 '))).toContain('\\ifcase\\axt@qend\\relax\\ifx\\axt@qa\\axt@qc\\xdef\\axt@qo{0}\\else\\xdef\\axt@qo{1}\\fi\\or\\xdef\\axt@qo{1}\\else')
     expect(rows.find(r => r.includes('ahead 2 '))).toContain('\\or\\xdef\\axt@qo{2}\\else')
@@ -383,7 +383,7 @@ describe('a paper\'s macro that looks ahead, before a placeholder (2609.20976\'s
     expect(marksOf(u, { lines: false, switches: sw(['1', '2', '0']) })).toEqual({ '\\snr': 'a', '$\\geq 50$': 'ab', '\\lgnrm': 'a', [footnote]: '', '\\name{x}': 'ab', '\\cite{a}': 'ab' })
     // (the formula after the second \\snr, past a line's end, is the same pair as the first's: one space to TeX)
     const second = (layoutMarking([u], MARK_CLASSES, { lines: false, switches: sw(['1', '2', '0']) }).units[0]?.pieces ?? []) as Piece[]
-    expect(second.map(p => p.src ?? p.s).join('')).toContain('\\axtpma{p0.12a}\\snr\n\\axtpmm{p0.14a}$\\geq 50$\\axtpm{p0.14b}')
+    expect(second.map(p => p.src ?? p.s).join('')).toContain('\\axtpmapa{0.12}\\snr\n\\axtpmmpa{0.14}$\\geq 50$\\axtpmpb{0.14}')
     // (every answer 0: the macro ending in a control word closed too, as the probe's box set it)
     expect(marksOf(u, { lines: false, switches: sw(['0', '0', '0']) })).toEqual({ '\\snr': 'ab', '$\\geq 50$': 'ab', '\\lgnrm': 'ab', [footnote]: 'ab', '\\name{x}': 'ab', '\\cite{a}': 'ab' })
     // (2 and no answer: none, as before)
@@ -404,7 +404,7 @@ describe('a paper\'s macro that looks ahead, before a placeholder (2609.20976\'s
     expect(marksOf(w, { lines: false, switches: sw })).toEqual({ '\\snr': '', '\\cite{a}': '' })
     // (an author block's unit: its marks robust, `\\protect\\axtpma`, which the probe's box did not set)
     const a = { ...unit([text('Ada, with '), ph('\\snr'), text(' '), ph('$\\geq 50$'), text('.')]), kind: 'author' } as SourceUnit
-    expect(layoutMarking([a], MARK_CLASSES, { lines: false, switches: sw }).units[0]?.pieces.map(p => (p as Piece).src ?? (p as Piece).s).join('')).toBe('Ada, with \\protect\\axtpma{p0.1a}\\snr $\\geq 50$.')
+    expect(layoutMarking([a], MARK_CLASSES, { lines: false, switches: sw }).units[0]?.pieces.map(p => (p as Piece).src ?? (p as Piece).s).join('')).toBe('Ada, with \\protect\\axtpmapa{0.1}\\snr $\\geq 50$.')
   })
 })
 
@@ -636,19 +636,19 @@ describe('frontMarks: the front matter\'s units, marked in the layout compile as
     const { units, mark } = layoutMarking([a], MARK_CLASSES, { lines: true })
     expect(mark(a)).toEqual({ start: '\\leavevmode\\axtmark{0s}', end: '\\axtend{0e}' })
     // (robust: a class may store a front unit's text with \\protected@xdef, \\thanks's, where \\axtpma alone takes itself off)
-    expect(((units[0]?.pieces ?? []) as Piece[]).map(p => p.src ?? p.s).join('')).toContain('\\protect\\axtpma{p0.1a}\\texttt{ada@x.org}\\protect\\axtpm{p0.1b}')
+    expect(((units[0]?.pieces ?? []) as Piece[]).map(p => p.src ?? p.s).join('')).toContain('\\protect\\axtpmapa{0.1}\\texttt{ada@x.org}\\protect\\axtpmpb{0.1}')
   })
   it('a \\thanks\'s placeholders keep their marks through its \\protected@xdef: \\texttt, \\href\'s text and \\protect\\url (2610.20484, 2610.11256, 2610.21880)', () => {
     const note = { ...unit([text('Corresponding author: '), ph('\\texttt{a@b.org}'), text(' or '), ph('\\protect'), ph('\\url{c@d.org}'), text('. Email: '), { t: 'open', id: 1, src: '\\href{mailto:e@f.org}{' } as Piece, ph('e@f.org'), { t: 'close', id: 1, src: '}' } as Piece, text('.')]), kind: 'footnote', front: true } as SourceUnit
     const { units, mark } = layoutMarking([note], MARK_CLASSES, { lines: true })
     expect(mark(note)).toEqual({ start: '\\leavevmode\\axtmark{0s}', end: '\\axtend{0e}' })
     const out = ((units[0]?.pieces ?? []) as Piece[]).map(p => p.src ?? p.s).join('')
-    expect(out).toContain('\\protect\\axtpma{p0.1a}\\texttt{a@b.org}\\protect\\axtpm{p0.1b}')
-    expect(out).toContain('\\protect\\axtpma{p0.4a}\\protect\\url{c@d.org}\\protect\\axtpm{p0.4b}')
-    expect(out).toContain('\\href{mailto:e@f.org}{\\protect\\axtpma{p0.7a}e@f.org')
+    expect(out).toContain('\\protect\\axtpmapa{0.1}\\texttt{a@b.org}\\protect\\axtpmpb{0.1}')
+    expect(out).toContain('\\protect\\axtpmapa{0.4}\\protect\\url{c@d.org}\\protect\\axtpmpb{0.4}')
+    expect(out).toContain('\\href{mailto:e@f.org}{\\protect\\axtpmapa{0.7}e@f.org')
     // (a body unit's marks are as they were: no \\protect before them)
     const body = unit([text('see '), ph('\\texttt{a@b.org}'), text(' now')])
     const plain = ((layoutMarking([body], MARK_CLASSES, { lines: true }).units[0]?.pieces ?? []) as Piece[]).map(p => p.src ?? p.s).join('')
-    expect(plain).toContain('see \\axtpma{p0.1a}\\texttt{a@b.org}\\axtpm{p0.1b}')
+    expect(plain).toContain('see \\axtpmapa{0.1}\\texttt{a@b.org}\\axtpmpb{0.1}')
   })
 })

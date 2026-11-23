@@ -24,10 +24,12 @@ import {
   DVI_LAYOUT_TEX,
   displayPiece,
   followsOf,
+  GATED_CS,
   LAYOUT_TEX,
   LAYOUT_TEX_REDUCED,
   layoutMarking,
   MARK_CLASSES,
+  markOf,
   NAMES_TEX,
   refsTex,
   regionsTex,
@@ -146,6 +148,14 @@ describe('a piece first in the paragraph TeX resumes after a display: the readin
   })
 })
 
+/** a gated mark's kind, written as a command (`\\axtpmd`), or undefined: marks.ts markOf */
+const kindOf = (src: string | undefined) => {
+  const g = markOf(src)
+  return g ? `\\${g.kind}` : undefined
+}
+/** whether a mark sets the point of this name */
+const names = (src: string, name: RegExp) => name.test(markOf(src)?.name ?? '')
+
 describe('a piece first in the paragraph TeX resumes after a display: its opening mark', () => {
   const opening = (u: SourceUnit<null>, k: number) =>
     (
@@ -156,7 +166,7 @@ describe('a piece first in the paragraph TeX resumes after a display: its openin
       }[]
     )
       .map((p) => (p.t === 'ph' ? (p.src ?? '') : ''))
-      .find((s) => new RegExp(`\\{[pn]0\\.${k}a\\}$`).test(s))
+      .find((s) => names(s, new RegExp(`^[pn]0\\.${k}a$`)))
   const after = (src: string) =>
     unit('para', [
       { t: 'text', s: 'We define ' },
@@ -165,7 +175,7 @@ describe('a piece first in the paragraph TeX resumes after a display: its openin
       { t: 'ph', src },
       { t: 'text', s: ' shows it.' },
     ])
-  const command = (src: string) => opening(after(src), 3)?.replace(/\{.*$/, '')
+  const command = (src: string) => kindOf(opening(after(src), 3))
 
   it('every piece that is no display, whatever its class and whether it sets ink: \\axtpmd, its point in a carrier', () => {
     // (one mark for every class, no table of classes: marks.ts CARRY_TEX sets the point in a box the paragraph takes back where
@@ -204,7 +214,7 @@ describe('a piece first in the paragraph TeX resumes after a display: its openin
       { t: 'ph', src: '\\cite{j}' },
       { t: 'text', s: ' shows it.' },
     ])
-    expect([3, 4, 6, 8, 10].map((k) => opening(u, k)?.replace(/\{.*$/, ''))).toEqual([
+    expect([3, 4, 6, 8, 10].map((k) => kindOf(opening(u, k)))).toEqual([
       '\\axtpmd',
       '\\axtpmd',
       '\\axtpma',
@@ -229,12 +239,7 @@ describe('a piece first in the paragraph TeX resumes after a display: its openin
       { t: 'ph', src: '\\[ e = f \\]' },
       { t: 'text', s: ' and words.' },
     ])
-    expect([3, 5, 7, 9].map((k) => opening(u, k)?.replace(/\{.*$/, ''))).toEqual([
-      '\\axtpma',
-      undefined,
-      '\\axtpmd',
-      '\\axtpma',
-    ])
+    expect([3, 5, 7, 9].map((k) => kindOf(opening(u, k)))).toEqual(['\\axtpma', undefined, '\\axtpmd', '\\axtpma'])
   })
 
   it('a piece behind a command of no mark after a display has the carrier too: TeX sets it first', () => {
@@ -258,8 +263,8 @@ describe('a piece first in the paragraph TeX resumes after a display: its openin
         }).units[0]!.pieces as { t: string; src?: string }[]
       )
         .map((p) => (p.t === 'ph' ? (p.src ?? '') : ''))
-        .find((s) => /\{[pn]0\.4a\}$/.test(s))
-        ?.replace(/\{.*$/, '')
+        .filter((s) => names(s, /^[pn]0\.4a$/))
+        .map(kindOf)[0]
     expect([after('\\noindent'), after('\\label{e}')]).toEqual(['\\axtpmd', '\\axtpmd'])
     // (behind a paper's macro that may read what follows it the piece has no mark of ours at all, as anywhere)
     expect(after('\\nothing', ['\\nothing'])).toBeUndefined()
@@ -294,11 +299,11 @@ describe('a piece first in the paragraph TeX resumes after a display: its openin
         }[]
       )
         .map((p) => (p.t === 'ph' ? (p.src ?? '') : ''))
-        .filter((s) => /\\axtpm[amd]?\{p0\.(?:3|7|11)a\}$/.test(s))
+        .filter((s) => /^axtpm[amd]?$/.test(markOf(s)?.kind ?? '') && names(s, /^p0\.(?:3|7|11)a$/))
     // (the shorthand a display, \\axtpma, though the answers name it; the citation first after a display, carried where TeX said
     // it opens none; \\eqn, a macro the probe said opens a display or never asked, \\axtpma)
-    expect(marks(['\\be c = d \\ee', '\\cite{k}'])).toEqual(['\\axtpma{p0.3a}', '\\axtpmd{p0.7a}', '\\axtpma{p0.11a}'])
-    expect(marks([])).toEqual(['\\axtpma{p0.3a}', '\\axtpma{p0.7a}', '\\axtpma{p0.11a}'])
+    expect(marks(['\\be c = d \\ee', '\\cite{k}'])).toEqual(['\\axtpmapa{0.3}', '\\axtpmdpa{0.7}', '\\axtpmapa{0.11}'])
+    expect(marks([])).toEqual(['\\axtpmapa{0.3}', '\\axtpmapa{0.7}', '\\axtpmapa{0.11}'])
     expect(carrySamples([u] as unknown as SourceUnit[])).toEqual(['\\cite{k}', '\\eqn{g}'])
   })
 
@@ -321,7 +326,7 @@ describe('a piece first in the paragraph TeX resumes after a display: its openin
       { t: 'ph', src: '$x$' },
       { t: 'text', s: ' holds.' },
     ])
-    expect([opening(u, 1), opening(u, 3)]).toEqual(['\\axtpma{p0.1a}', '\\axtpmm{p0.3a}'])
+    expect([opening(u, 1), opening(u, 3)]).toEqual(['\\axtpmapa{0.1}', '\\axtpmmpa{0.3}'])
   })
 })
 
@@ -350,8 +355,8 @@ describe('a footnote first in the paragraph TeX resumes after a display: its ope
           ? [
               (out[i]!.pieces as { t: string; src?: string }[])
                 .map((q) => (q.t === 'ph' ? (q.src ?? '') : ''))
-                .find((s) => s.endsWith(`{n${i}.${k}a}`))
-                ?.replace(/\{.*$/, ''),
+                .filter((s) => markOf(s)?.name === `n${i}.${k}a`)
+                .map(kindOf)[0],
             ]
           : [],
       ),
@@ -400,8 +405,8 @@ describe('a footnote first in the paragraph TeX resumes after a display: its ope
           .units[0]!.pieces as { t: string; src?: string }[]
       )
         .map((p) => (p.t === 'ph' ? (p.src ?? '') : ''))
-        .find((x) => x.endsWith('{n0.3a}'))
-        ?.replace(/\{.*$/, '')
+        .filter((x) => markOf(x)?.name === 'n0.3a')
+        .map(kindOf)[0]
     }
     expect([marks(', and words.'), marks(' of words.')]).toEqual(['\\axtpmd', '\\axtpmd'])
   })
@@ -424,14 +429,14 @@ describe("the carrier's TeX in a paper's head only where the marking writes a ca
   }
   it('a paragraph with a reference first after a display: CARRY_TEX in its head, its paragraph end before LAYOUT_TEX', () => {
     const tex = files('We define words here\n\\[ a = b \\]\n\\ref{f} shows it, and more words.')
-    expect(tex).toContain('\\axtpmd{')
+    expect(tex).toMatch(/\\axtpmd(?:pa|na)\{/)
     expect(tex.indexOf(CARRY_END_TEX)).toBeGreaterThan(-1)
     expect(tex.indexOf(CARRY_END_TEX)).toBeLessThan(tex.indexOf(LAYOUT_TEX))
     expect(tex.indexOf(CARRY_TEX)).toBeGreaterThan(tex.indexOf(LAYOUT_TEX))
   })
   it('a paper with none: its head as before, no CARRY_TEX', () => {
     const tex = files('We define words here\n\\[ a = b \\]\nwhere the words go on, \\ref{f} shows it.')
-    expect(tex).not.toContain('\\axtpmd{')
+    expect(tex).not.toMatch(/\\axtpmd(?:pa|na)\{/)
     expect(tex).not.toContain(CARRY_TEX)
     expect(tex).not.toContain(CARRY_END_TEX)
   })
@@ -458,7 +463,8 @@ describe("the carrier's TeX takes no name the rest of a marked head has", () => 
         m[1]!.replace(/^if/, ''),
       ),
     )
-    const wrapped = new Set(['axt@pmc', 'axt@pm'])
+    // (and the carrier's own marks, which the unmark list and its prefilter name in LAYOUT_TEX by design: GATED_CS)
+    const wrapped = new Set(['axt@pmc', 'axt@pm', ...GATED_CS.filter((c) => c.startsWith('axtpmd'))])
     const named = (n: string) => new RegExp(`\\\\(?:if)?${n.replace(/@/g, '@')}(?:true|false)?(?![A-Za-z@])`)
     const clash = [...defined].filter((n) => !wrapped.has(n) && others.some((t) => named(n).test(t)))
     expect(defined.size).toBeGreaterThan(20)

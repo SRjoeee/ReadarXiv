@@ -25,6 +25,7 @@ import {
   markProbeTex,
   POINTS_TEX,
   POINTS_TEX_REDUCED,
+  markOf,
   probeSamples,
   STATEMENTS_TEX,
   refKeysOf,
@@ -610,9 +611,7 @@ export function originalFiles(
     // (an author's call the source states, \axtcall: its definition in the head, CALL_TEX)
     called = marked.units.some((u) => !!marked.mark(u)?.call)
     // (a carrier the marking writes, \axtpmd: its TeX in the head, CARRY_TEX)
-    carried = marked.units.some((u) =>
-      u.pieces.some((p) => p.t === 'ph' && /^(?:\\protect)?\\axtpmd\{/.test(p.src ?? '')),
-    )
+    carried = marked.units.some((u) => u.pieces.some((p) => p.t === 'ph' && markOf(p.src)?.kind === 'axtpmd'))
     const asSource = unmarked
       ? (new Set([...unmarked].map((i) => marked.units[i]).filter(Boolean)) as Set<SourceUnit>)
       : null

@@ -15,7 +15,7 @@ import { isMemoryError } from '../memory.ts'
 import { lastTexLog, latin1, latin1Bytes, texText } from '../source/latex-front.ts'
 import { texErrors, unitsAtErrors } from './tex-errors.ts'
 import { END_TEX } from './tex.ts'
-import { duplicatesIn, MARK_CS, withoutOurMarks } from '../marks/marks.ts'
+import { duplicatesIn, MARK_CS, markOf, withoutOurMarks } from '../marks/marks.ts'
 import type { Fsys, SourceUnit } from '../source/latex-front.ts'
 import type { TexError, UnitLines } from './tex-errors.ts'
 import type { PdfLike } from './base.ts'
@@ -176,7 +176,7 @@ const inText = (stack: readonly Frame[]): boolean =>
   )
 /**
  * The marks of ours a file TeX wrote holds where no text is set: every mark (MARK_CS) but one inside a list entry's text or
- * a label's title (inText), by its argument as written (`216s`, `p69.1a`, `14`). The file is read as TeX's tokens are
+ * a label's title (inText), by its point's name (`216s`, `14`; a gated mark's, its letters the command's: `p69.1a`). The file is read as TeX's tokens are
  * written to it: a control word and the groups after it are its arguments in turn, a group after a group the next of the
  * same; a `%` to its line's end. 2610.21201: etoc's `\etocdepthtag.toc{main}` made a unit whose end mark TeX wrote into
  * the toc inside etoc's \csname, `\etoc@depthtag {main\axtend {2e}}`, and every reading of the contents raised "Missing
@@ -200,7 +200,11 @@ export function marksOutOfPlace(text: string): string[] {
           if (text[k] === '{') {
             const e = text.indexOf('}', k)
             if (e > k) {
-              if (!inText(stack)) out.push(text.slice(k + 1, e))
+              if (!inText(stack)) {
+                // (a gated mark by its point's name, the reader's: its letters are the command's, `\axtpmapa {5.2}` p5.2a)
+                const arg = text.slice(k + 1, e)
+                out.push(markOf(`\\${name}{${arg}}`)?.name ?? arg)
+              }
               i = e
               pending = null
               continue

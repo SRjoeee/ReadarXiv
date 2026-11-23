@@ -237,17 +237,17 @@ describe('arguments as the role table reads them (arg-roles.mjs): a group no com
     const body = 'Some words here, a hyphen-%\n  ated word and \\emph{more}%\n   text after a group, written by \\LaTeX%\n written, then a figure {%\n    \\fbox{x} of words}.\n'
     const paper = openPaper(new Map([['main.tex', enc(doc(body))]])), all = paper.units as unknown as Unit[]
     const marked = new TextDecoder().decode(originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES }).get('main.tex'))
-    expect(marked).toContain('a hyphen-ated word and \\emph{more}text after a group, written by \\axtpma')
-    expect(marked).toMatch(/\\LaTeX(?:\\axtpm\{[^}]*\})? written, then a figure \{\\fbox\{x\} of words\}/)
+    expect(marked).toContain('a hyphen-ated word and \\emph{more}text after a group, written by \\axtpmapa')
+    expect(marked).toMatch(/\\LaTeX(?:\\axtpmpb\{[^}]*\})? written, then a figure \{\\fbox\{x\} of words\}/)
     // (the units' pieces, and so their hashes and the translator's text, are the walk's as before: the indent is in them)
     expect(all.map(u => u.pieces.filter(p => p.t === 'text').map(p => p.s).join(''))[0]).toContain('hyphen-  ated')
   })
   it('…through every piece flush makes anew of it, and none left between a control word and a word (Devin and Codex on #552)', () => {
     const marked = (body: string, pre = '') => new TextDecoder().decode(originalFiles(openPaper(new Map([['main.tex', enc(doc(body, pre))]])), { lines: true, layout: LAYOUT_CLASSES }).get('main.tex'))
     // (cut around an address, a letter joined to the word before the line end, a second comment line in between)
-    expect(marked('Write to the alpha words%\n  test@example.com for more words.')).toMatch(/alpha words(?:\\axtpma\{[^}]*\})?test@example\.com/)
+    expect(marked('Write to the alpha words%\n  test@example.com for more words.')).toMatch(/alpha words(?:\\axtpmapa\{[^}]*\})?test@example\.com/)
     expect(marked('Words of a caf\\\'e%\n  continued words here.')).toMatch(/caf\\'econtinued words here/)
-    expect(marked('Set by \\LaTeX% first\n  % second\nwritten here, in words.')).toMatch(/\\LaTeX(?:\\axtpm\{[^}]*\})? written here/)
+    expect(marked('Set by \\LaTeX% first\n  % second\nwritten here, in words.')).toMatch(/\\LaTeX(?:\\axtpmpb\{[^}]*\})? written here/)
   })
   it('…but not in a paper that makes spaces active, where TeX reads the indent (CodeRabbit on #552)', () => {
     const marked = (body: string, pre: string) => new TextDecoder().decode(originalFiles(openPaper(new Map([['main.tex', enc(doc(body, pre))]])), { lines: true, layout: LAYOUT_CLASSES }).get('main.tex'))
@@ -649,7 +649,7 @@ describe('the prose a paper keeps in a macro of no argument (storedBodies: 2608.
     const tex = new TextDecoder().decode(originalFiles(p, { layout: LAYOUT_CLASSES }).get('main.tex'))
     expect(tex).toContain(`\\newcommand{\\KW}{\\leavevmode\\axtmark{${id}s}Constrained lasso; solution path; active-set method; formal verification\\axtend{${id}e}}`)
     // (the call stays its unit's placeholder; one called twice is set twice: no mark)
-    expect(tex).toMatch(/Keywords:\\axtend\{\d+e\}\} \\axtpma\{p\d+\.\d+a\}\\KW\n/)
+    expect(tex).toMatch(/Keywords:\\axtend\{\d+e\}\} \\axtpmapa\{\d+\.\d+\}\\KW\n/)
     expect(tex).toContain('\\newcommand{\\Note}{A remark the paper repeats in two places of its text.}')
   })
   it('counts a macro\'s expansions through the macros that hold its calls: one called once inside one called twice is set twice, no mark', () => {

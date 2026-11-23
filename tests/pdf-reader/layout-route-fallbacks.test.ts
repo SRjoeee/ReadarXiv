@@ -68,21 +68,21 @@ describe('an argument TeX reads verbatim (2610.19860): no mark of ours inside it
     // (llncs.cls' \\AtBeginDocument{\\@ifundefined{url}{\\def\\url#1{#1}}{}} read as \\url's definition: its argument a group,
     // the address in it a placeholder of its own, which hyperref's \\url, in force, would print with its marks)
     expect(marked([text('The code is at '), open('\\url{'), ph('https://github.com/a/b-c'), close(), text(' with '), ph('$x$'), text(' and '), ph('\\cite{k}'), text('.')])).toEqual([
-      'text', 'open \\url{', 'ph https://github.com/a/b-c', 'close }', 'text', 'ph \\axtpmm{p0.5a}', 'ph $x$', 'ph \\axtpm{p0.5b}', 'text', 'ph \\axtpma{p0.7a}', 'ph \\cite{k}', 'ph \\axtpm{p0.7b}', 'text'])
+      'text', 'open \\url{', 'ph https://github.com/a/b-c', 'close }', 'text', 'ph \\axtpmmpa{0.5}', 'ph $x$', 'ph \\axtpmpb{0.5}', 'text', 'ph \\axtpmapa{0.7}', 'ph \\cite{k}', 'ph \\axtpmpb{0.7}', 'text'])
     // (as a placeholder, the whole \\url its own marks, around it)
-    expect(marked([text('At '), ph('\\url{https://a.b}'), text('.')])).toEqual(['text', 'ph \\axtpma{p0.1a}', 'ph \\url{https://a.b}', 'ph \\axtpm{p0.1b}', 'text'])
+    expect(marked([text('At '), ph('\\url{https://a.b}'), text('.')])).toEqual(['text', 'ph \\axtpmapa{0.1}', 'ph \\url{https://a.b}', 'ph \\axtpmpb{0.1}', 'text'])
   })
   it('\\href: none in its first argument, options or not; its second, the link\'s text, keeps them', () => {
-    expect(marked([text('See '), open('\\href{'), ph('https://a.b'), close(), text(' and '), ph('$y$')])).toEqual(['text', 'open \\href{', 'ph https://a.b', 'close }', 'text', 'ph \\axtpmm{p0.5a}', 'ph $y$', 'ph \\axtpm{p0.5b}'])
+    expect(marked([text('See '), open('\\href{'), ph('https://a.b'), close(), text(' and '), ph('$y$')])).toEqual(['text', 'open \\href{', 'ph https://a.b', 'close }', 'text', 'ph \\axtpmmpa{0.5}', 'ph $y$', 'ph \\axtpmpb{0.5}'])
     expect(marked([text('See '), open('\\href[pdfnewwindow]{'), ph('https://a.b'), close()])).toEqual(['text', 'open \\href[pdfnewwindow]{', 'ph https://a.b', 'close }'])
-    expect(marked([text('See '), open('\\href{https://a.b}{'), text('the '), ph('$z$'), text(' site'), close()])).toEqual(['text', 'open \\href{https://a.b}{', 'text', 'ph \\axtpmm{p0.3a}', 'ph $z$', 'ph \\axtpm{p0.3b}', 'text', 'close }'])
+    expect(marked([text('See '), open('\\href{https://a.b}{'), text('the '), ph('$z$'), text(' site'), close()])).toEqual(['text', 'open \\href{https://a.b}{', 'text', 'ph \\axtpmmpa{0.3}', 'ph $z$', 'ph \\axtpmpb{0.3}', 'text', 'close }'])
   })
   it('\\nolinkurl, \\path and \\burl the same, a group inside too; a command of another name is no such one', () => {
     for (const cmd of ['\\nolinkurl{', '\\path{', '\\burl{', '\\protect\\url{', '\\url {']) {
       expect(marked([text('At '), open(cmd), open('{', 2), ph('$v$'), close(2), ph('a@b.c'), close(), text('.')]), cmd).toEqual(['text', `open ${cmd}`, 'open {', 'ph $v$', 'close }', 'ph a@b.c', 'close }', 'text'])
     }
     for (const cmd of ['\\myurl{', '\\urlx{', '\\textbf{', '{']) {
-      expect(marked([text('At '), open(cmd), ph('$v$'), close(), text('.')]), cmd).toEqual(['text', `open ${cmd}`, 'ph \\axtpmm{p0.2a}', 'ph $v$', 'ph \\axtpm{p0.2b}', 'close }', 'text'])
+      expect(marked([text('At '), open(cmd), ph('$v$'), close(), text('.')]), cmd).toEqual(['text', `open ${cmd}`, 'ph \\axtpmmpa{0.2}', 'ph $v$', 'ph \\axtpmpb{0.2}', 'close }', 'text'])
     }
   })
 })
@@ -98,7 +98,7 @@ describe('a class\'s fallback definition (2610.19860\'s llncs.cls): not the comm
     const CLS = '\\NeedsTeXFormat{LaTeX2e}\\ProvidesClass{llncs}\\LoadClass{article}\n\\AtBeginDocument{\\@ifundefined{url}{\\def\\url#1{#1}}{}}\n'
     const p = openPaper(new Map([['main.tex', enc(`\\documentclass{llncs}\n\\usepackage{hyperref}\n\\begin{document}\nThe code is available at\\newline\n\\url{https://github.com/a/b-c} with $x$.\n\\end{document}\n`)], ['llncs.cls', enc(CLS)]]))
     const marked = ((layoutMarking(p.units, LAYOUT_CLASSES, { lines: false }).units[0]?.pieces ?? []) as { t: string; src?: string }[]).map(q => q.src ?? q.t)
-    expect(marked).toEqual(['text', '\\newline', 'text', '\\axtpma{p0.3a}', '\\url{https://github.com/a/b-c}', '\\axtpm{p0.3b}', 'text', '\\axtpmm{p0.5a}', '$x$', '\\axtpm{p0.5b}', 'text'])
+    expect(marked).toEqual(['text', '\\newline', 'text', '\\axtpmapa{0.3}', '\\url{https://github.com/a/b-c}', '\\axtpmpb{0.3}', 'text', '\\axtpmmpa{0.5}', '$x$', '\\axtpmpb{0.5}', 'text'])
   })
   it('each guard of the name being undefined, \\unless inverting a conditional, and \\providecommand', () => {
     for (const guard of [

@@ -18,7 +18,7 @@ import {
   preambleUnits,
 } from '../src/compile/guard.ts'
 import { openPaper, originalFiles, type Spans } from '../src/compile/live.ts'
-import { LAYOUT_CLASSES, MARK_CS } from '../src/marks/marks.ts'
+import { GATED_CS, LAYOUT_CLASSES, MARK_CS, markOf } from '../src/marks/marks.ts'
 
 const enc = (s: string) => new TextEncoder().encode(s)
 const dec = (b: Uint8Array | undefined) => new TextDecoder().decode(b ?? new Uint8Array(0))
@@ -61,11 +61,11 @@ const error = (message: string, level: string, line: number, before: string, aft
 describe("the marks our TeX writes beside a paper's own macros and calls, read as ours at each place", () => {
   it('are in the marked original as layoutMarking writes them', () => {
     const { lineOf } = marked()
-    expect(lineOf('\\axthpk{p').text).toBe(
-      '\\axthpk{p2.2a}\\bert{} \\leavevmode\\axtmark{2s}is a model of words.\\axtend{2e}',
+    expect(lineOf('\\axthpkpa{').text).toBe(
+      '\\axthpkpa{2.2}\\bert{} \\leavevmode\\axtmark{2s}is a model of words.\\axtend{2e}',
     )
-    expect(lineOf('\\axttg{p').text).toBe(
-      '\\axtlines{3}\\leavevmode\\axtmark{3s}We read the words of Smith\\axtend{3e}\\axttg{p3.1g}\\etal',
+    expect(lineOf('\\axttgpg{').text).toBe(
+      '\\axtlines{3}\\leavevmode\\axtmark{3s}We read the words of Smith\\axtend{3e}\\axttgpg{3.1}\\etal',
     )
     expect(lineOf('\\axtcall{5}').text).toBe(
       '\\author{\\leavevmode\\axtmark{1s}Ann Lee\\axtend{1e} \\axtcall{5}\\and \\leavevmode\\axtmark{5s}Bob Ray\\axtend{5e}}',
@@ -74,11 +74,11 @@ describe("the marks our TeX writes beside a paper's own macros and calls, read a
 
   it("a paper's own error beside \\axthpk or \\axttg is the unmarked original's: errorUnits less ownErrors names no unit", () => {
     const { paper, files, lines, lineOf } = marked()
-    const head = lineOf('\\axthpk{p'),
-      tail = lineOf('\\axttg{p')
+    const head = lineOf('\\axthpkpa{'),
+      tail = lineOf('\\axttgpg{')
     // (\bert's \foo at the paragraph's head, \etal's at its end, as the unmarked original's log has them, and as the marked one's)
     const original = `${TEX}${error('Undefined control sequence.', '\\bert ->BERT\\foo ', 8, '\\bert', '{} is a model of words.')}${error('Undefined control sequence.', '\\etal ->et al.\\foo ', 10, '...e read the words of Smith\\etal', '')}`
-    const log = `${TEX}${error('Undefined control sequence.', '\\bert ->BERT\\foo ', head.n, '\\axthpk{p2.2a}\\bert', '{} \\leavevmode\\axtmark{2s}is a model of words.\\axtend{2e}')}${error('Undefined control sequence.', '\\etal ->et al.\\foo ', tail.n, '...ds of Smith\\axtend{3e}\\axttg{p3.1g}\\etal', '')}`
+    const log = `${TEX}${error('Undefined control sequence.', '\\bert ->BERT\\foo ', head.n, '\\axthpkpa{2.2}\\bert', '{} \\leavevmode\\axtmark{2s}is a model of words.\\axtend{2e}')}${error('Undefined control sequence.', '\\etal ->et al.\\foo ', tail.n, '...ds of Smith\\axtend{3e}\\axttgpg{3.1}\\etal', '')}`
     // (each stands in its unit's line: read as ours, the unit would be unmarked)
     expect(errorUnits(paper, log, files, lines)).toEqual(new Set([2, 3]))
     expect(errorUnits(paper, log, files, lines, ownErrors(original))).toEqual(new Set())
@@ -86,27 +86,27 @@ describe("the marks our TeX writes beside a paper's own macros and calls, read a
 
   it("the aux and the lists: one written by name where no text is set is out of place, in a list entry's text not", () => {
     // (a write that does not expand: each by name, a space after its control word, as \write prints it)
-    expect(marksOutOfPlace('\\@writefile{toc}{\\etoc@depthtag {x\\axthpk {p2.2a}\\bert }}\n')).toEqual(['p2.2a'])
-    expect(marksOutOfPlace('\\newlabel{k\\axtend {3e}\\axttg {p3.1g}}{{1}{3}}\n')).toEqual(['3e', 'p3.1g'])
+    expect(marksOutOfPlace('\\@writefile{toc}{\\etoc@depthtag {x\\axthpkpa {2.2}\\bert }}\n')).toEqual(['p2.2a'])
+    expect(marksOutOfPlace('\\newlabel{k\\axtend {3e}\\axttgpg {3.1}}{{1}{3}}\n')).toEqual(['3e', 'p3.1g'])
     expect(marksOutOfPlace('\\etoc@depthtag {Ann Lee\\axtend {1e} \\axtcall {5}\\and }\n')).toEqual(['1e', '5'])
     expect(marksOutOfPlace('\\@writefile{toc}{\\etoc@depthtag {\\axtbrname {p7.3}}}\n')).toEqual(['p7.3'])
     // (an author block in a contents entry's text, set as text there)
     expect(
       marksOutOfPlace(
-        '\\@writefile{toc}{\\contentsline {author}{\\axtmark {1s}Ann Lee\\axtend {1e}\\axtcall {5}\\axthpk {p5.0a}\\me }{1}{}}\n',
+        '\\@writefile{toc}{\\contentsline {author}{\\axtmark {1s}Ann Lee\\axtend {1e}\\axtcall {5}\\axthpkpa {5.0}\\me }{1}{}}\n',
       ),
     ).toEqual([])
     const aux =
-      '\\@writefile{toc}{\\etoc@depthtag {x\\axthpk {p2.2a}\\bert \\axttg {p3.1g}\\axtcall {5}\\axtbrname {p4.1}}}\n'
+      '\\@writefile{toc}{\\etoc@depthtag {x\\axthpkpa {2.2}\\bert \\axttgpg {3.1}\\axtcall {5}\\axtbrname {p4.1}}}\n'
     expect(auxUnits({ aux }, 9, 'main')).toEqual(new Set([2, 3, 5, 4]))
   })
 
   it("a class's verbatim copy of our source cut inside \\axthpk is cut inside our TeX: its unit", () => {
     const { files, lineOf } = marked()
-    const ours = lineOf('\\axthpk{p').text
+    const ours = lineOf('\\axthpkpa{').text
     // (cas-common's abstract: the copy lost the body's first token, our head mark's name, its argument left as text)
     const copy = (text: string) => ({ files: new Map([['x.abs', enc(`${text}\n`)]]) })
-    expect(cutCopyUnits(copy(ours.slice('\\axthpk'.length)), files, 9)).toEqual(new Set([2]))
+    expect(cutCopyUnits(copy(ours.slice('\\axthpkpa'.length)), files, 9)).toEqual(new Set([2]))
     // (a copy of the whole line loses nothing)
     expect(cutCopyUnits(copy(ours), files, 9)).toEqual(new Set())
   })
@@ -119,7 +119,7 @@ describe("the marks our TeX writes beside a paper's own macros and calls, read a
     // with a paper's macro, and the second author's call)
     expect(
       preambleUnits(
-        at(5, '\\author{\\protect\\axthpk{p1.0a}', '\\myname{} \\leavevmode\\axtmark{1s}Lee\\axtend{1e}}'),
+        at(5, '\\author{\\protect\\axthpkpa{1.0}', '\\myname{} \\leavevmode\\axtmark{1s}Lee\\axtend{1e}}'),
         9,
         range,
       ),
@@ -136,19 +136,21 @@ describe("the marks our TeX writes beside a paper's own macros and calls, read a
   it('MARK_IN_CONTEXT: the level of context TeX shows reading one names its unit', () => {
     const ctx = (level: string, place: string, rest: string) =>
       `! Undefined control sequence.\n${level}${place}\n${' '.repeat(level.length + place.length)}${rest}\nl.12 }\n\n`
-    expect(contextUnits(ctx('<argument> ', '...words of Smith\\axttg {p3.1g}\\etal ', ''), 9)).toEqual(new Set([3]))
-    expect(contextUnits(ctx('<argument> ', '\\axthpk {p2.2a}\\bert ', '{} is'), 9)).toEqual(new Set([2]))
+    expect(contextUnits(ctx('<argument> ', '...words of Smith\\axttgpg {3.1}\\etal ', ''), 9)).toEqual(new Set([3]))
+    expect(contextUnits(ctx('<argument> ', '\\axthpkpa {2.2}\\bert ', '{} is'), 9)).toEqual(new Set([2]))
     expect(contextUnits(ctx('\\@author ->', '\\axtcall {5}\\and ', 'Bob Ray'), 9)).toEqual(new Set([5]))
   })
 })
 
 describe("every reader of the guard reads every mark of ours (marks.ts MARK_CS, the marked original's TeX's: tests/mirrors.test.ts)", () => {
-  // (each mark with a placeholder's argument, `p3.1a`: unit 3 whichever mark carries it)
+  // (each mark with a placeholder's argument, `p3.1a`, a gated mark's its digits alone, `3.1`, its letters the command's: unit
+  // 3 whichever mark carries it)
   it.each([...MARK_CS])('\\%s', (name) => {
-    const mark = `\\${name}{p3.1a}`,
-      written = `\\${name} {p3.1a}`
-    // (the aux and the lists, where no text is set)
-    expect(marksOutOfPlace(`\\@writefile{toc}{\\etoc@depthtag {x${written}}}\n`)).toEqual(['p3.1a'])
+    const arg = GATED_CS.includes(name) ? '3.1' : 'p3.1a',
+      mark = `\\${name}{${arg}}`,
+      written = `\\${name} {${arg}}`
+    // (the aux and the lists, where no text is set: by the point's name)
+    expect(marksOutOfPlace(`\\@writefile{toc}{\\etoc@depthtag {x${written}}}\n`)).toEqual([markOf(mark)?.name ?? arg])
     // (an error's line of input as the unmarked original has it, and the context that shows what TeX read: the paper's own error
     // with the mark taken out, ours without the original's)
     const log = (input: string) =>
@@ -175,11 +177,11 @@ describe("a paper's own error beside what the marking writes around a mark keys 
 
   it("the \\protect the marking writes before a front unit's mark", () => {
     // (an author block whose head is a paper's macro, its error at that macro: the head mark robust, `\protect\axthpk`)
-    const marked = log('\\author{\\protect\\axthpk{p1.0a}\\myname', '{} \\leavevmode\\axtmark{1s}Lee\\axtend{1e}}')
+    const marked = log('\\author{\\protect\\axthpkpa{1.0}\\myname', '{} \\leavevmode\\axtmark{1s}Lee\\axtend{1e}}')
     expect(contextUnits(marked, 9)).toEqual(new Set([3]))
     expect(contextUnits(marked, 9, ownOf('\\author{\\myname', '{} Lee}'))).toEqual(new Set())
     // (a footnote's call in an author block, `\protect\axtpma` before it)
-    const call = log('Ann Lee\\protect\\axtpma{n1.2a}\\thanks', '{A note.}\\axtend{1e}')
+    const call = log('Ann Lee\\protect\\axtpmana{1.2}\\thanks', '{A note.}\\axtend{1e}')
     expect(contextUnits(call, 9)).toEqual(new Set([3]))
     expect(contextUnits(call, 9, ownOf('Ann Lee\\thanks', '{A note.}'))).toEqual(new Set())
   })
@@ -195,10 +197,10 @@ describe("a paper's own error beside what the marking writes around a mark keys 
   it("a paper's own \\protect beside a mark of ours stays the paper's", () => {
     // (the paper's \protect\cite, a placeholder whose opening mark the marking writes before the prefix: in a body unit, and in a
     // front unit, robust, ours before the paper's)
-    const body = log('Words \\axtpma{p3.2a}\\protect\\cite', '{x}\\axtpm{p3.2b}.')
+    const body = log('Words \\axtpmapa{3.2}\\protect\\cite', '{x}\\axtpmpb{3.2}.')
     expect(contextUnits(body, 9, ownOf('Words \\protect\\cite', '{x}.'))).toEqual(new Set())
     expect(contextUnits(body, 9, ownOf('Words \\cite', '{x}.'))).toEqual(new Set([3]))
-    const front = log('Ann Lee \\protect\\axtpma{p1.2a}\\protect\\cite', '{x}')
+    const front = log('Ann Lee \\protect\\axtpmapa{1.2}\\protect\\cite', '{x}')
     expect(contextUnits(front, 9, ownOf('Ann Lee \\protect\\cite', '{x}'))).toEqual(new Set())
     expect(contextUnits(front, 9, ownOf('Ann Lee \\cite', '{x}'))).toEqual(new Set([3]))
   })
