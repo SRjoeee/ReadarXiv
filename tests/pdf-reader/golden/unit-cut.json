@@ -1,5 +1,5 @@
 {
- "pipeline": "116",
+ "pipeline": "118",
  "units": {
   "sample-1": [
    "heading: text",
@@ -119,6 +119,25 @@
    "author: open,open,text,ph,close,close,text",
    "affiliation: open,ph,text,close,text",
    "affiliation: open,text,close,text"
+  ],
+  "par-defs": [
+   "para: open,text,close,text",
+   "para: text",
+   "para: text",
+   "para: ph,text",
+   "para: open,text,close,text",
+   "para: text",
+   "para: open,text,close,text"
+  ],
+  "llncs-rows": [
+   "heading: text",
+   "author: text,ph,text",
+   "affiliation: text",
+   "para: ph,text",
+   "author: text,ph,text",
+   "author: text,ph,text",
+   "author: text,ph",
+   "affiliation: text"
   ],
   "made-bbl": [
    "para: text,ph,text,ph,text"
