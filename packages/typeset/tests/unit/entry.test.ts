@@ -2530,6 +2530,25 @@ describe('an element drawn as the page’s text in the font state TeX set its gl
       ['LAN', 0.7],
     ])
   })
+  it('draws an element at the size TeX set its glyphs at where it states one apart from the run’s: a `\\small` macro’s text', () => {
+    // (a paper's macro setting a name `{\\small\\texttt{…}}` at 8 in 10 pt text, a citation set larger than its cell: drawn at the
+    // run's size, its stated size dropped (El.style.size), as a figure label's run of its own size was; faked small capitals
+    // state their small letters' size and the share they are set at, El.style.sc: drawn as before, at the share)
+    expect(sizes(member({ els: [['1', el('ResNet', 100, { role: 'mono', size: 8, design: 'CMTT8' })]] }), '1')).toEqual([
+      ['ResNet', 0.8],
+    ])
+    expect(
+      sizes(
+        member({ els: [['1', el('LivePlan', 100, { role: 'serif', size: 7, sc: 0.7, design: 'NimbusRomNo9L-Regu' })]] }),
+        '1',
+      ),
+    ).toEqual([
+      ['L', 1],
+      ['IVE', 0.7],
+      ['P', 1],
+      ['LAN', 0.7],
+    ])
+  })
   it('waits for an element’s own face as for a run’s: the page’s faces hold it, never a face the run alone needs', () => {
     // (an element drawn in its own face is a face the page needs: the lay asks it of the metrics (B.cover over every token) and
     // the page waits for it (Page.wait.faces), as for any run's, so the reader loads its slices before it measures and paints.
