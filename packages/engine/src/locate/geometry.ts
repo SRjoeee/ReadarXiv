@@ -278,62 +278,9 @@ export function lineGeometry(w: Work, owned: Owned): void {
       ...(caps.ratio !== undefined ? { sc: caps.ratio } : {}),
       ...(caps.caps ? { caps: 1 as const } : {}),
     }
-    // (the fill and the face TeX set its text in, group by group (group-style.ts): a group's fill where it is not the fill
-    // around it, a link's that hyperref colours, and the face of a group whose command names none where it is not the face
-    // around it, stated for the typesetter to draw its translation in; and where a group or a switch's run is set apart so,
-    // the unit's own fill is its own text's, not the one most of all its glyphs hold, which a link holding most of its letters
-    // makes its own. Its weight and slant, its base, are always the reading's (group-style.ts: its own text's glyphs, its marks
-    // and the symbols it draws as text included, else each read outside the scopes that set it, an \emph run's turned back):
-    // the typesetter draws its translation's text outside every group in them and reads nothing more of its own
-    // (docs/PDF-READER.md §18.114). And its size, where it has text of its own
-    // beside its groups, is that text's (its letters in no group; faked small capitals aside): every group TeX set at another
-    // size states its own (marks/faces.ts), so the base is the size of the text no group claims; where every letter is a
-    // group's, the median of them all, the size most of its text is set at, which paces the lay's knobs)
-    const colourSwitch = (el: Extract<Piece, { t: 'el' }>) => classOf.get(el.id)?.colour !== undefined
-    const faceSwitch = (el: Extract<Piece, { t: 'el' }>) => {
-      const c = classOf.get(el.id)
-      return !!c?.bare && !!c.cmd && namesFace(commandStyleOf(`\\${c.cmd}`))
-    }
-    const switches = (el: Extract<Piece, { t: 'el' }>) => colourSwitch(el) || faceSwitch(el)
-    // (not a figure text's: its groups are its runs of glyphs in another face than its own, which is the face of most of its
-    // glyphs by their definition (ink.ts figureRuns), its text in its run's order, not its glyphs' stream order: read again in
-    // the stream's, 2610.37668v1's "PSNR 33.42 dB" took its italic run's face for its own)
-    if (unit && !mem.figure && !unit.figure && mem.text.length && hasScopes(unit.content, switches)) {
-      const sorted = [...mem.text].sort((x, y) => x - y)
-      const g = groupStyleOf(
-        unit.content,
-        sorted.map(gA),
-        (el) => classOf.get(el.id)?.text,
-        colourSwitch,
-        faceSwitch,
-        (el) => {
-          const c = classOf.get(el.id)
-          return c?.cmd ? commandStyleOf(`\\${c.cmd}`) : undefined
-        },
-        // (a symbol the typesetter draws as text where it stands, not raised: its own glyphs)
-        (el) => {
-          const c = classOf.get(el.id)
-          return c?.cls === 'symbol' && c.sym && !c.sym[1] ? (mem.els.get(el.id) ?? []).map(gA) : undefined
-        },
-      )
-      if (g.fill.groups.length) mem.spanFills = g.fill.groups
-      if (g.fill.apart && g.fill.own !== undefined) {
-        if (g.fill.own > 0) mem.style.fill = g.fill.own
-        else delete mem.style.fill
-      }
-      if (g.face.groups.length) mem.spanFaces = g.face.groups
-      if (g.face.several.length) mem.spanSeveral = [...(mem.spanSeveral ?? []), ...g.face.several]
-      if (g.face.own) {
-        if (g.face.own.bold) mem.style.bold = 1
-        else delete mem.style.bold
-        if (!g.face.own.italic) delete mem.style.slant
-        else mem.style.slant ??= 1
-      }
-      const ownSize = unitSize(
-        g.text.map((q) => gA(sorted[q] as number)).filter((x) => /\S/.test(x.u) && !caps.small.has(x)),
-      )
-      if (ownSize !== undefined) mem.style.size = ownSize
-    }
+    // (the fill and the face TeX set its text in, group by group, and its base: readGroupStyle, off its level text's glyphs in
+    // stream order; a unit TeX set turned is read off its turned glyphs, in turned-frames.ts, by the same reading)
+    readGroupStyle(w, mem, unit, [...mem.text].sort((x, y) => x - y).map(gA), caps.small)
     // (a babel name's own text, its counter aside: S.names leaves it the original's where the target's word is it already, and
     // sets the counter after the target's word)
     if (mem.name !== undefined) {
@@ -1177,4 +1124,70 @@ function roomOf(
     ...(runs.length ? { runs } : {}),
     ...(tex.sep !== undefined ? { sep: tex.sep } : {}),
   }
+}
+
+/**
+ * The fill and the face TeX set a member's text in, group by group (group-style.ts): a group's fill where it is not the fill
+ * around it, a link's that hyperref colours, and the face of a group whose command names none where it is not the face
+ * around it, stated for the typesetter to draw its translation in; and where a group or a switch's run is set apart so, the
+ * unit's own fill is its own text's, not the one most of all its glyphs hold, which a link holding most of its letters makes
+ * its own. Its weight and slant, its base, are always the reading's (group-style.ts: its own text's glyphs, its marks and the
+ * symbols it draws as text included, else each read outside the scopes that set it, an \emph run's turned back): the
+ * typesetter draws its translation's text outside every group in them and reads nothing more of its own (docs/PDF-READER.md
+ * §18.114). And its size, where it has text of its own beside its groups, is that text's (its letters in no group; faked
+ * small capitals aside, `small`): every group TeX set at another size states its own (marks/faces.ts), so the base is the
+ * size of the text no group claims; where every letter is a group's, the median of them all, the size most of its text is set
+ * at, which paces the lay's knobs. Read off `glyphs`, the member's text's as TeX set them in stream order: a level member's
+ * (geometry.ts), a turned one's the turned reading's (turned-frames.ts frameTurned): one reading of both. Not a figure text's:
+ * its groups are its runs of glyphs in another face than its own, which is the face of most of its glyphs by their
+ * definition (ink.ts figureRuns), its text in its run's order, not its glyphs' stream order: read again in the stream's,
+ * 2610.37668v1's "PSNR 33.42 dB" took its italic run's face for its own
+ */
+export function readGroupStyle(
+  w: Work,
+  mem: Member,
+  unit: Work['units'][number] | null | undefined,
+  glyphs: readonly StyleGlyph[],
+  small: ReadonlySet<StyleGlyph>,
+): void {
+  if (!unit || mem.figure || unit.figure || !glyphs.length) return
+  const { gA } = w.ix
+  const classOf = new Map(unit.classes ?? [])
+  const colourSwitch = (el: Extract<Piece, { t: 'el' }>) => classOf.get(el.id)?.colour !== undefined
+  const faceSwitch = (el: Extract<Piece, { t: 'el' }>) => {
+    const c = classOf.get(el.id)
+    return !!c?.bare && !!c.cmd && namesFace(commandStyleOf(`\\${c.cmd}`))
+  }
+  if (!hasScopes(unit.content, (el) => colourSwitch(el) || faceSwitch(el))) return
+  const g = groupStyleOf(
+    unit.content,
+    glyphs,
+    (el) => classOf.get(el.id)?.text,
+    colourSwitch,
+    faceSwitch,
+    (el) => {
+      const c = classOf.get(el.id)
+      return c?.cmd ? commandStyleOf(`\\${c.cmd}`) : undefined
+    },
+    // (a symbol the typesetter draws as text where it stands, not raised: its own glyphs)
+    (el) => {
+      const c = classOf.get(el.id)
+      return c?.cls === 'symbol' && c.sym && !c.sym[1] ? (mem.els.get(el.id) ?? []).map(gA) : undefined
+    },
+  )
+  if (g.fill.groups.length) mem.spanFills = g.fill.groups
+  if (g.fill.apart && g.fill.own !== undefined) {
+    if (g.fill.own > 0) mem.style.fill = g.fill.own
+    else delete mem.style.fill
+  }
+  if (g.face.groups.length) mem.spanFaces = g.face.groups
+  if (g.face.several.length) mem.spanSeveral = [...(mem.spanSeveral ?? []), ...g.face.several]
+  if (g.face.own) {
+    if (g.face.own.bold) mem.style.bold = 1
+    else delete mem.style.bold
+    if (!g.face.own.italic) delete mem.style.slant
+    else mem.style.slant ??= 1
+  }
+  const ownSize = unitSize(g.text.map((q) => glyphs[q] as StyleGlyph).filter((x) => /\S/.test(x.u) && !small.has(x)))
+  if (ownSize !== undefined) mem.style.size = ownSize
 }
