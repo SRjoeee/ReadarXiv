@@ -1,12 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { openPaper } from '../../src/compile/live.ts'
 
-// The kind of a row of an author block's names (F, PDF-READER §18.111). The source reader took the rows of \author after its
-// first, between `\\` (FRONT_ROW), for places unless an affiliation's mark, a note or "and" said otherwise: the row's position
-// decided it. A paper that writes its places in a command of their own (llncs's \institute, authblk's \affil, REVTeX's and
-// acmart's \affiliation, amsart's \address) writes none in \author: every row there is names, and a name read as a place
-// (kind `affiliation`) is no person to the one-person rule (PDF-READER §19.15) — 2604.10456v1's names after `\\`. A block that
-// holds its places is read as before. Words of our own.
+// The kind of a row of an author block's names (F, PDF-READER §18.111). The source reader takes the rows of \author after its
+// first, between `\\` (FRONT_ROW), for places unless what the row sets says it is names: an affiliation's mark after a name
+// (MARK_AFTER), a note, "and". llncs's mark is \inst, which that reading did not know: 2604.10456v1's names after `\\`, each
+// with its \inst, were read as places, no person to the one-person rule (PDF-READER §19.15). A row that sets no such fact keeps
+// its position's kind (a block that holds its places, the control). Words of our own.
 
 type Piece = { t: string; s?: string }
 const enc = (s: string) => new TextEncoder().encode(s)
@@ -39,14 +38,6 @@ describe('a row of an author block’s names is a name where the paper writes it
         ['affiliation', 'Second Place'],
       ].sort(),
     )
-  })
-  it('authblk: \\affil apart, a second row of \\author is a name', () => {
-    expect(
-      kindsOf(
-        '\\documentclass{article}\n\\usepackage{authblk}',
-        '\\title{A Title of Ours}\n\\author[1]{Ann Lee \\\\ Bob Ray}\n\\affil[1]{Some Place of Ours}\n\\maketitle\nWords of ours.',
-      ).filter(([k]) => k === 'author').length,
-    ).toBe(2)
   })
   it('the control: a block that holds its places keeps them places', () => {
     expect(

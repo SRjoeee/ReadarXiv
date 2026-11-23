@@ -4084,11 +4084,12 @@ const ROW_LEAD =
  *  \\IEEEauthorrefmark, a style's \\affmark. A row of names sets its marks after each name, never before the first */
 const MARK_FIRST =
   /^(?:\$\s*(?:\{\s*\})?\s*\^|\\\(\s*(?:\{\s*\})?\s*\^|\\(?:textsuperscript|IEEEauthorrefmark|affmark)(?![A-Za-z@]))/
-/** the same mark after a name's last letter (`Marcelo Kuperman$^{3,4}$`): a row of names, wherever it stands in its block —
- *  names that run over two rows, their places set elsewhere (2608.14893's second row of names, read as a place). A place opens
+/** the same mark after a name's last letter (`Marcelo Kuperman$^{3,4}$`, llncs's `Ann Lee\\inst{1}`): a row of names, wherever it
+ *  stands in its block — names that run over two rows, their places set elsewhere (2608.14893's second row of names, read as a
+ *  place; 2604.10456v1's names after `\\\\` each with its \\inst, read as places, no person to the one-person rule). A place opens
  *  with its mark, never sets one after its words */
 const MARK_AFTER =
-  /[^\s{$\\]\s*(?:\$\s*(?:\{\s*\})?\s*\^|\\\(\s*(?:\{\s*\})?\s*\^|\\(?:textsuperscript|IEEEauthorrefmark|affmark)(?![A-Za-z@]))/
+  /[^\s{$\\]\s*(?:\$\s*(?:\{\s*\})?\s*\^|\\\(\s*(?:\{\s*\})?\s*\^|\\(?:textsuperscript|IEEEauthorrefmark|affmark|inst)(?![A-Za-z@]))/
 /** a row of an author block that opens with the word "and" (`\\\\and Rafael F. Schaefer, \\emph{Senior Member, IEEE}`, IEEEtran's
  *  journal form, 2610.21880v1): the list of names its row before broke, never a place */
 const AND_FIRST = /^and(?![A-Za-z@])/

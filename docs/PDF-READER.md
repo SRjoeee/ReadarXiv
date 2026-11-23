@@ -9560,6 +9560,11 @@ expansion took off (all in this section's last item), and the rest are the holes
   throws away after `\appendix`. What TeX printed of it, where it printed any, is an ink unit's, asked as that. The units the
   reader asks a translator for held it all the same, its row asked and never shown; it is now left out of them, unless another
   unit asked names it in its content (a nested unit). Every other unit is asked as before.
+- **A name after `\\` is a name by what its row sets** (`source/latex-front.ts` `MARK_AFTER`). The source reader takes the
+  rows of an author block's names after its first for places unless the row says it is names: an affiliation's mark after a
+  name, a note, "and". llncs's affiliation mark is `\inst`, which that reading did not know: 2604.10456v1's names after `\\`,
+  each with its `\inst`, were read as places (kind `affiliation`), no person to the one-person rule (§19.15). A row that sets no
+  such fact keeps its position's kind: a name and a place written alike in one block are not told apart by the source.
 - **Their native cases** (our own content, pdfLaTeX, XeLaTeX, LuaLaTeX and latex, with hyperref and without; every text item
   of the marked original at this round's head against the paper's own unmarked compile, to 0.01 pt): the note alone after a
   title's `\maketitle` in a group, after `\renewcommand{\thefootnote}`, of three forced lines in `{\let\thefootnote\relax…}`,
