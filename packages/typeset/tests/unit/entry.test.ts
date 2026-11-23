@@ -2534,12 +2534,14 @@ describe('an element drawn as the page’s text in the font state TeX set its gl
     // (a paper's macro setting a name `{\\small\\texttt{…}}` at 8 in 10 pt text, a citation set larger than its cell: drawn at the
     // run's size, its stated size dropped (El.style.size), as a figure label's run of its own size was; faked small capitals
     // state their small letters' size and the share they are set at, El.style.sc: drawn as before, at the share)
-    expect(sizes(member({ els: [['1', el('ResNet', 100, { role: 'mono', size: 8, design: 'CMTT8' })]] }), '1')).toEqual([
-      ['ResNet', 0.8],
-    ])
+    expect(sizes(member({ els: [['1', el('ResNet', 100, { role: 'mono', size: 8, design: 'CMTT8' })]] }), '1')).toEqual(
+      [['ResNet', 0.8]],
+    )
     expect(
       sizes(
-        member({ els: [['1', el('LivePlan', 100, { role: 'serif', size: 7, sc: 0.7, design: 'NimbusRomNo9L-Regu' })]] }),
+        member({
+          els: [['1', el('LivePlan', 100, { role: 'serif', size: 7, sc: 0.7, design: 'NimbusRomNo9L-Regu' })]],
+        }),
         '1',
       ),
     ).toEqual([

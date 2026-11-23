@@ -3409,6 +3409,49 @@ describe('an element’s ink is what TeX set for it', () => {
     expect([formula.text, formula.style?.sc]).toEqual(['(HR)', undefined])
   })
 
+  it('states an element’s size the one its glyphs share; of several, the member’s: the size of none of its runs (El.style.size)', () => {
+    // (the typesetter draws an element as its text at its stated size (TStyle.rel): `\\code`, every glyph at 8 in 10 pt text, at
+    // 8; 2608.00812v1's `(i)`, its parentheses at 10.38 and its letter at 9.96, at none of them: the most of its glyphs' size, the
+    // parentheses', drew its letter larger than printed. A group of several sizes states none, docs/PDF-READER.md §18.114)
+    const B = docOf([
+      {
+        lines: [
+          { text: 'see ', x: 72, y: 700 },
+          { text: '(i)', x: 96, y: 700 },
+          { text: ' and ', x: 120, y: 700 },
+          { text: 'code', x: 150, y: 700 },
+          { text: ' work', x: 180, y: 700 },
+        ],
+      },
+    ])
+    const page = B.pages[0]!
+    for (const k of [4, 6]) page.glyphs[k]!.size = 10.4
+    for (const k of [12, 13, 14, 15]) page.glyphs[k]!.size = 8
+    page.glyphs = pageGlyphsOf(page.glyphs)
+    const macro = (id: string, src: string) => ({ t: 'el' as const, id, kind: 'macro', src })
+    const content = [text('see '), macro('1', '\\ii'), text(' and '), macro('3', '\\code'), text(' work')]
+    const ins = ownedBy(
+      B,
+      [
+        paraOf(content, [
+          ['1', { cls: 'umacro' }],
+          ['3', { cls: 'umacro' }],
+        ]),
+      ],
+      [
+        [
+          [0, T, -1],
+          [0, E, 1],
+          [0, T, -1],
+          [0, E, 3],
+          [0, T, -1],
+        ],
+      ],
+    )
+    const L = locate(ins, B, align(B, B))
+    expect(elementOf(L, '3').style?.size).toBe(8)
+    expect(elementOf(L, '1').style?.size).toBe(L.members.find((x) => x.unit === 0)!.style.size)
+  })
   it('reads the separation to the next member on the row from the member’s ink end, its element’s box with it (§18.60)', () => {
     // (2609.20976v1 p1, JCAP: "Gautam Bhuyan," then his ORCID icon, an element of his unit (a box), then the next name. The join
     // was read from his glyphs' ink end, the icon left out: the icon's crop travels with the name, so the next one was laid the

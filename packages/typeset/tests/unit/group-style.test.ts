@@ -137,7 +137,8 @@ const sized = (size: number, els: NonNullable<Placed['els']> = [], align: Placed
 /** the drawn items of the member's first line: their text, place and size */
 const itemsOf = (m: Placed, c: Content, to: string) => {
   const r: Row = { id, ok: true, by: 'test', content: c }
-  const laid = layPage(part(m), { get: (k) => (k === id ? r : undefined), done: true }, rulesFor(to), metrics).members[0]!
+  const laid = layPage(part(m), { get: (k) => (k === id ? r : undefined), done: true }, rulesFor(to), metrics)
+    .members[0]!
   expect(laid.state).toBe('laid')
   const [, x0, , items] = laid.lines[0]!
   return {
@@ -212,22 +213,28 @@ describe('a group’s size is the size of everything measured inside it', () => 
         { t: 'span', id: 's1', content: [{ t: 'text', s: '(fett)' }] },
       ],
     } as unknown as Row
-    const paper = {
-      designs: { serif: 'times', sans: 'helvetica', mono: 'courier' },
-      roles: rolesFor('de', 'times', null),
-    } as unknown as PaperReading
     const R = { cjkQuotes: false, floorMin: 0.6, centredPunct: false, compressMax: 2 } as RuleParams
-    const got = figuresOf({ page: 1, ties: [] } as unknown as Part, [label], { get: () => row } as unknown as Rows, {
-      paper,
-      R,
-      metrics,
-    })
-    const items = (got.laid.get(7)?.[0]?.[3] ?? []) as { s: string; x: number; size: number }[]
-    const main = items.find((it) => it.s.startsWith('Gewinn'))!
-    const bold = items.find((it) => it.s.includes('fett'))!
+    const runs = (bases: boolean) => {
+      const paper = {
+        designs: { serif: 'times', sans: 'helvetica', mono: 'courier' },
+        roles: rolesFor('de', 'times', null),
+        bases,
+      } as unknown as PaperReading
+      const got = figuresOf({ page: 1, ties: [] } as unknown as Part, [label], { get: () => row } as unknown as Rows, {
+        paper,
+        R,
+        metrics,
+      })
+      const items = (got.laid.get(7)?.[0]?.[3] ?? []) as { s: string; x: number; size: number }[]
+      return { main: items.find((it) => it.s.startsWith('Gewinn'))!, bold: items.find((it) => it.s.includes('fett'))! }
+    }
+    const { main, bold } = runs(true)
     expect(bold.size / main.size).toBeCloseTo(7 / 12, 6)
     // (the bold run after the label's, by the label's advance at its size)
     expect(bold.x - main.x).toBeCloseTo(em(main.size, main.s), 6)
+    // (a part made before, its runs' sizes a median of several where they stood at several: drawn at the label's, as before)
+    const old = runs(false)
+    expect(old.bold.size).toBe(old.main.size)
   })
   it('a part made before states no base: its style the face of its glyphs whole, the groups read out of it as before', () => {
     // (a unit wholly inside \emph: a part made before states its style italic, its glyphs'; the typesetter's count takes the
@@ -238,7 +245,12 @@ describe('a group’s size is the size of everything measured inside it', () => 
         style,
         spans: [['3', { cmd: 'emph' }]],
       }
-      const r: Row = { id, ok: true, by: 'test', content: [{ t: 'span', id: '3', content: [{ t: 'text', s: 'Ein Satz' }] }] }
+      const r: Row = {
+        id,
+        ok: true,
+        by: 'test',
+        content: [{ t: 'span', id: '3', content: [{ t: 'text', s: 'Ein Satz' }] }],
+      }
       const pt = part(m)
       const laid = layPage(
         bases ? pt : { ...pt, paper: { faces: pt.paper.faces } },
@@ -256,5 +268,32 @@ describe('a group’s size is the size of everything measured inside it', () => 
     expect(emph(italic, false).every(Boolean)).toBe(true)
     expect(emph(upright, true).every(Boolean)).toBe(true)
   })
+  it('a part made before: its stated sizes drawn as before, at the member’s (a size there the most of several glyphs’)', () => {
+    // (before PIPELINE 119 a group's stated face carried its glyphs' most common size, of several too, and an element's style its
+    // glyphs' most common: the typesetter read none of them. Read now, 2609.19644v1's ink small capitals "PREDOPT" (P and O at
+    // 2.51, the rest at 2.01) were drawn with P and O at 2.01, smaller than printed)
+    const sizesOf = (bases: boolean) => {
+      const m = sized(5)
+      const r: Row = {
+        id,
+        ok: true,
+        by: 'test',
+        content: [
+          { t: 'span', id: '3', content: [{ t: 'text', s: 'klein' }] },
+          { t: 'text', s: ' und gross' },
+        ],
+      }
+      const pt = part(m)
+      const laid = layPage(
+        bases ? pt : { ...pt, paper: { faces: pt.paper.faces } },
+        { get: (k) => (k === id ? r : undefined), done: true },
+        rulesFor('de'),
+        metrics,
+      ).members[0]!
+      expect(laid.state).toBe('laid')
+      return laid.lines.flatMap(([, , , items]) => items.flatMap((it) => ('src' in it ? [] : [it.size as number])))
+    }
+    expect(new Set(sizesOf(false)).size).toBe(1)
+    expect(new Set(sizesOf(true)).size).toBe(2)
+  })
 })
-
