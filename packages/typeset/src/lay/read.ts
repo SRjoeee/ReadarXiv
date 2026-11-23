@@ -354,7 +354,9 @@ function readingsOf(
           ...(el.style.sc !== undefined ? { sc: el.style.sc } : {}),
           ...(own !== undefined ? { rel: own } : {}),
         }
-      : null
+      : own !== undefined
+        ? { rel: own }
+        : null
     const literal = !!el?.literal
     const drawn0 = gap ? drawnAs(cls, gap, supSrc, copy, page, gst, literal, mark) : null
     // (a URL drawn as its one line's crop: where TeX's url package may break it, El.breaks, which the breaker reads)

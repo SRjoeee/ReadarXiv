@@ -208,7 +208,8 @@ export function oneSize(gs: readonly StyleGlyph[], math = false): number | undef
   const real1 = text1.length || !math ? text1 : gs.filter(real)
   if (!real1.length) return undefined
   const r = Math.round((real1[0] as StyleGlyph).size * 100)
-  return real1.every((g) => Math.round(g.size * 100) === r) ? unitSize(real1) : undefined
+  if (!real1.every((g) => Math.round(g.size * 100) === r)) return undefined
+  return text1.length ? unitSize(real1) : (real1[0] as StyleGlyph).size
 }
 
 // ---------------------------------------------------------------- faked small capitals
