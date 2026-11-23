@@ -88,6 +88,40 @@ describe('a definition that ends the paragraph in other forms', () => {
       'Words of the next one.',
     ])
   })
+  it('a \\par in a branch TeX skips, or an operand of \\let, ends no paragraph: one unit (the review of #674)', () => {
+    expect(
+      saidOf('\\newcommand{\\outer}[1]{#1\\iffalse\\par\\fi}', 'Previous sentence. \\outer{Middle words} Following sentence.'),
+    ).toEqual(['Previous sentence. Middle words Following sentence.'])
+    expect(
+      saidOf('\\newcommand{\\inline}[1]{#1\\let\\saved\\par}', 'See \\inline{the latest} results below.'),
+    ).toEqual(['See the latest results below.'])
+    // (a branch the source cannot tell ends a paragraph not surely: none)
+    expect(
+      saidOf('\\newcommand{\\maybe}[1]{#1\\ifdefined\\foo\\par\\fi}', 'Previous sentence. \\maybe{Middle words} Following sentence.'),
+    ).toEqual(['Previous sentence. Middle words Following sentence.'])
+  })
+  it('the side travels through a wrapper: after its argument where the macro it calls ends the paragraph after (the review of #674)', () => {
+    expect(
+      saidOf(
+        '\\newcommand{\\inner}[1]{\\textbf{#1}\\par}\n\\newcommand{\\outer}[1]{\\inner{#1}}',
+        'Previous sentence. \\outer{Middle words} Following sentence.',
+      ),
+    ).toEqual(['Previous sentence. Middle words', 'Following sentence.'])
+    expect(
+      saidOf(
+        '\\newcommand{\\inner}[1]{{\\bfseries #1}\\par}\n\\newcommand{\\outer}[1]{\\inner{#1}}',
+        'First words \\outer{label words} Last words.',
+      ),
+    ).toEqual(['First words label words', 'Last words.'])
+    // (and before it, where the macro it calls ends the paragraph before its argument)
+    const said = saidOf(
+      '\\newcommand{\\innerb}[1]{\\par\\textbf{#1}}\n\\newcommand{\\outerb}[1]{\\innerb{#1}}',
+      'Words before it. \\outerb{A head} and after it.',
+    )
+    expect(said[0]).toBe('Words before it.')
+    expect(said[1]).toMatch(/and after it\.$/)
+    expect(said.length).toBe(2)
+  })
   it('a \\par inside a box’s own text ends that box’s paragraph alone: one unit', () => {
     expect(
       saidOf(
