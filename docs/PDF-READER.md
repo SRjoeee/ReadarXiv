@@ -9578,9 +9578,11 @@ expansion took off (all in this section's last item), and the rest are the holes
   a piece no point (a paper's macro glued to the word before it is read as letters of that word) or its opening point alone (a
   command may read what follows it): TeX stated no point between that ink and the next name's, and the ownership could not tell
   them apart (lane own-2's 15 members `unproven`). A piece that sets ink there (an inline formula, a command with an argument;
-  not a command of spacing, a rule or a phantom) is no longer read as letters of the word before it, and has its closing mark
-  where only its command's possible look ahead kept it off and TeX answered nothing for that command and what follows it; each
-  mark robust as the unit's (`\protect`). Every other rule of the marking holds as for any piece: no mark after a command that
+  not one of TeX's and LaTeX's that set no ink, `INVISIBLE`) is no longer read as letters of the word before it, and has its
+  closing mark where only its command's possible look ahead kept it off and TeX answered nothing for that command and what
+  follows it, before the next name's text alone (before another piece, whose ink would be no one's where that piece gets no
+  mark of its own: 2608.11884v1's `\textsuperscript{1,2}\corresponding`, the two one run as before); each mark robust as the
+  unit's (`\protect`). Every other rule of the marking holds as for any piece: no mark after a command that
   reads what follows it (`\xspace`), TeX's answers where the probe gave one, and a piece first on a row after `\\` keeps its
   opening point before the break (nothing of ours between a break and what follows it) and has its closing one after it. A
   piece before the unit's first text or after its last (a trail, the ownership's own rule) keeps the reading of before.

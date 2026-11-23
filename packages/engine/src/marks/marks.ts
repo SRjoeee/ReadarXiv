@@ -2953,13 +2953,11 @@ const ENDS_ENV = /\\end\s*\{[^{}]*\}\s*$/
  *  ahead. Not LaTeX's \), which reads nothing after it */
 const ENDS_IN_CS = /\\(?:[A-Za-z@]+\*?|[^A-Za-z@)])$/
 /** a piece that sets ink between a front unit's texts and may have a point on each side (layoutMarking): an inline formula, or a
- *  command with an argument (a name's mark, `\\inst{1}`, `\\textsuperscript{1}`, `\\IEEEauthorrefmark{1}`, an ORCID); not a
- *  command of spacing, a rule or a phantom, which set no ink, nor a forced break */
+ *  command with an argument (a name's mark, `\\inst{1}`, `\\textsuperscript{1}`, `\\IEEEauthorrefmark{1}`, an ORCID); not one
+ *  of TeX's and LaTeX's that set no ink (INVISIBLE), nor a forced break; one TeX's probe said sets no ink keeps no mark (`none`) */
 const BETWEEN_TEXTS = (p: Piece): boolean =>
   p.t === 'ph' &&
-  (/^(?:\$|\\\()/.test(p.src ?? '') ||
-    (/^\\[A-Za-z@]+\*?\s*[[{]/.test(p.src ?? '') &&
-      !/^\\(?:[hv]space|[hv]skip|kern|phantom|hphantom|vphantom|rule|vrule|hrule)(?![A-Za-z@])/.test(p.src ?? '')))
+  (MATH.test(p.src ?? '') || (/^\\[A-Za-z@]+\*?\s*[[{]/.test(p.src ?? '') && !INVISIBLE.test(p.src ?? '')))
 /** a placeholder whose macro may look at what follows it: a paper's macro (\xspace, \@ifnextchar[ after its argument;
  *  \@esphack's \ignorespaces after \todo, \nocite, \marginpar), a footnote's call (fnpct's \footnote moves the
  *  punctuation after it), \xspace itself, and a prefix that applies to the next token (\protect\eqref: a mark between
@@ -3182,16 +3180,24 @@ export function layoutMarking(
     const firstText = lead ? u.pieces.findIndex(lettered) : -1,
       lastText = lead ? u.pieces.findLastIndex(lettered) : -1
     // (a piece that sets ink between the texts of a front unit — a name's mark in a unit of several names, `Ann Lee\\inst{1},
-    // Bob Ray` — has a point on each side, so that TeX states where its ink begins and ends between the names' (lane own-2's 15
-    // members `unproven`): not taken for letters of the word before it (`bare`), and its closing mark where only a look ahead of
+    // Bob Ray` — has a point on each side, so that TeX states where its ink begins and ends between the names': not taken for
+    // letters of the word before it (`bare`), and its closing mark where only a look ahead of
     // its own command would keep it off and TeX answered nothing for it (`raw`); every other rule of the marking as for any piece:
     // none after a command that reads what follows it, the opening point of one after a forced break before the break (and its
     // closing one after it), TeX's answers. PDF-READER §18.111)
     const between = (k: number): boolean =>
       firstText >= 0 && k > firstText && k < lastText && BETWEEN_TEXTS(u.pieces[k]!)
+    // (its closing mark before the next name's text alone: before another piece, whose ink would be no one's where that piece
+    // gets no mark of its own, 2608.11884v1's `\\textsuperscript{1,2}\\corresponding`, the two pieces one run as before)
     const closesBetween = (k: number): boolean => {
       const src = (u.pieces[k] as PhPiece).src ?? ''
-      return between(k) && !(ENDS_IN_CS.test(src) && !identifierPiece(src)) && !/\s$/.test(src) && !ENDS_ENV.test(src)
+      return (
+        between(k) &&
+        u.pieces[k + 1]?.t === 'text' &&
+        !(ENDS_IN_CS.test(src) && !identifierPiece(src)) &&
+        !/\s$/.test(src) &&
+        !ENDS_ENV.test(src)
+      )
     }
     let last: Piece | null = null,
       gap = false,
