@@ -6,7 +6,7 @@ import { toLastLines } from '../fit/last-lines.ts'
 import { toStand } from '../fit/stand.ts'
 import type { FitBlock, FitParams, FitState, LaidLine, Layout } from '../fit/types.ts'
 import type { Broken } from './break.ts'
-import type { Token } from './tokens.ts'
+import { relOf, type Token } from './tokens.ts'
 
 /** the unit's end mark's distances (Token.endMark) */
 type EndMark = NonNullable<Token['endMark']>
@@ -66,10 +66,12 @@ function placeItems(lines: LaidLine[], f: number, P: FitParams, scale: number): 
     if (line.squeezed && slack < 0 && !latinish && line.items.length > 1) {
       for (const it of squeezable(line.items, hang > 0, P._compress as number, P)) {
         if (slack >= 0) break
-        it.w -= 0.5 * f
-        if (it.t.punct === 'open') it.shift = (it.shift ?? 0) - 0.5 * f
+        // (its blank half at the size it is drawn at: a group's at its own, TStyle.rel)
+        const h = 0.5 * f * relOf(it.t)
+        it.w -= h
+        if (it.t.punct === 'open') it.shift = (it.shift ?? 0) - h
         it.cut = true
-        slack += 0.5 * f
+        slack += h
       }
       if (slack < 0) {
         const by = Math.max(slack, -spW * (1 - P.spaceMin))

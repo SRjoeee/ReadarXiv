@@ -13,10 +13,13 @@ import { type Disagreement, type Index, type Located, type Member, piecesOf } fr
 const FREE = -1
 const HELD = -2
 
-/** a member's seven lists (work.ts Member): A's glyphs by role, its boxes, its turned glyphs */
-export type Ink = Pick<Member, 'text' | 'label' | 'els' | 'textBoxes' | 'elBoxes' | 'elBoxesB' | 'turned'>
+/** a member's nine lists (work.ts Member): A's glyphs by role, its boxes, its turned glyphs by role */
+export type Ink = Pick<
+  Member,
+  'text' | 'label' | 'els' | 'textBoxes' | 'elBoxes' | 'elBoxesB' | 'turned' | 'turnedEls' | 'turnedLabel'
+>
 
-/** the seven lists as this module writes them: Member's are read-only everywhere else, and this is the one cast. The lists
+/** the nine lists as this module writes them: Member's are read-only everywhere else, and this is the one cast. The lists
  *  `empty` makes are plain arrays and maps, and every list written here is the module's own copy */
 interface Lists {
   text: number[]
@@ -26,6 +29,8 @@ interface Lists {
   elBoxes: Map<string, [number, number][]>
   elBoxesB: Map<string, [number, number][]>
   turned: [number, number][]
+  turnedEls: Map<string, [number, number][]>
+  turnedLabel: [number, number][]
 }
 const listsOf = (mem: Member): Lists => mem as unknown as Lists
 
@@ -141,6 +146,8 @@ export function ownershipOf(of: { size: number; aToB: ArrayLike<number>; unitB: 
     for (const [id, l] of ink.elBoxes ?? []) append(to.elBoxes, id, l)
     for (const [id, l] of ink.elBoxesB ?? []) append(to.elBoxesB, id, l)
     for (const x of ink.turned ?? []) to.turned.push(x)
+    for (const [id, l] of ink.turnedEls ?? []) append(to.turnedEls, id, l)
+    for (const x of ink.turnedLabel ?? []) to.turnedLabel.push(x)
   }
   const take = (mem: Member, ink: Partial<Ink>): void => write(mem, ink, true)
   const takeAsStated = (mem: Member, ink: Partial<Ink>, claimed: readonly number[]): void => {
@@ -301,6 +308,12 @@ export function groupsOf(
       groups[ap - 1]!.turned[aj] = `${mem.ord}.${ap}.t`
       if (mem.figure) figureGroups.add(`${mem.ord}.${ap}.t`)
     }
+    // (a unit TeX set turned: its elements' turned glyphs travelling, `.e`, and its label's, `.l`, as a level unit's glyphs)
+    for (const [id, l] of mem.turnedEls) {
+      if ((pieces.get(id) as { kind?: string } | undefined)?.kind === 'display' || keptEl.has(id)) continue
+      for (const [ap, aj] of l) groups[ap - 1]!.turned[aj] = `${mem.ord}.${ap}.e`
+    }
+    for (const [ap, aj] of mem.turnedLabel) groups[ap - 1]!.turned[aj] = `${mem.ord}.${ap}.l`
     // (a figure text's elements' groups figures' too: the wrap writes them inside the form they are shown in, as their text's)
     for (const [id, l] of mem.els) {
       if ((pieces.get(id) as { kind?: string } | undefined)?.kind === 'display' || keptEl.has(id)) continue

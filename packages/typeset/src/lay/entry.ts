@@ -31,7 +31,7 @@ import type { Layout, Tokens } from '../fit/types.ts'
 import type { Item, Laid, Metrics, Page, Rows, Rules, Unlaid } from '../types.ts'
 import { inkLines } from '../emit/display.ts'
 import { adapt, rectOf, rowLinesOf, sharedPaper } from './adapt.ts'
-import { cropInks } from './clips.ts'
+import { cropInks, pageInks } from './clips.ts'
 import type { FlowMember } from './flow.ts'
 import { figuresOf } from './figures.ts'
 import { keptBefore, type Lead, ledBy, type NameWord } from './lead.ts'
@@ -304,6 +304,101 @@ function unservedOf(tokens: Tokens, metrics: Metrics): { inked: Set<number>; lab
 
 /** layPage: page `part.page` laid from its part and the target's rows */
 export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics, o: EntryOptions = {}): Page {
+  const flat = layFlows(part, given, rules, metrics, o)
+  if (!part.frames?.length) return flat
+  // (the units TeX set turned, by turn (Part.frames, docs/PDF-READER.md §18.113): each frame laid as a part's flows are, in its
+  // own coordinates (the page turned back), by every rule of the lay; then each laid line stated from its origin on the page
+  // along the turn, as a figure text's turned line is (Laid.lines: its items' `dir`, their places along it from x0), and lit in
+  // the frame, which is the turned run's frame (Laid.lit `dir`): the reader draws, lights and selects it through the turn)
+  // (and each frame's links: the annotations its members own (Link.owner), their boxes in the frame, laid with them as a part's
+  // are, moved with their pieces or left at their boxes, then turned back onto the page: a box left where it was is the
+  // annotation's own on A. The level lay leaves them at their boxes, owners it does not lay: those of its are dropped)
+  const framed = new Set<number>()
+  const subs = part.frames.map((f) => {
+    const { frames: _f, links: _l, ties: _t, ...rest } = part
+    const ords = new Set(f.flows.flat().map((m) => m.ord))
+    for (const n of ords) framed.add(n)
+    const own = (part.links ?? []).flatMap((l, i) => (l.owner && ords.has(l.owner[0]) ? [{ l, i }] : []))
+    const inFrame = own.map(({ l }) => ({ ...l, box: boxInFrame(l.box, f.dir) }))
+    const fates: LinkFate[] = []
+    const sub = layFlows(
+      { ...rest, flows: f.flows, ...(f.ties ? { ties: f.ties } : {}), ...(inFrame.length ? { links: inFrame } : {}) },
+      given,
+      rules,
+      metrics,
+      { ...o, linkFates: o.linkFates ? fates : undefined },
+    )
+    if (o.linkFates)
+      own.forEach(({ i }, k) => {
+        if (fates[k]) o.linkFates![i] = fates[k]
+      })
+    const links = sub.links.map(([box, to, owner, border]): Page['links'][number] => {
+      const at = inFrame.findIndex((l) => l.box.every((v, k) => v === box[k]))
+      return [at >= 0 ? own[at]!.l.box : boxOnPage(box, f.dir), to, owner, border] as Page['links'][number]
+    })
+    return { sub, dir: f.dir, links }
+  })
+  const members = [...flat.members]
+  for (const { sub, dir } of subs) for (const m of sub.members) members.push(turnedOf(m, dir))
+  const rows = [...new Set([...flat.wait.rows, ...subs.flatMap((s) => s.sub.wait.rows)])]
+  const faces = [...flat.wait.faces, ...subs.flatMap((s) => s.sub.wait.faces)]
+  // (the page's every piece's ink on the pages its crops are cut from, level and framed alike, on the page: a crop laid in a
+  // frame is cut clear of a level piece's ink as of another frame's, and a level one of theirs)
+  const cropPages = new Set(
+    members.flatMap((m) =>
+      m.state === 'laid' ? m.lines.flatMap((l) => l[3].flatMap((it) => ('src' in it ? [it.src[0]] : []))) : [],
+    ),
+  )
+  const inks = cropPages.size ? pageInks(part, cropPages) : []
+  return {
+    ...flat,
+    wait: { rows, faces: [...new Map(faces.map((x) => [x[0], x])).values()] },
+    members: rows.length ? members.map((m) => ({ ...m, state: 'waiting' as const, off: 0, lines: [] })) : members,
+    links: [...flat.links.filter((l) => l[2] === undefined || !framed.has(l[2])), ...subs.flatMap((s) => s.links)],
+    ...(inks.length ? { inks } : {}),
+  }
+}
+/** a box of the page in the frame of direction (ux, uy) (the page's (x, y) at (ux x + uy y, -uy x + ux y)): the box of its four
+ *  corners turned back */
+function boxInFrame(b: readonly number[], [ux, uy]: readonly [number, number]): [number, number, number, number] {
+  const c = [
+    [b[0]!, b[1]!],
+    [b[2]!, b[1]!],
+    [b[0]!, b[3]!],
+    [b[2]!, b[3]!],
+  ].map(([x, y]) => [ux * x! + uy * y!, -uy * x! + ux * y!] as const)
+  return [
+    Math.min(...c.map((q) => q[0])),
+    Math.min(...c.map((q) => q[1])),
+    Math.max(...c.map((q) => q[0])),
+    Math.max(...c.map((q) => q[1])),
+  ]
+}
+/** a box of the frame of direction (ux, uy) on the page: the box of its four corners turned by it */
+function boxOnPage(b: readonly number[], [ux, uy]: readonly [number, number]): [number, number, number, number] {
+  return boxInFrame(b, [ux, -uy])
+}
+/** a member laid in a frame of direction (ux, uy) stated on its page: each line from its origin there (the frame's (x0, y)
+ *  turned by the frame's direction), its items' places along it and their `dir`; its lit in the frame, the turned run's */
+function turnedOf(m: Laid, [ux, uy]: [number, number]): Laid {
+  return {
+    ...m,
+    frame: [ux, uy],
+    lines: m.lines.map(([y, x0, x1, items]) => {
+      const px = ux * x0 - uy * y,
+        py = uy * x0 + ux * y
+      return [
+        py,
+        px,
+        px + (x1 - x0),
+        items.map((it) => ({ ...it, x: px + (it.x - x0), dir: [ux, uy] as [number, number] })),
+      ] as Laid['lines'][number]
+    }),
+    lit: { ...m.lit, dir: [ux, uy] },
+  }
+}
+/** a part's flows laid (layPage's, its frames aside) */
+function layFlows(part: Part, given: Rows, rules: Rules, metrics: Metrics, o: EntryOptions = {}): Page {
   const page = part.page
   const members = part.flows.flat()
   // (the kinds the reader leaves the original's: its "what to translate", Rules.leave)
@@ -330,7 +425,10 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
   if (waiting.length) return waitAll([])
   const R = rules.set
   const measure = fitMeasure(metrics)
-  const paper = paperOf(part.paper.faces.fonts, rules.target, rules.cjkFaces as never)
+  const paper = {
+    ...paperOf(part.paper.faces.fonts, rules.target, rules.cjkFaces as never),
+    bases: part.paper.bases === 1,
+  }
   // (the free paper two members share on one baseline, each its half: two authors side by side; a cell widens by its own side)
   const shared = sharedPaper(part.flows, page)
   // (the lines of TeX's several members share whole, set centred or flush right: each laid as one run, lay/flow.ts)

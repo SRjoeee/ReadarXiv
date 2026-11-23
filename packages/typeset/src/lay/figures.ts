@@ -22,7 +22,7 @@ import { faceOf } from '../breaker/faces.ts'
 import { fontString } from '../breaker/measure.ts'
 import { shown } from '../breaker/text.ts'
 import type { TextItem } from '../emit/display.ts'
-import { type FigureClass, type FigureRow, type FigureUnit, figures } from '../shared/figures.ts'
+import { type FigureClass, type FigureRow, type FigureUnit, figures, runRel } from '../shared/figures.ts'
 import type { FaceId, Laid, Metrics, RuleParams, Rows, Unlaid } from '../types.ts'
 import { type PaperReading, tstyleOf } from './read.ts'
 
@@ -31,9 +31,11 @@ const ANCHOR = { l: 'start', c: 'centre', r: 'end' } as const
 /** a figure text's row as S.figures reads it: its translation's text pieces (an element a space), each inside a group of a run
  *  of its in another face in that run's style, as its part states the group's (SpanAt.style: its family, weight and slant);
  *  none where it has none (a failed row's reason is the entry's, figuresOf) */
-/** a figure text's class (FigureClass) of a part's Style, its small capitals and design as tstyleOf reads them */
-function classOf(st: Placed['style'], designs: PaperReading['designs']): FigureClass {
+/** a figure text's class (FigureClass) of a part's Style, its small capitals and design as tstyleOf reads them, and its size
+ *  to the member's (`size`) where it states its own (FigureClass.rel) */
+function classOf(st: Placed['style'], designs: PaperReading['designs'], size?: number): FigureClass {
   const t = tstyleOf(st, designs)
+  const rel = size && st.size > 0 && st.size !== size ? st.size / size : undefined
   return {
     fam: st.role,
     bold: !!st.bold,
@@ -41,10 +43,16 @@ function classOf(st: Placed['style'], designs: PaperReading['designs']): FigureC
     ...(t.caps ? { caps: true as const } : {}),
     ...(t.design ? { design: t.design } : {}),
     ...(st.fill !== undefined ? { fill: st.fill } : {}),
+    ...(rel !== undefined ? { rel } : {}),
   }
 }
 
-function unitOf(row: Row | undefined, m: Placed, designs: PaperReading['designs']): FigureUnit | undefined {
+function unitOf(
+  row: Row | undefined,
+  m: Placed,
+  designs: PaperReading['designs'],
+  bases: boolean,
+): FigureUnit | undefined {
   if (!row?.ok) return undefined
   const styles = new Map((m.spans ?? []).flatMap(([id, x]) => (x.style ? [[id, x.style] as const] : [])))
   const pieces: NonNullable<FigureUnit['pieces']>[number][] = []
@@ -54,7 +62,9 @@ function unitOf(row: Row | undefined, m: Placed, designs: PaperReading['designs'
       else if (p.t === 'el') pieces.push({ t: 'text', s: ' ', ...(cls ? { cls } : {}) })
       else {
         const st = styles.get(p.id)
-        walk(p.content, st ? classOf(st, designs) : cls)
+        // (its size where the part states the convention, Part.paper.bases: a part made before stated a run's most common size,
+        // of several too, which no typesetter read)
+        walk(p.content, st ? classOf(st, designs, bases ? m.style.size : undefined) : cls)
       }
   }
   walk(row.content, undefined)
@@ -134,7 +144,7 @@ export function figuresOf(
     figures: rowsOf,
     unit: (id) => {
       const t = byOrd.get(id)!.text
-      return unitOf(typeof t === 'string' ? rows.get(t) : undefined, byOrd.get(id)!, o.paper.designs)
+      return unitOf(typeof t === 'string' ? rows.get(t) : undefined, byOrd.get(id)!, o.paper.designs, !!o.paper.bases)
     },
     src: (id) =>
       shown({ t: 'text', s: byOrd.get(id)?.plain ?? '' })
@@ -176,16 +186,18 @@ export function figuresOf(
       const fill = r.fill ?? f.fill
       // (an oblique face's slant, a CJK face's synthetic italic: the run skewed, as the names path's and D.display's)
       const slant = r.face.oblique ? { skew: 1 as const, slant: r.face.oblique } : {}
+      // (a run of a group in a size of its own measured and drawn at it, on the text's baseline: runRel)
+      const size = f.size! * runRel(r)
       items.push({
         s: r.s,
         x,
         face: fontString(r.face, 100),
-        size: f.size!,
+        size,
         ...(fill ? { fill } : {}),
         ...slant,
         ...turn,
       })
-      x += (w100(r.s, r.face) / 100) * f.size!
+      x += (w100(r.s, r.face) / 100) * size
     }
     laid.set(f.id, [[f.y!, f.x!, x, items]])
   }

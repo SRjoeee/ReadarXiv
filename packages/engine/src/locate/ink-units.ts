@@ -34,6 +34,9 @@
 //      (a note of addresses alone is then no unit, a kept block that says so, `address`; a line of no text word, an address or a
 //      URL TeX broke onto a line of its own, is the next line of the unit its line before belongs to in one of TeX's paragraphs as
 //      the compile marked them, and starts none);
+//  3b. a line TeX ended at a forced break (its point `kb<n>` after the line's last glyph, B's, carried onto A: marks.ts
+//      BREAKS_TEX) ends its line inside the unit with a break placeholder, `\\` of kind `break`, as a source unit's: no line's
+//      shortness tells a break (CHANGED);
 //   5. echo: a unit whose letters (own/stream.ts spellOf) and count of kept runs equal a source unit's letters and count of
 //      visible placeholders (a heading first, then a caption, then any) takes that unit's pieces, each visible placeholder
 //      placed by its kept run in turn, and is drawn with its row: the contents read as the headings they repeat, and no
@@ -109,6 +112,8 @@ export interface InkPage {
   points?: readonly TodayPoint[]
   paras?: readonly TodayPoint[]
   paraEnds?: readonly ParaEnd[]
+  /** where TeX ended a line at a forced break (B's `kb<n>`, carried by locate): a unit's break element (rule 3b) */
+  breaks?: readonly TodayPoint[]
   view?: readonly number[]
   boxes?: readonly number[]
   paths?: readonly number[]
@@ -207,6 +212,9 @@ export interface TodayInkUnit {
     ph: [number, number][]
     runs?: [number, [number, number][]][]
     label?: [number, number][]
+    /** the last glyph ([page, g]) of each line TeX ended at a forced break inside it, in order (rule 3b): its break elements'
+     *  in its content's order, an echo's too (locate/ink.ts) */
+    breaks?: [number, number][]
   }
   rows: InkRows
 }
@@ -899,6 +907,16 @@ function echoKey(u: TodayUnit | undefined): string | null {
   return s.length < 4 ? null : `${s}#${u.pieces.filter((p) => p.t === 'ph' && statedClassOf(p) !== null).length}`
 }
 const ECHO_ORDER: Readonly<Record<string, number>> = { heading: 0, caption: 1 }
+/** whether a unit's forced break pieces (kind `break`) stand at `at` in its letters (spellOf of its texts), each where an ink
+ *  unit's break stands in its own (rule 3b) */
+function sameBreaks(pieces: readonly TodayPiece[], at: readonly number[]): boolean {
+  const own: number[] = []
+  let n = 0
+  for (const p of pieces)
+    if (p.t === 'text') n += spellOf(utf8(p.s ?? '')).length
+    else if (p.t === 'ph' && p.kind === 'break') own.push(n)
+  return own.length === at.length && own.every((x, k) => x === at[k])
+}
 
 /**
  * The ink units of a document. `pages` as the wrap reads them (wrap.ts: each glyph { u, x0, x1, ix0, ix1, y, size, top,
@@ -1183,7 +1201,41 @@ export function inkUnitsOf(
       closeLink()
       while (open.length) pieces.push({ t: 'close', id: open.pop(), src: '}' })
     }
+    const forced: [number, number][] = []
+    // (where each break stands in the unit's letters: a part of its echo key, so that occurrences whose breaks differ are not one)
+    const breakAt: number[] = []
     lines.forEach((l, li) => {
+      // (CHANGED, rule 3b: a line TeX ended at a forced break, its point `kb<n>` after that line's last glyph and before this one's
+      // first (B's, carried onto A): a break placeholder there, as a source unit's `\\`, each point one, so that the part states
+      // the break and the lay ends the translation's line there (unit/breaks.ts); no kept run goes on over it. The lines' places
+      // tell no break: a wrap before a long word ends a line as short. A unit over a page's break, a biblatex entry's (rule 1), has
+      // TeX's point carried where its partner glyph stands: after its first page's line, after that page's last glyph (our
+      // compile's page end the same), or before the next page's line, before that line's first glyph (arXiv's page ending there and
+      // our compile's not): there, nothing TeX set between the point and the line)
+      const prev = li > 0 ? lines[li - 1]! : null
+      if (prev) {
+        const end = Math.max(...prev.words.flatMap((w) => w.gs))
+        const lo = Math.max(...prev.gs),
+          hi = Math.min(...l.gs)
+        const inked = (p: number, a: number, b: number) =>
+          (pages[p - 1]?.glyphs ?? []).slice(a, b).some((g) => /\S/u.test(g.u ?? ''))
+        const at =
+          prev.page === l.page
+            ? (pages[l.page - 1]?.breaks ?? []).filter((e) => e.glyph > lo && e.glyph <= hi)
+            : [
+                ...(pages[prev.page - 1]?.breaks ?? []).filter(
+                  (e) => e.glyph > lo && !inked(prev.page, lo + 1, e.glyph),
+                ),
+                ...(pages[l.page - 1]?.breaks ?? []).filter((e) => e.glyph <= hi && !inked(l.page, e.glyph, hi)),
+              ]
+        for (let q = 0; q < at.length; q++) {
+          flushText()
+          breakAt.push(spellOf(plain).length)
+          forced.push([prev.page, end])
+          pieces.push({ t: 'ph', src: '\\\\', kind: 'break' })
+          for (const p of phs) p.open = false
+        }
+      }
       // (its label, the glyphs its first line begins with that the class set before its text: kept as the original's, no text of
       // the unit's, its glyphs the unit's still, claimed and erased with its line, so that the reader keeps them where they stand;
       // stated, `labelled`, as the glyphs of the unit's label)
@@ -1293,10 +1345,15 @@ export function inkUnitsOf(
     let echo: number | null = null,
       own: TodayPiece[] = pieces,
       kept: Ph[] = phs
+    // (an ink unit echoes another only where their forced breaks stand where its own do, `inkKey`: two occurrences whose breaks
+    // differ are not one; a source unit by its letters and placeholders, as before: a running head or a contents line TeX set
+    // on one line repeats a title its source breaks, and keeps that unit's row, its own breaks placed where they match the
+    // unit's in number, locate/ink.ts)
     const spell = spellOf(plain),
-      key = `${spell}#${phs.length}`
+      key = `${spell}#${phs.length}`,
+      inkKey = breakAt.length ? `${key}#${breakAt.join(',')}` : key
     const e = units ? echoOf.get(key) : undefined
-    const before = e === undefined && spell.length >= 4 ? inkEchoOf.get(key) : undefined
+    const before = e === undefined && spell.length >= 4 ? inkEchoOf.get(inkKey) : undefined
     if (e !== undefined || before !== undefined) {
       echo = e ?? out[before!]!.id
       own = (e !== undefined ? units![e]!.pieces : out[before!]!.pieces).map((p) => ({ ...p }))
@@ -1309,7 +1366,7 @@ export function inkUnitsOf(
     const textGlyphs = lines.flatMap((l) =>
       l.words.filter((w) => w.fam === 'text').flatMap((w) => w.gs.map((g): [number, number] => [l.page, g])),
     )
-    if (echo === null && spell.length >= 4 && !inkEchoOf.has(key)) inkEchoOf.set(key, out.length)
+    if (echo === null && spell.length >= 4 && !inkEchoOf.has(inkKey)) inkEchoOf.set(inkKey, out.length)
     // (the casts: a unit's class one INK_KIND makes units of, the ledger's classes of rule 1 or the names)
     out.push({
       id,
@@ -1323,6 +1380,9 @@ export function inkUnitsOf(
         ph: kept.flatMap((p) => p.gs),
         runs: kept.map((p): [number, [number, number][]] => [p.k, p.gs]),
         ...(labelled.length ? { label: labelled } : {}),
+        // (its own breaks' anchors: an echo of an ink unit's stand where that unit's do (its key), a source unit's only where its
+        // break pieces stand there too, else none, its breaks unplaced as an echo's were)
+        ...(forced.length && (e === undefined || sameBreaks(units![e]!.pieces, breakAt)) ? { breaks: forced } : {}),
       },
       rows: rowsOf(id, INK_KIND[cls as keyof typeof INK_KIND], cls, lines, kept, own.length, pages),
     })

@@ -20,8 +20,8 @@ export type LayoutUnit = {
   flush?: string | null
 }
 /** the face TeX set a group's text in where its command names no style the rules know (the part's SpanAt.style: role, weight,
- *  slant) */
-type OpenFace = { role: 'serif' | 'sans' | 'mono'; bold?: 1 | undefined; slant?: 1 | 2 | undefined }
+ *  slant), and the size it set it at (its size, every group's where the part states one: docs/PDF-READER.md §18.114) */
+type OpenFace = { role: 'serif' | 'sans' | 'mono'; bold?: 1 | undefined; slant?: 1 | 2 | undefined; size?: number }
 /** a piece of a row as the unit holds it (the translation's pieces in its order, `k` the source's; a
  *  group's open with the face TeX set it in, where its part states one, and `runin` where its part states the group a title set
  *  in the line, SpanAt.runin); `par` a piece of the typesetter's own, never in a Row

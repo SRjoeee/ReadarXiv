@@ -509,10 +509,12 @@ describe("the probe's raw log, returned beside the answers read from it", () => 
     }
   })
 })
-/** what the engine asked and made at d5673d033 (this file's cases run there, before Q1), each request and result as digests */
+/** what the engine asked and made at d5673d033 (this file's cases run there, before Q1), each request and result as digests; the
+ *  probe's request taken again where its word follower answers the skipped space apart (4, marks.ts punctuationSection), every
+ *  other request and every result as it was */
 const GOLDEN_AT_BASE: Record<string, unknown> = {
   'a paper: the probe, every pass, the final pass': {
-    asked: ['5f1f37c8ef8db092', 'f8bf604f842ce399', '66ed7620758abc60'],
+    asked: ['f9996ca03a819e8e', 'f8bf604f842ce399', '66ed7620758abc60'],
     made: {
       pdf: 'ba5627208b38c012',
       log: 'ee997e55c8c8064b',
@@ -527,7 +529,7 @@ const GOLDEN_AT_BASE: Record<string, unknown> = {
     },
   },
   'its bibliography shipped': {
-    asked: ['5f1f37c8ef8db092', '358a3dbc66252b16', '66ed7620758abc60'],
+    asked: ['f9996ca03a819e8e', '358a3dbc66252b16', '66ed7620758abc60'],
     made: {
       pdf: 'ba5627208b38c012',
       log: 'ee997e55c8c8064b',
@@ -542,7 +544,7 @@ const GOLDEN_AT_BASE: Record<string, unknown> = {
     },
   },
   'a mark printed: the guard compiles it again, the final pass over the second': {
-    asked: ['5f1f37c8ef8db092', 'f8bf604f842ce399', '0e5ab5bc8bf03338', '6964c9cca387d228'],
+    asked: ['f9996ca03a819e8e', 'f8bf604f842ce399', '0e5ab5bc8bf03338', '6964c9cca387d228'],
     made: {
       pdf: 'bca44c74041aebf9',
       log: 'ee997e55c8c8064b',
@@ -562,7 +564,7 @@ const GOLDEN_AT_BASE: Record<string, unknown> = {
     },
   },
   'under latex: the driver output read': {
-    asked: ['fd71859814c2da41', '34d155818ab5093c', 'f01a8461e905ede9'],
+    asked: ['c50f63b14c61b557', '34d155818ab5093c', 'f01a8461e905ede9'],
     made: {
       pdf: 'ba5627208b38c012',
       log: 'ee997e55c8c8064b',
@@ -577,7 +579,7 @@ const GOLDEN_AT_BASE: Record<string, unknown> = {
     },
   },
   'no final pass asked': {
-    asked: ['5f1f37c8ef8db092', '73c0c9ecd4d448b1'],
+    asked: ['f9996ca03a819e8e', '73c0c9ecd4d448b1'],
     made: {
       pdf: 'ba5627208b38c012',
       log: 'ee997e55c8c8064b',

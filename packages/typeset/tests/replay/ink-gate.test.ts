@@ -404,3 +404,34 @@ describe('I6’s purity: a page laid twice by the entry gives the same display l
     expect(samePage(page(72), page(72.01))).toBe(false)
   })
 })
+
+describe('I3 by ink over the members of a part’s frames (the units TeX set turned, #673)', () => {
+  const placedIn = (ord: number, lines: Placed['lines'], more: Partial<Placed> = {}) =>
+    ({
+      ord,
+      kind: 'cell',
+      text: 'b'.repeat(64),
+      lead: 12,
+      style: { role: 'serif', size: 10 },
+      align: 'l',
+      lines,
+      room: { below: 0 },
+      ...more,
+    }) as Placed
+  const pageOf = (members: Laid[]): Page => ({ page: 1, wait: { rows: [], faces: [] }, members, links: [] })
+  it('holds a framed member’s kept ink, read in its frame turned onto the page, as any member’s', () => {
+    // (a header cell turned (0, 1), left the original's: its line from 400 to 430 along the turn, its band -152 to -144 across:
+    // on the page x 144 to 152, y 400 to 430)
+    const cell = placedIn(5, [[1, 0, 400, 430, -150, -144, -152, 400, 430, 0, 8]])
+    const part = {
+      format: 1,
+      page: 1,
+      paper: { faces: { fonts: [] } },
+      flows: [],
+      frames: [{ dir: [0, 1], flows: [[cell]] }],
+    } as unknown as Part
+    const kept = keptInk(part, pageOf([]))
+    expect(kept.map((k) => [k.ord, k.kind])).toEqual([[5, 'text']])
+    expect(boxOfRect(kept[0]!.r)).toEqual([144, 400, 152, 430])
+  })
+})

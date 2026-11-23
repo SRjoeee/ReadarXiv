@@ -51,7 +51,8 @@ export interface DocPoint {
 /** a glyph set turned (pageInk's `turned`: a figure's y-axis title, arXiv's margin stamp), which no line of the page holds:
  *  its Unicode and code, its font's base name, its show and place there, the level glyphs before it in the stream (`at`), its
  *  own box's index among the page's boxes (`box`, a kind -4; -1 where its clip left none), its baseline from its origin to its
- *  advance's end, its direction, size, its font's band in em, and its fill (0xRRGGBB, -1 none; absent, a page read without it) */
+ *  advance's end, its direction, size, its font's band in em, its fill (0xRRGGBB, -1 none; absent, a page read without it) and
+ *  its own ink's band */
 export interface DocTurned {
   u: string
   code: number
@@ -71,6 +72,11 @@ export interface DocTurned {
   descent: number
   form: boolean
   fill?: number
+  /** its own ink up and down from its baseline in em (pageInk's `up`, `down`: its outline's top and bottom, 0 and 0 for an
+   *  outline of nothing drawn, its font's band where no outline is read): whether it paints, whatever its Unicode (lines.ts
+   *  isInk's reading of a level glyph), and how far its ink reaches across its line; absent, a page read without them */
+  up?: number
+  down?: number
 }
 
 /** the points pageInk keeps apart from the marks' (`points`): TeX's paragraphs' (`q<n>`) and their ends (`qe<n><code>`, with the

@@ -10,6 +10,7 @@ import type { Instrument, InstrumentUnit, TexFrame } from '../instrument.ts'
 import { fixedFacesOf } from './facts.ts'
 import type { DisplayLine, InkInput, InkStats } from './ink.ts'
 import { r2 } from './lines.ts'
+import type { PaintedFrame } from './frames.ts'
 import type { FloatLine } from './ledger.ts'
 import type { Word } from './words.ts'
 
@@ -38,7 +39,7 @@ export interface Member {
   /** its elements made of a group set wholly in a face of one pitch on lines of their own (Rule 1 by group, PDF-READER §18.22):
    *  TeX's vertical box, its rows kept where TeX set them as a display's are, by piece id */
   ownRows?: Set<string>
-  /** A's glyphs (global) by role; elements by piece id. These seven lists are written by the ownership alone (ownership.ts),
+  /** A's glyphs (global) by role; elements by piece id. These nine lists are written by the ownership alone (ownership.ts),
    *  with the owner of each glyph of `text`, `label` and `els`: read-only everywhere else */
   readonly text: readonly number[]
   readonly label: readonly number[]
@@ -48,8 +49,11 @@ export interface Member {
   readonly elBoxes: ReadonlyMap<string, readonly [number, number][]>
   /** each element box's partner on B ([page index, index]), by piece id, in elBoxes' order: where TeX shipped it in B's stream */
   readonly elBoxesB: ReadonlyMap<string, readonly [number, number][]>
-  /** A's turned glyphs ([page, index among the page's turned]): a figure text set turned */
+  /** A's turned glyphs ([page, index among the page's turned]): a figure text set turned, a unit whose text TeX set turned */
   readonly turned: readonly [number, number][]
+  /** a unit whose text TeX set turned (turned-frames.ts): its elements' turned glyphs by piece id, and its label's */
+  readonly turnedEls: ReadonlyMap<string, readonly [number, number][]>
+  readonly turnedLabel: readonly [number, number][]
   lines: Line[]
   elements: [string, El][]
   /** the elements (by piece id) of a symbol's class whose ink is not that symbol as its reading draws it (a letter or digit among
@@ -77,6 +81,9 @@ export interface Member {
   room: Room
   pages: number[]
   join?: [number] | [number, 1]
+  /** a unit whose text TeX set turned, read in its frame (turned-frames.ts): its turn's direction on the page, its lines, lead and room
+   *  in the frame's coordinates (its page's turned back by it) */
+  frame?: [number, number]
   dir?: [number, number]
   /** a figure text set turned (`dir`): its run, its first glyph's origin, its box's length along `dir` and its room before and
    *  after its box along it (Placed.run; its line is its box on the page), as figure-text.ts tells them */
@@ -127,6 +134,15 @@ export interface Member {
   /** a figure text's runs in another face than its own, by their group's piece id: each one's style, read off its glyphs on A
    *  (ink.ts figureRuns; SpanAt.style) */
   spanStyles?: [string, Style][]
+  /** of those, the groups whose glyphs stand at several sizes: each states no size of its own, its style the member's size in
+   *  the part (bundle.ts), so that the typesetter draws it at the size the figure text's own rule draws it (docs/PDF-READER.md
+   *  §18.114). And a group of a source unit whose face group-style.ts states, likewise (`spanFaces`) */
+  spanSeveral?: string[]
+  /** the face TeX set its marks in outside every group, where it is not its letters' (group-style.ts; Placed.markFace) */
+  markFace?: { bold?: 1; slant?: 1 }
+  /** a unit made on A's forced breaks (ink-units.ts rule 3b), by piece id: the last glyph (A, global) of the line TeX ended at
+   *  each, the break's line (facts-pass.ts readElements); a source unit's break is placed by its point on B instead */
+  breakAfter?: ReadonlyMap<string, number>
   /** its groups whose text TeX set in a fill other than the fill around it, read off its glyphs on A (group-style.ts;
    *  SpanAt.colour where the instrument states none): each one's open piece id and fill */
   spanFills?: [string, number][]
@@ -154,6 +170,14 @@ export interface Located {
   born: Map<number, { kind: string; content: Piece[] }>
   flows: number[][]
   ties: ({ rule: 'cells'; cells: number[][]; head?: 1 } | { rule: 'size'; ords: number[] })[]
+  /** the frames of the units whose text TeX set turned (turned-frames.ts): by page and turn, their flows and ties (taken off `flows`
+   *  and `ties`), each member's facts in the frame */
+  frames: {
+    page: number
+    dir: [number, number]
+    flows: number[][]
+    ties: ({ rule: 'cells'; cells: number[][]; head?: 1 } | { rule: 'size'; ords: number[] })[]
+  }[]
   links: Map<
     number,
     {
@@ -260,6 +284,9 @@ export interface Index {
   readonly fixedFaces: ReadonlySet<string>
   /** each A page's text frame as TeX shipped it (framesOnA) */
   readonly framesA: ReadonlyMap<number, TexFrame>
+  /** each A page's closed painted paths that hold text, seen or not (frames.ts framesOnPage), by page (1-based): a member's frame
+   *  is read from them (geometry.ts rooms, facts-pass.ts readRoom) */
+  readonly paintedA: ReadonlyMap<number, readonly PaintedFrame[]>
 }
 
 /** the artefacts' reading the units made on A take (artefacts.ts): whether a unit set wholly in a face of one pitch is kept as
@@ -275,7 +302,7 @@ interface Pitch {
  * by their writer and read through `field`, which throws where the writer has not run:
  * - `jointPiece`: written by 4 unitsMadeOnA; read by 6 lineGeometry.
  * - `displays`, `floatLines`: written by 4 unitsMadeOnA; read by close.
- * - `trailSep`: written by 2 claimTrails; read by 6 lineGeometry.
+ * - `trailSep`, `runShared`: written by 2 claimTrails; read by 6 lineGeometry.
  * - `pitch`: written by 3 keepArtefacts; read by 4 unitsMadeOnA.
  * - `born`: written by 5 unitsBornOnA; read by 7 sentenceStarts and close.
  * - `flows`, `ties`: written by 13 flowsAndTies; read by 14 rowAligns and close (`flows`), close (`ties`).
@@ -300,6 +327,8 @@ export interface Work {
 /** the fields of the record one phase assigns once (Work's comment names each one's writer and readers) */
 interface Assigned {
   trailSep: Map<number, number>
+  /** the pieces after an author's name whose ink is the run their first piece holds (trails.ts runOf), by `${unit}|${piece}` */
+  runShared: Set<string>
   pitch: Pitch
   born: Map<number, { kind: string; content: Piece[] }>
   flows: number[][]
@@ -330,10 +359,18 @@ export interface LocateOptions {
   take?: boolean
   /** what the front half reads of an ink unit's pieces (the adapter's classesOf) */
   classesOf?: InkInput['classesOf']
+  /** each A page's closed painted paths that hold text (frames.ts framesOnPage), where the raw pages are not given (`pages`):
+   *  read from them where they are */
+  frames?: (readonly PaintedFrame[] | null)[]
 }
 
 /** the record of a locate: its index, and the fields the phases fill from the start */
-export function open(ins: Instrument, inkA: Doc, m: Mapping): Work {
+export function open(
+  ins: Instrument,
+  inkA: Doc,
+  m: Mapping,
+  paintedA: ReadonlyMap<number, readonly PaintedFrame[]> = new Map(),
+): Work {
   const B = ins.ink
   const NB = m.offB[B.pages.length] as number
   const NA = m.offA[inkA.pages.length] as number
@@ -462,6 +499,7 @@ export function open(ins: Instrument, inkA: Doc, m: Mapping): Work {
       setA,
       fixedFaces,
       framesA,
+      paintedA,
     },
     members,
     units,

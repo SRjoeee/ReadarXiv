@@ -4,7 +4,12 @@
 // ink; no threshold guards a re-derivation of ownership (ownership is exact and answers instead), and a threshold that is a
 // typographic fact stays, named, with its source.
 import type { Ink, KnownElKind, Line, Piece, Style } from '@readarxiv/format'
-import { bareFontName as bare, readFontName as classifyFont, type FontNameClass } from '@readarxiv/text'
+import {
+  bareFontName as bare,
+  readFontName as classifyFont,
+  type FontNameClass,
+  isLetterOrDigit,
+} from '@readarxiv/text'
 import type { DocGlyph } from '../doc.ts'
 import { glyphWith } from '../glyph.ts'
 import { isInk, r2 } from './lines.ts'
@@ -96,12 +101,11 @@ export const mostOf = <T>(xs: Iterable<T>): T | undefined => {
   }
   return best
 }
-const LETTER_OR_DIGIT = /[\p{L}\p{N}]/u
 /** a character's letters as two sides of an alignment compare them: decomposed, marks off, lower case, its letters and digits
  *  alone (a ligature its letters) */
 export const fold = (ch: string): number[] =>
   [...ch.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase()]
-    .filter((c) => LETTER_OR_DIGIT.test(c))
+    .filter((c) => isLetterOrDigit(c))
     .map((c) => c.codePointAt(0) as number)
 const real = (g: { u: string }) => /\S/.test(g.u)
 /** what a style is read off a glyph by: its Unicode, its font's base name, its size (up its line; `along` it, where that differs)
@@ -192,6 +196,20 @@ export function unitSize(gs: readonly StyleGlyph[]): number | undefined {
   // (as the page states it, not on the coordinates' 1/100 grid: a size is a font's scale, which the lay multiplies every width
   // by; pdfTeX writes 10 pt as 9.9626 bp, and 9.96 sets a 240 pt line 0.06 pt short of 9.9626's)
   return sizes.length ? (sizes[sizes.length >> 1] as number) : undefined
+}
+
+/** the one size a group's glyphs share, as unitSize reads it (its math fonts' glyphs aside), two sizes alike to the hundredth of
+ *  a point (the page's grid) one; undefined where they stand at several (a figure text's run in ink small capitals: its
+ *  capitals at the size, its small capitals smaller) or where none is read. A group states a size of its own only where its
+ *  glyphs share one (docs/PDF-READER.md §18.114): a median of several is the size of none of its runs. `math`: a math font's
+ *  glyphs read where there are no others (an element of a symbol alone, drawn as text) */
+export function oneSize(gs: readonly StyleGlyph[], math = false): number | undefined {
+  const text1 = gs.filter((g) => real(g) && classifyFont(g.base).fam !== 'math')
+  const real1 = text1.length || !math ? text1 : gs.filter(real)
+  if (!real1.length) return undefined
+  const r = Math.round((real1[0] as StyleGlyph).size * 100)
+  if (!real1.every((g) => Math.round(g.size * 100) === r)) return undefined
+  return text1.length ? unitSize(real1) : (real1[0] as StyleGlyph).size
 }
 
 // ---------------------------------------------------------------- faked small capitals

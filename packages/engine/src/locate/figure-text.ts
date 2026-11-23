@@ -1041,8 +1041,9 @@ export function containersOf(
   return out.map(({ area, ...h }) => h)
 }
 
-/** whether a path's segments (x0, y0, x1, y1 each) close: every end met by another's, to the hundredth of a unit */
-function closedPath(segs: ArrayLike<number> | null | undefined): boolean {
+/** whether a path's segments (x0, y0, x1, y1 each) close: every end met by another's, to the hundredth of a unit (a member's
+ *  frame too, frames.ts) */
+export function closedPath(segs: ArrayLike<number> | null | undefined): boolean {
   if (!segs || segs.length < 12) return false
   const deg = new Map<string, number>()
   // (`!`: i in range by the loop's test)

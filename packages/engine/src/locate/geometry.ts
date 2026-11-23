@@ -27,6 +27,7 @@ import {
   unitSize,
   urlCopyOf,
 } from './facts.ts'
+import { frameOf, frameUnder, type PaintedFrame } from './frames.ts'
 import { groupStyleOf, hasScopes, namesFace } from './group-style.ts'
 import { groupStyleOf as commandStyleOf } from './ink.ts'
 import { type CutLine, cutLines, isInk, lineSize, r2 } from './lines.ts'
@@ -47,8 +48,8 @@ const TEXT_KINDS = new Set<string>([
   'macro',
 ] satisfies readonly KnownElKind[])
 /** the classes the typesetter draws as the page's text (its lay/read.ts drawnAs: a citation, a reference, a macro) */
-const TEXT_CLASSES = new Set<string>(['cite', 'num', 'macro', 'umacro'] satisfies readonly KnownElClass[])
-const LABEL_KIND: Record<string, Label['kind']> = {
+export const TEXT_CLASSES = new Set<string>(['cite', 'num', 'macro', 'umacro'] satisfies readonly KnownElClass[])
+export const LABEL_KIND: Record<string, Label['kind']> = {
   caption: 'float',
   heading: 'head',
   theorem: 'head',
@@ -65,6 +66,7 @@ export function lineGeometry(w: Work, owned: Owned): void {
   const { ins, B, inkA, m, pageA, pageB, placeSpan, unitB, roleB, emptyPiece, outsidePiece, gA, atA } = w.ix
   const { members, units, jointPiece } = w
   const trailSep = field(w, 'trailSep')
+  const runShared = field(w, 'runShared')
   /** A's boxes ([page, index]) as rows.ts takes them */
   const boxesOf_ = (l: readonly [number, number][]): RowBox[] =>
     l.map(([ap, ai]) => {
@@ -276,41 +278,9 @@ export function lineGeometry(w: Work, owned: Owned): void {
       ...(caps.ratio !== undefined ? { sc: caps.ratio } : {}),
       ...(caps.caps ? { caps: 1 as const } : {}),
     }
-    // (the fill and the face TeX set its text in, group by group (group-style.ts): a group's fill where it is not the fill
-    // around it, a link's that hyperref colours, and the face of a group whose command names none where it is not the face
-    // around it, stated for the typesetter to draw its translation in; and where a group or a switch's run is set apart so,
-    // the unit's own fill, slant and weight are its own text's, not those most of all its glyphs hold, which a link or an
-    // \emph holding most of its letters makes theirs)
-    const colourSwitch = (el: Extract<Piece, { t: 'el' }>) => classOf.get(el.id)?.colour !== undefined
-    const faceSwitch = (el: Extract<Piece, { t: 'el' }>) => {
-      const c = classOf.get(el.id)
-      return !!c?.bare && !!c.cmd && namesFace(commandStyleOf(`\\${c.cmd}`))
-    }
-    const switches = (el: Extract<Piece, { t: 'el' }>) => colourSwitch(el) || faceSwitch(el)
-    // (not a figure text's: its groups are its runs of glyphs in another face than its own, which is the face of most of its
-    // glyphs by their definition (ink.ts figureRuns), its text in its run's order, not its glyphs' stream order: read again in
-    // the stream's, 2610.37668v1's "PSNR 33.42 dB" took its italic run's face for its own)
-    if (unit && !mem.figure && !unit.figure && mem.text.length && hasScopes(unit.content, switches)) {
-      const g = groupStyleOf(
-        unit.content,
-        [...mem.text].sort((x, y) => x - y).map(gA),
-        (el) => classOf.get(el.id)?.text,
-        colourSwitch,
-        faceSwitch,
-      )
-      if (g.fill.groups.length) mem.spanFills = g.fill.groups
-      if (g.fill.apart && g.fill.own !== undefined) {
-        if (g.fill.own > 0) mem.style.fill = g.fill.own
-        else delete mem.style.fill
-      }
-      if (g.face.groups.length) mem.spanFaces = g.face.groups
-      if (g.face.apart && g.face.own) {
-        if (g.face.own.bold) mem.style.bold = 1
-        else delete mem.style.bold
-        if (!g.face.own.italic) delete mem.style.slant
-        else mem.style.slant ??= 1
-      }
-    }
+    // (the fill and the face TeX set its text in, group by group, and its base: readGroupStyle, off its level text's glyphs in
+    // stream order; a unit TeX set turned is read off its turned glyphs, in turned-frames.ts, by the same reading)
+    readGroupStyle(w, mem, unit, [...mem.text].sort((x, y) => x - y).map(gA), caps.small)
     // (a babel name's own text, its counter aside: S.names leaves it the original's where the target's word is it already, and
     // sets the counter after the target's word)
     if (mem.name !== undefined) {
@@ -635,11 +605,20 @@ export function lineGeometry(w: Work, owned: Owned): void {
       // `\trajectoryMark{}`, 2402.10294v1's `\url` in `\urldef\tempurl`) —; or TeX set it before the unit's start point,
       // outside the unit's text: El.keep, its ink never erased (the instrument's `outside`); with neither, its ink was not
       // found, and the reading leaves its unit the original's. An empty ink of a visible class read as TeX's nothing would leave
-      // 2608.25210v2 p7's algorithm erased under one line, 2402.10294v1's reference [1] drawn without its year)
+      // 2608.25210v2 p7's algorithm erased under one line, 2402.10294v1's reference [1] drawn without its year. A piece of an
+      // author's run but its first (phase 2, trails.ts runOf: `\orcidID` after `\inst`, set past the end mark with no point
+      // between them) is stated so too: what TeX set for it stands in the first's ink, drawn once where the translation sets
+      // that one)
       const emptySpan = !!span && span[0] === span[1]
       const stated = cls ?? p.kind
       if (!ink.length && el.text === undefined && INKED_CLASSES.has(stated)) {
-        if (emptySpan || emptyPiece.has(`${mem.unit}|${id}`) || jointPiece.has(`${mem.unit}|${id}`)) el.text = ''
+        if (
+          emptySpan ||
+          emptyPiece.has(`${mem.unit}|${id}`) ||
+          jointPiece.has(`${mem.unit}|${id}`) ||
+          runShared.has(`${mem.unit}|${id}`)
+        )
+          el.text = ''
         else if (outsidePiece.has(`${mem.unit}|${id}`)) el.keep = 1
         // (an inked macro whose ink nothing on the page bounds (no closing point, a paper's macro's; no opening point where it is
         // glued to the word before it; or set after its unit's end point) is stated by the text TeX set for it where the document
@@ -770,7 +749,7 @@ export function frameMeasures(w: Work): void {
 }
 
 export function rooms(w: Work): void {
-  const { ins, inkA, m, framesA } = w.ix
+  const { ins, inkA, m, framesA, paintedA } = w.ix
   const { members, units } = w
   const ink = inkIndex(inkA)
   // (TeX's paragraph separation where each unit's paragraph ends: its \baselineskip and \parskip, LINES_TEX's AXT-LINES)
@@ -781,7 +760,18 @@ export function rooms(w: Work): void {
   for (const mem of members)
     if (mem.lines.length) {
       const g = gaps.get(mem)
+      // (its frame on each page, a closed path a reader sees round its text there (frames.ts, docs/PDF-READER.md §18.112): not a
+      // cell's, whose room is its walls', nor a figure text's, whose container its figure reading reads)
+      const framed = !(mem.figure || (mem.unit >= 0 && units[mem.unit]?.cell))
+      const frameOn = (page: number) =>
+        framed
+          ? frameOf(
+              paintedA.get(page),
+              mem.lines.filter((l) => l[0] === page && !(l[9] & 1)),
+            )
+          : null
       const room = roomOf(mem, inkA, m.offA, ink, {
+        frame: frameOn,
         frames: framesA,
         // (a table's cell keeps its own room, a figure text, an ink figure and a name theirs: no run's room is theirs to borrow)
         runs: !(
@@ -993,16 +983,22 @@ function inkIndex(inkA: Doc): { under: InkUnder; next: InkNext } {
   }
 }
 
-/** the free depth under a member's last line in its column, to the first ink not its own (a page's glyph or box), the page's
- *  bottom edge where there is none; the distance to the next text line of its column, baseline to baseline; and, with TeX's
- *  facts, the room under each run of its text lines and its paragraph's separation (Room.runs, Room.sep: what a translation
- *  may borrow, PDF-READER §18.11) */
+/** the free depth under a member's last line in its column, to the first ink not its own (a page's glyph or box, its frame's
+ *  painted line: `tex.frame`, PDF-READER §18.112), the page's bottom edge where there is none; the distance to the next text line
+ *  of its column, baseline to baseline; and, with TeX's facts, the room under each run of its text lines and its paragraph's
+ *  separation (Room.runs, Room.sep: what a translation may borrow, PDF-READER §18.11), the next ink there its frame's line where
+ *  nearer */
 function roomOf(
   mem: Member,
   inkA: Doc,
   offA: Int32Array,
   ink: { under: InkUnder; next: InkNext },
-  tex: { frames: ReadonlyMap<number, TexFrame>; runs: boolean; sep: number | undefined },
+  tex: {
+    frames: ReadonlyMap<number, TexFrame>
+    runs: boolean
+    sep: number | undefined
+    frame?: (page: number) => PaintedFrame | null
+  },
 ): Room {
   const inkBelow = ink.under
   const last = mem.lines.at(-1)!
@@ -1029,9 +1025,10 @@ function roomOf(
   }
   // (the free depth under a line across x0..x1: from its bottom to the first ink under it, whoever's it is (its own kept rows and
   // elements under it too), the page's bottom edge where there is none)
+  const frameOn = tex.frame ?? (() => null)
   const depthUnder = (l: Line, x0: number, x1: number): number => {
     const pg = inkA.pages[l[0] - 1]!
-    const next = inkBelow(l[0], l[6] - 0.5, x0, x1)
+    const next = Math.max(inkBelow(l[0], l[6] - 0.5, x0, x1), frameUnder(frameOn(l[0]), l[6] - 0.5, x0, x1))
     return r2(Math.min(pg.view[3] - pg.view[1], Math.max(0, l[6] - (Number.isFinite(next) ? next : pg.view[1]))))
   }
   // (its last text line: the last line not kept, the first where every line is; its block)
@@ -1109,7 +1106,12 @@ function roomOf(
     }
     const foot = tex.frames.get(end[0])?.foot
     if (foot !== undefined) {
-      const next = ink.next(end[0], end[6] - 0.5, ox0, from === e ? mx1 : ox1)
+      // (and its frame's painted line under the run there, a reader's border: the next ink too)
+      const nx1 = from === e ? mx1 : ox1
+      const next = Math.max(
+        ink.next(end[0], end[6] - 0.5, ox0, nx1),
+        frameUnder(frameOn(end[0]), end[6] - 0.5, ox0, nx1),
+      )
       const pg = inkA.pages[end[0] - 1]!
       runs.push([e, r2(end[4] - (Number.isFinite(next) ? next : pg.view[1])), r2(end[4] - foot)])
     }
@@ -1122,4 +1124,82 @@ function roomOf(
     ...(runs.length ? { runs } : {}),
     ...(tex.sep !== undefined ? { sep: tex.sep } : {}),
   }
+}
+
+/**
+ * The fill and the face TeX set a member's text in, group by group (group-style.ts): a group's fill where it is not the fill
+ * around it, a link's that hyperref colours, and the face of a group whose command names none where it is not the face
+ * around it, stated for the typesetter to draw its translation in; and where a group or a switch's run is set apart so, the
+ * unit's own fill is its own text's, not the one most of all its glyphs hold, which a link holding most of its letters makes
+ * its own. Its weight and slant, its base, are always the reading's (group-style.ts: its own text's glyphs, its marks and the
+ * symbols it draws as text included, else each read outside the scopes that set it, an \emph run's turned back): the
+ * typesetter draws its translation's text outside every group in them and reads nothing more of its own (docs/PDF-READER.md
+ * §18.114). And its size, where it has text of its own beside its groups, is that text's (its letters in no group; faked
+ * small capitals aside, `small`): every group TeX set at another size states its own (marks/faces.ts), so the base is the
+ * size of the text no group claims; where every letter is a group's, the median of them all, the size most of its text is set
+ * at, which paces the lay's knobs. Read off `glyphs`, the member's text's as TeX set them in stream order: a level member's
+ * (geometry.ts), a turned one's the turned reading's (turned-frames.ts frameTurned): one reading of both. Not a figure text's:
+ * its groups are its runs of glyphs in another face than its own, which is the face of most of its glyphs by their
+ * definition (ink.ts figureRuns), its text in its run's order, not its glyphs' stream order: read again in the stream's,
+ * 2610.37668v1's "PSNR 33.42 dB" took its italic run's face for its own
+ */
+export function readGroupStyle(
+  w: Work,
+  mem: Member,
+  unit: Work['units'][number] | null | undefined,
+  glyphs: readonly StyleGlyph[],
+  small: ReadonlySet<StyleGlyph>,
+): void {
+  if (!unit || mem.figure || unit.figure || !glyphs.length) return
+  const { gA, inkA } = w.ix
+  const classOf = new Map(unit.classes ?? [])
+  const cmdOf = new Map((unit.spans ?? []).map(([id, x]) => [id, x.cmd]))
+  const colourSwitch = (el: Extract<Piece, { t: 'el' }>) => classOf.get(el.id)?.colour !== undefined
+  const faceSwitch = (el: Extract<Piece, { t: 'el' }>) => {
+    const c = classOf.get(el.id)
+    return !!c?.bare && !!c.cmd && namesFace(commandStyleOf(`\\${c.cmd}`))
+  }
+  if (!hasScopes(unit.content, (el) => colourSwitch(el) || faceSwitch(el))) return
+  const g = groupStyleOf(
+    unit.content,
+    glyphs,
+    (el) => classOf.get(el.id)?.text,
+    colourSwitch,
+    faceSwitch,
+    (el) => {
+      const c = classOf.get(el.id)
+      return c?.cmd ? commandStyleOf(`\\${c.cmd}`) : undefined
+    },
+    // (a symbol the typesetter draws as text where it stands, not raised: its own glyphs, level or, a turned unit's, turned)
+    (el) => {
+      const c = classOf.get(el.id)
+      if (c?.cls !== 'symbol' || !c.sym || c.sym[1]) return undefined
+      return [
+        ...(mem.els.get(el.id) ?? []).map(gA),
+        ...(mem.turnedEls.get(el.id) ?? []).map(([ap, aj]) => turnedStyleGlyph(inkA.pages[ap - 1]!.turned![aj]!)),
+      ]
+    },
+    // (a bare group's command the instrument read off its leading declaration, SpanAt.cmd)
+    (sp) => cmdOf.get(sp.id),
+  )
+  if (g.fill.groups.length) mem.spanFills = g.fill.groups
+  if (g.fill.apart && g.fill.own !== undefined) {
+    if (g.fill.own > 0) mem.style.fill = g.fill.own
+    else delete mem.style.fill
+  }
+  if (g.face.groups.length) mem.spanFaces = g.face.groups
+  if (g.face.several.length) mem.spanSeveral = [...(mem.spanSeveral ?? []), ...g.face.several]
+  if (g.face.own) {
+    if (g.face.own.bold) mem.style.bold = 1
+    else delete mem.style.bold
+    if (!g.face.own.italic) delete mem.style.slant
+    else mem.style.slant ??= 1
+  }
+  // (the marks' base where it is not the letters': the face a translated mark outside every group is drawn in, Placed.markFace)
+  const mk = g.face.marks
+  if (g.face.own && mk && (mk.bold !== g.face.own.bold || mk.italic !== g.face.own.italic))
+    mem.markFace = { ...(mk.bold ? { bold: 1 as const } : {}), ...(mk.italic ? { slant: 1 as const } : {}) }
+  else delete mem.markFace
+  const ownSize = unitSize(g.text.map((q) => glyphs[q] as StyleGlyph).filter((x) => /\S/.test(x.u) && !small.has(x)))
+  if (ownSize !== undefined) mem.style.size = ownSize
 }
