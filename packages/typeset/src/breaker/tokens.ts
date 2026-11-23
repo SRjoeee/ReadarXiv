@@ -1074,8 +1074,10 @@ export function tokens(i: TokensInput): Tokens {
     // the original's style is its own: 2608.06701v1 p5's "Periodic Advisor", italic by the paper's macro, was drawn upright in
     // the run's style, and "LIVEPLAN", in faked small capitals, in full capitals; a group around it that TeX applied is in its
     // glyphs (\emph's italic), and a rendering of no stated style, or an attribute its style does not state, takes the run's)
+    // (and its size where its glyphs' is not the member's, El.style.size: TStyle.rel, read.ts)
+    const rel = r.st?.rel !== undefined ? { rel: r.st.rel } : {}
     const own: TStyle = r.math
-      ? { ...cur, italic: /[A-Za-z]/.test(r.text) && r.text.length <= 3, caps: false }
+      ? { ...cur, italic: /[A-Za-z]/.test(r.text) && r.text.length <= 3, caps: false, ...rel }
       : r.mode === 'orig-text' && r.st && r.st.fam !== 'math'
         ? {
             ...style(),
@@ -1084,6 +1086,7 @@ export function tokens(i: TokensInput): Tokens {
             bold: r.st.bold ?? style().bold,
             italic: r.st.italic ?? style().italic,
             caps: r.st.caps ?? style().caps,
+            ...rel,
           }
         : style()
     if (r.math && own.upper) own.upper = false

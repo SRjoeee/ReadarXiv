@@ -242,11 +242,12 @@ function drawnAs(
   return { mode: 'crop', page, ...cropOfBox(box), text: copy, ...(mark ? { mark: true } : {}) } as Res
 }
 
-/** each element's reading (U.elements' ElementReading) from its El, by the row's piece index */
+/** each element's reading (U.elements' ElementReading) from its El, by the row's piece index; `size` the member's */
 function readingsOf(
   pieces: readonly V0Piece[],
   els: ReadonlyMap<string, El>,
   L: LineKeys,
+  size: number,
 ): { readings: Map<number, ElementReading>; cls2: (string | null)[] } {
   const readings = new Map<number, ElementReading>()
   const cls2 = clsOf(pieces, els)
@@ -341,7 +342,16 @@ function readingsOf(
     const page = ink[0]?.[0] ?? 1
     // (the style most of its glyphs are set in (El.style), its own font state where it is drawn as the page's text: its
     // typewriter face, weight, slant and small capitals, faked (El.style.sc, its text in TeX's case) or its face's own, over
-    // the run's (tokens.ts); none where the part states none, the run's then)
+    // the run's (tokens.ts); none where the part states none, the run's then. And its size where its glyphs' is not the
+    // member's (TStyle.rel, absolute, as a group's): `{\small\texttt{…}}`, a citation TeX set larger than its cell; none for an
+    // element of no ink, whose style no glyph states, nor for faked small capitals, whose size is their small letters', the
+    // share they are set at (El.style.sc))
+    const own =
+      el?.style && el.ink.length && el.style.sc === undefined && el.style.size > 0 && size > 0
+        ? Math.round(el.style.size * 100) !== Math.round(size * 100)
+          ? el.style.size / size
+          : undefined
+        : undefined
     const gst: TStyle | null = el?.style
       ? {
           fam: el.style.role,
@@ -349,6 +359,7 @@ function readingsOf(
           italic: !!el.style.slant,
           caps: el.style.sc !== undefined || (!!el.style.design && !!classifyFont(el.style.design).caps),
           ...(el.style.sc !== undefined ? { sc: el.style.sc } : {}),
+          ...(own !== undefined ? { rel: own } : {}),
         }
       : null
     const literal = !!el?.literal
@@ -394,7 +405,17 @@ function readingsOf(
       ...(el?.tie ? { tie: true as const } : {}),
       symbol:
         cls === 'symbol'
-          ? { leads: !!el?.leads, res: { mode: 'symbol', text: el?.sym?.[0] ?? '', math: true, sup: !!el?.sym?.[1] } }
+          ? {
+              leads: !!el?.leads,
+              res: {
+                mode: 'symbol',
+                text: el?.sym?.[0] ?? '',
+                math: true,
+                sup: !!el?.sym?.[1],
+                // (drawn as text at its glyphs' size where it is not the member's: TStyle.rel)
+                ...(own !== undefined && !el?.sym?.[1] ? { st: { rel: own } } : {}),
+              },
+            }
           : null,
       supSrc,
       source: { mode: 'source', text: nested ? '*' : copy, math: cls === 'other', sup: supSrc },
@@ -537,7 +558,7 @@ export function readMember(i: ReadInput): ReadOut {
   const facts = factsOf(m)
   const { els, spans } = facts
   const L = linesOf(m, i.rects)
-  const { readings, cls2 } = readingsOf(pieces, els, L)
+  const { readings, cls2 } = readingsOf(pieces, els, L, m.style.size)
   // (the lines its source does not write, held: KEPT lines no display's rows are; a display's rows, touched)
   const displayLines = new Set<string>()
   for (const r of readings.values()) for (const l of r.display ?? []) displayLines.add(l)
