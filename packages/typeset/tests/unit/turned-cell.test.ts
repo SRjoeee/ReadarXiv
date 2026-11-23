@@ -219,3 +219,69 @@ describe('what is not text in a unit set turned, laid in its frame (docs/PDF-REA
     expect(m!.off & 4).toBe(4)
   })
 })
+
+describe('a link over what a unit set turned holds, laid in its frame (#673)', () => {
+  /** a sideways caption whose reference "4.2" stands from 472 to 490 along its line, its baseline -60 (x 60 on the page) */
+  const ref: [number, number, number, number, number, number] = [1, 472, -62, 490, -53, -60]
+  const cap: Placed = {
+    ord: 0,
+    kind: 'caption',
+    text: idOf(1),
+    lead: 12,
+    style: { role: 'serif', size: 10, design: 'NimbusRomNo9L-Regu' },
+    align: 'j',
+    lines: [[1, 0, 400, 502, -60, -53, -62, 400, 700, 0, 10]],
+    room: { below: 30 },
+    els: [['1', { kind: 'num', ink: [ref], copy: '4.2' }]],
+  }
+  const row: Row = {
+    id: idOf(1),
+    ok: true,
+    by: 'test',
+    content: [
+      { t: 'text', s: 'Die Ergebnisse der langen Läufe (Abschnitt ' },
+      { t: 'el', id: '1' },
+      { t: 'text', s: ').' },
+    ],
+  }
+  const one: Rows = { get: (k) => (k === row.id ? row : undefined), done: true }
+  it('moves the link with the reference’s crop, onto the page through the frame’s turn', () => {
+    // (the annotation on the page over the reference, (x, y) of the frame at (-y, x): x 52 to 63, y 471 to 491)
+    const link = {
+      box: [52, 471, 63, 491] as [number, number, number, number],
+      to: { dest: '"sec.4.2"' },
+      owner: [0, '1'] as [number, string],
+    }
+    const p = layPage({ ...part([], [{ dir: [0, 1], flows: [[cap]] }]), links: [link] }, one, rulesFor('de'), metrics())
+    const [m] = p.members
+    expect(m).toMatchObject({ state: 'laid', frame: [0, 1] })
+    // (the crop where the translation sets it, on the page: its frame place turned by (0, 1))
+    const [y, x0, , items] = m!.lines.find((l) => l[3].some((it) => 'src' in it))!
+    const c = items.find((it) => 'src' in it) as Extract<(typeof items)[number], { src: unknown }>
+    const fx = y + (c.x - x0),
+      fy = -x0
+    const along = [fx + (ref[1] - c.src[1]) * c.k, fx + (ref[3] - c.src[1]) * c.k]
+    expect(p.links).toHaveLength(1)
+    const [box, to, owner] = p.links[0]!
+    expect([to, owner]).toEqual([{ dest: '"sec.4.2"' }, 0])
+    // (on the page its y the crop's place along the frame, its x across it: no longer the annotation's box on A)
+    expect(box).not.toEqual(link.box)
+    expect(box[1]).toBeGreaterThanOrEqual(along[0]! - 1.5)
+    expect(box[3]).toBeLessThanOrEqual(along[1]! + 1.5)
+    expect(box[0]).toBeGreaterThanOrEqual(-(fy + (ref[4] - c.src[5]) * c.k) - 1.5)
+  })
+  it('keeps the link at its box on A where the caption stays the original’s', () => {
+    const link = {
+      box: [52, 471, 63, 491] as [number, number, number, number],
+      to: { dest: '"sec.4.2"' },
+      owner: [0, '1'] as [number, string],
+    }
+    const p = layPage(
+      { ...part([], [{ dir: [0, 1], flows: [[cap]] }]), links: [link] },
+      { get: () => undefined, done: true },
+      rulesFor('de'),
+      metrics(),
+    )
+    expect(p.links.map((l) => l[0])).toEqual([link.box])
+  })
+})
