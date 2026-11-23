@@ -41,6 +41,17 @@ describe('a note written in a paragraph of no text of its own', () => {
       'a \\footnotetext in a group of its own',
       '\\begingroup\n\\renewcommand{\\thefootnote}{\\fnsymbol{footnote}}\n\\footnotetext[1]{A note of our own set apart in a group.}\n\\endgroup',
     ],
+    // (an unnumbered note of three forced lines, `{\let\thefootnote\relax\footnotetext{…}}`: its lines drawn run together
+    // while its ink was an ink unit's, read off the glyphs with no break)
+    [
+      'an unnumbered \\footnotetext of three forced lines in a group',
+      '{\\let\\thefootnote\\relax\\footnotetext{\n$^{a}$ A first line of our note. \\\\\n$^{b}$ A second line of ours. \\\\\n$^{c}$ A third line of ours.\n}}',
+    ],
+    // (a note in a paragraph of words: the rule otherwise holds)
+    [
+      'a \\footnote in a paragraph of words',
+      'Words of ours before it.\\footnote{A note of ours in a paragraph.} Words after it.',
+    ],
   ]
   for (const [what, block] of forms) {
     const tex = `\\documentclass{article}\n\\begin{document}\nOur own first paragraph, with a mark\\footnotemark[1] for a note set apart.\n\n${block}\n\n${LAST}\n\\end{document}\n`
@@ -50,7 +61,9 @@ describe('a note written in a paragraph of no text of its own', () => {
       const notes = paper.units.map((u, i) => [u, i] as const).filter(([u]) => u.kind === 'footnote')
       expect(notes).toHaveLength(1)
       const [note, i] = notes[0]!
-      expect(note.nested && !held.has(note), 'nested in no unit').toBe(false)
+      expect(!!note.nested && !held.has(note), 'nested in no unit').toBe(false)
+      // (its forced breaks its own pieces, which its part states as breaks)
+      expect(note.pieces.filter((p) => p.t === 'ph' && p.src === '\\\\')).toHaveLength(block.split('\\\\\n').length - 1)
       const marked = markedOf(tex)
       expect(marked).toContain(`\\axtmark{${i}s}`)
       expect(marked).toContain(`\\axtend{${i}e}`)
