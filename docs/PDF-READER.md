@@ -9458,11 +9458,12 @@ mechanism for a turned header cell, a turned caption of several lines and a side
   papers (59 cells, 6 of them turned 60 degrees, and 2 captions of a sideways figure), 36 of them cells the paper keeps as
   written (a word, a name: drawn as the original's ink, by their rule); of the 32 placements of turned text a survey found
   left the original's (lane turned), 25 drawn translated and 7 left for an element of ink (`turned: an element`: a formula,
-  a reference, a citation in a turned cell or caption). No unit is in two turns or on two pages. Every other object byte
-  for byte: every units object, ownership file and part but the 14 parts that gain a frame and the two pages that gain one
-  (2610.38776v1 p20 and p21, sideways figures); 18 prepare dumps differ (the framed units' states, and the reason of four
-  units the spell check refuses, now `spell` where it read `no ink`). The reader's lay with every row answered: drawn
-  51,603 -> 51,628 (the 25), no unit drawn before lost, 5,872 -> 5,874 pages laid.
+  a reference, a citation in a turned cell or caption); none left for two pages or two turns. Every other object byte for
+  byte: every units object and every part but the 14 that gain a frame and the two pages that gain one (2610.38776v1 p20
+  and p21, sideways figures), and so the heads of those 11 papers; 17 prepare dumps differ (the framed units' states in the
+  11, the seven `turned: an element`, and the reason of four units the spell check refuses, now `spell` where it read `no
+  ink`). The reader's lay with every row answered: drawn 51,603 -> 51,628 (the 25), no unit drawn before lost, 5,872 ->
+  5,874 pages laid.
 - **Versions**: PIPELINE moves (the parts, the units' states); FORMAT 1 stays (above); TRANSLATE stays (no unit's content, id
   or wire moves: every units object byte for byte, the rows production holds are kept); LAYOUT and the marks digest stay (no
   TeX moves; today's layout maker does not ask the turned reading).
