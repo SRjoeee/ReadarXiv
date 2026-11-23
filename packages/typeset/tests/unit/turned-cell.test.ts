@@ -138,3 +138,84 @@ describe('a unit set turned, laid in its frame', () => {
     expect(p.members.every((m) => m.state === 'waiting')).toBe(true)
   })
 })
+
+describe('what is not text in a unit set turned, laid in its frame (docs/PDF-READER.md §18.108)', () => {
+  /** 2608.12502v1's header cell "Before ($t_1$)" a quarter turned, in its frame: its formula from 448 to 460 on its line */
+  const formula: [number, number, number, number, number, number] = [1, 448, -63.4, 460, -53, -60]
+  const cell = cellInFrame(0, {
+    plain: 'Before ()',
+    style: { role: 'serif', size: 10, design: 'NimbusRomNo9L-Regu' },
+    lines: [[1, 0, 400, 466, -60, -53, -63.4, 400, 466, 0, 10]],
+    room: { below: 0, side: [380, 520] },
+    els: [['1', { kind: 'other', ink: [formula], copy: 't1' }]],
+  })
+  const row: Row = {
+    id: idOf(1),
+    ok: true,
+    by: 'test',
+    content: [
+      { t: 'text', s: 'Avant (' },
+      { t: 'el', id: '1' },
+      { t: 'text', s: ')' },
+    ],
+  }
+  const one: Rows = { get: (k) => (k === row.id ? row : undefined), done: true }
+  it('lays an element’s crop on its frame line as on a level one, its source and own ink in the frame, along the turn', () => {
+    const p = layPage(part([], [{ dir: [0, 1], flows: [[cell]] }]), one, rulesFor('fr'), metrics())
+    const [m] = p.members
+    expect(m).toMatchObject({ state: 'laid', frame: [0, 1] })
+    const crops = m!.lines.flatMap((l) => l[3]).filter((it) => 'src' in it)
+    expect(crops).toHaveLength(1)
+    // (its source the formula's box with the crop's margin, in the frame; its own ink the formula's box)
+    const c = crops[0] as Extract<(typeof crops)[number], { src: unknown }>
+    expect(c).toMatchObject({ dir: [0, 1], ink: [[448, -63.4, 460, -53]] })
+    expect(c.src[0]).toBe(1)
+    expect(c.src[5]).toBe(-60)
+    expect(c.src[1]! <= 448 && c.src[2]! <= -63.4 && c.src[3]! >= 460 && c.src[4]! >= -53).toBe(true)
+    // (its element's group off with its text's: its ink drawn again where the translation sets it)
+    expect(m!.off & 3).toBe(3)
+    // (the page's every piece's ink on the page: the formula's box turned onto it, (x, y) of the frame at (-y, x))
+    expect(p.inks).toEqual([[1, 53, 448, 63.4, 460, 448]])
+  })
+  it('draws a turned caption’s label anew in the target’s word by its float’s type, on its frame line, along the turn', () => {
+    // (2610.38776v1 p20's sideways "Figure 14:" before its text: the structural-names rule's, as a level caption's)
+    const label: Placed['label'] = {
+      kind: 'float',
+      ink: [1, 400, -62, 460, -53, -60],
+      style: { role: 'serif', size: 10, design: 'NimbusRomNo9L-Regu' },
+      name: ['Figure', [1, 400, -62, 436, -53, -60]],
+      num: ['14', [1, 442, -62, 454, -53, -60]],
+      punct: [':', [1, 454, -62, 460, -53, -60]],
+      line: 0,
+      float: 'figure',
+    }
+    const cap: Placed = {
+      ord: 0,
+      kind: 'caption',
+      text: idOf(1),
+      lead: 12,
+      style: { role: 'serif', size: 10, design: 'NimbusRomNo9L-Regu' },
+      align: 'j',
+      lines: [[1, 0, 466, 700, -60, -53, -62, 400, 700, 0, 10]],
+      room: { below: 30 },
+      label,
+    }
+    const p = layPage(
+      part([], [{ dir: [0, 1], flows: [[cap]] }]),
+      rows({ 0: 'Die Ergebnisse der Modelle.' }),
+      rulesFor('de'),
+      metrics(),
+    )
+    const [m] = p.members
+    expect(m).toMatchObject({ state: 'laid', frame: [0, 1] })
+    const items = m!.lines.flatMap((l) => l[3])
+    expect(
+      items
+        .map((it) => ('face' in it ? it.s : ''))
+        .join('')
+        .startsWith('Abbildung 14:'),
+    ).toBe(true)
+    expect(items.every((it) => 'dir' in it && it.dir?.[1] === 1)).toBe(true)
+    expect(m!.off & 4).toBe(4)
+  })
+})
