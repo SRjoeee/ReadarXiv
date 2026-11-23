@@ -9425,7 +9425,18 @@ translation sets the pieces and in whatever order it returns them; a reply that 
 first and nothing at the others (the typesetter's tests, `unit/read.test.ts`). The trail's gap before it (`El.sep`) is the
 trail's statement alone: a piece is laid where the translation sets it, glued there. Where the source writes no such piece
 (a class's own marks from its lists, REVTeX's affiliation numbers; a separator), or the piece after the name owns its ink by
-its own points, what stands past it stays the trail it was. No mark of TeX's moves: the marking is another lane's.
+its own points, what stands past it stays the trail it was. No mark of TeX's moves.
+
+- **Reach**, as measured over the lab's 245 papers from the stored compiles: 100 member placements of 25 papers take their run
+  (their trail gone), the rooms and joins of 4 papers' rows with them (an ORCID icon that stood beside the row as ink that stays
+  is now a member's), 12 papers' link annotations over a run owned by its piece. The reader's own lay, names on, every row its
+  own words: author-block members refused `unproven` 61 -> 15 (laid author members 544 -> 590; a connector after a name laid now
+  that the name is, 2608.21180v1), and 2604.10456v1's eleven -> none. What remains, 13 author members of 12 papers and 2
+  affiliations of one, is no run after the name: a piece in the middle of a unit that holds several names
+  (`Name\IEEEauthorrefmark{1}, Name …`, `\aff{…}\orcid{…}` between names, a `\thanks` call between names, an affiliation's
+  `$^2$` between two places), whose ink TeX set with no point of the marking's between it and the text around it: the ownership
+  gave it to the unit's text or to the piece before it, and no rule of one owner tells it apart without a point of TeX's there;
+  the marking's.
 
 ### 18.109 A label is what TeX set before the start on the start's line, by the line's extent, in its paragraph (the coordinator's ruling of 2026-11-23)
 
@@ -9442,6 +9453,14 @@ paragraph's start (`q<n>`, LaTeX's para/begin, which runs before `\everypar` set
 point being another paragraph's. TeX keeps two lines' boxes apart by `\lineskip` at least, so no glyph of the line above or
 below meets the line's extent. A caption's label stays TeX's call's, read on any line (§18.34).
 
+- **Reach**, over the lab's 245 papers: besides 2604.10456v1's first institute, 5 units' labels or lead moved, each drawn
+  before and after: a "*" acmart sets after an author's name in that name's paragraph, read by the band as the next author's
+  label across the row, is no label (the paragraph bound) and the trail of the name it follows (2608.03063v1, two); the "."
+  amsthm sets after its "Proof" is the proof's label, the head's joint, read by the band against a formula's first glyph whose
+  origin stands 8.37 off the line (2610.21085v1); a unit's head piece TeX set before its start, `\texttt{…}`, is the piece's
+  ink (2610.37818v1); a footnote's mark at a page's foot is its note's label (2610.36184v1). No label is lost; the drawings
+  read the same or better.
+
 ### 18.110 A unit read off the ink keeps the forced line ends TeX set inside it (the coordinator's ruling of 2026-11-23)
 
 A unit no source unit owns (an ink unit, §19.10: a note with no unit, an orphan, the names the class prints) is read off its
@@ -9453,9 +9472,14 @@ for a centred block's `\\` (`\@centercr`, which ends a paragraph, and paragraph 
 row. Carried onto A as the paragraph points are (`locate/ink.ts` carry), each such point between two lines of an ink unit
 ends the first inside the unit with a break placeholder, `\\` of kind `break`, as a source unit's (`locate/ink-units.ts` rule
 3b): the part states its line (`El.ends`, from the last glyph of the line TeX ended there, the maker's), the bundle `El.brk`,
-and the lay's forced-break rule (§18.77, `unit/breaks.ts`) ends the translation's line there. An ink unit that echoes a
-source unit takes that unit's pieces, as before. The ink units that hold such a point change their content, so their ids
-move and their rows are asked again.
+and the lay's forced-break rule (§18.77, `unit/breaks.ts`) ends the translation's line there. A unit whose lines stand on two
+pages, a biblatex entry's (§19.10), takes the point TeX set after its first page's line, carried after that page's last glyph,
+where nothing TeX set stands between them. An ink unit that echoes a source unit takes that unit's pieces, as before. The ink
+units that hold such a point change their content, so their ids move and their rows are asked again.
+
+- **Reach**, over the lab's 245 papers: 10 ink units of 10 papers hold 26 of TeX's forced breaks inside them (8 notes, an orphan
+  paragraph of seven lines, a names block), drawn on TeX's lines; 2608.14893v1's note of six author notes, run together in five
+  lines, now six. A point that ends an ink unit's last line (the next line another unit's) sets no break inside it.
 
 ## 19. The engine's contract
 
