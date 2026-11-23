@@ -4,6 +4,10 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- Fixed: in the PDF reader, a paragraph holding a command of the paper's own that prints nothing, such as one that hides a passage the author struck out, is translated, and so is a title whose acknowledgement the paper's class sets without a mark in the title. Both had stayed in the original.
+- Fixed: in the PDF reader, a paragraph that goes on after a displayed formula with a reference, a citation, a footnote's mark or a command of the paper's own that prints something, such as `\[ … \]` then `\autoref{fig}` on the next line, is translated. It had stayed in the original, though its translation had arrived.
+- Fixed: in the PDF reader, a caption or a paragraph holding a symbol the reader has no font for, such as a check mark or a cross the paper draws from a symbol font, is translated, the symbol drawn as printed. It had stayed in the original language.
+- Fixed: in the PDF reader, a page on which the number before a line is a link, such as a note's number that leads to its mark, is translated. The whole page had stayed as printed.
 - Fixed: in the PDF reader, a word in small capitals whose letters the font has no small capitals for, such as Greek in Linux Libertine, or, in a Russian, Ukrainian or Bulgarian translation, the sans and typewriter text of a paper in Computer Modern, is drawn in small capitals made from the font's capitals. It had been drawn in lower case.
 - Fixed: in the PDF reader, a name the paper sets in small capitals, such as `\textsc{…}` in a heading or a paragraph, is followed by the translation after its last letter. The translation had started about one letter before the name ended, drawn over it.
 - Fixed: in the PDF reader, a figure's text that a picture painted over it hides on the page, such as the labels of a mock interface under a pasted screenshot, is no longer translated. Its translation had been drawn over the picture.

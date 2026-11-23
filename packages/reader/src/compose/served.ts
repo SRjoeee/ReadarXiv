@@ -32,7 +32,9 @@
 // in no slice of the string's faces (a face whose table cannot be had holds none), or its slice is lost (an answer no ask would
 // mend, or a failure met twice, until it comes), else false: the typesetter waits for the face (the page's `wait.faces`), and
 // the composer asks it here (`faces.ready`), whose answer is each face's table read or found not to be had, never a wait
-// asked again at once.
+// asked again at once. `holds` is the catalogue's alone: false only where a character is in no slice of the string's faces,
+// every table read and had; a slice lost declares its characters still (the typesetter draws an element as the original's ink
+// only where no served face holds its text, never for a face lost for now).
 import { SMCP } from '@readarxiv/text'
 import { FACES, hyphenationOf, type Metrics, type Patterns } from '@readarxiv/typeset'
 import { type Fetch, realTimers, type Timers } from '../bytes/source.ts'
@@ -457,6 +459,8 @@ export function createServed(o: {
   /** a face lost: its texts left the original's, told once; one lost while only the text rendering's probe asked it
    *  (`quiet`), told once a page's text asks it (a face no page draws is no loss of the page's) */
   const unseen = new Set<string>()
+  /** the faces whose table (or the index) cannot be had: what they declare is not known (Metrics.holds) */
+  const unhad = new Set<string>()
   const tellLost = (id: string, quiet = false) => {
     if (told.has(id)) return
     if (quiet) {
@@ -614,6 +618,7 @@ export function createServed(o: {
         if (had[k]) f.slices ??= []
         else {
           f.slices = []
+          unhad.add(f.id)
           tellLost(f.id, quiet)
         }
       })
@@ -696,6 +701,15 @@ export function createServed(o: {
         if (!loaded.has(r.slice.key)) return false
       }
       return true
+    },
+    // (the catalogue's answer, whatever is loaded or lost: false only where every face of the string has its table read and
+    // none declares a character (runsOf 'never'); a slice lost for now, or not there, declares its characters all the same,
+    // and a face whose table cannot be had declares what is not known: true. `ready`'s 'never' answers both: the typesetter
+    // draws an element as the original's ink only for the first, lay/entry.ts unservedOf)
+    holds(face, text) {
+      const fs = facesOf(face)
+      if (fs && (!fs.read || fs.faces.some((f) => unhad.has(f.id)))) return true
+      return runsOf(face, text) !== 'never'
     },
     advance: (face, size, text) => (measured(face, text)[0] * size) / 100,
     ink(face, size, text) {

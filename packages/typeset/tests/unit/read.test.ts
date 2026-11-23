@@ -165,6 +165,24 @@ describe('the reading from the part', () => {
     expect(got.resolutions.get(1)).toMatchObject({ mode: 'none', text: '', proof: true })
     expect((got.tokens as unknown as { s?: string }[]).map((t) => t.s ?? '').join('')).toBe('Werkzeug')
   })
+  it('draws a nested unit’s mark the part states TeX set nothing for as nothing, its unit read; one not found leaves it unproven', () => {
+    // (a heading's `\\thanks{…}`, its class setting no mark there: the part's El.text '' with no ink, as for any element of a class
+    // drawn from its ink. Read as a mark not found, drawn from its source as `*`, it left the unit unproven: 2608.18760v1's title)
+    const pieces = [{ t: 'text', tr: true, s: 'Ein Titel' } as V0Piece, { t: 'nested', k: 1 } as V0Piece]
+    const none = read(
+      member({ els: [['1', { kind: 'num', ink: [], mark: 1, nested: 1, text: '' }]] }),
+      pieces,
+      'heading',
+    )
+    expect(none.unproven).toBe(-1)
+    expect(none.resolutions.get(1)).toMatchObject({ mode: 'none', text: '', proof: true })
+    expect((none.tokens as unknown as { s?: string }[]).flatMap((t) => (t.s?.trim() ? [t.s] : []))).toEqual([
+      'Ein',
+      'Titel',
+    ])
+    const lost = read(member({ els: [['1', { kind: 'num', ink: [], mark: 1, nested: 1 }]] }), pieces, 'heading')
+    expect(lost.unproven).toBe(1)
+  })
   it('reads a unit’s tree of pieces back as today’s flat ones, a group an open and a close', () => {
     const got = sourcePieces([
       { t: 'text', s: 'a ' },

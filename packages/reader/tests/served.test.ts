@@ -6,6 +6,7 @@
 // told once), one that does not come in time or whose body the link breaks is a failure for now; a table not to be had loses
 // its faces; a 408 or 429 is asked once more after its Retry-After; the patterns read as the typesetter reads them, none
 // where they do not come in time; a slice lost for now asked again by itself at the session's pace while a page needs it.
+import type { Part, Row } from '@readarxiv/format'
 import * as T from '@readarxiv/typeset'
 import { describe, expect, it, vi } from 'vitest'
 import type { Timers } from '../src/bytes/source.ts'
@@ -868,6 +869,95 @@ describe('a slice lost for now (a failure that may pass, met twice): asked again
       at.s.faces.dispose()
     },
   )
+  it("a slice lost for now still holds its characters (Metrics.holds, the catalogue's): the typesetter leaves a unit whose element needs it the original's, never draws its ink, and lays it with its text once the slice is back; a character no slice declares is held by none", async () => {
+    // (the typesetter draws an element as the original's ink only where no served face holds its text, lay/entry.ts
+    // unservedOf: `ready` says 'never' for a slice lost for now as for a character no slice declares; `holds` tells them apart)
+    const ACCENTS_SLICE = '/static-fonts/0000000000000002.woff2'
+    const timers = handTimers()
+    const at = site({ answers: { [ACCENTS_SLICE]: [503, 503, 503, 503] }, timers })
+    const E = 'é'
+    const id = 'a'.repeat(64)
+    const part: Part = {
+      format: 1,
+      page: 1,
+      paper: { faces: { fonts: [['NimbusRomNo9L-Regu', 100]] } },
+      flows: [
+        [
+          {
+            ord: 0,
+            kind: 'para',
+            text: id,
+            lead: 12,
+            style: { role: 'serif', size: 10, design: 'NimbusRomNo9L-Regu' },
+            align: 'j',
+            lines: [
+              [1, 0, 72, 300, 700, 707, 698, 72, 300, 0, 10],
+              [1, 0, 72, 200, 688, 695, 686, 72, 300, 0, 10],
+            ],
+            room: { below: 20, next: 24 },
+            els: [
+              [
+                '1',
+                {
+                  kind: 'umacro',
+                  cmd: 'emark',
+                  bare: 1,
+                  unknown: 1,
+                  text: E,
+                  style: { role: 'serif', size: 10 },
+                  ink: [[1, 150, 698, 155, 707, 700]],
+                },
+              ],
+            ],
+          },
+        ],
+      ],
+    }
+    const row: Row = {
+      id,
+      ok: true,
+      by: 'test',
+      content: [
+        { t: 'text', s: 'Ein Satz mit ' },
+        { t: 'el', id: '1' },
+        { t: 'text', s: ' darin, der weiter geht.' },
+      ],
+    }
+    const rows = { get: (k: string) => (k === id ? row : undefined), done: true }
+    const rules = T.rulesFor('de')
+    const lay = () => T.layPage(structuredClone(part), rows, rules, at.s.metrics)
+    // (laid, its faces asked as the page waits for them: the accents' slice fails twice, lost for now)
+    let page = lay()
+    // (the font string the typesetter sets the element's text in: the one its page waits for with that text)
+    const font = page.wait.faces.find(([, t]) => t.includes(E))?.[0]
+    expect(font).toBeTypeOf('string')
+    for (let k = 0; k < 4 && page.wait.faces.length; k++) {
+      const p = at.s.faces.ready(page.wait.faces)
+      await timers.run(RETRY_MS)
+      await p
+      page = lay()
+    }
+    expect([at.s.metrics.ready(font!, E), at.s.metrics.holds?.(font!, E), at.lost]).toEqual([
+      'never',
+      true,
+      ['nimbus-roman-regular'],
+    ])
+    expect(at.s.metrics.holds?.(font!, 'a \u{1F600}')).toBe(false)
+    // (while lost: the unit the original's, nothing of it drawn, its slice the lay met told to be asked again)
+    const [laidLost, lost] = at.s.faces.lostIn(lay)
+    expect(laidLost.members.map((m) => [m.state, m.off, m.lines.length])).toEqual([['served', 0, 0]])
+    expect(lost).toEqual(['nimbus-roman-regular:1'])
+    // (back: laid, its element drawn as its text, no crop; nothing told lost again)
+    at.s.faces.heal(lost, () => true)
+    await timers.run(BACKOFF_MS)
+    const back = lay().members[0]!
+    const items = back.lines.flatMap((l) => l[3])
+    expect([back.state, items.some((it) => 'src' in it), items.some((it) => 'face' in it && it.s.includes(E))]).toEqual(
+      ['laid', false, true],
+    )
+    expect(at.lost).toEqual(['nimbus-roman-regular'])
+    at.s.faces.dispose()
+  })
   it("a body the link cuts short is the link's: a failure for now (no ask again within the ask), lost for now at the second, then asked again at the pace and ready", async () => {
     const timers = handTimers()
     // (its answer came, a part of its body, then the stream broke: a declared length not reached, a reset stream)
