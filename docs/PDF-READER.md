@@ -9853,8 +9853,9 @@ mechanism for a turned header cell, a turned caption of several lines and a side
   #676), and the
   typesetter lays a frame's links with the frame, their boxes in it, and turns them back onto the page (a link left where it
   was keeps its own box on A). The reader registers a frame's member on the page, its lines' and pieces' boxes turned onto it
-  (composer.ts onPage): the text layer matches its run there and sets its translation where the run stood, and the marks stand
-  over it. The replay ink gate reads a part's frames' members, each in its frame (tests/replay/ink-gate.ts).
+  (compose/turn.ts onPage, membersOnPage): the text layer matches its run there and sets its translation where the run stood,
+  the marks stand over it, and the contents place a heading so set where it stands on the page (read from the part's flows
+  alone it had no rectangle, and the heading being read started at its page's top: the review of #676). The replay ink gate reads a part's frames' members, each in its frame (tests/replay/ink-gate.ts).
 - **Not covered**: a page with /Rotate (unread whole, `ink.ts`: 3 pages of the lab's 245 papers, 1409.0575v3's landscape tables,
   shown as the original); a mirrored glyph (a box alone: 3 text items of one paper's figure); a unit on two pages or in two
   turns (none in the lab's papers); one whose turned glyphs share no direction, read as before (`stats.turned.mixed`, which no
