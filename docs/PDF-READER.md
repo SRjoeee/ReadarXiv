@@ -9563,8 +9563,9 @@ expansion took off (all in this section's last item), and the rest are the holes
   whose glyphs the figure reading makes units of its own (§18.102), an author's unit a class prints from a store of its own.
   What TeX printed of it, where it printed any, is an ink unit's, asked as that. The units the reader asks a translator for held
   it all the same, its row asked and never shown; it is now left out of them, unless another unit asked names it in its content
-  (a nested unit), or it is of a kind the reader reads beyond its lay (`READ_BEYOND_LAY`): a heading, which the contents list
-  with its row as its title (a heading TeX set whose marks a class took off owns no glyph and is listed so), an abstract,
+  (a nested unit), a part's member names it as its text (an ink unit that echoes it, its letters the unit's, is drawn with its
+  row: a unit TeX set without its points), or it is of a kind the reader reads beyond its lay (`READ_BEYOND_LAY`): a heading,
+  which the contents list with its row as its title (a heading TeX set whose marks a class took off owns no glyph and is listed so), an abstract,
   every translation's context, and a paper's own name, which every theorem head of that name reads (§19.14). The block's names (§19.15) are still read from every unit: an author's unit TeX never set
   writes the names the block TeX printed draws (2608.14557v1, acmart's), and a unit asked that holds one keeps its form with
   the name (kind `named`). Every other unit is asked as before.
