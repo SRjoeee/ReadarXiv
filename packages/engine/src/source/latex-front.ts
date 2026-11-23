@@ -5511,7 +5511,13 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
     // (a macro whose body ends the paragraph TeX is setting, at its top level (resolveParEnds): before its prose, the unit ends
     // before the call, as at a written \par; after it, after the call (parAt, above). Where the reader's unit is a paragraph of
     // TeX's: not a table's cell, whose grid bounds it, nor a heading's, a caption's or an author block's, whose own readings do)
-    if (call && (macro.parBefore || macro.parAfter) && !b.cellMode && PAR_UNITS.has(b.kind ?? 'para')) {
+    if (
+      call &&
+      (macro.parBefore || macro.parAfter) &&
+      !b.cellMode &&
+      b.within !== 'author' &&
+      PAR_UNITS.has(b.kind ?? 'para')
+    ) {
       if (macro.parBefore) {
         endText()
         b.flush()
@@ -5894,12 +5900,15 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
     // the unit ends before it, and it is read again as the next one's head, which the start mark passes over, its ink the
     // original's. Read inside the unit, 2610.21765v1 p3's `{\bf Protocol …} \vspace{…} \hrule \vspace{…} \textbf{Procedure}` was one
     // unit of two of TeX's paragraphs, the rule between them drawn as an inline element of its translation; before the text, as
-    // the rules over that title, nothing ends. A name the paper defines is its own command)
-    if (
-      (((VERTICAL_COMMANDS.has(name) || PAR_COMMANDS.has(name)) && !ctx.macros.has(name)) || ctx.parNames?.has(name)) &&
-      textBegun(b.cur?.pieces ?? [])
-    )
-      b.flush()
+    // the rules over that title, nothing ends. A name the paper defines is its own command. LaTeX's \medbreak family and the
+    // paper's macros that end a paragraph (parNamesOf) so too, but not in an author block's own text, whose reading bounds its
+    // units otherwise: jmlr2e's block separator `\AND` skips vertically, and read as a paragraph's end there the block's walk
+    // numbered its units otherwise, 2608.08872v1's marked TeX moving with no unit's text)
+    const parEnd =
+      b.within !== 'author' &&
+      !AUTHOR_KINDS.has(b.kind ?? '') &&
+      (PAR_COMMANDS.has(name) ? !ctx.macros.has(name) : !!ctx.parNames?.has(name))
+    if (((VERTICAL_COMMANDS.has(name) && !ctx.macros.has(name)) || parEnd) && textBegun(b.cur?.pieces ?? [])) b.flush()
     b.ph(s.slice(i, e), i, e)
     // a command with a letter name eats the following spaces in TeX; keep them with it
     i = e
