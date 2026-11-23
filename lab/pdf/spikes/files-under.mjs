@@ -1,7 +1,7 @@
 // lab/pdf/spikes/files-under.mjs
 // The files a directory holds, each its path from the directory, in the order the file system lists them, depth first: what a
 // compile's folder holds (its request's files, the files a pass wrote), as the stage-1a runner (lab/pdf/prepare-back/run.mjs)
-// and the highlights fixture's maker (scripts/make-highlight-fixture.mjs) read it. Imports nothing but Node's.
+// and the TeX fixtures' maker (scripts/make-tex-fixture.mjs) read it. Imports nothing but Node's.
 import { readdirSync } from 'node:fs'
 import { join } from 'node:path'
 
