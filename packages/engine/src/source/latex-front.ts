@@ -7353,7 +7353,11 @@ function readProject(
     sources.map(sourceText),
     ifs,
     sources.map((f) =>
-      f === mainFile.rel ? Math.max(0, documentBounds(sourceText(f)).begin) : /\.sty$/i.test(f) ? Number.POSITIVE_INFINITY : 0,
+      f === mainFile.rel
+        ? Math.max(0, documentBounds(sourceText(f)).begin)
+        : /\.sty$/i.test(f)
+          ? Number.POSITIVE_INFINITY
+          : 0,
     ),
   )
   const macros = paperMacros(own, { ifs, ifValues: proven })
