@@ -484,6 +484,13 @@ export const Placed = z.object({
   // `read`, the pitch of its lines on A (their gaps' median, a gap that rule opened among them) or 1.2 of its size
   lead: num,
   style: Style,
+  // the face TeX set the unit's marks in outside every group (its punctuation, separators and symbols there), where it is not
+  // its letters' (`style`'s weight and slant, the face of its letters outside every group): a translated character outside every
+  // group is drawn in the one of the two bases it stands for, a letter in `style`'s, a mark in this (@readarxiv/text
+  // isLetterOrDigit, one reading). An author line `\textbf{…}, \textbf{…}` whose reply drops the names' groups draws its names
+  // bold and its commas regular, as TeX set them (docs/PDF-READER.md §18.114). Absent, a mark is drawn as a letter is; a
+  // typesetter of before strips it and draws as it did, so FORMAT stays
+  markFace: z.object({ bold: flag.optional(), slant: z.literal(1).optional() }).optional(),
   align: z.enum(['j', 'l', 'c', 'r']),
   // a table cell of several lines set in a box of its cell (a \makecell's, a \shortstack's, a nested one-column tabular's): how
   // its lines stand in that box, read off A (their left edges, middles or right edges together; all three, the cell's class),

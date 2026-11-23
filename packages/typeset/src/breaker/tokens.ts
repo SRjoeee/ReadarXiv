@@ -20,6 +20,7 @@
 // - `faces`: B.faces' answers (faceOf over the role table and the paper's family) and whether a face has small capitals
 // - `P`: the rule set's fields resolved for the target (Rules.breaking, Rules.fit); `designs`: the paper's
 import type { KnownElKind } from '@readarxiv/format'
+import { isLetterOrDigit } from '@readarxiv/text'
 import { cjkLeadRe, clustersOf, fullWidthPunctOf, kinsokuOf, keptPair, markOf, noStart, SPACELESS } from './script.ts'
 import { drawnText, plainTracker, shown, type TextPiece, transformMap } from './text.ts'
 import { dropMarks, type MarksAfter, type MarksTrace, mergeTail } from '../unit/marks.ts'
@@ -193,6 +194,9 @@ export type TokensInput = {
   spacedSource: boolean
   to: string
   base: TStyle
+  /** the face TeX set the unit's marks in outside every group where it is not its letters' (Placed.markFace): a translated
+   *  mark outside every group and every face switch's run is drawn in it, a letter in `base` (@readarxiv/text isLetterOrDigit) */
+  markBase?: { bold: boolean; italic: boolean }
   designs: { serif: string; sans: string; mono: string }
   P: TokenRules
   lead: { parts?: { text: string; st: TStyle; gap?: number }[]; gap?: number } | null
@@ -519,6 +523,8 @@ export function tokens(i: TokensInput): Tokens {
   if (Number.isInteger(measured?.fill) && measured!.fill! > 0) base.color = hexOf(measured!.fill!)
   const stack: TStyle[] = [{ ...base }]
   const style = () => stack.at(-1)!
+  /** whether a face switch set the rest of the unit's top level (its run no base's: the marks' base reaches no mark in it) */
+  let topSwitched = false
   const colourRun = (k: number, p: V0Piece): { color?: string | undefined; colourRun?: true } => {
     const rgb = i.colourOf(k)
     if (Number.isInteger(rgb)) return { color: hexOf(rgb!), colourRun: true }
@@ -587,6 +593,7 @@ export function tokens(i: TokensInput): Tokens {
     track: Track | null = null,
     smallAt: ((at: number) => boolean) | null = null,
     ratio = capsK,
+    markSt: TStyle | null = null,
   ) => {
     for (const m of s.matchAll(/\s+|\S+/g)) {
       const chunk = m[0]
@@ -599,8 +606,10 @@ export function tokens(i: TokensInput): Tokens {
         afterHead = false
         continue
       }
-      const parts: { cls: 'cjk' | 'latin'; s: string; off: number }[] = []
-      let cur: { cls: 'cjk' | 'latin'; s: string; off: number } | null = null,
+      // (with `markSt`, each run of marks, characters no letter or digit (@readarxiv/text isLetterOrDigit), a part of its own in
+      // that style: a translated mark outside every group drawn in the marks' base, glued to the letters beside it)
+      const parts: { cls: 'cjk' | 'latin'; s: string; off: number; mark: boolean }[] = []
+      let cur: { cls: 'cjk' | 'latin'; s: string; off: number; mark: boolean } | null = null,
         off = 0
       // (the chunk walked by its grapheme clusters, what a reader sees as one character (UAX #29: script.ts clustersOf, its code
       // points where none joins another), each classed by its first code point: a run that breaks between its characters is cut
@@ -608,33 +617,35 @@ export function tokens(i: TokensInput): Tokens {
       // variation selector stay one token, measured whole. Each part's offset its first unit's, as before)
       for (const ch of clustersOf(chunk)) {
         const cls = cjkLead.test(ch) ? 'cjk' : 'latin'
+        const mark = !!markSt && !isLetterOrDigit(ch)
         if (cls === 'cjk' && !keepAll) {
           cur = null
-          parts.push({ cls, s: ch, off })
+          parts.push({ cls, s: ch, off, mark })
           off += ch.length
           continue
         }
-        if (cur && cur.cls === cls) cur.s += ch
+        if (cur && cur.cls === cls && cur.mark === mark) cur.s += ch
         else {
-          cur = { cls, s: ch, off }
+          cur = { cls, s: ch, off, mark }
           parts.push(cur)
         }
         off += ch.length
       }
       parts.forEach((p, n) => {
+        const st0 = p.mark && markSt ? markSt : st
         const pieces =
           p.cls !== 'latin'
             ? [p.s]
-            : st.fam === 'mono' || /^(?:https?:|www\.)/.test(p.s)
+            : st0.fam === 'mono' || /^(?:https?:|www\.)/.test(p.s)
               ? p.s.split(/(?<=[/.\-_#?&=])(?=[^/.\-_#?&=])/)
               : !extra.ph
                 ? p.s.split(/(?<=[A-Za-zÀ-ɏЀ-ӿ][-/])(?=[A-Za-zÀ-ɏЀ-ӿ])/)
                 : [p.s]
         let po = 0
         pieces.forEach((s, q) => {
-          const face0 = faceOf(st, p.cls)
+          const face0 = faceOf(st0, p.cls)
           const from = m.index + p.off + po
-          const all = p.cls === 'latin' && !!st.upper
+          const all = p.cls === 'latin' && !!st0.upper
           const runs =
             !all && p.cls === 'latin' && selfCaps(face0, s)
               ? caseRuns(s, ratio, upper, smallAt && ((x) => smallAt(from + x)))
@@ -648,7 +659,7 @@ export function tokens(i: TokensInput): Tokens {
               len = run ? run.n : s.length
             const t: Token = {
               s: rs,
-              st,
+              st: st0,
               face,
               cls: p.cls,
               w100: 0,
@@ -681,7 +692,7 @@ export function tokens(i: TokensInput): Tokens {
               p.cls === 'latin' &&
               P.hyphen &&
               !extra.ph &&
-              st.fam !== 'mono' &&
+              st0.fam !== 'mono' &&
               s.length >= minWord &&
               unit.kind !== 'heading' &&
               !unit.title
@@ -862,11 +873,17 @@ export function tokens(i: TokensInput): Tokens {
             : null
         : null
       const map = sm ? transformMap(s, text) : null
+      // (outside every group and every face switch's run, a mark in the marks' base where the part states one: Placed.markFace)
+      const mb = i.markBase
+      const markSt = mb && stack.length === 1 && !topSwitched ? { ...style(), bold: mb.bold, italic: mb.italic } : null
       pushText(
         text,
         style(),
         {},
         map && { at: at!, sh: sh!, base: raw.length - s.length, map, sm: sm === true ? null : sm },
+        null,
+        capsK,
+        markSt,
       )
       return
     }
@@ -910,6 +927,7 @@ export function tokens(i: TokensInput): Tokens {
       const sw = applyCmd(p.src, style(), designs)
       if (sw && /^\\[A-Za-z]+$/.test(p.src)) {
         stack[stack.length - 1] = sw
+        if (stack.length === 1) topSwitched = true
         return
       }
       const run = colourRun(k, p)

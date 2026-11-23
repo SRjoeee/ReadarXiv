@@ -657,6 +657,9 @@ export function readMember(i: ReadInput): ReadOut {
     spacedSource: false,
     to: i.to,
     base: given,
+    // (the face TeX set the unit's marks in outside every group, where it is not its letters': a translated mark there is drawn
+    // in it, Placed.markFace)
+    ...(m.markFace ? { markBase: { bold: !!m.markFace.bold, italic: !!m.markFace.slant } } : {}),
     designs: paper.designs,
     P: i.P,
     lead: i.lead

@@ -183,6 +183,7 @@ function placedOf(
       mem.name !== undefined ? { name: mem.name, ...(mem.counter ? { counter: mem.counter } : {}) } : (echo ?? mem.id),
     lead: mem.lead,
     style: mem.style,
+    ...(mem.markFace ? { markFace: mem.markFace } : {}),
     align: mem.align,
     lines: mem.lines,
     room: mem.room,

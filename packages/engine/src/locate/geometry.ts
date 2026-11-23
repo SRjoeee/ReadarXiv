@@ -1188,6 +1188,11 @@ export function readGroupStyle(
     if (!g.face.own.italic) delete mem.style.slant
     else mem.style.slant ??= 1
   }
+  // (the marks' base where it is not the letters': the face a translated mark outside every group is drawn in, Placed.markFace)
+  const mk = g.face.marks
+  if (g.face.own && mk && (mk.bold !== g.face.own.bold || mk.italic !== g.face.own.italic))
+    mem.markFace = { ...(mk.bold ? { bold: 1 as const } : {}), ...(mk.italic ? { slant: 1 as const } : {}) }
+  else delete mem.markFace
   const ownSize = unitSize(g.text.map((q) => glyphs[q] as StyleGlyph).filter((x) => /\S/.test(x.u) && !small.has(x)))
   if (ownSize !== undefined) mem.style.size = ownSize
 }

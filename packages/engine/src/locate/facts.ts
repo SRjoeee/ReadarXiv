@@ -4,7 +4,12 @@
 // ink; no threshold guards a re-derivation of ownership (ownership is exact and answers instead), and a threshold that is a
 // typographic fact stays, named, with its source.
 import type { Ink, KnownElKind, Line, Piece, Style } from '@readarxiv/format'
-import { bareFontName as bare, readFontName as classifyFont, type FontNameClass } from '@readarxiv/text'
+import {
+  bareFontName as bare,
+  readFontName as classifyFont,
+  type FontNameClass,
+  isLetterOrDigit,
+} from '@readarxiv/text'
 import type { DocGlyph } from '../doc.ts'
 import { glyphWith } from '../glyph.ts'
 import { isInk, r2 } from './lines.ts'
@@ -96,12 +101,11 @@ export const mostOf = <T>(xs: Iterable<T>): T | undefined => {
   }
   return best
 }
-const LETTER_OR_DIGIT = /[\p{L}\p{N}]/u
 /** a character's letters as two sides of an alignment compare them: decomposed, marks off, lower case, its letters and digits
  *  alone (a ligature its letters) */
 export const fold = (ch: string): number[] =>
   [...ch.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase()]
-    .filter((c) => LETTER_OR_DIGIT.test(c))
+    .filter((c) => isLetterOrDigit(c))
     .map((c) => c.codePointAt(0) as number)
 const real = (g: { u: string }) => /\S/.test(g.u)
 /** what a style is read off a glyph by: its Unicode, its font's base name, its size (up its line; `along` it, where that differs)
