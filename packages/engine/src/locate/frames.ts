@@ -8,9 +8,9 @@
 // as a frame of separate rules (\fbox, framed, mdframed's default) is already: the room ends at the frame.
 //
 // SEEN, by the page's own operators, no tolerance: a path that strokes (at an alpha over 0, pageInk's `stroke`), or one whose fill
-// has a colour that is not the colour painted under it: the last opaque fill painted before it whose region holds its box's four
-// edge middles (an image or a shading there, or a fill of no known colour, is a colour this reading does not know: seen), else the
-// paper's white. A fill of the colour under it with no stroke (an mdframed box's white ground on the white page), a path painted at
+// has a colour that is not the colour painted under it at one of its box's four edge middles at least: at each, the last opaque fill
+// painted before it whose region holds that point (an image or a shading there, or a fill of no known colour, is a colour this
+// reading does not know: seen), else the paper's white. A fill of the colour under it with no stroke (an mdframed box's white ground on the white page), a path painted at
 // an alpha of 0 (pageInk's `unseen`), a clip (which paints nothing and is no box) are no frame. A pattern's fill is seen.
 // Candidates: closed paths (every segment's end met by another's: closedPath) that are no page's background (0.9 x 0.75 of the
 // page, as geometry.ts inkIndex reads one) and whose interior holds a glyph's middle, the glyph's ink inside the path's box; kept
@@ -96,7 +96,7 @@ export function framesOnPage(raw: PaintedPage | null | undefined, page: DocPage)
     if (U?.has(b)) {
       frame.seen = false
       frame.why = 'alpha 0'
-    } else if (!sh.stroke && sh.colour !== undefined && !sh.pattern && sh.colour === underOf(b, box, shapes, U, K, B)) {
+    } else if (!sh.stroke && sh.colour !== undefined && !sh.pattern && asUnder(b, box, sh.colour, shapes, U, K, B)) {
       frame.seen = false
       frame.why = 'as under'
     }
@@ -105,18 +105,17 @@ export function framesOnPage(raw: PaintedPage | null | undefined, page: DocPage)
   return out
 }
 
-/** the colour painted under box `b` (its box `box`): the last fill before it whose region holds its box's four edge middles, its
- *  colour where it covers what is under it, the paper's where none; null where what is painted there has no colour this reading
- *  knows (a box that is no path's, an image's or a shading's among them, whose box holds them; a pattern, a fill that covers
- *  nothing whole or of no colour; a path whose lines were not kept) */
-function underOf(
+/** whether a fill of `colour` (box `b`, its box `box`) is of the colour painted under it at each of its box's four edge
+ *  middles (colourAt): seen where one of them stands on another colour or on one this reading does not know */
+function asUnder(
   b: number,
   box: readonly [number, number, number, number],
+  colour: number,
   shapes: NonNullable<PaintedPage['shapes']>,
   U: ReadonlySet<number> | undefined,
   K: readonly number[],
   B: readonly number[],
-): number | null {
+): boolean {
   const cx = (box[0] + box[2]) / 2,
     cy = (box[1] + box[3]) / 2
   const pts = [
@@ -125,20 +124,39 @@ function underOf(
     [box[0], cy],
     [box[2], cy],
   ] as const
+  return pts.every(([x, y]) => colourAt(b, x, y, shapes, U, K, B) === colour)
+}
+
+/** the colour painted under box `b` at point (x, y): the last fill before it whose region holds the point, its colour where it
+ *  covers what is under it, the paper's where none; null where what is painted there has no colour this reading knows (a box
+ *  that is no path's, an image's or a shading's among them, whose box holds the point; a pattern, a fill that covers nothing
+ *  whole or of no colour; a path whose lines were not kept). Each point by its own paint: artwork under part of a fill is
+ *  under that part (Codex's local review) */
+function colourAt(
+  b: number,
+  x: number,
+  y: number,
+  shapes: NonNullable<PaintedPage['shapes']>,
+  U: ReadonlySet<number> | undefined,
+  K: readonly number[],
+  B: readonly number[],
+): number | null {
   for (let j = b - 1; j >= 0; j--) {
     if (U?.has(j)) continue
-    const x0 = B[4 * j] as number,
-      y0 = B[4 * j + 1] as number,
-      x1 = B[4 * j + 2] as number,
-      y1 = B[4 * j + 3] as number
-    if (!pts.every(([x, y]) => x >= x0 && x <= x1 && y >= y0 && y <= y1)) continue
+    if (
+      x < (B[4 * j] as number) ||
+      x > (B[4 * j + 2] as number) ||
+      y < (B[4 * j + 1] as number) ||
+      y > (B[4 * j + 3] as number)
+    )
+      continue
     // (a box that is no path's (pageInk's `paths`: an image, a shading, an annotation's appearance, a turned glyph, merged cells):
     // paint of no colour this reading knows)
     if ((K[j] as number) < 0) return null
     const sh = shapes.get(j)
     if (!sh) return null
-    // (a stroke paints its lines, no region; a fill whose region does not hold them is not under them)
-    if (!sh.fill || !pts.every(([x, y]) => interiorOf(sh.segs, x, y))) continue
+    // (a stroke paints its lines, no region; a fill whose region does not hold the point is not under it)
+    if (!sh.fill || !interiorOf(sh.segs, x, y)) continue
     // (a fill that does not cover what is under it, or of no colour: what shows there is no colour of the page's operators)
     return sh.opaque && sh.colour !== undefined && !sh.pattern ? sh.colour : null
   }
