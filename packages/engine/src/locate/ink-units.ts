@@ -1205,16 +1205,20 @@ export function inkUnitsOf(
       // (CHANGED, rule 3b: a line TeX ended at a forced break, its point `kb<n>` after that line's last glyph and before this one's
       // first (B's, carried onto A): a break placeholder there, as a source unit's `\\`, each point one, so that the part states
       // the break and the lay ends the translation's line there (unit/breaks.ts); no kept run goes on over it. The lines' places
-      // tell no break: a wrap before a long word ends a line as short)
+      // tell no break: a wrap before a long word ends a line as short. A unit over a page's break, a biblatex entry's (rule 1), has
+      // TeX's point after its first page's line carried after that page's last glyph: there, after the line with nothing TeX set
+      // between them)
       const prev = li > 0 ? lines[li - 1]! : null
-      if (prev && prev.page === l.page) {
+      if (prev) {
         const end = Math.max(...prev.words.flatMap((w) => w.gs))
         const lo = Math.max(...prev.gs),
-          hi = Math.min(...l.gs)
-        for (const e of pages[l.page - 1]?.breaks ?? []) {
+          hi = prev.page === l.page ? Math.min(...l.gs) : Number.POSITIVE_INFINITY
+        const G0 = pages[prev.page - 1]?.glyphs ?? []
+        for (const e of pages[prev.page - 1]?.breaks ?? []) {
           if (e.glyph <= lo || e.glyph > hi) continue
+          if (prev.page !== l.page && G0.slice(lo + 1, e.glyph).some((g) => /\S/u.test(g.u ?? ''))) continue
           flushText()
-          forced.push([pieces.length, [l.page, end]])
+          forced.push([pieces.length, [prev.page, end]])
           pieces.push({ t: 'ph', src: '\\\\', kind: 'break' })
           for (const p of phs) p.open = false
         }
