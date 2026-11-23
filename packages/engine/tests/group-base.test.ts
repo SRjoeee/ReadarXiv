@@ -160,6 +160,35 @@ describe('a unit’s base face, read off TeX’s glyphs', () => {
     expect(g.own).toEqual({ bold: false, italic: true })
     expect(g.marks).toEqual({ bold: false, italic: true })
   })
+  it('a kernel command the group table names no face for sets one by its definition: \\textup’s marks no reading of the marks’ base', () => {
+    // (2608.19071v1 p2's italic theorem `\\textup{Theorem 1.2.} The tree … of Section \\textcolor{…}{4.}`: its head's full stops
+    // upright, the period after the section's number CMTI12 italic; read as the face around them, the marks' base upright)
+    const th = [
+      group('\\textup{', 'other', [t('Theorem 1.2.')]),
+      t(' The tree of Section '),
+      group('\\textcolor{blue}{', 'colour', [t('4.')]),
+    ]
+    const g = faces(th, [...set('Theorem 1.2.', REGULAR), ...set('The tree of Section', ITALIC), ...set('4.', ITALIC)])
+    expect(g.own).toEqual({ bold: false, italic: true })
+    expect(g.marks).toEqual({ bold: false, italic: true })
+  })
+  it('a group whose face is the letters’ base but not the marks’ states it: its marks are its own', () => {
+    // (2608.03063v1 p10's `\\exfield{Input:} … $\\cdots$ …`: the paper's macro bold, its colon bold, the `$\\cdots$` beside it
+    // regular: the marks' base regular, and the colon, drawn in it, regular)
+    const ex = [group('\\exfield{', 'other', [t('Input:')]), t(' '), sym('$\\cdots$', set('⋯', SYMBOLS))]
+    const g = groupStyleOf(
+      ex,
+      set('Input:', SANS_BOLD),
+      () => undefined,
+      () => false,
+      () => false,
+      () => undefined,
+      (e) => symbols.get(e.id),
+    ).face
+    expect(g.own).toEqual(B)
+    expect(g.marks).toEqual(REG)
+    expect(g.groups.map(([gid, st]) => [gid, st.bold])).toEqual([[(ex[0] as { id: string }).id, 1]])
+  })
   it('a unit of marks alone: its letters’ base its marks’, TeX’s', () => {
     expect(faces([t('(—)')], set('(—)', REGULAR))).toMatchObject({ own: REG, marks: REG })
     expect(faces([group('\\textbf{', 'bold', [t('—')])], set('—', BOLD))).toMatchObject({ own: B, marks: B })
