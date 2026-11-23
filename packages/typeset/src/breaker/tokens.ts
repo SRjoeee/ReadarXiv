@@ -1020,13 +1020,13 @@ export function tokens(i: TokensInput): Tokens {
       }
       return
     }
+    // (a symbol drawn as text a mark: in the marks' style where the part states a marks' base)
+    const cur = r.mode === 'symbol' ? mstyle() : style()
     // (a rendering of the page's own text in the font state TeX set its glyphs in, where the part states it (El.style, read.ts):
     // its typewriter face, its weight, its slant and its small capitals over the run's. It is text no translation replaces, and
     // the original's style is its own: 2608.06701v1 p5's "Periodic Advisor", italic by the paper's macro, was drawn upright in
     // the run's style, and "LIVEPLAN", in faked small capitals, in full capitals; a group around it that TeX applied is in its
     // glyphs (\emph's italic), and a rendering of no stated style, or an attribute its style does not state, takes the run's)
-    // (a symbol drawn as text a mark: in the marks' style where the part states a marks' base)
-    const cur = r.mode === 'symbol' ? mstyle() : style()
     const own: TStyle = r.math
       ? { ...cur, italic: /[A-Za-z]/.test(r.text) && r.text.length <= 3, caps: false }
       : r.mode === 'orig-text' && r.st && r.st.fam !== 'math'
