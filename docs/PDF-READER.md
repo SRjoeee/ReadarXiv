@@ -9817,7 +9817,10 @@ The rule now, one reading of TeX's glyphs:
   `\multicolumn`'s or a link's text is in the face around it, the arrow of `\multicolumn{2}{c}{\textbf{Overall}$\uparrow$}`
   regular). Where none, its letters', all of them: no glyph of the original then stands in that face, and what a translation
   sets outside its groups there takes the face its groups share (a kicker and a title both bold: bold; a reply that drops the
-  groups draws them as printed). `geometry.ts` states that base always. Its size, where the unit has text of its own beside its groups, is that text's; where every letter is a group's, the
+  groups draws them as printed). `geometry.ts` states that base always, by one reading (`readGroupStyle`) of a level member's
+  text glyphs and, in `turned-frames.ts` frameTurned, of a turned member's turned glyphs: read off the face most of them hold,
+  a sideways caption wholly in `\emph` (2610.19282v1 p11 and p15, `\emph{{\bf …} for fixed …}`, CMTI10 on arXiv's page) was
+  italic, and the typesetter's `\emph` turned it upright. Its size, where the unit has text of its own beside its groups, is that text's; where every letter is a group's, the
   median of them all (the size most of its text is set at, by which the lay's knobs, its size steps and its pitch's em, are
   read): the base is then the size of no run the translation keeps in a group, and every group whose glyphs differ states its own.
 - **The typesetter applies what is stated and reads nothing more**: the base is the part's style (`breaker/tokens.ts`; the count
@@ -9832,8 +9835,9 @@ The rule now, one reading of TeX's glyphs:
   never moves a line (TeX keeps \baselineskip).
 
 Over the lab's 245 papers (the chain from the line's stored compiles, none made again, against its chain of record, on the line
-of #670, #671 and #672 alike: the same records move): every unit, its id and its content the same, every glyph's owner the
-same; 223 of 5,896 parts move (670 placements in 70 papers: 375 groups state a size apart from their member's, 9 a style at
+of #670, #671, #672 and #673 alike: the same records move, and on #673's the two sideways captions' frames, their base
+upright): every unit, its id and its content the same, every glyph's owner the same; 223 parts move and 2 frames (670
+placements in 70 papers: 375 groups state a size apart from their member's, 9 a style at
 it; 185 figure runs of several sizes their style at the member's size; 137 a regular base off its own marks, an author line's
 commas, a colon after `\textbf{While}`, a table head's arrow; 234 cells wholly in `{\em …}` an upright base, drawn the same; 6
 a base size). The reader's lay over them, every row an echo of its words, against the line's: no member's state moves; 142
