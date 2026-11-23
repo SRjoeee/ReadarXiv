@@ -145,3 +145,86 @@ describe('the frames a page paints: seen by its own operators', () => {
     expect(frameOf(frames, [crossed])?.b).toBe(0)
   })
 })
+
+describe('the frames a page paints: the review of round 2 into main (#676)', () => {
+  it('reads a turned rectangle’s fill seen by the paint under its own edges, not its box’s', () => {
+    // (a white rectangle turned 45 degrees, (100, 400) (300, 600) (240, 660) (40, 460), over a blue one round it, (100, 380)
+    // (320, 600) (240, 680) (20, 460), our words inside both. Its box's edge middles stand outside it, on the paper: read there,
+    // the white was the paper's colour, unseen, and the frame the blue one past the white's edge)
+    const white = Float32Array.from([100, 400, 300, 600, 300, 600, 240, 660, 240, 660, 40, 460, 40, 460, 100, 400])
+    const blue = Float32Array.from([100, 380, 320, 600, 320, 600, 240, 680, 240, 680, 20, 460, 20, 460, 100, 380])
+    const pg = docOf([
+      {
+        lines: [{ text: 'held', x: 160, y: 530 }],
+        boxes: [
+          [0, 0, 20, 380, 320, 680],
+          [0, 0, 40, 400, 300, 660],
+        ],
+      },
+    ]).pages[0] as DocPage
+    const base = { stroke: false, fill: true, hw: 0.25, opaque: true as const }
+    const raw = {
+      shapes: new Map<number, S>([
+        [0, { ...base, segs: blue, colour: 0x1f3a93 }],
+        [1, { ...base, segs: white, colour: 0xffffff }],
+      ]),
+    } satisfies PaintedPage
+    expect(framesOnPage(raw, pg).map((f) => [f.b, f.seen, f.why ?? null])).toEqual([
+      [0, true, null],
+      [1, true, null],
+    ])
+  })
+  it('reads a sloped border under a run by its part across the run: a diamond’s lower edges', () => {
+    // (a stroked diamond, (90, 700) (160, 740) (230, 700) (160, 660), a run from 145 to 175 whose foot is 697.5: each lower edge
+    // has an end at 700, over the foot, but across the run it stands at 660 to 668.7, under it; read by its whole edge, no border
+    // was under the run and its room ran past the diamond)
+    const f = {
+      b: 0,
+      box: [90, 660, 230, 740] as [number, number, number, number],
+      segs: Float32Array.from([90, 700, 160, 740, 160, 740, 230, 700, 230, 700, 160, 660, 160, 660, 90, 700]),
+      stroke: true,
+      hw: 0.25,
+      seen: true,
+    }
+    expect(frameUnder(f, 697.5, 145, 175)).toBeCloseTo(668.96, 1)
+  })
+  // RECORDED, NOT BUILT (CodeRabbit on #676, Codex on #672's second review: counted then over the lab's 245 papers, of 2,263 framed
+  // member-pages 0 covered whole by later opaque paint, 233 covered in part with their border showing; it fails until it is):
+  // a frame a later opaque fill covers whole is not seen, and is still read as one.
+  it.fails('reads no frame of a fill a later opaque fill covers whole', () => {
+    // (a blue rectangle, then a larger white one over it, then our words: the white reads as the paper (unseen), the blue under
+    // it is painted over and no reader sees it, yet it stays the frame)
+    const r = pageOf(
+      [
+        [0, 72, 690, 300, 712],
+        [1, 60, 680, 320, 730],
+      ],
+      [{ colour: 0x1f3a93 }, { colour: 0xffffff }],
+    )
+    expect(seenOf(r).map(([b, seen]) => [b, seen])).toEqual([
+      [0, false],
+      [1, false],
+    ])
+  })
+})
+
+describe('the frames a page paints: the review of #677', () => {
+  it('reads a fill of a path of 140,002 segments without passing its crossings as arguments (no RangeError)', () => {
+    // (a filled path round our words whose right side zigzags 140,000 times across its box's middle line, x = 145: every
+    // crossing of that line an entry; spread into Math.min's arguments, past the engine's limit, it threw and aborted the
+    // paper's prepare)
+    const n = 140_000
+    const pts: [number, number][] = [[60, 600]]
+    for (let k = 0; k <= n; k++) pts.push([k % 2 ? 230 : 140, 600 + (200 * k) / n])
+    pts.push([60, 800])
+    const segs = new Float32Array(4 * pts.length)
+    pts.forEach(([x, y], k) => {
+      const [x1, y1] = pts[(k + 1) % pts.length]!
+      segs.set([x, y, x1, y1], 4 * k)
+    })
+    const r = pageOf([[0, 60, 600, 230, 800]], [{ colour: 0xffffff }])
+    r.raw.shapes.set(0, { ...r.raw.shapes.get(0)!, segs })
+    expect(() => framesOnPage(r.raw, r.pg)).not.toThrow()
+    expect(seenOf(r)).toEqual([[0, false, 'as under']])
+  })
+})

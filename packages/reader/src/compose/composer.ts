@@ -48,6 +48,7 @@ import type { Groups } from './groups.ts'
 import { type LinkHooks, linkLayer } from './links.ts'
 import { createMarks, type MarkBox } from './marks.ts'
 import { committed, type Lay, type Laid, type Page, type Rows } from './page.ts'
+import { membersOnPage } from './turn.ts'
 import {
   cropGrid,
   cropsAway,
@@ -460,15 +461,11 @@ export function createComposer(o: ComposerOptions): Composer {
         // and the registry holds each on the page, its geometry turned onto it (onPage), as the text layer matches a run to its
         // member, the marks stand over it and a pane's sync finds it, in the page's coordinates)
         if (part && layer === l)
-          for (const [f, dir] of [
-            ...part.flows.map((x) => [x, null] as const),
-            ...(part.frames ?? []).flatMap((x) => x.flows.map((y) => [y, x.dir] as const)),
-          ])
-            for (const m of f)
-              if (!members.has(m.ord)) {
-                members.set(m.ord, dir ? onPage(m, dir) : m)
-                if (typeof m.text === 'string') toggleOf.set(m.text, toggleKind(m))
-              }
+          for (const m of membersOnPage(part))
+            if (!members.has(m.ord)) {
+              members.set(m.ord, m)
+              if (typeof m.text === 'string') toggleOf.set(m.text, toggleKind(m))
+            }
         return part
       })
       // (a part that cannot be read is asked again on a zoom, coming near or the next scroll)
@@ -1121,65 +1118,4 @@ export function createComposer(o: ComposerOptions): Composer {
 
 export type { Laid }
 
-/** a box of the frame of direction (ux, uy) on the page (a frame's (x, y) is the page's (ux x - uy y, uy x + ux y), Part.frames):
- *  the box of its four corners turned by it */
-function boxOnPage([ux, uy]: readonly [number, number], b: readonly number[]): [number, number, number, number] {
-  const c = [
-    [b[0]!, b[1]!],
-    [b[2]!, b[1]!],
-    [b[0]!, b[3]!],
-    [b[2]!, b[3]!],
-  ].map(([x, y]) => [ux * x! - uy * y!, uy * x! + ux * y!] as const)
-  return [
-    Math.min(...c.map((q) => q[0])),
-    Math.min(...c.map((q) => q[1])),
-    Math.max(...c.map((q) => q[0])),
-    Math.max(...c.map((q) => q[1])),
-  ]
-}
-/** a frame's member on the page (docs/PDF-READER.md §18.113): each line its box turned onto the page (across, x0 to x1; up,
- *  its bottom to its top), its measure that box's extent across, its elements' and its label's ink their boxes turned so, their
- *  baselines the boxes' bottoms; everything else as the part states it */
-export function onPage(m: Placed, dir: readonly [number, number]): Placed {
-  type Ink = [number, number, number, number, number, number]
-  const ink = (k: Ink): Ink => {
-    const [x0, y0, x1, y1] = boxOnPage(dir, [k[1], k[2], k[3], k[4]])
-    return [k[0], x0, y0, x1, y1, y0]
-  }
-  const lines = m.lines.map((l) => {
-    const [x0, y0, x1, y1] = boxOnPage(dir, [l[2], l[6], l[3], l[5]])
-    const out = [...l] as typeof l
-    out[2] = x0
-    out[3] = x1
-    out[4] = y0
-    out[5] = y1
-    out[6] = y0
-    out[7] = x0
-    out[8] = x1
-    return out
-  })
-  const lb = m.label
-  return {
-    ...m,
-    lines,
-    ...(m.els
-      ? {
-          els: m.els.map(([id, e]): NonNullable<Placed['els']>[number] => [
-            id,
-            { ...e, ink: e.ink.map((k) => ink(k as Ink)) },
-          ]),
-        }
-      : {}),
-    ...(lb
-      ? {
-          label: {
-            ...lb,
-            ink: ink(lb.ink as Ink),
-            ...(lb.name ? { name: [lb.name[0], ink(lb.name[1] as Ink)] as typeof lb.name } : {}),
-            ...(lb.num ? { num: [lb.num[0], ink(lb.num[1] as Ink)] as typeof lb.num } : {}),
-            ...(lb.punct ? { punct: [lb.punct[0], ink(lb.punct[1] as Ink)] as typeof lb.punct } : {}),
-          },
-        }
-      : {}),
-  }
-}
+export { onPage } from './turn.ts'

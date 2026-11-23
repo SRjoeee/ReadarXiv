@@ -111,3 +111,19 @@ describe('a group TeX set at another size than the text around it states its siz
     expect(groupFacts(content, read).get(small)?.style?.size).toBe(7.9701)
   })
 })
+
+describe('a group TeX set in capitals of a lowercase source: the review of round 2 into main (#676)', () => {
+  // RECORDED, NOT BUILT (CodeRabbit on #676; it fails until it is): a letter of a lowercase source TeX set as a capital is read
+  // as a faked small capital and left out of the group's size, whatever its size: a kicker `\tagline{field notes}` whose macro
+  // sets its argument in capitals at 9.96 beside a title at 29.89 states no size, and is drawn at the title's. A faked small
+  // capital (NFSS's virtual small capitals, at their share of the size) and a capital set at the size TeX was asked for are one
+  // glyph and one size where the group holds no other letter: only TeX's own size at the group's opening (\f@size, a statement
+  // of the marked compile) tells them apart, recorded with 2604.14228v3's NFSS scale.
+  it.fails('a kicker whose macro sets its lowercase argument in capitals, small above a large title: its size stated', () => {
+    const kicker = group('\\tagline{', [t('field notes')])
+    const title = group('{', [el('\\fontsize{30}{35}'), el('\\selectfont'), el('\\bfseries'), t(' A Small Title')])
+    const content = [kicker, t('\n'), el('\\vspace{6mm}'), t('\n'), title]
+    const glyphs = [...set('FIELD NOTES', SANS_BOLD, 9.9626), ...set('A Small Title', SANS_BOLD, 29.8879)]
+    expect(groupFacts(content, glyphs).get(kicker)?.style?.size).toBe(9.9626)
+  })
+})

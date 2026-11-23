@@ -9,8 +9,8 @@
 // frameTurned) it is read in its frame and put in its page's frame of its turn (Located.frames).
 //
 // A unit is framed where it is located, no figure text, its text all turned glyphs (own/own.ts TURNED: no level text glyph),
-// on one page, in one turn. One whose glyphs stand in two turns or on two pages is not framed: it stays the original's
-// (`turned: two turns`, `turned: two pages`).
+// on one page, in one turn. One whose glyphs stand in two turns or on two pages, or whose text glyphs are all white space, is
+// not framed: it stays the original's (`turned: two turns`, `turned: two pages`, `turned: no text of ink`).
 //
 // The frame: the page's coordinates turned back, the turn's direction (ux, uy) being the frame's x axis on the page, about the
 // page's origin: a point (x, y) of the page is (ux x + uy y, -uy x + ux y) in its frame, which the reader turns back by
@@ -57,7 +57,11 @@ const boxToFrame = (ux: number, uy: number, b: readonly number[]): [number, numb
 }
 
 /** every box of ink on page `p` of A in the frame of direction (ux, uy), but the member's own turned glyphs (`mine`) and boxes
- *  (`mineBoxes`): its level glyphs' boxes, its other turned glyphs' bands, its painted boxes (a rule, an image, a fill) */
+ *  (`mineBoxes`): its level glyphs' boxes, its other turned glyphs' bands, its painted boxes (a rule, an image, a fill). A turned
+ *  glyph is ink where it paints (`paints`: CMEX's delimiters PDF.js maps to white space among them), its band along its own
+ *  direction from its origin to its advance's end, up and down to its font's band or its own ink's, whichever reaches further
+ *  (a big delimiter's outline past its font's), the box of that band's four corners in the frame: a glyph of another turn (45
+ *  degrees) is bounded whole, where two of its corners bounded a line across it */
 function inkBoxesOf(
   inkA: Doc,
   p: number,
@@ -70,10 +74,19 @@ function inkBoxesOf(
   const out: [number, number, number, number][] = []
   for (const g of pg.glyphs) if (!g.blank) out.push(boxToFrame(ux, uy, [g.x0, g.bottom, g.x1, g.top]))
   ;(pg.turned ?? []).forEach((t, j) => {
-    if (mine.has(j) || !/\S/.test(t.u)) return
-    const [ox, oy] = [t.ox - t.uy * t.descent * t.size, t.oy + t.ux * t.descent * t.size]
-    const [tx, ty] = [t.ex - t.uy * t.ascent * t.size, t.ey + t.ux * t.ascent * t.size]
-    out.push(boxToFrame(ux, uy, [Math.min(ox, tx), Math.min(oy, ty), Math.max(ox, tx), Math.max(oy, ty)]))
+    if (mine.has(j) || !paints(t)) return
+    const lo = Math.min(t.descent, t.down ?? t.descent) * t.size,
+      hi = Math.max(t.ascent, t.up ?? t.ascent) * t.size
+    const c = [
+      [t.ox, t.oy],
+      [t.ex, t.ey],
+    ].flatMap(([x, y]) => [lo, hi].map((h) => toFrame(ux, uy, x! - t.uy * h, y! + t.ux * h)))
+    out.push([
+      Math.min(...c.map((q) => q[0])),
+      Math.min(...c.map((q) => q[1])),
+      Math.max(...c.map((q) => q[0])),
+      Math.max(...c.map((q) => q[1])),
+    ])
   })
   for (let b = 0; b < pg.kinds.length; b++) {
     // (a painted path's or an image's box: a glyph set turned is a box of kind -4, read above as its glyph)
@@ -325,7 +338,8 @@ export type Held = { mem: Member; page: number; dir: [number, number] }
 /**
  * Phase 1b, right after the members are placed: each member to be framed held out of the page's readings (its `located`
  * false until phase 16, so that no reading of the level page's lines, columns, measures, rooms, flows, ties or links meets
- * it). A turned unit that cannot be framed stays the original's with its reason (`turned: two pages`, `turned: two turns`)
+ * it). A turned unit that cannot be framed stays the original's with its reason (`turned: two pages`, `turned: two turns`,
+ * `turned: no text of ink`: its text glyphs all white space)
  */
 export function holdTurned(w: Work): Held[] {
   const { inkA } = w.ix
@@ -342,6 +356,13 @@ export function holdTurned(w: Work): Held[] {
     const p = [...pages][0]!
     const T = inkA.pages[p - 1]!.turned!
     const set = mem.turned.map(([, j]) => T[j]!).filter((t) => /\S/.test(t.u))
+    // (its text all white space, its ink its pieces' (two formulas and the glyph pdfTeX's \pdfinterwordspaceon sets between
+    // them): no text of its own to lay, nor ink to read its turn by; the original's)
+    if (!set.length) {
+      mem.located = false
+      mem.cause = 'turned: no text of ink'
+      continue
+    }
     const [ux, uy] = [set[0]!.ux, set[0]!.uy]
     if (set.some((t) => Math.abs(t.ux - ux) > TURN_SAME || Math.abs(t.uy - uy) > TURN_SAME)) {
       mem.located = false

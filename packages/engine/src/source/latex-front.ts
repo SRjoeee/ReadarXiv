@@ -2288,7 +2288,7 @@ function paramUse(
  * them would swap the arguments. The count alone matters too: TeX takes a token for an argument without braces
  * (\\inline{\\onenode x}, 2608.12096), and translated, the x became a character pdfTeX could not take
  */
-function paperMacros(files: readonly { file: string; text: string }[]) {
+function paperMacros(files: readonly { file: string; text: string }[], scan: ParScan = {}) {
   const out = new Map<string, Macro>()
   const re =
     /\\(?:((?:re)?newcommand|providecommand|DeclareRobustCommand)\*?\s*(?:\{\s*\\([A-Za-z@]+)\s*\}|\\([A-Za-z@]+))\s*(?:\[(\d)\])?|(?:[egx]?def)\s*\\([A-Za-z@]+)\s*((?:#\d\s*)*)(?=\{))/g
@@ -2340,16 +2340,27 @@ function paperMacros(files: readonly { file: string; text: string }[]) {
       })
     }
   resolveKeeps(out)
-  resolveParEnds(out, parNamesOf(files.map((f) => f.text)))
+  resolveParEnds(
+    out,
+    parNamesOf(
+      files.map((f) => f.text),
+      scan,
+      out,
+    ),
+    scan,
+  )
   return out
 }
+/** what the reading of a definition's paragraph ends knows of the paper (parEndsOf): its \\newif conditionals and the values
+ *  TeX reads them at wherever it reads them (texCommands' `ifs`, `ifValues`) */
+type ParScan = Pick<TexScan, 'ifs' | 'ifValues'>
 /**
  * The paper's macros of no argument that end the paragraph TeX is setting and set no text of their own (`\newcommand{\endp}{\par}`,
  * `\def\sep{\par\vskip 4pt}`): a name every definition of which, in any form (DEFINITION), takes no parameter and has a body
  * whose top level ends it (parEndsOf). A call of one written in a paragraph ends the unit as \par does (the walk), and a body that
  * calls one ends a paragraph there (resolveParEnds). A name also defined otherwise is none
  */
-function parNamesOf(texts: readonly string[]) {
+function parNamesOf(texts: readonly string[], scan: ParScan, defined: ReadonlyMap<string, Macro>) {
   const out = new Set<string>(),
     other = new Set<string>()
   for (const t of texts.map(uncommented)) {
@@ -2360,7 +2371,7 @@ function parNamesOf(texts: readonly string[]) {
         k = skipSpaces(t, m.index + m[0].length)
       const e = (nc ?? nb ?? nd) && t[k] === '{' ? matchGroup(t, k) : -1
       const body = e > 0 ? t.slice(k + 1, e - 1) : ''
-      if (e > 0 && parEndsOf(body, new Map()).length && !setsText(body)) out.add(name)
+      if (e > 0 && parEndsOf(body, new Map(), scan, defined).length && !setsText(body)) out.add(name)
       else other.add(name)
     }
   }
@@ -2383,14 +2394,22 @@ const PAR_UNITS: ReadonlySet<string> = new Set(['para', 'abstract', 'theorem', '
  * the call's end), so that the side travels through a wrapper (`\outer{#1}` calling `\inner`, `\textbf{#1}\par`, ends after
  * its argument). Read as TeX reads the body: a bare group's content is the body's (a group ends no paragraph:
  * `{\small\bfseries #1}\par`), an argument's, a box's or an environment's is not (\parbox{…\par…}, a minipage's, a
- * \footnote{…}: a paragraph of their own, inside); and a command TeX surely acts on alone (texCommands, its own scan of the
- * conditionals: not in a branch it skips, `\iffalse\par\fi`; not an operand, `\let\saved\par`; not in a definition's body
- * inside it; not in a conditional whose branch the source cannot tell, `\ifdefined`)
+ * \footnote{…}: a paragraph of their own, inside, an environment of the same name nested in it too, endOfEnv); and a command
+ * TeX surely acts on alone (texCommands, its own scan of the conditionals: not in a branch it skips, `\iffalse\par\fi`, a
+ * branch of the paper's own \newif conditional TeX does not take (`scan`: never set, it is false); not an operand,
+ * `\let\saved\par`; not in a definition's body inside it; not in a conditional whose branch the source cannot tell,
+ * `\ifdefined`, one of the paper's set two ways). A paragraph command the paper defines anew (`defined`:
+ * `\renewcommand{\medbreak}{}`) is its own command, as the walk reads it (commandEndsParagraph)
  */
-function parEndsOf(body: string, ends: ReadonlyMap<string, Macro | null>): { at: number; end: number }[] {
+function parEndsOf(
+  body: string,
+  ends: ReadonlyMap<string, Macro | null>,
+  scan: ParScan,
+  defined: ReadonlyMap<string, Macro>,
+): { at: number; end: number }[] {
   const t = uncommented(body)
   const acted = new Set(
-    texCommands(t)
+    texCommands(t, scan)
       .filter((c) => !c.inDef && c.sure)
       .map((c) => c.at),
   )
@@ -2403,13 +2422,24 @@ function parEndsOf(body: string, ends: ReadonlyMap<string, Macro | null>): { at:
       if (cmd.name === 'begin') {
         // (an environment's content is its own: past its \end)
         const m = /^\\begin\s*\{([^{}]+)\}/.exec(t.slice(i))
-        const close = m ? t.indexOf(`\\end{${m[1]}}`, i + m[0].length) : -1
-        if (close < 0) break
-        i = close + `\\end{${m![1]}}`.length - 1
+        if (!m) break
+        // (to its own \end: an environment of the same name inside it is passed over whole, a minipage in a minipage)
+        const re = new RegExp(String.raw`\\(begin|end)\s*\{${m[1]!.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\}`, 'g')
+        re.lastIndex = i + m[0].length
+        let depth = 1,
+          after = -1
+        for (let x = re.exec(t); x; x = re.exec(t))
+          if (x[1] === 'begin') depth++
+          else if (--depth === 0) {
+            after = x.index + x[0].length
+            break
+          }
+        if (after < 0) break
+        i = after - 1
         afterCommand = false
         continue
       }
-      if (acted.has(i) && (PAR_COMMANDS.has(cmd.name) || VERTICAL_COMMANDS.has(cmd.name)))
+      if (acted.has(i) && (PAR_COMMANDS.has(cmd.name) || VERTICAL_COMMANDS.has(cmd.name)) && !defined.has(cmd.name))
         out.push({ at: i, end: cmd.end })
       else if (acted.has(i) && ends.has(cmd.name)) {
         const m = ends.get(cmd.name)
@@ -2449,7 +2479,7 @@ function parEndsOf(body: string, ends: ReadonlyMap<string, Macro | null>): { at:
  * after the last (or after everything else); read through the paper's own macros the body calls, as TeX expands them, until
  * nothing more is read (a name that calls itself adds nothing after its first reading)
  */
-function resolveParEnds(macros: Map<string, Macro>, names: ReadonlySet<string>) {
+function resolveParEnds(macros: Map<string, Macro>, names: ReadonlySet<string>, scan: ParScan) {
   // (a name of no argument that ends a paragraph, parNamesOf: null, where it stands; one resolved here: its Macro, its sides)
   const ends = new Map<string, Macro | null>([...names].map((n) => [n, null]))
   // (until nothing moves: a name added, a side set, each only once, so that a macro ending a paragraph through another's, at any
@@ -2457,7 +2487,7 @@ function resolveParEnds(macros: Map<string, Macro>, names: ReadonlySet<string>) 
   for (let moved = true; moved; ) {
     moved = false
     for (const [name, m] of macros) {
-      const found = parEndsOf(m.def, ends)
+      const found = parEndsOf(m.def, ends, scan, macros)
       if (!found.length) continue
       const at = found.map((f) => f.at)
       const t = uncommented(m.def)
@@ -4013,26 +4043,30 @@ const isConditional = (name: string, ifs: ReadonlySet<string>) =>
 /**
  * The paper's \\newif conditionals TeX resolves the same wherever it reads them: one set true or false (\\longtrue) only
  * where TeX surely acts on it, never in a definition's body, and always to the same value; one never set, false, as
- * \\newif leaves it. A Map of the conditional's name to its value; one set otherwise is not in it
+ * \\newif leaves it. A Map of the conditional's name to its value; one set otherwise is not in it. With `until` (each text's
+ * offset an assignment must stand before): the values PROVEN wherever the document's text runs, one set at or after its text's
+ * bound (in the document's body, in a file it may input there) not in it
  */
-function newifValues(texts: readonly string[], ifs: ReadonlySet<string>) {
+function newifValues(texts: readonly string[], ifs: ReadonlySet<string>, until?: readonly number[]) {
   const set = new Map<string, Set<boolean> | null>()
   if (!ifs.size) return new Map()
   // only a file that sets one is read (a package's files mostly do not)
   const sets = new RegExp(
     String.raw`\\(?:${[...ifs].map((n) => n.slice(2).replace(/@/g, '\\@')).join('|')})(?:true|false)(?![A-Za-z@])`,
   )
-  for (const t of texts.filter((x) => sets.test(x)))
+  texts.forEach((t, k) => {
+    if (!sets.test(t)) return
     for (const c of texCommands(t, { ifs })) {
       const m = /^(.+?)(true|false)$/.exec(c.name),
         name = m && `if${m[1]}`
       if (!name || !ifs.has(name)) continue
-      if (c.inDef || !c.sure) {
+      if (c.inDef || !c.sure || (until && c.at >= (until[k] ?? 0))) {
         set.set(name, null)
         continue
       }
       if (set.get(name) !== null) (set.get(name) ?? set.set(name, new Set()).get(name)!).add(m[2] === 'true')
     }
+  })
   const out = new Map<string, boolean>()
   for (const name of ifs) {
     const v = set.get(name)
@@ -4786,13 +4820,17 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
   }
   // (the end of a paper macro's call whose body ends the paragraph after its prose, parAfter: the unit ends there, at the first
   // token the walk reads past it, as at a written \par; the white space right after the call, which TeX skips in vertical mode,
-  // still the unit's, as it is a unit's before a blank line, so that a unit TeX's \par ends where it ended already keeps its text)
+  // still the unit's, as it is a unit's before a blank line, so that a unit TeX's \par ends where it ended already keeps its text.
+  // Not where the body ends in a command that takes what follows the call (`then`, goOn: `#1\par\strong` called as
+  // `\labelthen{A}{B}`): TeX's paragraph ends inside the call, where no mark can stand, and the next begins with that command and
+  // its argument, between which neither can a unit's mark nor its line probe (begun there, the probe was \strong's argument and
+  // the marked TeX set other text than the paper's): the unit goes on, as the reading was before it read the definition's end)
   let parAt = -1
   while (i < to && !ctx.ended) {
     walkSteps++
     if (parAt >= 0 && i >= parAt && (then || !/\s/.test(s[i]!))) {
       parAt = -1
-      endUnit()
+      if (!then) endUnit()
     }
     const c = then ? '\\' : s[i]
     // a comment takes its line's end with it; a blank line after it is still \\par, as TeX reads it (`text % note`, then
@@ -7306,6 +7344,23 @@ function readProject(
     ].map((m) => m[1]!),
   )
   const ifValues = newifValues(sources.map(sourceText), ifs)
+  // (the paper's macros, read with its conditionals: a definition's paragraph end in a branch TeX does not take is none, and one
+  // in a branch it takes surely is; a definition's paragraph end is read wherever a call stands, so only a value PROVEN there
+  // counts: never set (false, as \\newif leaves it), or set before the main file's \\begin{document} or in a package of the
+  // paper's (.sty, loaded in the preamble). One set in the document's text, or in a file it may input there, holds at a call by
+  // the order TeX meets them, which this reading does not follow: its branches are not sure, and no paragraph end is read there)
+  const proven = newifValues(
+    sources.map(sourceText),
+    ifs,
+    sources.map((f) =>
+      f === mainFile.rel
+        ? Math.max(0, documentBounds(sourceText(f)).begin)
+        : /\.sty$/i.test(f)
+          ? Number.POSITIVE_INFINITY
+          : 0,
+    ),
+  )
+  const macros = paperMacros(own, { ifs, ifValues: proven })
   // (the job's .bbl, where the package holds it and it is BibTeX's, a thebibliography: what \\bibliography reads. Not biber's,
   // which is biblatex's data — \\entry, \\field — and no text, which \\bibliography, biblatex's alias of \\addbibresource, never reads)
   const bblName = `${jobName(mainFile.rel)}.bbl`,
@@ -7327,8 +7382,8 @@ function readProject(
     lineEnvs,
     ownAccents: ownAccents(ownTexts),
     ownLetters: ownLetters(ownTexts),
-    macros: paperMacros(own),
-    parNames: parNamesOf(ownTexts),
+    macros,
+    parNames: parNamesOf(ownTexts, { ifs, ifValues: proven }, macros),
     envMacros,
     ifs,
     ifValues,

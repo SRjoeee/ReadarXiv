@@ -141,3 +141,92 @@ describe('a definition that ends the paragraph in other forms', () => {
     ).toEqual(['A sentence of ours with boxed words inside it goes on.'])
   })
 })
+
+describe('a definition that ends the paragraph: the review of round 2 into main (#676)', () => {
+  /** the marked main file's body as the marked compile writes it (with the line probes) */
+  const markedBody = (preamble: string, body: string) => {
+    const paper = openPaper(
+      new Map([['main.tex', enc(`\\documentclass{article}\n${preamble}\n\\begin{document}\n${body}\n\\end{document}\n`)]]),
+    )
+    const out = new TextDecoder('latin1').decode(
+      originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES }).get('main.tex'),
+    )
+    return out.slice(out.indexOf('\\begin{document}'), out.indexOf('\\end{document}'))
+  }
+  it('no mark nor line probe between a call and the argument the command its body ends in takes', () => {
+    // (`\labelthen{Label words}{Next words.}` is `Label words\par\strong{Next words.}`: TeX's paragraph ends inside the call,
+    // where no mark can stand; a unit begun at the call's end set its line probe before `{Next words.}`, and \strong took the
+    // probe for its argument: the marked TeX set other text than the paper's)
+    const strong = '\\newcommand{\\strong}[1]{\\textbf{#1}}\n'
+    for (const [def, tail] of [
+      [`${strong}\\newcommand{\\labelthen}[1]{#1\\par\\strong}`, 'strong'],
+      ['\\newcommand{\\labelthen}[1]{#1\\par\\textbf}', 'textbf'],
+      [`${strong}\\newcommand{\\labelthen}[1]{#1\\vskip 2pt\\strong}`, 'vskip'],
+    ] as const) {
+      const marked = markedBody(def, 'Words before. \\labelthen{Label words}{Next words.} More words after.')
+      expect(marked, tail).toMatch(/\\labelthen\{[^{}]*\}\{/)
+      // (one unit, as the reading was before it read the definition's end, of TeX's two paragraphs)
+      expect(saidOf(def, 'Words before. \\labelthen{Label words}{Next words.} More words after.'), tail).toEqual([
+        'Words before. Label wordsNext words. More words after.',
+      ])
+    }
+  })
+  it('a \\par in a branch of a paper’s own conditional TeX does not take ends no paragraph (\\newif, never set: false)', () => {
+    const def = '\\newif\\ifdraft\n\\newcommand{\\maybe}[1]{#1\\ifdraft\\par\\fi}'
+    expect(saidOf(def, 'Previous sentence. \\maybe{The first half} continues here.')).toEqual([
+      'Previous sentence. The first half continues here.',
+    ])
+    // (and one TeX surely takes, the conditional set true wherever TeX reads it: the paragraph ends there)
+    expect(saidOf(`${def}\n\\drafttrue`, 'Previous sentence. \\maybe{The first half} continues here.')).toEqual([
+      'Previous sentence. The first half',
+      'continues here.',
+    ])
+  })
+  it('a paragraph command the paper defines anew is its own command (\\renewcommand{\\medbreak}{}): no paragraph end', () => {
+    expect(
+      saidOf(
+        '\\renewcommand{\\medbreak}{}\n\\newcommand{\\inlinepiece}[1]{#1\\medbreak}',
+        'Previous sentence. \\inlinepiece{an inline sentence} goes on.',
+      ),
+    ).toEqual(['Previous sentence. an inline sentence goes on.'])
+  })
+  it('a \\par inside a box nested in a box of the same environment is the outer box’s own: no paragraph end', () => {
+    expect(
+      saidOf(
+        '\\newcommand{\\inbox}[1]{#1 \\begin{minipage}{3cm}\\begin{minipage}{2cm}Inner words.\\end{minipage}\\par Outer words.\\end{minipage}}',
+        'A sentence of ours with \\inbox{boxed words} inside it goes on.',
+      ),
+    ).toEqual(['A sentence of ours with inside it goes on.'])
+  })
+})
+
+describe('a definition that ends the paragraph: the review of #677', () => {
+  it('a \\newif flag set later in the document than the call is no value proven at the call: no paragraph end read from it', () => {
+    // (TeX runs `\newif` and the flag is false at the call; the paper's only `\drafttrue` stands after it. Read as true
+    // wherever TeX reads it, the `\par` of the true branch cut the paragraph TeX does not end)
+    const def = '\\newif\\ifdraft\n\\newcommand{\\maybe}[1]{#1\\ifdraft\\par\\fi}'
+    expect(saidOf(def, 'Previous sentence. \\maybe{The first half} continues here.\n\n\\drafttrue Later words.')).toEqual([
+      'Previous sentence. The first half continues here.',
+      'Later words.',
+    ])
+  })
+  // RECORDED, NOT BUILT (Codex and Devin on #677; each fails until it is; over the lab's 245 papers no unit merges by them: the
+  // units at this round's head are the line's byte for byte): where the reading cannot tell what TeX runs, it reads no
+  // paragraph end, two of TeX's paragraphs one unit as before the definitions' ends were read
+  it.fails('an environment opened in a branch TeX skips is no nesting: the \\par after the outer box ends the paragraph', () => {
+    expect(
+      saidOf(
+        '\\newcommand{\\boxedline}[1]{#1 \\begin{minipage}{3cm}\\iffalse\\begin{minipage}{2cm}\\fi Boxed text.\\end{minipage}\\par}',
+        'Previous sentence. \\boxedline{First paragraph.} Second paragraph.',
+      ),
+    ).toHaveLength(2)
+  })
+  it.fails('a redefinition TeX skips leaves the paragraph command its own: \\medbreak still ends the paragraph', () => {
+    expect(
+      saidOf(
+        '\\iffalse\\renewcommand{\\medbreak}{}\\fi\n\\newcommand{\\labelpiece}[1]{#1\\medbreak}',
+        'Previous sentence. \\labelpiece{First paragraph.} Second paragraph.',
+      ),
+    ).toHaveLength(2)
+  })
+})
