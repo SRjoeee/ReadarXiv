@@ -1137,7 +1137,7 @@ function boxOnPage([ux, uy]: readonly [number, number], b: readonly number[]): [
     Math.max(...c.map((q) => q[1])),
   ]
 }
-/** a frame's member on the page (docs/PDF-READER.md §18.112): each line its box turned onto the page (across, x0 to x1; up,
+/** a frame's member on the page (docs/PDF-READER.md §18.113): each line its box turned onto the page (across, x0 to x1; up,
  *  its bottom to its top), its measure that box's extent across, its elements' and its label's ink their boxes turned so, their
  *  baselines the boxes' bottoms; everything else as the part states it */
 export function onPage(m: Placed, dir: readonly [number, number]): Placed {

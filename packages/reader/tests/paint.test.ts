@@ -433,7 +433,7 @@ describe('a crop cut through its own ink and a device pixel round it, clear of e
   })
 })
 
-describe('a crop of a line laid in a frame (a unit TeX set turned, docs/PDF-READER.md §18.112)', () => {
+describe('a crop of a line laid in a frame (a unit TeX set turned, docs/PDF-READER.md §18.113)', () => {
   // (2608.12502v1's header cell "Before ($t_1$)" a quarter turned: its formula from 448 to 460 along its line in the frame, its
   // baseline -60 there (x 60 on the page); the translation's line in the frame at baseline -150 (x 150), from 400 (y 400)
   // along the run, the formula's crop 48 along it)

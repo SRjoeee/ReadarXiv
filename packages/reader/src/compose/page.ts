@@ -31,7 +31,7 @@ export type Item =
    *  its edges cut from its element's ink between two glyphs (1 its left, 2 its right: a URL broken), drawn with no margin;
    *  `ink` its own ink, its piece's boxes on its line as the part states them (src's page's PDF units), which it is cut by;
    *  `dir` a crop of a line laid in a frame (a unit TeX set turned, Part.frames): its line stands from its origin along it, as
-   *  a run's, and its src and ink are stated in the frame (the page turned back by `dir`, docs/PDF-READER.md §18.112) */
+   *  a run's, and its src and ink are stated in the frame (the page turned back by `dir`, docs/PDF-READER.md §18.113) */
   | {
       s: string
       x: number

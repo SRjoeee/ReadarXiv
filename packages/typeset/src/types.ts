@@ -144,7 +144,7 @@ export type Item =
    *  reader's to cut it by; `of` the member whose label it is where another member's line draws it (a label no line opens with,
    *  carried to the end of the name before, lay/flow.ts): lit, cut and counted as that member's; `dir` a crop of a line laid in a
    *  frame (a unit TeX set turned, Part.frames): its line from its origin along it as a run's, its `src` and `ink` stated in the
-   *  frame, which the reader turns onto the page (docs/PDF-READER.md §18.112) */
+   *  frame, which the reader turns onto the page (docs/PDF-READER.md §18.113) */
   | {
       s: string
       x: number

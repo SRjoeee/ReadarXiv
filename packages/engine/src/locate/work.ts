@@ -10,6 +10,7 @@ import type { Instrument, InstrumentUnit, TexFrame } from '../instrument.ts'
 import { fixedFacesOf } from './facts.ts'
 import type { DisplayLine, InkInput, InkStats } from './ink.ts'
 import { r2 } from './lines.ts'
+import type { PaintedFrame } from './frames.ts'
 import type { FloatLine } from './ledger.ts'
 import type { Word } from './words.ts'
 
@@ -277,6 +278,9 @@ export interface Index {
   readonly fixedFaces: ReadonlySet<string>
   /** each A page's text frame as TeX shipped it (framesOnA) */
   readonly framesA: ReadonlyMap<number, TexFrame>
+  /** each A page's closed painted paths that hold text, seen or not (frames.ts framesOnPage), by page (1-based): a member's frame
+   *  is read from them (geometry.ts rooms, facts-pass.ts readRoom) */
+  readonly paintedA: ReadonlyMap<number, readonly PaintedFrame[]>
 }
 
 /** the artefacts' reading the units made on A take (artefacts.ts): whether a unit set wholly in a face of one pitch is kept as
@@ -349,10 +353,18 @@ export interface LocateOptions {
   take?: boolean
   /** what the front half reads of an ink unit's pieces (the adapter's classesOf) */
   classesOf?: InkInput['classesOf']
+  /** each A page's closed painted paths that hold text (frames.ts framesOnPage), where the raw pages are not given (`pages`):
+   *  read from them where they are */
+  frames?: (readonly PaintedFrame[] | null)[]
 }
 
 /** the record of a locate: its index, and the fields the phases fill from the start */
-export function open(ins: Instrument, inkA: Doc, m: Mapping): Work {
+export function open(
+  ins: Instrument,
+  inkA: Doc,
+  m: Mapping,
+  paintedA: ReadonlyMap<number, readonly PaintedFrame[]> = new Map(),
+): Work {
   const B = ins.ink
   const NB = m.offB[B.pages.length] as number
   const NA = m.offA[inkA.pages.length] as number
@@ -481,6 +493,7 @@ export function open(ins: Instrument, inkA: Doc, m: Mapping): Work {
       setA,
       fixedFaces,
       framesA,
+      paintedA,
     },
     members,
     units,

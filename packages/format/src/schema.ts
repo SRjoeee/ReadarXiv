@@ -383,7 +383,8 @@ export const Label = z.object({
  *  a figure text's depth under its baseline of the nearest stroke under its text (S.figures: a translation that reaches it is
  *  crowded). `runs`: the room under each run of its text lines (to its last line on a page or in a column, over a kept row of
  *  its own, over another's ink TeX set between two of its lines), each [that line's index, the depth under its baseline of the
- *  next ink across the run (from its lines' own start to their column's end: a glyph's baseline, a box's top), the depth under
+ *  next ink across the run (from its lines' own start to their column's end: a glyph's baseline, a box's top, the highest line
+ *  wholly under it of the frame a reader sees round the member's lines, docs/PDF-READER.md §18.112), the depth under
  *  it of TeX's text block bottom in its column there (the foot of the box TeX shipped the column's text in)], stated where TeX
  *  states that foot; `sep` TeX's normal paragraph separation where its paragraph ends, \baselineskip and \parskip, natural (a
  *  heading's, under its title set on lines of its own: its \@startsection after-skip and the \baselineskip and \parskip around
@@ -454,9 +455,9 @@ export const Room = z.object({
       num,
     ])
     .optional(),
-  // (the ink that stays beside its text lines: ink no member owns (a glyph no unit claims, a rule or an image no member's) on a
-  // line's band within its text block, wholly before the line's start or after its end, each side's pieces as one box: [that
-  // line's index, x0, y0, x1, y1]. TeX set it on the line and no translation replaces it: a translation's line laid over it,
+  // (the ink that stays beside its text lines: ink no member owns (a glyph no unit claims, a rule or an image no member's, the
+  // painted lines of the member's frame, §18.112) on a line's band within its text block, wholly before the line's start or after
+  // its end, each side's pieces as one box: [that line's index, x0, y0, x1, y1]. TeX set it on the line and no translation replaces it: a translation's line laid over it,
   // borrowed or not, keeps off it. A unit's end mark (El.end: amsthm's QED box TeX pushed to its last line's end) is the
   // unit's, claimed and stated as its element, no stay; a part made before states it here)
   stays: z.array(z.tuple([int, num, num, num, num])).optional(),
@@ -624,7 +625,7 @@ export const Part = z.object({
   // and its parts): what is not text in the unit is the original's turned ink, cut as a crop and drawn moved along the turn. A
   // typesetter lays a frame as it lays a part's flows, and a reader draws it through its turn. A field of its own: a reader of
   // before strips it and leaves those units the original's,
-  // their groups on, as it did when no part held them (FORMAT stays: ARCHITECTURE.md §5; docs/PDF-READER.md §18.112)
+  // their groups on, as it did when no part held them (FORMAT stays: ARCHITECTURE.md §5; docs/PDF-READER.md §18.113)
   frames: z
     .array(z.object({ dir: z.tuple([num, num]), flows: z.array(z.array(Placed)), ties: z.array(Tie).optional() }))
     .optional(),

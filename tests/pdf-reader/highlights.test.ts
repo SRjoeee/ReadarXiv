@@ -5,7 +5,7 @@
 // nor to one right after another paper's macro (it may read ahead), and the reader draws a macro with an argument from its ink (a
 // crop, `other`), which holds no text: its glyphs were read as its unit's text, the unit's letters past its source's, and locate
 // held the whole unit the original's (2111.09276v1's Figure 1 caption, `\hlyellow{high}\hlblue{lighted}`, its three sentences
-// English). The fixture (tests/fixtures/pdf/highlights/, ours, CC0; made by scripts/make-highlight-fixture.mjs) holds each case:
+// English). The fixture (tests/fixtures/pdf/highlights/, ours, CC0; made by scripts/make-tex-fixture.mjs) holds each case:
 // two highlights in one word after a closed one (a paragraph) and after one of its opening point alone (a caption), one at a
 // word's start, its middle and its end, one run across a line's end, \hl itself, under two colours. The back half runs here over
 // the compiles the front half made of it: the instrument over our final pass, prepareBack over the stand-in for arXiv's PDF.
