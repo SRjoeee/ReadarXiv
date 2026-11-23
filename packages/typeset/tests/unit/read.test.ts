@@ -401,6 +401,39 @@ describe('the reading from the part', () => {
   })
 })
 
+describe('the run TeX set after an author’s name for several pieces, as the prepare states it (PDF-READER §18.108)', () => {
+  // (`Ann Lee\inst{1}\orcidID{0000}`: TeX sets the two marks past the end point as one run, no point between them; the part
+  // states the run the first piece's ink and the second empty, El.text '')
+  const m = member({
+    kind: 'author',
+    els: [
+      ['1', { kind: 'other', copy: '1', ink: [[1, 114, 702.6, 140, 708.5, 700]] }],
+      ['2', { kind: 'other', copy: '0000', ink: [], text: '' }],
+    ],
+  })
+  const tr = (s: string) => ({ t: 'text' as const, tr: true, s })
+  const el = (k: number) => ({ t: 'ph', src: k === 1 ? '\\inst{1}' : '\\orcidID{0000}', k }) as V0Piece
+  /** the tokens' text, a crop as `[crop]` */
+  const drawn = (pieces: V0Piece[]) => {
+    const got = read(m, pieces, 'author')
+    const toks = got.tokens as unknown as { s?: string; crop?: unknown; space?: true }[]
+    return {
+      unproven: got.unproven,
+      text: toks.map((t) => (t.crop ? '[crop]' : t.space ? ' ' : (t.s ?? ''))).join(''),
+    }
+  }
+  it('is drawn once, where the translation sets the first piece, in the source’s order', () => {
+    expect(drawn([tr('Anna Li'), el(1), el(2)])).toEqual({ unproven: -1, text: 'Anna Li[crop]' })
+  })
+  it('is drawn once whatever order the translation returns the pieces in', () => {
+    expect(drawn([tr('Anna Li'), el(2), el(1)])).toEqual({ unproven: -1, text: 'Anna Li[crop]' })
+  })
+  it('a reply that separates the pieces: the run drawn whole at the first piece, nothing at the other', () => {
+    expect(drawn([tr('Anna Li'), el(1), tr(' und'), el(2)])).toEqual({ unproven: -1, text: 'Anna Li[crop] und' })
+    expect(drawn([el(2), tr('Anna Li '), el(1)])).toEqual({ unproven: -1, text: 'Anna Li [crop]' })
+  })
+})
+
 describe("the old font commands are LaTeX's own: \\normalfont, then their one series, shape or family (article.cls)", () => {
   // (article.cls: \DeclareOldFontCommand{\bf}{\normalfont\bfseries}{\mathbf}, and \it, \sl, \sc, \tt, \sf, \rm alike. Read as
   // adding their attribute to the face around them, 2610.19282v1's `\emph{\bf Model parameters.}` was drawn bold italic where TeX

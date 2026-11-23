@@ -65,6 +65,7 @@ export function lineGeometry(w: Work, owned: Owned): void {
   const { ins, B, inkA, m, pageA, pageB, placeSpan, unitB, roleB, emptyPiece, outsidePiece, gA, atA } = w.ix
   const { members, units, jointPiece } = w
   const trailSep = field(w, 'trailSep')
+  const runShared = field(w, 'runShared')
   /** A's boxes ([page, index]) as rows.ts takes them */
   const boxesOf_ = (l: readonly [number, number][]): RowBox[] =>
     l.map(([ap, ai]) => {
@@ -635,11 +636,20 @@ export function lineGeometry(w: Work, owned: Owned): void {
       // `\trajectoryMark{}`, 2402.10294v1's `\url` in `\urldef\tempurl`) —; or TeX set it before the unit's start point,
       // outside the unit's text: El.keep, its ink never erased (the instrument's `outside`); with neither, its ink was not
       // found, and the reading leaves its unit the original's. An empty ink of a visible class read as TeX's nothing would leave
-      // 2608.25210v2 p7's algorithm erased under one line, 2402.10294v1's reference [1] drawn without its year)
+      // 2608.25210v2 p7's algorithm erased under one line, 2402.10294v1's reference [1] drawn without its year. A piece of an
+      // author's run but its first (phase 2, trails.ts runOf: `\orcidID` after `\inst`, set past the end mark with no point
+      // between them) is stated so too: what TeX set for it stands in the first's ink, drawn once where the translation sets
+      // that one)
       const emptySpan = !!span && span[0] === span[1]
       const stated = cls ?? p.kind
       if (!ink.length && el.text === undefined && INKED_CLASSES.has(stated)) {
-        if (emptySpan || emptyPiece.has(`${mem.unit}|${id}`) || jointPiece.has(`${mem.unit}|${id}`)) el.text = ''
+        if (
+          emptySpan ||
+          emptyPiece.has(`${mem.unit}|${id}`) ||
+          jointPiece.has(`${mem.unit}|${id}`) ||
+          runShared.has(`${mem.unit}|${id}`)
+        )
+          el.text = ''
         else if (outsidePiece.has(`${mem.unit}|${id}`)) el.keep = 1
         // (an inked macro whose ink nothing on the page bounds (no closing point, a paper's macro's; no opening point where it is
         // glued to the word before it; or set after its unit's end point) is stated by the text TeX set for it where the document

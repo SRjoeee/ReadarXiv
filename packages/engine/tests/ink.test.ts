@@ -1532,6 +1532,61 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     expect(note.lines[0]![2]).toBe(76)
   })
 
+  it('keeps the forced line ends TeX set inside a unit made on A: a break element at each of its points, its line stated', () => {
+    // (a note no source unit owns, three lines `a \\ b \\ c` as TeX set them: \@gnewline's point `kb<n>` after each line's last
+    // glyph, B's marks (marks.ts BREAKS_TEX). Read off the ink alone, its lines run together as one paragraph's, and the
+    // translation of three lines was laid head to tail in two (2604.10456v1 p1's note). A short line is no fact of a break: a
+    // wrap before a long word ends one as short; TeX's point is)
+    const lines = [
+      'Body text here',
+      { text: 'Work done at a lab.', x: 72, y: 688 },
+      { text: 'Project lead.', x: 72, y: 676 },
+      { text: 'Corresponding authors.', x: 72, y: 664 },
+    ]
+    const one = 14,
+      two = one + 'Work done at a lab.'.length,
+      three = two + 'Project lead.'.length
+    const made = (kb: boolean) => {
+      const { B, A } = pair({
+        lines,
+        points: [
+          ['bs1', 0],
+          ['be1', three + 'Corresponding authors.'.length],
+        ],
+      })
+      if (kb)
+        B.pages[0]!.marks = {
+          paras: [],
+          paraEnds: [],
+          regions: [],
+          pictures: [],
+          breaks: [
+            { name: 'kb1', glyph: two, box: 0 },
+            { name: 'kb2', glyph: three, box: 0 },
+          ],
+        }
+      const L = locate(instrumentOf(B, [unitOf('para', 'Body text here')], [[0, -1, -1, -1]]), A, align(B, A), {
+        pages: rawOf(A),
+      })
+      const note = L.members.find((m) => m.kind === 'inkorphan')!
+      return { content: L.units[note.unit]!.content, note }
+    }
+    const brk = (id: string): Piece => ({ t: 'el', id, kind: 'break', src: '\\\\' })
+    const forced = made(true)
+    expect(forced.content).toEqual([
+      text('Work done at a lab.'),
+      brk('1'),
+      text(' Project lead.'),
+      brk('3'),
+      text(' Corresponding authors.'),
+    ])
+    // (each break's line the one TeX ended at it, as a source unit's break states it: El.ends)
+    const els = new Map(forced.note.elements)
+    expect(els.get('1')?.ends?.[0]).toBe(0)
+    expect(els.get('3')?.ends?.[0]).toBe(1)
+    // (where TeX set no point, the lines are one paragraph's, as before: its lines wrapped by TeX for all the ink tells)
+    expect(made(false).content).toEqual([text('Work done at a lab. Project lead. Corresponding authors.')])
+  })
   it('makes the text of a float of a type with no counter a note, the page’s own text (NeurIPS’s notice); a figure’s float none', () => {
     // (NeurIPS sets "Preprint. Under review." in \\@float{noticebox}[b], a float type with \\ftype@noticebox and no counter: no
     // \\caption can number it, so TeX says it is no figure, table or algorithm. The marked compile states it, `fn<n>` beside the

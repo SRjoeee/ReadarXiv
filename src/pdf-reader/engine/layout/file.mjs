@@ -238,7 +238,7 @@ export { LayoutRefusal } from './json.mjs'
   marking, which this maker calls through @readarxiv/engine/today (layoutMarking), writes the carrier's opening mark (\axtpmd)
   before every piece but a display that stands first in the paragraph TeX resumes after a display, an inline formula's for
   \axtpmm (marks.ts CARRY_TEX, PDF-READER §18.106), so that a file of 44 holds such a paper as made from a marked TeX without
-  that point where the piece is no formula (the papers of the lab's 245 it reaches: PDF-READER §18.106); 46 (with PIPELINE 113):
+  that point where the piece is no formula (the papers of the lab's 245 it reaches: PDF-READER §18.106); 46 (with PIPELINE 114):
   the source reader's cut, which this maker reads through @readarxiv/engine/today, makes a unit nested in a unit it drops a
   unit of its own, and the marking, which it calls (layoutMarking), gives a nested note first after a display the carrier
   (PDF-READER §18.111), so that a file of 45 holds a paper with a note written in a paragraph of no text of its own with no
