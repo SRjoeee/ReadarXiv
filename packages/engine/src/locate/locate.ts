@@ -74,7 +74,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   facts(w, owned) // 12
   flowsAndTies(w) // 13
   rowAligns(w) // 14
-  linksOnA(w, owned, o) // 15
+  linksOnA(w, owned, o, held) // 15: an annotation over a held unit's turned glyphs its member's
   const frames = frameTurned(w, held) // 16: the units TeX set turned, read in their frames
   return close(w, owned, frames)
 }

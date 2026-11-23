@@ -310,13 +310,33 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
   // own coordinates (the page turned back), by every rule of the lay; then each laid line stated from its origin on the page
   // along the turn, as a figure text's turned line is (Laid.lines: its items' `dir`, their places along it from x0), and lit in
   // the frame, which is the turned run's frame (Laid.lit `dir`): the reader draws, lights and selects it through the turn)
+  // (and each frame's links: the annotations its members own (Link.owner), their boxes in the frame, laid with them as a part's
+  // are, moved with their pieces or left at their boxes, then turned back onto the page: a box left where it was is the
+  // annotation's own on A. The level lay leaves them at their boxes, owners it does not lay: those of its are dropped)
+  const framed = new Set<number>()
   const subs = part.frames.map((f) => {
     const { frames: _f, links: _l, ties: _t, ...rest } = part
-    const sub = layFlows({ ...rest, flows: f.flows, ...(f.ties ? { ties: f.ties } : {}) }, given, rules, metrics, {
-      ...o,
-      linkFates: undefined,
+    const ords = new Set(f.flows.flat().map((m) => m.ord))
+    for (const n of ords) framed.add(n)
+    const own = (part.links ?? []).flatMap((l, i) => (l.owner && ords.has(l.owner[0]) ? [{ l, i }] : []))
+    const inFrame = own.map(({ l }) => ({ ...l, box: boxInFrame(l.box, f.dir) }))
+    const fates: LinkFate[] = []
+    const sub = layFlows(
+      { ...rest, flows: f.flows, ...(f.ties ? { ties: f.ties } : {}), ...(inFrame.length ? { links: inFrame } : {}) },
+      given,
+      rules,
+      metrics,
+      { ...o, linkFates: o.linkFates ? fates : undefined },
+    )
+    if (o.linkFates)
+      own.forEach(({ i }, k) => {
+        if (fates[k]) o.linkFates![i] = fates[k]
+      })
+    const links = sub.links.map(([box, to, owner, border]): Page['links'][number] => {
+      const at = inFrame.findIndex((l) => l.box.every((v, k) => Math.abs(v - box[k]!) < 1e-6))
+      return [at >= 0 ? own[at]!.l.box : boxOnPage(box, f.dir), to, owner, border] as Page['links'][number]
     })
-    return { sub, dir: f.dir }
+    return { sub, dir: f.dir, links }
   })
   const members = [...flat.members]
   for (const { sub, dir } of subs) for (const m of sub.members) members.push(turnedOf(m, dir))
@@ -334,8 +354,29 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
     ...flat,
     wait: { rows, faces: [...new Map(faces.map((x) => [x[0], x])).values()] },
     members: rows.length ? members.map((m) => ({ ...m, state: 'waiting' as const, off: 0, lines: [] })) : members,
+    links: [...flat.links.filter((l) => l[2] === undefined || !framed.has(l[2])), ...subs.flatMap((s) => s.links)],
     ...(inks.length ? { inks } : {}),
   }
+}
+/** a box of the page in the frame of direction (ux, uy) (the page's (x, y) at (ux x + uy y, -uy x + ux y)): the box of its four
+ *  corners turned back */
+function boxInFrame(b: readonly number[], [ux, uy]: readonly [number, number]): [number, number, number, number] {
+  const c = [
+    [b[0]!, b[1]!],
+    [b[2]!, b[1]!],
+    [b[0]!, b[3]!],
+    [b[2]!, b[3]!],
+  ].map(([x, y]) => [ux * x! + uy * y!, -uy * x! + ux * y!] as const)
+  return [
+    Math.min(...c.map((q) => q[0])),
+    Math.min(...c.map((q) => q[1])),
+    Math.max(...c.map((q) => q[0])),
+    Math.max(...c.map((q) => q[1])),
+  ]
+}
+/** a box of the frame of direction (ux, uy) on the page: the box of its four corners turned by it */
+function boxOnPage(b: readonly number[], [ux, uy]: readonly [number, number]): [number, number, number, number] {
+  return boxInFrame(b, [ux, -uy])
 }
 /** a member laid in a frame of direction (ux, uy) stated on its page: each line from its origin there (the frame's (x0, y)
  *  turned by the frame's direction), its items' places along it and their `dir`; its lit in the frame, the turned run's */

@@ -18,10 +18,26 @@
 import type { El, Ink, Line, Room } from '@readarxiv/format'
 import type { Doc, DocGlyph, DocTurned } from '../doc.ts'
 import { TURN_SAME } from '../own/own.ts'
-import { fakedCaps, labelParts, mostOf, sourceText, styleOf, turnedStyleGlyph, unitSize } from './facts.ts'
-import { LABEL_KIND } from './geometry.ts'
-import { cutLines, r2 } from './lines.ts'
+import {
+  alignOf,
+  CENTRE,
+  fakedCaps,
+  INSET,
+  labelParts,
+  mostOf,
+  sourceText,
+  styleOf,
+  textOf,
+  turnedStyleGlyph,
+  unitSize,
+} from './facts.ts'
+import { LABEL_KIND, ON_BASE } from './geometry.ts'
+import { cutLines, isInk, r2 } from './lines.ts'
 import { field, INKED_CLASSES, type Located, type Member, piecesOf, standsOn, type Work } from './work.ts'
+
+/** the classes the typesetter draws as the page's text where a level element's glyphs are its reading (geometry.ts
+ *  TEXT_CLASSES): a framed one is drawn as its crop, its copy text its glyphs' */
+const COPY_CLASSES = new Set(['cite', 'num', 'macro', 'umacro'])
 
 /** a point of the page in the frame of direction (ux, uy) */
 export const toFrame = (ux: number, uy: number, x: number, y: number): [number, number] => [
@@ -71,12 +87,19 @@ function inkBoxesOf(
   return out
 }
 
+/** whether a turned glyph paints: by its own ink where pageInk read it (its outline's band, none for an outline of nothing
+ *  drawn), whatever its Unicode, as a level glyph is ink (lines.ts isInk: CMEX's delimiters PDF.js maps to white space are
+ *  ink); inside a form XObject, an included figure's, by its Unicode, as there; by its Unicode on a page read without its band */
+export const paints = (t: DocTurned): boolean =>
+  t.form || t.up === undefined || t.down === undefined ? /\S/.test(t.u) : t.up > t.down
+
 /** a turned glyph of A as a level glyph of the frame of direction (ux, uy): along its line from its origin to its advance's
- *  end, its font's band about its baseline, its own ink across that band */
+ *  end, its font's band about its baseline, its own ink across that band where it paints (`paints`), none where it does not */
 function frameGlyph(t: DocTurned, ux: number, uy: number): DocGlyph {
   const [a, y] = toFrame(ux, uy, t.ox, t.oy)
   const [b] = toFrame(ux, uy, t.ex, t.ey)
   const blank = !/\S/.test(t.u)
+  const ink = paints(t)
   return {
     u: t.u,
     code: t.code,
@@ -85,11 +108,11 @@ function frameGlyph(t: DocTurned, ux: number, uy: number): DocGlyph {
     x0: Math.min(a, b),
     x1: Math.max(a, b),
     y,
-    top: blank ? y : y + t.ascent * t.size,
-    bottom: blank ? y : y + t.descent * t.size,
+    top: ink ? y + t.ascent * t.size : y,
+    bottom: ink ? y + t.descent * t.size : y,
     size: t.size,
     ix0: Math.min(a, b),
-    ix1: blank ? Math.min(a, b) : Math.max(a, b),
+    ix1: ink ? Math.max(a, b) : Math.min(a, b),
     n: t.n,
     k: t.k,
     form: false,
@@ -184,17 +207,24 @@ function frameElements(w: Work, mem: Member, p: number, ux: number, uy: number, 
     if (p0.t !== 'el' && p0.t !== 'unit') continue
     const kind = p0.t === 'unit' ? 'note-mark' : p0.kind
     const byLine = new Map<number, Ink>()
-    for (const [, j] of mem.turnedEls.get(id) ?? []) {
-      const g = frameGlyph(T[j]!, ux, uy)
+    // (its glyphs that are ink, by their paint (isInk over frameGlyph's reading), each across its advance and up and down to its
+    // font's band and its own ink's, whichever reaches further: a big delimiter's outline past its font's band)
+    const shown = [...(mem.turnedEls.get(id) ?? [])]
+      .sort((x, y) => x[1] - y[1])
+      .map(([, j]) => ({ j, t: T[j]!, g: frameGlyph(T[j]!, ux, uy) }))
+      .filter(({ g }) => isInk(g))
+    for (const { j, t, g } of shown) {
       const q = lineOf.get(j)
-      if (g.blank || q === undefined) continue
+      if (q === undefined) continue
+      const lo = Math.min(g.bottom, g.y + (t.down ?? t.descent) * t.size),
+        hi = Math.max(g.top, g.y + (t.up ?? t.ascent) * t.size)
       const was = byLine.get(q)
       byLine.set(q, [
         p,
         r2(Math.min(was?.[1] ?? g.x0, g.x0)),
-        r2(Math.min(was?.[2] ?? g.bottom, g.bottom)),
+        r2(Math.min(was?.[2] ?? lo, lo)),
         r2(Math.max(was?.[3] ?? g.x1, g.x1)),
-        r2(Math.max(was?.[4] ?? g.top, g.top)),
+        r2(Math.max(was?.[4] ?? hi, hi)),
         mem.lines[q]![4],
       ])
     }
@@ -214,6 +244,29 @@ function frameElements(w: Work, mem: Member, p: number, ux: number, uy: number, 
     }
     const el: El = { kind, ink }
     if (classOf.get(id)?.end) el.end = 1
+    // (a class the typesetter draws as the page's text where its glyphs are its reading (a citation, a reference, a paper's
+    // macro: geometry.ts's TEXT_CLASSES), drawn here as its crop: its copy text its glyphs' as a level element's text is read
+    // (facts.ts textOf), what selecting and copying the crop gives, never the source's reading of the command ("?", "[·]"))
+    const cls = classOf.get(id)?.cls
+    if (shown.length && cls !== undefined && COPY_CLASSES.has(cls)) el.copy = textOf(shown.map(({ g }) => g))
+    // (a symbol, drawn as its reading's character, only where its turned ink is that symbol so drawn: no letter or digit among
+    // its glyphs, each on its line's baseline, or over it where its reading raises it; else drawn as its ink, a formula's, as
+    // geometry.ts reads a level element: Member.asInk)
+    const sym = classOf.get(id)?.sym
+    if (
+      cls === 'symbol' &&
+      shown.length &&
+      (shown.some(({ g }) => /[A-Za-z0-9]/.test(g.u)) ||
+        !shown.every(({ j, g }) => {
+          const q = lineOf.get(j)
+          if (q === undefined || g.blank) return true
+          const base = mem.lines[q]![4]
+          return sym?.[1] ? g.y > base + ON_BASE : Math.abs(g.y - base) <= ON_BASE
+        }))
+    ) {
+      mem.asInk ??= new Set()
+      mem.asInk.add(id)
+    }
     const key = `${mem.unit}|${id}`
     const stated = classOf.get(id)?.cls ?? kind
     if (!ink.length && INKED_CLASSES.has(stated)) {
@@ -247,6 +300,26 @@ function frameLabel(w: Work, mem: Member, p: number, ux: number, uy: number) {
     ),
     ...(on >= 0 ? { line: on } : {}),
     ...labelParts(lg, p),
+  }
+  // (a label TeX set on a line of its own (IEEEtran's "TABLE I" over its caption): that line's alignment against the member's
+  // measure in the frame, read as facts-pass.ts readLabelLine reads a level one's (centred by alignOf; flush right where it
+  // ends at the measure's end and starts within it; else flush left): the typesetter lays its relabel as a row of its own)
+  const first = mem.lines[0]
+  if (on < 0 && first) {
+    const lb = mem.labelAt
+    const [m0, m1] = [first[7], first[8]]
+    const l = [p, 0, lb.ink[1], lb.ink[3], lb.ink[5], lb.ink[4], lb.ink[2], m0, m1, 0] as Line
+    const size = lb.style.size > 0 ? lb.style.size : 10
+    lb.align =
+      alignOf(
+        [l],
+        () => size,
+        () => [m0, m1],
+      ) === 'c'
+        ? 'c'
+        : Math.abs(l[3] - m1) <= CENTRE && l[2] - m0 > INSET * size
+          ? 'r'
+          : 'l'
   }
 }
 
