@@ -9908,8 +9908,8 @@ The rule now, one reading of TeX's glyphs:
   `\multicolumn`'s or a link's text is in the face around it: the arrow of `\multicolumn{2}{c}{\textbf{Overall}$\uparrow$}`
   regular); where none, the letters' base. A unit of marks alone has its marks' face for both. So 2602.23285v2's author line
   `\textbf{Yasuko Matsubara}♣, \textbf{Jimeng Sun}♡, …` (arXiv's names NimbusRomNo9L-Medi, its commas NimbusRomNo9L-Regu)
-  states its letters bold and its marks regular: its ja reply, which drops the names' groups (the names one plain run each, `、`
-  between them), draws the names bold and the separators regular, as TeX set them; read off one base, the commas', the names
+  states its letters bold and its marks regular: its ja reply, which drops the names' groups (the names one plain run each, an
+  ideographic comma between them), draws the names bold and the separators regular, as TeX set them; read off one base, the commas', the names
   were drawn regular (the display gate's one newly worse page, then), and off the letters alone the commas bold. The colon of
   `\textbf{While} $j \leq n$:` stays regular, a cell's `\textit{Messi}; \textit{Copa del Rey};` keeps its letters italic and its
   semicolons upright, the arrow of `\textbf{Mean tokens}~$\downarrow$` regular. The part states the letters' base as `Style`'s
