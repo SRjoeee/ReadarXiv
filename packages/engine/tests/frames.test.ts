@@ -188,4 +188,22 @@ describe('the frames a page paints: the review of round 2 into main (#676)', () 
     }
     expect(frameUnder(f, 697.5, 145, 175)).toBeCloseTo(668.96, 1)
   })
+  // RECORDED, NOT BUILT (CodeRabbit on #676, Codex on #672's second review: counted then over the lab's 245 papers, of 2,263 framed
+  // member-pages 0 covered whole by later opaque paint, 233 covered in part with their border showing; it fails until it is):
+  // a frame a later opaque fill covers whole is not seen, and is still read as one.
+  it.fails('reads no frame of a fill a later opaque fill covers whole', () => {
+    // (a blue rectangle, then a larger white one over it, then our words: the white reads as the paper (unseen), the blue under
+    // it is painted over and no reader sees it, yet it stays the frame)
+    const r = pageOf(
+      [
+        [0, 72, 690, 300, 712],
+        [1, 60, 680, 320, 730],
+      ],
+      [{ colour: 0x1f3a93 }, { colour: 0xffffff }],
+    )
+    expect(seenOf(r).map(([b, seen]) => [b, seen])).toEqual([
+      [0, false],
+      [1, false],
+    ])
+  })
 })

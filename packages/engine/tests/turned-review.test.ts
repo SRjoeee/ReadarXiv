@@ -224,4 +224,14 @@ describe('the review of round 2 into main (#676): a unit TeX set turned', () => 
     const [link] = L.links.get(1) ?? []
     expect(link?.owner).toBeUndefined()
   })
+  // RECORDED, NOT BUILT (Devin on #676, Codex on #673's second review: counted then, 0 of the 68 framed units over the lab's 245
+  // papers hold a forced break; it fails until it is): a forced break in a framed member states no line it ends (El.ends), which
+  // the typesetter's breaks need to end its translation's line there, as a level member's does (facts-pass.ts readElements).
+  it.fails('states the line a forced break ends in a framed cell, as a level one’s', () => {
+    const content: Piece[] = [text('Training results'), { t: 'el', id: '1', kind: 'break', src: '\\newline' }, text('Validation results')]
+    const { mem } = runOf(content, [[{ s: 'Training results' }], [{ s: 'Validation results' }]], {
+      classes: [['1', { cls: 'break' } as PieceClass]],
+    })
+    expect(new Map(mem.elements).get('1')?.ends).toBeDefined()
+  })
 })

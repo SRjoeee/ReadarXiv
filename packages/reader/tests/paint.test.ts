@@ -470,6 +470,19 @@ describe('a crop of a line laid in a frame (a unit TeX set turned, docs/PDF-READ
     close(c!.at, grow([143, 448, 153.4, 460], px))
     expect(c!.clip).toBeUndefined()
   })
+  // RECORDED, NOT BUILT (the review of #676, CodeRabbit; it fails until it is): a crop of a line laid in a frame whose edge is cut
+  // between two of its piece's glyphs (a URL broken across lines, `cut`) takes its own ink whole, its cut edges not applied in
+  // its frame before the turn. Reached by nothing today: a framed element states no break points (turned-frames.ts
+  // frameElements writes no El.breaks), so the typesetter never cuts one; over the lab's 245 papers 0 framed elements do.
+  it.fails('cuts a framed crop’s own ink at its cut edge in its frame before the turn (a broken URL’s head)', () => {
+    // (its piece's ink in the frame from 440 to 480, the head's source from 448 to 460, its right edge cut there)
+    const page = pageOf()
+    const item = page.members[0]!.lines[0]![3][0] as Extract<Page['members'][number]['lines'][number][3][number], { src: unknown }>
+    Object.assign(item, { ink: [[440, -63.4, 480, -53]], cut: 2 })
+    const [c] = cropsOf(page, { x: 0.5, y: 0.5 })
+    // (on the page the frame's x is the page's y: nothing of the head's source past 460, the cut, where its piece's ink goes on)
+    expect(c!.src[3]).toBeLessThanOrEqual(460)
+  })
   it('is cut clear of another piece’s ink on the page as a level crop is', () => {
     // (a rule of the original's table 0.6 right of the formula on the page; the clip stated where the crop is drawn)
     const [c] = cropsOf(pageOf([[1, 64, 440, 70, 470, 440]]), { x: 0.5, y: 0.5 })
