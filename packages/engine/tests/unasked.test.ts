@@ -93,6 +93,20 @@ describe('a unit TeX never sets is not asked of a translator', () => {
     expect(got.members[0]).toEqual([false, 'marks'])
     expect(got.asked).toEqual(['affiliation', 'para', 'named'])
   })
+  it('a heading and an abstract TeX never set are asked as before: the reader’s contents list the one, every translation’s context is the other', () => {
+    // (packages/reader session/contents.ts listedOf: every unit of kind heading after the front, its title its row, its page the
+    // original's outline where no part places it — a heading TeX set whose marks a class took off owns no glyph and is listed so;
+    // session/rows.ts contextOf: the units of kind abstract, the context a translator is given with every batch)
+    const units = [
+      unitOf('para', 'A paragraph of ours.'),
+      unitOf('heading', 'A Heading of Ours', { why: 'marks' }),
+      unitOf('abstract', 'The abstract of ours.', { why: 'marks' }),
+    ]
+    const got = askedOf(units, [[0]], ['A paragraph of ours.'])
+    expect(got.members[1]).toEqual([false, 'marks'])
+    expect(got.members[2]).toEqual([false, 'marks'])
+    expect(got.asked).toEqual(['para', 'heading', 'abstract'])
+  })
   it('a unit of no glyph unlocated otherwise (no ink, no mark of its own asked) is asked as before', () => {
     const units = [unitOf('para', 'A paragraph of ours.'), unitOf('footnote', 'A note of ours set nowhere here.')]
     const got = askedOf(units, [[0]], ['A paragraph of ours.'])
