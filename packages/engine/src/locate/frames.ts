@@ -38,9 +38,6 @@ export interface PaintedFrame {
 
 /** the paper's colour: what a page shows where nothing is painted */
 const PAPER = 0xffffff
-/** a box's kind (pageInk's `paths`): an image, a shading */
-const IMAGE = -3,
-  SHADING = -2
 
 /** what a page paints, as pageInk read it (read.ts `raw`): its boxes' lines and fills, and the boxes nothing of which shows */
 export interface PaintedPage {
@@ -110,7 +107,8 @@ export function framesOnPage(raw: PaintedPage | null | undefined, page: DocPage)
 
 /** the colour painted under box `b` (its box `box`): the last fill before it whose region holds its box's four edge middles, its
  *  colour where it covers what is under it, the paper's where none; null where what is painted there has no colour this reading
- *  knows (an image, a shading, a pattern, a fill that covers nothing whole or of no colour, a path whose lines were not kept) */
+ *  knows (a box that is no path's, an image's or a shading's among them, whose box holds them; a pattern, a fill that covers
+ *  nothing whole or of no colour; a path whose lines were not kept) */
 function underOf(
   b: number,
   box: readonly [number, number, number, number],
@@ -134,9 +132,9 @@ function underOf(
       x1 = B[4 * j + 2] as number,
       y1 = B[4 * j + 3] as number
     if (!pts.every(([x, y]) => x >= x0 && x <= x1 && y >= y0 && y <= y1)) continue
-    const k = K[j] as number
-    if (k === IMAGE || k === SHADING) return null
-    if (k < 0) continue
+    // (a box that is no path's (pageInk's `paths`: an image, a shading, an annotation's appearance, a turned glyph, merged cells):
+    // paint of no colour this reading knows)
+    if ((K[j] as number) < 0) return null
     const sh = shapes.get(j)
     if (!sh) return null
     // (a stroke paints its lines, no region; a fill whose region does not hold them is not under them)
