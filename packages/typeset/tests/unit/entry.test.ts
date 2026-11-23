@@ -2540,6 +2540,8 @@ describe('an element drawn as the page’s text in the font state TeX set its gl
         '1',
       ),
     ).toEqual([['ResNet', 0.8]])
+    // (its size stated, no style of its own: at its size, in the run's face)
+    expect(sizes(member({ els: [['1', { ...el('ResNet', 100), size: 8 }]] }), '1')).toEqual([['ResNet', 0.8]])
     // (its style's size alone, its glyphs' most common, of several perhaps: drawn at the run's)
     expect(sizes(member({ els: [['1', el('ResNet', 100, { role: 'mono', size: 8, design: 'CMTT8' })]] }), '1')).toEqual(
       [['ResNet', 1]],

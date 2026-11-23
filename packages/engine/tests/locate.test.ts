@@ -3422,6 +3422,8 @@ describe('an element’s ink is what TeX set for it', () => {
           { text: ' and ', x: 120, y: 700 },
           { text: 'code', x: 150, y: 700 },
           { text: ' work', x: 180, y: 700 },
+          { text: ' ', x: 210, y: 700 },
+          { text: '↓', x: 214, y: 700, size: 8, font: 'ABCDEF+CMSY8' },
         ],
       },
     ])
@@ -3430,13 +3432,22 @@ describe('an element’s ink is what TeX set for it', () => {
     for (const k of [12, 13, 14, 15]) page.glyphs[k]!.size = 8
     page.glyphs = pageGlyphsOf(page.glyphs)
     const macro = (id: string, src: string) => ({ t: 'el' as const, id, kind: 'macro', src })
-    const content = [text('see '), macro('1', '\\ii'), text(' and '), macro('3', '\\code'), text(' work')]
+    // (and an arrow drawn as text, `$\\downarrow$` in a math font at 8: its glyph's, though it states no style of its own)
+    const content = [
+      text('see '),
+      macro('1', '\\ii'),
+      text(' and '),
+      macro('3', '\\code'),
+      text(' work '),
+      { t: 'el' as const, id: '5', kind: 'math', src: '$\\downarrow$' },
+    ]
     const ins = ownedBy(
       B,
       [
         paraOf(content, [
           ['1', { cls: 'umacro' }],
           ['3', { cls: 'umacro' }],
+          ['5', { cls: 'symbol', sym: ['↓'] }],
         ]),
       ],
       [
@@ -3446,11 +3457,14 @@ describe('an element’s ink is what TeX set for it', () => {
           [0, T, -1],
           [0, E, 3],
           [0, T, -1],
+          [0, T, -1],
+          [0, E, 5],
         ],
       ],
     )
     const L = locate(ins, B, align(B, B))
     expect(elementOf(L, '3').size).toBe(8)
+    expect(elementOf(L, '5').size).toBe(8)
     expect(elementOf(L, '1').size).toBeUndefined()
     expect(elementOf(L, '1').style?.size).toBe(10.4)
   })
