@@ -28,6 +28,7 @@ function pageOf(
   return { pg, raw: { shapes, unseen: new Set(unseen) } satisfies PaintedPage }
 }
 const seenOf = (r: ReturnType<typeof pageOf>) => framesOnPage(r.raw, r.pg).map((f) => [f.b, f.seen, f.why ?? null])
+const GREY = 0xe6e6e6
 
 describe('the frames a page paints: seen by its own operators', () => {
   it('reads a fill of a colour on the paper seen, a white one unseen, a stroke seen whatever its colour', () => {
@@ -95,6 +96,30 @@ describe('the frames a page paints: seen by its own operators', () => {
         ),
       ),
     ).toEqual([[1, true, null]])
+  })
+  it('reads a fill of the colour under it unseen whichever of its edges stand flush with the fill’s under it', () => {
+    // (a grey panel and a fill of the same grey inside it, flush with its right edge (Devin's review on #672): the paint under
+    // the inner fill's right edge is the panel's, read on the edge's inner side, not the paper's beyond it)
+    const panel: [number, number, number, number, number] = [0, 80, 650, 300, 740]
+    expect(seenOf(pageOf([panel, [1, 90, 686, 300, 730]], [{ colour: GREY }, { colour: GREY }]))).toEqual([
+      [0, true, null],
+      [1, false, 'as under'],
+    ])
+    // (flush with its top edge, and with its right and its top at once)
+    const low: [number, number, number, number, number] = [0, 80, 650, 300, 730]
+    expect(seenOf(pageOf([low, [1, 90, 686, 290, 730]], [{ colour: GREY }, { colour: GREY }]))).toEqual([
+      [0, true, null],
+      [1, false, 'as under'],
+    ])
+    expect(seenOf(pageOf([low, [1, 90, 686, 300, 730]], [{ colour: GREY }, { colour: GREY }]))).toEqual([
+      [0, true, null],
+      [1, false, 'as under'],
+    ])
+    // (a fill of another colour in the same place: seen, a frame)
+    expect(seenOf(pageOf([panel, [1, 90, 686, 300, 730]], [{ colour: GREY }, { colour: 0xdddddd }]))).toEqual([
+      [0, true, null],
+      [1, true, null],
+    ])
   })
   it('reads no open path a frame, nor a background of the page’s size', () => {
     const r = pageOf([[0, 72, 690, 300, 712]], [{ colour: 0xeeeeee }])

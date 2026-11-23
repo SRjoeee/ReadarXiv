@@ -40,8 +40,9 @@ function instrumentOf(B: Doc, units: InstrumentUnit[], own: number[][], tex: Ins
     made: { compiler: 'pdflatex', tree: '2025', front: 'test' },
   }
 }
-/** a path's paint: its fill's colour (none: a stroke alone), whether it strokes */
-type Paint = { colour?: number; stroke?: boolean }
+/** a path's paint: its fill's colour (none: a stroke alone), whether it strokes; its lines (x0, y0, x1, y1 each) where they are
+ *  not its box's edges */
+type Paint = { colour?: number; stroke?: boolean; segs?: number[] }
 /** a page: its lines and boxes, and each path box's paint, by its index among the page's boxes in their order */
 type Spec = PageSpec & { paint?: (Paint | null)[] }
 /** a rectangle's lines, closed */
@@ -63,7 +64,7 @@ function paintedOf(B: Doc, spec: Spec[]): PaintedPage[] {
         number,
       ]
       shapes.set(b, {
-        segs: edges(x0, y0, x1, y1),
+        segs: paint.segs ? Float32Array.from(paint.segs) : edges(x0, y0, x1, y1),
         stroke: !!paint.stroke,
         fill: paint.colour !== undefined,
         hw: 0.25,
@@ -147,6 +148,23 @@ describe('the room about a paragraph a frame of one painted path holds ends at t
       [[0]],
     )
     expect(widened(m as never)).toBeLessThanOrEqual(299.01)
+  })
+  it('states a sloped frame’s sides where its path stands at the line’s own height: a diamond’s, beside a single line', () => {
+    // (a stroked diamond (Devin's review on #672): vertices (90, 700), (160, 740), (230, 700), (160, 660); a line at 700 from 145
+    // to 175, its fonts' box 698-707. Each edge's box reaches x 160, across the line: as boxes, none stands beside it. At the
+    // line's height, 698-707 (and the stroke's half width, 0.25), the path stands at x 89.75-102.94 before it and 217.06-230.25
+    // after it)
+    const one = unitOf('para', 'abcde')
+    const diamond: Spec = {
+      lines: [],
+      boxes: [[0, 0, 90, 660, 230, 740]],
+      paint: [{ stroke: true, segs: [90, 700, 160, 740, 160, 740, 230, 700, 230, 700, 160, 660, 160, 660, 90, 700] }],
+    }
+    const [m] = membersOf([page([{ text: 'abcde', x: 145, y: 700 }], diamond)], [one], [[0]])
+    expect(widened(m as never)).toBeCloseTo(217.06, 1)
+    const before = (m!.room.stays ?? []).filter((k) => k[0] === 0 && k[3]! <= 145)
+    expect(before.length).toBe(1)
+    expect(before[0]![3]).toBeCloseTo(102.94, 1)
   })
   it('keeps the room of a paragraph a fill under one of its words stands in (a highlight is no frame)', () => {
     const hl: Spec = { lines: [], boxes: [[0, 0, 113, 686, 155, 697]], paint: [{ colour: GREY }] }
