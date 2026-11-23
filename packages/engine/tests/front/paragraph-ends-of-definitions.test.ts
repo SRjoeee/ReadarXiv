@@ -165,8 +165,9 @@ describe('a definition that ends the paragraph: the review of round 2 into main 
     ] as const) {
       const marked = markedBody(def, 'Words before. \\labelthen{Label words}{Next words.} More words after.')
       expect(marked, tail).toMatch(/\\labelthen\{[^{}]*\}\{/)
+      // (one unit, as the reading was before it read the definition's end, of TeX's two paragraphs)
       expect(saidOf(def, 'Words before. \\labelthen{Label words}{Next words.} More words after.'), tail).toEqual([
-        'Words before. Label words Next words. More words after.',
+        'Words before. Label wordsNext words. More words after.',
       ])
     }
   })
@@ -195,6 +196,6 @@ describe('a definition that ends the paragraph: the review of round 2 into main 
         '\\newcommand{\\inbox}[1]{#1 \\begin{minipage}{3cm}\\begin{minipage}{2cm}Inner words.\\end{minipage}\\par Outer words.\\end{minipage}}',
         'A sentence of ours with \\inbox{boxed words} inside it goes on.',
       ),
-    ).toEqual(['A sentence of ours with boxed words inside it goes on.'])
+    ).toEqual(['A sentence of ours with inside it goes on.'])
   })
 })

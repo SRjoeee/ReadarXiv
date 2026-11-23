@@ -9553,9 +9553,18 @@ expansion took off (all in this section's last item), and the rest are the holes
   `\par`), and a call of another of the paper's macros that does (a macro of no argument whose body ends a paragraph and sets no
   text: `parNamesOf`). Only a command TeX surely acts on counts (texCommands, the reader's own scan of conditionals): none in a
   branch TeX skips (`#1\iffalse\par\fi`), none an operand (`\let\saved\par`), none in a definition inside the body, none in a
-  conditional whose branch the source cannot tell (`\ifdefined`); and a call of another such macro ends the paragraph on that
+  conditional whose branch the source cannot tell (`\ifdefined`), none in a branch of the paper's own `\newif` conditional TeX
+  does not take, read with the paper's conditionals and the values TeX reads them at as every other scan of the walk is
+  (`#1\ifdraft\par\fi`, `\ifdraft` never set: false); none that the paper defines anew, its own command as the walk reads it
+  (`\renewcommand{\medbreak}{}`); an environment's content is passed to its own `\end`, one of the same name inside it whole (a
+  minipage in a minipage: the review of #676); and a call of another such macro ends the paragraph on that
   macro's side of its arguments, before or after them, so that the side travels through a wrapper (`\outer{#1}` calling `\inner`,
-  `\textbf{#1}\par`: after the argument; the review of #674). The source reading decides alone: the units are cut before any
+  `\textbf{#1}\par`: after the argument; the review of #674). Not where the body ends in a command that takes what follows the
+  call (`\newcommand{\labelthen}[1]{#1\par\strong}`, called `\labelthen{A}{B}`): TeX's paragraph ends inside the call, where no
+  mark can stand, and the next begins with that command and its argument, between which neither a unit's mark nor its line
+  probe can stand (begun at the call's end, the next unit's probe was `\strong`'s argument and the marked TeX set other text
+  than the paper's: the review of #676); the unit goes on there as the reading was before it read the definition's end, one
+  unit of TeX's two paragraphs. The source reading decides alone: the units are cut before any
   compile, and the marked TeX writes their marks, so a cut TeX's paragraph points would not confirm is not undone by that compile;
   the gate holds as proof instead, every split over the lab's 245 one of TeX's paragraph ends inside the unit it cut, and the
   reading counts a paragraph's end only where TeX surely makes one. The reader walked such a call as a pair round its argument or
