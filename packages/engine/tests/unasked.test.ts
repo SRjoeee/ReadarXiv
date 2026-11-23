@@ -38,10 +38,16 @@ function instrumentOf(B: Doc, units: InstrumentUnit[], own: number[][]): Instrum
   }
 }
 /** the kinds and texts of the units the bundle asks a translator for */
-function askedOf(units: InstrumentUnit[], own: number[][], lines: string[]) {
+function askedOf(
+  units: InstrumentUnit[],
+  own: number[][],
+  lines: string[],
+  located: ((u: InstrumentUnit, i: number) => InstrumentUnit) | null = null,
+) {
   const B = docOf([{ lines }])
   const ins = instrumentOf(B, units, own)
-  const L = locate(ins, B, align(B, B))
+  const L0 = locate(ins, B, align(B, B))
+  const L = located ? { ...L0, units: (L0.units ?? units).map(located) } : L0
   const addOn = {
     bytes: new Uint8Array([1, 2, 3]),
     pages: new Map([[1, { ok: true }]]),
@@ -60,11 +66,16 @@ function askedOf(units: InstrumentUnit[], own: number[][], lines: string[]) {
       made: 'test',
     }),
   ]
+  const asked = objects.flatMap((x) => (x.kind === 'units' ? read('units', x.bytes, x.digest).units : []))
   return {
     members: L.members.map((m) => [m.located, m.cause ?? null]),
-    asked: objects
-      .flatMap((x) => (x.kind === 'units' ? read('units', x.bytes, x.digest).units : []))
-      .map((u) => u.kind),
+    asked: asked.map((u) => u.kind),
+    askedIds: asked.map((u) => u.id),
+    // (the texts the parts' members name: a unit's id, its own or the one it echoes)
+    texts: objects
+      .flatMap((x) => (x.kind === 'part' ? read('part', x.bytes, x.digest).flows.flat() : []))
+      .map((m) => (m as { text?: unknown }).text)
+      .filter((t): t is string => typeof t === 'string'),
   }
 }
 
@@ -114,6 +125,21 @@ describe('a unit TeX never sets is not asked of a translator', () => {
     const got = askedOf(units, [[0]], ['A paragraph of ours.'])
     expect(got.members[1]).toEqual([false, 'marks'])
     expect(got.asked).toEqual(['para', 'name'])
+  })
+  it('a unit a part’s member names is asked as before: a unit an ink unit echoes, whose row that member is drawn with', () => {
+    // (locate/ink-units.ts's echo: the printed text of a unit TeX set without its points, read off the page as an ink unit whose
+    // letters are the unit's, names that unit as its member's text, bundle.ts placedOf; written here as the located units' echo
+    // of the paragraph whose member is placed: 68 members of 5 papers over the corpus' main and holdout parts, chain m2)
+    const units = [
+      unitOf('para', 'A caption TeX set without its points.'),
+      unitOf('caption', 'A caption TeX set without its points.', { why: 'marks' }),
+    ]
+    const got = askedOf(units, [[0]], ['A caption TeX set without its points.'], (u, i) =>
+      i === 0 ? { ...u, echo: 1 } : u,
+    )
+    expect(got.members[1]).toEqual([false, 'marks'])
+    expect(got.texts).toEqual([units[1]!.id])
+    expect(got.askedIds).toContain(units[1]!.id)
   })
   it('a unit of no glyph unlocated otherwise (no ink, no mark of its own asked) is asked as before', () => {
     const units = [unitOf('para', 'A paragraph of ours.'), unitOf('footnote', 'A note of ours set nowhere here.')]
