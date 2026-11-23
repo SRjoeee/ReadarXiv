@@ -9554,6 +9554,12 @@ expansion took off (all in this section's last item), and the rest are the holes
   sets as `\par` there, inside one unit by design (one sentence); nor a table's cell, a heading's, a caption's or an author
   block's own text, whose readings bound them otherwise. The units split move their ids (unitId(kind, content)): their rows
   are asked again, every other unit's id and row kept.
+- **A unit TeX never sets is not asked of a translator** (`bundle/bundle.ts`, the units). A unit every member of which the
+  locate leaves unlocated because TeX set no point of it and it owns no glyph of B (`unlocated: marks`, the ownership's why
+  `marks`) is on no page: the false branch of a conditional, the keywords a class stores and never prints, the title IEEEtran
+  throws away after `\appendix`. What TeX printed of it, where it printed any, is an ink unit's, asked as that. The units the
+  reader asks a translator for held it all the same, its row asked and never shown; it is now left out of them, unless another
+  unit asked names it in its content (a nested unit). Every other unit is asked as before.
 - **Their native cases** (our own content, pdfLaTeX, XeLaTeX, LuaLaTeX and latex, with hyperref and without; every text item
   of the marked original at this round's head against the paper's own unmarked compile, to 0.01 pt): the note alone after a
   title's `\maketitle` in a group, after `\renewcommand{\thefootnote}`, of three forced lines in `{\let\thefootnote\relax…}`,

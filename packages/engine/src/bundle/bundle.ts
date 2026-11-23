@@ -362,9 +362,21 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
       })
     }
   }
-  // ---- Units: every unit of the instrument's but a babel name's word, those locate made on A (its ink units, kept blocks and
-  // figure texts), and the units born on A
+  // ---- Units: every unit of the instrument's but a babel name's word and a unit TeX never set (below), those locate made on A
+  // (its ink units, kept blocks and figure texts), and the units born on A
   const all = located.units ?? ins.units
+  // (a unit every member of which the locate left unlocated because TeX set no point of it and it owns no glyph of B
+  // (`unlocated: marks`, place.ts: the ownership's why 'marks'): a false branch of a conditional, a class's keywords it never
+  // prints, a title it throws away. Nothing of it is on a page, and what TeX printed of it, where it printed any, is an ink
+  // unit's, asked as that: it is not asked. One another unit asked names in its content (a nested unit) is kept)
+  const everyMember = new Map<number, boolean>()
+  for (const m of members)
+    everyMember.set(m.unit, (everyMember.get(m.unit) ?? true) && !m.located && m.cause === 'marks')
+  const named = new Set<string>()
+  for (const u of all)
+    for (const q of u.content as readonly { t: string; unit?: string }[])
+      if (q.t === 'unit' && q.unit) named.add(q.unit)
+  const neverSet = (u: (typeof all)[number], i: number) => everyMember.get(i) === true && !named.has(u.id)
   const seen = new Set<string>()
   const units: Unit[] = []
   const add = (u: Unit) => {
@@ -372,8 +384,8 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
     seen.add(u.id)
     units.push(u)
   }
-  for (const u of all) {
-    if (u.name !== undefined) continue
+  for (const [i, u] of all.entries()) {
+    if (u.name !== undefined || neverSet(u, i)) continue
     add({
       id: u.id,
       kind: u.kind,
