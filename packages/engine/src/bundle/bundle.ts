@@ -383,9 +383,13 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
   for (const m of members)
     everyMember.set(m.unit, (everyMember.get(m.unit) ?? true) && !m.located && m.cause === 'marks')
   const named = new Set<string>()
-  for (const u of all)
-    for (const q of u.content as readonly { t: string; unit?: string }[])
-      if (q.t === 'unit' && q.unit) named.add(q.unit)
+  // (at any depth: a nested unit inside a span, a formatted group, is its unit's too)
+  const nameIn = (ps: readonly Piece[]): void => {
+    for (const q of ps)
+      if (q.t === 'unit') named.add(q.unit)
+      else if (q.t === 'span') nameIn(q.content)
+  }
+  for (const u of all) nameIn(u.content)
   // (and one a part's member names as its text, its own unit or the one its ink unit echoes, placedOf: a unit TeX set without its
   // points, read off the page as an ink unit of its letters, drawn with that unit's row; the members a part holds, those with a
   // line, as names.ts reads them below)

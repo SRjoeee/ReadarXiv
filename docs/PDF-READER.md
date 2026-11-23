@@ -9541,37 +9541,38 @@ expansion took off (all in this section's last item), and the rest are the holes
   display too, where its carrier is all that gives the paragraph its opening point); else 2, and no answer at all (an error in
   the call's own box, a call the probe never reached), no mark, as before this round. A 2 or no answer is never read as
   approval: an opening mark kept without TeX's is how a line moves (the review of #671).
-- **A definition that ends a paragraph ends the unit there** (`source/latex-front.ts` `parEndsOf`, `resolveParEnds`,
-  `parNamesOf`; the owner's report on 2611.23651v2, lane style-23651's trace). TeX reads a macro's call as its body: a `\par` at
-  the body's top level after its prose argument (`\newcommand{\eyebrow}[1]{{\small\bfseries\color{kicker}#1}\par}`) ends the
-  paragraph the argument was set in, one before it the paragraph before the call, as a `\par` written in the source does; so do
-  `\endgraf`, TeX's vertical commands (VERTICAL_COMMANDS), LaTeX's `\smallbreak`, `\medbreak` and `\bigbreak` (latex.ltx begins
-  each with `\par`), and a call of another of the paper's macros that does (a macro of no argument whose body ends a paragraph
-  and sets no text: `parNamesOf`). The reader walked such a call as a pair round its argument or as an element and kept the label
-  and the title after it one unit: one row, one size, one highlight for the two paragraphs TeX set. Now the unit ends before the
-  call, or after it, where TeX's paragraph does, in a unit of TeX's paragraphs (a paragraph, an abstract, a theorem, a note); a
-  `\medbreak` written between two paragraphs ends the first, as the vertical commands do. A bare group in the body is the body's
-  (a group ends no paragraph); an argument's, a box's or an environment's `\par` is that box's paragraph alone. Not covered: a
-  class's command whose body the paper does not ship (acmart's `\institution`), and `\\` in centred or ragged text, which LaTeX
-  sets as `\par` there, inside one unit by design (one sentence); nor a table's cell, a heading's, a caption's or an author
-  block's own text, whose readings bound them otherwise (jmlr2e's block separator `\AND` skips vertically: read there as a
-  paragraph's end, it renumbered 2608.08872v1's author units); nor a definition that ends a table's cell or row (`&`, `\\` in its
-  body: 2609.36054v2's `\formataffil`). The white space after a call that ends the paragraph, which TeX skips in vertical mode,
-  stays the unit's, as it does before a blank line: a unit TeX's `\par` ended where it ended already keeps its text and its id
-  (2610.21477v1's last `\PromptItem` of each box). The units split move their ids (unitId(kind, content)): their rows are asked
-  again, every other unit's id and row kept.
+- **A definition that ends a paragraph ends the unit there** (`source/latex-front.ts` `parEndsOf`, `resolveParEnds`, `parNamesOf`;
+  the owner's report on 2611.23651v2, lane style-23651's trace). TeX reads a macro's call as its body: a `\par` at the body's top
+  level after its prose argument (`\newcommand{\eyebrow}[1]{{\small\bfseries\color{kicker}#1}\par}`) ends the paragraph the
+  argument was set in, one before it the paragraph before the call, as a `\par` written in the source does; so do `\endgraf`,
+  TeX's vertical commands (VERTICAL_COMMANDS), LaTeX's `\smallbreak`, `\medbreak` and `\bigbreak` (latex.ltx begins each with
+  `\par`), and a call of another of the paper's macros that does (a macro of no argument whose body ends a paragraph and sets no
+  text: `parNamesOf`). The reader walked such a call as a pair round its argument or as an element and kept the label and the
+  title after it one unit: one row, one size, one highlight for the two paragraphs TeX set. Now the unit ends before the call, or
+  after it, where TeX's paragraph does, in a unit of TeX's paragraphs (a paragraph, an abstract, a theorem, a note); a `\medbreak`
+  written between two paragraphs ends the first, as the vertical commands do. A bare group in the body is the body's (a group ends
+  no paragraph), and so is one after a command of no argument (`\noindent{\bfseries #1\par}`); an argument's, a box's or an
+  environment's `\par` is that box's paragraph alone. Not covered: a class's command whose body the paper does not ship (acmart's
+  `\institution`), and `\\` in centred or ragged text, which LaTeX sets as `\par` there, inside one unit by design (one sentence);
+  nor a table's cell, a heading's, a caption's or an author block's own text, whose readings bound them otherwise (jmlr2e's block
+  separator `\AND` skips vertically: read there as a paragraph's end, it renumbered 2608.08872v1's author units); nor a definition
+  that ends a table's cell or row (`&`, `\\` in its body: 2609.36054v2's `\formataffil`). The white space after a call that ends
+  the paragraph, which TeX skips in vertical mode, stays the unit's, as it does before a blank line: a unit TeX's `\par` ended
+  where it ended already keeps its text and its id (2610.21477v1's last `\PromptItem` of each box). The units split move their ids
+  (unitId(kind, content)): their rows are asked again, every other unit's id and row kept.
 - **A unit TeX never sets is not asked of a translator** (`bundle/bundle.ts`, the units). A unit every member of which the locate
   leaves unlocated because TeX set no point of it and it owns no glyph of B (`unlocated: marks`, the ownership's why `marks`) is
   on no page: the false branch of a conditional, the keywords a class stores and never prints, a picture's text, whose glyphs the
   figure reading makes units of its own (§18.102), an author's unit a class prints from a store of its own. What TeX printed of
   it, where it printed any, is an ink unit's, asked as that. The units the reader asks a translator for held it all the same, its
-  row asked and never shown; it is now left out of them, unless another unit asked names it in its content (a nested unit), a
-  part's member names it as its text (an ink unit that echoes it, its letters the unit's, is drawn with its row: a unit TeX set
-  without its points), or it is of a kind the reader reads beyond its lay (`READ_BEYOND_LAY`): a heading, which the contents list
-  with its row as its title (a heading TeX set whose marks a class took off owns no glyph and is listed so), an abstract, every
-  translation's context, and a paper's own name, which every theorem head of that name reads (§19.14). The block's names (§19.15)
-  are still read from every unit: an author's unit TeX never set writes the names the block TeX printed draws (2608.14557v1,
-  acmart's), and a unit asked that holds one keeps its form with the name (kind `named`). Every other unit is asked as before.
+  row asked and never shown; it is now left out of them, unless another unit asked names it in its content (a nested unit, inside
+  a span too), a part's member names it as its text (an ink unit that echoes it, its letters the unit's, is drawn with its row: a
+  unit TeX set without its points), or it is of a kind the reader reads beyond its lay (`READ_BEYOND_LAY`): a heading, which the
+  contents list with its row as its title (a heading TeX set whose marks a class took off owns no glyph and is listed so), an
+  abstract, every translation's context, and a paper's own name, which every theorem head of that name reads (§19.14). The block's
+  names (§19.15) are still read from every unit: an author's unit TeX never set writes the names the block TeX printed draws
+  (2608.14557v1, acmart's), and a unit asked that holds one keeps its form with the name (kind `named`). Every other unit is asked
+  as before.
 - **A piece between the texts of a front unit gets a point on each side** (`marks/marks.ts` `BETWEEN_TEXTS`, layoutMarking
   `between`). An author block's unit of several names sets each name's mark after it, between the unit's texts (`Ann
   Lee\IEEEauthorrefmark{1}, Bob Ray`, `Ann Lee\textsuperscript{1}, Bob Ray`, `Ann Lee\inst{1}, Bob Ray`). The marking gave such

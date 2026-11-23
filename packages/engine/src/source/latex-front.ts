@@ -2401,7 +2401,8 @@ function parEndsOf(body: string, ends: ReadonlySet<string>): number[] {
       }
       if (PAR_COMMANDS.has(cmd.name) || VERTICAL_COMMANDS.has(cmd.name) || ends.has(cmd.name)) out.push(i)
       i = cmd.end - 1
-      afterCommand = true
+      // (a group after a command of no argument, `\noindent{\bfseries #1\par}`, is bare)
+      afterCommand = !NO_ARGS.has(cmd.name) && !PAR_COMMANDS.has(cmd.name)
       continue
     }
     if (c === '\\') {
