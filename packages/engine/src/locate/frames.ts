@@ -131,7 +131,7 @@ function asUnder(
  *  covers what is under it, the paper's where none; null where what is painted there has no colour this reading knows (a box
  *  that is no path's, an image's or a shading's among them, whose box holds the point; a pattern, a fill that covers nothing
  *  whole or of no colour; a path whose lines were not kept). Each point by its own paint: artwork under part of a fill is
- *  under that part (Codex's local review) */
+ *  under that part */
 function colourAt(
   b: number,
   x: number,
