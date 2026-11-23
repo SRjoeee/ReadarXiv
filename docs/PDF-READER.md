@@ -9937,7 +9937,7 @@ The rule now, one reading of TeX's glyphs:
   baselines are its depth and that height plus \lineskip apart, the later lines of its flow pushed with it; a smaller group
   never moves a line (TeX keeps \baselineskip).
 
-Over the lab's 245 papers (the chain from #673's stored compiles, none made again, against its chain of record): every unit, its
+Over the lab's 245 papers (the chain from #674's stored compiles, none made again, against its chain of record, as against #673's): every unit, its
 id and its content the same, every glyph's owner the same; 245 parts move and the two sideways captions' frames (698
 placements in 76 papers: 375 groups state a size apart from their member's, 10 a style at it; 185 figure runs of several sizes
 their style at the member's size; 161 state a marks' base apart from their letters' (`Placed.markFace`: an author line's
