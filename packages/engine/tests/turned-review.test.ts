@@ -15,9 +15,11 @@ const text = (s: string): Piece => ({ t: 'text', s })
 /** a run of a unit's turned text: its characters, their role and piece, their size, their drop under the line's baseline, and
  *  their own ink up and down from the baseline in em where it is not the font's band (`up`, `down`) */
 type Run = { s: string; role?: number; piece?: number; size?: number; drop?: number; up?: number; down?: number }
+/** a turned glyph of no unit's on the page beside the unit's (another unit's ink, as its frame's room reads it) */
+type Other = Pick<DocTurned, 'u' | 'ox' | 'oy' | 'ex' | 'ey' | 'ux' | 'uy'> & Partial<DocTurned>
 /** a page with a level line and lines of runs set a quarter turned (0, 1): line q from (60 + 12 q + lift, 400) up the page, 6 a
- *  glyph along it (its frame's x from 400, its baseline -60 - 12 q - lift) */
-const pageOf = (lines: Run[][], lift: number[] = []) => {
+ *  glyph along it (its frame's x from 400, its baseline -60 - 12 q - lift); then the turned glyphs of no unit's (`others`) */
+const pageOf = (lines: Run[][], lift: number[] = [], others: Other[] = []) => {
   const d = docOf([{ lines: ['Method 0.91'] }])
   const T: DocTurned[] = []
   const owner: [number, number][] = []
@@ -51,6 +53,10 @@ const pageOf = (lines: Run[][], lift: number[] = []) => {
         j++
       }
   })
+  for (const t of others) {
+    T.push({ code: t.u.codePointAt(0) ?? 32, base: 'CMR10', n: 9, k: T.length, at: 11, box: -1, size: 10, ascent: 0.7, descent: -0.2, up: 0.7, down: -0.2, form: false, ...t })
+    owner.push([-1, -1])
+  }
   d.pages[0]!.turned = T
   return { d, owner }
 }
@@ -59,7 +65,7 @@ const runOf = (
   lines: Run[][],
   more: Partial<InstrumentUnit> = {},
   kind = 'cell',
-  o: { lift?: number[]; annotations?: unknown[] } = {},
+  o: { lift?: number[]; annotations?: unknown[]; others?: Other[] } = {},
 ) => {
   const level: InstrumentUnit = {
     id: unitId('cell', [text('Method 0.91')]),
@@ -67,9 +73,9 @@ const runOf = (
     content: [text('Method 0.91')],
   }
   const unit: InstrumentUnit = { id: unitId(kind, content), kind, content, ...more }
-  const B = pageOf(lines, o.lift).d
-  const A = pageOf(lines, o.lift).d
-  const { owner } = pageOf(lines, o.lift)
+  const B = pageOf(lines, o.lift, o.others).d
+  const A = pageOf(lines, o.lift, o.others).d
+  const { owner } = pageOf(lines, o.lift, o.others)
   const ins: Instrument = {
     ink: B,
     units: [level, unit],
@@ -84,8 +90,8 @@ const runOf = (
     boxes: B.pages.map((pg) => ownersOf(pg.kinds.length)),
     turned: [
       {
-        unit: new Int32Array(owner.length).fill(1),
-        role: Uint8Array.from(owner.map(([r]) => r)),
+        unit: Int32Array.from(owner.map(([r]) => (r < 0 ? -1 : 1))),
+        role: Uint8Array.from(owner.map(([r]) => Math.max(r, 0))),
         piece: Int32Array.from(owner.map(([, k]) => k)),
       },
     ],
@@ -185,5 +191,37 @@ describe('the review of round 2 into main (#676): a unit TeX set turned', () => 
     ]
     const { mem } = runOf(content, [[{ s: 'x', role: E, piece: 0 }, { s: ' ' }, { s: 'y', role: E, piece: 2 }]])
     expect(mem).toMatchObject({ located: false, cause: 'turned: no text of ink' })
+  })
+  // (a cell `Rate` set a quarter turned, its frame's line on baseline -60 from x 400 to 424, its band -62 to -53; under it, across
+  // its measure, a glyph of another unit's whose ink's top stands 3 under the line's bottom, at -65)
+  const under = (t: Partial<Other>): Other => ({ u: '(', ox: 80, oy: 405, ex: 80, ey: 411, ux: 0, uy: 1, up: 1.5, down: -0.8, ...t })
+  const roomOf = (others: Other[]) => runOf([text('Rate')], [[{ s: 'Rate' }]], {}, 'cell', { others }).mem.room
+  it('reads a neighbour’s painted glyph whose Unicode is white space as ink under a framed member', () => {
+    // (CMEX's big parenthesis, which PDF.js reads as U+0020: it paints (its outline 1.5 em up, 0.8 down); passed over by its
+    // Unicode, the room under the cell ran to its size, 10, over the parenthesis)
+    expect(roomOf([under({ u: ' ' })]).below).toBe(3)
+  })
+  it('reads a neighbour’s glyph by its own ink where it passes its font’s band', () => {
+    // (by its font's band, 0.7 em up, its top at -73: 11 of room where its ink stands 3 under the line)
+    expect(roomOf([under({})]).below).toBe(3)
+  })
+  it('reads a neighbour’s glyph turned at another angle by the four corners of its band', () => {
+    // (a glyph turned 45 degrees, its advance its band's height (9): its origin's corner under its baseline and its end's over it
+    // stand on one line of the page; by those two its band collapsed to a line, its top at -71.36, 9.36 of room. By its four
+    // corners its top is its origin's over the baseline, at -65)
+    const s = Math.SQRT1_2
+    const ox = 65 + 7 * s
+    expect(roomOf([{ u: 'x', ox, oy: 405, ex: ox + 9 * s, ey: 405 + 9 * s, ux: s, uy: s, up: 0.7, down: -0.2 }]).below).toBe(3)
+  })
+  it('weighs an annotation over turned glyphs by all of them under it: three of a held member’s among nine of none are not its', () => {
+    // (a link over the caption's "4)." and nine glyphs of no unit's beside them, the line after it on the page: the member owns 3
+    // of the 12 under it, no majority; counted among its own alone, 3 of 3, it took the link)
+    const content: Piece[] = [text('Runs '), { t: 'el', id: '1', kind: 'ref', src: '\\ref{s}' }, text(').')]
+    const others: Other[] = [...'abcdefghi'].map((u, j) => ({ u, ox: 72, oy: 430 + 6 * j, ex: 72, ey: 436 + 6 * j, ux: 0, uy: 1 }))
+    const { L } = runOf(content, [[{ s: 'Runs ' }, { s: '4', role: E, piece: 1 }, { s: ').' }]], {
+      classes: [['1', { cls: 'num' } as PieceClass]],
+    }, 'caption', { others, annotations: [{ annotationType: 2, rect: [52, 425, 80, 486], dest: 'sec.4' }] })
+    const [link] = L.links.get(1) ?? []
+    expect(link?.owner).toBeUndefined()
   })
 })
