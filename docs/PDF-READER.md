@@ -9576,7 +9576,8 @@ mechanism for a turned header cell, a turned caption of several lines and a side
   papers: every element of a framed unit stands in a quarter turn).
 - **Not covered**: a page with /Rotate (unread whole, `ink.ts`: 3 pages of the lab's 245 papers, 1409.0575v3's landscape tables,
   shown as the original); a mirrored glyph (a box alone: 3 text items of one paper's figure); a unit on two pages or in two
-  turns, or whose turned glyphs share no direction (none in the lab's papers); figure texts keep their own one-line run
+  turns (none in the lab's papers); one whose turned glyphs share no direction, read as before (`stats.turned.mixed`, which no
+  dump holds: not counted); figure texts keep their own one-line run
   (S.figures): one could later be a frame of one line, not changed now. Slanted text is no turned text: a glyph whose
   matrix's baseline is level is a level glyph whatever its slant (pageInk's level test reads the baseline, not the shear), read
   by the level rules; a glyph turned and sheared is a box alone, never a turned glyph. Over the lab's 245 papers PDF.js's text
