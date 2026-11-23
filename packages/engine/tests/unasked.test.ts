@@ -107,6 +107,14 @@ describe('a unit TeX never sets is not asked of a translator', () => {
     expect(got.members[2]).toEqual([false, 'marks'])
     expect(got.asked).toEqual(['para', 'heading', 'abstract'])
   })
+  it('a name of the paper’s TeX never set on a page is asked as before: every theorem head of that name reads its row', () => {
+    // (a unit of kind `name` with no babel name: the paper's own name of a theorem's kind, \newtheorem{lemma}{Lemma}, which no
+    // page waits on and each head of its kind reads, packages/typeset lay/entry.ts, PDF-READER §19.14)
+    const units = [unitOf('para', 'A paragraph of ours.'), unitOf('name', 'Lemma', { why: 'marks' })]
+    const got = askedOf(units, [[0]], ['A paragraph of ours.'])
+    expect(got.members[1]).toEqual([false, 'marks'])
+    expect(got.asked).toEqual(['para', 'name'])
+  })
   it('a unit of no glyph unlocated otherwise (no ink, no mark of its own asked) is asked as before', () => {
     const units = [unitOf('para', 'A paragraph of ours.'), unitOf('footnote', 'A note of ours set nowhere here.')]
     const got = askedOf(units, [[0]], ['A paragraph of ours.'])
