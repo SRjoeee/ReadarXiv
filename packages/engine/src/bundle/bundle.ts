@@ -57,9 +57,10 @@ interface BundleInput {
 
 /** the kinds of unit the reader reads beyond its lay, which leave the units a translator is asked for never: a heading, which
  *  its contents list with its row as its title and the original's outline's page where no part places it (packages/reader
- *  session/contents.ts listedOf: one TeX set whose marks a class took off owns no glyph and is listed so), and an abstract,
- *  the context every batch is given (session/rows.ts contextOf) */
-const READ_BEYOND_LAY: ReadonlySet<string> = new Set(['heading', 'abstract'])
+ *  session/contents.ts listedOf: one TeX set whose marks a class took off owns no glyph and is listed so), an abstract, the
+ *  context every batch is given (session/rows.ts contextOf), and a paper's own name, which no page waits on and every theorem
+ *  head of its name reads (packages/typeset lay/entry.ts, PDF-READER §19.14) */
+const READ_BEYOND_LAY: ReadonlySet<string> = new Set(['heading', 'abstract', 'name'])
 /** each member's state in the bundle: why it stays the original's (PrepWhy), and the groups the add-on could not part */
 export interface MemberState {
   why?: PrepWhy
@@ -375,7 +376,7 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
   // prints, a picture's text, whose glyphs the figure reading makes its own units of (PDF-READER §18.102), an author's unit a
   // class prints from its own store. Nothing of it is on a page, and what TeX printed of it, where it printed any, is an ink
   // unit's, asked as that: it is not asked. One another unit asked names in its content (a nested unit) is kept, so is one of a
-  // kind the reader reads beyond its lay (READ_BEYOND_LAY: a heading, an abstract), and the names
+  // kind the reader reads beyond its lay (READ_BEYOND_LAY: a heading, an abstract, a name), and the names
   // of the block are read from every unit as before (names.ts: an author's unit TeX never set still writes its names, which the
   // block TeX printed draws: 2608.14557v1), only what is written left without it)
   const everyMember = new Map<number, boolean>()
