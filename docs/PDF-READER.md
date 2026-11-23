@@ -9298,7 +9298,7 @@ So no class is left out, and no table of classes is kept.
   empty, its point stands there (a paper's macro has no closing mark: its other bound is the text after it, §18.107).
 - **The inline formula joins**: its `\axtpmm` set its point on the empty list as a bare point; the carrier holds it in the
   same place (its math node follows at once, so the carrier always stays), one rule with no class test but the display's.
-- **Its native cases** (`lab/pdf/spikes/layout-marks-cases.mjs`, `ONLY=lost`, our own content under pdfLaTeX, XeLaTeX,
+- **Its native cases** (`f28b56e7f:lab/pdf/spikes/layout-marks-cases.mjs`, `ONLY=lost`, our own content under pdfLaTeX, XeLaTeX,
   LuaLaTeX and latex, with hyperref and without; every text item where it was, TeX's DVI to the sp under latex, the log the run
   reads unchanged): 'a piece first after a display: …' (latex.ltx's, cite.sty's, cite.sty [super]'s, natbib's and biblatex's
   citations, a reference that prints a name, a page or a label's stored text, `\eqref`, a URL and code, a footnote's call, an
