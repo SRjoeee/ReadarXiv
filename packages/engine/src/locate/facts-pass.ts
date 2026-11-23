@@ -21,6 +21,7 @@ import {
   type InkBox,
   labelParts,
   mostOf,
+  oneSize,
   pinnedOf,
   rightToLeft,
   shortSkipLines,
@@ -482,6 +483,7 @@ function readElements(fx: FactsIndex, r: MemberReading): void {
   }
   // -- its elements
   const pieces = unit ? elsOf(unit.content) : new Map()
+  const classOf = new Map(unit?.classes ?? [])
   const breaks: [El, number][] = []
   const unplaced: [string, El][] = []
   for (const [id, el] of mem.elements) {
@@ -500,6 +502,15 @@ function readElements(fx: FactsIndex, r: MemberReading): void {
         ...(fill !== undefined ? { fill } : {}),
       }
     }
+    // (its size where its glyphs share one, a symbol's math font's too, that is not the member's (El.size: the typesetter draws
+    // it as its text at it), on an element it may draw as its text: one whose style is stated (no mark: a mark is drawn as its
+    // ink) and a symbol drawn as text where it stands, which states none. None for glyphs at several sizes, whose most common is
+    // the size of none of its runs (2608.00812v1's `(i)`, its parentheses at 10.38, its letter at 9.96), as a group of several
+    // sizes states none (docs/PDF-READER.md §18.114), nor for faked small capitals, drawn at their share (El.style.sc))
+    const c = classOf.get(id)
+    const asText = (el.style !== undefined && !c?.mark) || (c?.cls === 'symbol' && !!c.sym && !c.sym[1])
+    const one = asText && gs.length && mem.smallCaps?.get(id) === undefined ? oneSize(gs, true) : undefined
+    if (one !== undefined && r2(one) !== r2(mem.style.size)) el.size = r2(one)
     // (its own brackets: its first and last glyphs where they are a pair of them, "[" "]" around a citation's numbers:
     // the brackets a translation that brackets it takes)
     const pair = bracketsOf(gs)

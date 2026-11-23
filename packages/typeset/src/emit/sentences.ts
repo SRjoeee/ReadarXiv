@@ -14,13 +14,13 @@ const ASC = 0.75,
   CJK_DESC = -0.12
 
 /** a text token as its band reads it */
-type BandToken = { sup?: boolean; cls?: string; face?: { size?: number } }
+type BandToken = { sup?: boolean; cls?: string; face?: { size?: number }; st?: { rel?: number } }
 /**
  * A text token's band on a line whose baseline is `by`: the baseline it is drawn on (a superscript's
  * raised), the size drawn, and the ascent and descent of a Times-like face, or of a CJK face's em box, over and under it
  */
 export function tokenBand(t: BandToken, L: { f: number }, by: number) {
-  const h = L.f * (t.sup ? 0.62 : 1) * (t.face?.size ?? 1),
+  const h = L.f * (t.sup ? 0.62 : 1) * (t.face?.size ?? 1) * (t.st?.rel ?? 1),
     y = t.sup ? by + 0.36 * L.f : by
   const cjk = t.cls === 'cjk'
   return { y, h, top: y + (cjk ? CJK_ASC : ASC) * h, bottom: y + (cjk ? CJK_DESC : DESC) * h }

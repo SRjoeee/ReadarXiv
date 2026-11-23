@@ -31,7 +31,7 @@ import {
   turnedStyleGlyph,
   unitSize,
 } from './facts.ts'
-import { LABEL_KIND, ON_BASE, TEXT_CLASSES } from './geometry.ts'
+import { LABEL_KIND, ON_BASE, readGroupStyle, TEXT_CLASSES } from './geometry.ts'
 import { cutLines, isInk, r2 } from './lines.ts'
 import { field, INKED_CLASSES, type Located, type Member, piecesOf, standsOn, type Work } from './work.ts'
 
@@ -383,6 +383,10 @@ export function frameTurned(w: Work, held: readonly Held[]): Located['frames'] {
       ...(caps.ratio !== undefined ? { sc: caps.ratio } : {}),
       ...(caps.caps ? { caps: 1 as const } : {}),
     }
+    // (its fill and face group by group, and its base, by the reading a level member's are read by, off its turned glyphs:
+    // read off the face most of them hold, a sideways caption wholly in \emph was italic, and the typesetter's \emph turned it
+    // upright where TeX set it italic, 2610.19282v1 p11, p15; docs/PDF-READER.md §18.114)
+    readGroupStyle(w, mem, unit, own, caps.small)
     const { lineOf, ...facts } = frameFacts(inkA, mem, p, ux, uy)
     Object.assign(mem, facts)
     frameElements(w, mem, p, ux, uy, lineOf)

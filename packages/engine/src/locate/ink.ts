@@ -26,6 +26,7 @@ import {
   styleKeyOf,
   styleOf as glyphStyleOf,
   turnedStyleGlyph,
+  oneSize,
   unitSize,
 } from './facts.ts'
 import { identifiersIn } from '../source/latex-front.ts'
@@ -64,6 +65,9 @@ interface Made {
   elBoxes: [number, number][]
   /** a figure text's groups of its runs in another face (figureRuns): each one's style, its glyphs', by its piece id */
   spanStyles?: [string, Style][]
+  /** of those, the groups whose glyphs stand at several sizes (figureRuns): each states no size of its own, the part's style
+   *  the member's size (bundle.ts), so that it is drawn at the size the figure text's own rule draws it */
+  spanSeveral?: string[]
   /** an ink unit's elements of a kept run, each its own (by piece id): the run's glyphs the claim gave the unit's placeholders
    *  (inkUnitsOf's `glyphs.runs`; none where another unit owns them all) and the rules the claim gave them that stand nearest
    *  its glyphs */
@@ -580,7 +584,7 @@ export function inkOf(o: InkInput): {
     const turned = figTurned.get(k) ?? []
     const held = t ? t.why === 'decoration' : !f.why && !!f.decorated
     // (its text in the runs its glyphs set in another face than its own: each a group of its own, its style its glyphs')
-    const { content, styles } = figureRuns(f.text ?? '', streamOfFigure(text, turned, pages, inkA, m, o.pageA))
+    const { content, styles, several } = figureRuns(f.text ?? '', streamOfFigure(text, turned, pages, inkA, m, o.pageA))
     const ux = f.ux ?? 1
     const uy = f.uy ?? 0
     const dir: [number, number] | undefined =
@@ -638,6 +642,7 @@ export function inkOf(o: InkInput): {
       textBoxes: t ? t.textBoxes.map((b): [number, number] => [t.page, b]) : [],
       elBoxes: [],
       ...(styles.length ? { spanStyles: styles } : {}),
+      ...(several.length ? { spanSeveral: several } : {}),
     })
   }
   for (const x of made) x.text.sort((a, b) => a - b)
@@ -726,7 +731,13 @@ function figureTextOf(
   const textGs = t.order.flatMap((o) => (o.t === 'text' ? o.glyphs : []))
   const own = textGs.map((g) => G[g]!)
   // (its pieces with ids of their own, renumbered by place once the white space between them is merged)
-  type Raw = { piece: Piece; style?: Style; cls?: PieceClass; el?: { glyphs: number[]; boxes: [number, number][] } }
+  type Raw = {
+    piece: Piece
+    style?: Style
+    several?: true
+    cls?: PieceClass
+    el?: { glyphs: number[]; boxes: [number, number][] }
+  }
   const raw: Raw[] = []
   const space = () => {
     const last = raw.at(-1)
@@ -764,7 +775,12 @@ function figureTextOf(
       for (const x of r.content) {
         const last = raw.at(-1)
         if (x.t === 'text' && last?.piece.t === 'text') last.piece = { t: 'text', s: last.piece.s + x.s }
-        else raw.push({ piece: x, ...(x.t === 'span' && st.has(x.id) ? { style: st.get(x.id)! } : {}) })
+        else
+          raw.push({
+            piece: x,
+            ...(x.t === 'span' && st.has(x.id) ? { style: st.get(x.id)! } : {}),
+            ...(x.t === 'span' && r.several.includes(x.id) ? { several: true as const } : {}),
+          })
       }
     } else {
       if (spaced) space()
@@ -780,6 +796,7 @@ function figureTextOf(
   }
   const content: Piece[] = []
   const styles: [string, Style][] = []
+  const several: string[] = []
   const classes: [string, PieceClass][] = []
   const els = new Map<string, { glyphs: number[]; boxes: [number, number][] }>()
   for (const x of raw) {
@@ -788,6 +805,7 @@ function figureTextOf(
     else if (x.piece.t === 'span') {
       content.push({ ...x.piece, id })
       if (x.style) styles.push([id, x.style])
+      if (x.several) several.push(id)
     } else if (x.piece.t === 'el') {
       content.push({ ...x.piece, id })
       classes.push([id, x.cls!])
@@ -865,6 +883,7 @@ function figureTextOf(
     textBoxes: t.textBoxes.map((b): [number, number] => [p, b]),
     elBoxes: [],
     ...(styles.length ? { spanStyles: styles } : {}),
+    ...(several.length ? { spanSeveral: several } : {}),
     ...(els.size ? { els } : {}),
   }
 }
@@ -956,7 +975,7 @@ function streamOfFigure(
 function figureRuns(
   s: string,
   { stream, own }: { stream: readonly FigureGlyph[]; own: readonly StyleGlyph[] },
-): { content: Piece[]; styles: [string, Style][] } {
+): { content: Piece[]; styles: [string, Style][]; several: string[] } {
   // (a run's key its face and its fill: TeX's line in a picture goes on over another colour (figure-text.ts texLine: the link's
   // colour of an address after its label), whose group states its fill where it is not the text's, black included; a figure text
   // a plotting program sets is of one fill, as its run was)
@@ -983,7 +1002,7 @@ function figureRuns(
   const keyOf = glyphOf.map((g) =>
     g === null ? null : `${faceKeyOf(stream[g]!.style.base)}|${fillKey(stream[g]!.style.fill)}`,
   )
-  if (!keyOf.some((x) => x !== null && x !== base)) return { content: [{ t: 'text', s }], styles: [] }
+  if (!keyOf.some((x) => x !== null && x !== base)) return { content: [{ t: 'text', s }], styles: [], several: [] }
   // (a space the run's on both sides of it, else its own style's)
   const key = keyOf.map((x, i) => {
     if (x !== null) return x
@@ -995,6 +1014,7 @@ function figureRuns(
   })
   const content: Piece[] = []
   const styles: [string, Style][] = []
+  const several: string[] = []
   for (let i = 0; i < chars.length; ) {
     let j = i
     while (j < chars.length && key[j] === key[i]) j++
@@ -1008,16 +1028,19 @@ function figureRuns(
         style: changeOf(key[i] as string, base) || 'colour',
         content: [{ t: 'text', s: run }],
       })
-      // (its style its own glyphs', at their size as locate reads a unit's: the median along the line)
+      // (its style its own glyphs', at the one size they share (facts.ts oneSize); a run of several sizes, ink small capitals
+      // ("PREDOPT": P and O at the size, the rest smaller, 2609.19644v1 p11), states none: the member's size, bundle.ts)
       const gs = [...new Set(glyphOf.slice(i, j).filter((g): g is number => g !== null))].map((g) => stream[g]!.style)
       const { upper: _upper, ...st } = glyphStyleOf(gs)
       void _upper
       const fill = Number((key[i] as string).split('|')[3])
-      styles.push([id, { ...st, size: unitSize(gs) ?? st.size, ...(fill !== baseFill ? { fill } : {}) }])
+      const one = oneSize(gs)
+      if (one === undefined) several.push(id)
+      styles.push([id, { ...st, size: one ?? unitSize(gs) ?? st.size, ...(fill !== baseFill ? { fill } : {}) }])
     }
     i = j
   }
-  return { content: runIns(content), styles }
+  return { content: runIns(content), styles, several }
 }
 
 // ---------------------------------------------------------------- B's marks on A

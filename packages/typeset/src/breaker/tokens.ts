@@ -20,13 +20,17 @@
 // - `faces`: B.faces' answers (faceOf over the role table and the paper's family) and whether a face has small capitals
 // - `P`: the rule set's fields resolved for the target (Rules.breaking, Rules.fit); `designs`: the paper's
 import type { KnownElKind } from '@readarxiv/format'
+import { isLetterOrDigit } from '@readarxiv/text'
 import { cjkLeadRe, clustersOf, fullWidthPunctOf, kinsokuOf, keptPair, markOf, noStart, SPACELESS } from './script.ts'
 import { drawnText, plainTracker, shown, type TextPiece, transformMap } from './text.ts'
 import { dropMarks, type MarksAfter, type MarksTrace, mergeTail } from '../unit/marks.ts'
 import type { V0Piece } from '../unit/breaks.ts'
 
-/** a run's style as the tokens carry it: its family, weight, slant, small capitals, design, colour, link… */
+/** a run's style as the tokens carry it: its family, weight, slant, small capitals, design, colour, link…; `rel` its size over
+ *  the member's, a group TeX set at another size (SpanAt.style.size over Placed.style.size), by which its tokens are measured,
+ *  their lines' heights read (B.break lineExtent) and drawn (D.display), as `sc` scales a small capitals run */
 export type TStyle = {
+  rel?: number
   fam?: string
   bold?: boolean
   italic?: boolean
@@ -55,6 +59,8 @@ export type Face = {
 export type Fill = readonly [order: 1 | 2, n: number]
 /** a fill with one more of order `o` (TeX's: only the highest order stretches) */
 const fillWith = (f: Fill | undefined, o: 1 | 2): Fill => (!f || o > f[0] ? [o, 1] : o === f[0] ? [o, f[1] + 1] : f)
+/** a token's size over its member's: its group's (TStyle.rel, a group TeX set at another size), else 1 */
+export const relOf = (t: { st?: TStyle | undefined }): number => t.st?.rel ?? 1
 /** a token (layer2.d.mts Token): a run of one face, a space, a crop, or a control token */
 export type Token = {
   s?: string
@@ -188,6 +194,13 @@ export type TokensInput = {
   spacedSource: boolean
   to: string
   base: TStyle
+  /** false where the part states no base of its letters (Part.paper.bases absent: a part made before PIPELINE 119), whose
+   *  style is its glyphs' whole: baseOf reads its weight and slant out of its groups by its count, and no group's stated size is
+   *  read (its glyphs' most common then, of several too), as before */
+  statedBase?: boolean
+  /** the face TeX set the unit's marks in outside every group where it is not its letters' (Placed.markFace): a translated
+   *  mark outside every group and every face switch's run is drawn in it, a letter in `base` (@readarxiv/text isLetterOrDigit) */
+  markBase?: { bold: boolean; italic: boolean }
   designs: { serif: string; sans: string; mono: string }
   P: TokenRules
   lead: { parts?: { text: string; st: TStyle; gap?: number }[]; gap?: number } | null
@@ -278,9 +291,6 @@ const SENTENCE_END = /\p{Sentence_Terminal}$/u
  *  note's mark (engine bundle/run-in.ts's BETWEEN, by the part's El.kind) */
 const BETWEEN = new Set<string>(['space', 'cite', 'note-mark', 'footnote'] satisfies readonly KnownElKind[])
 
-const GROUP_ITALIC = 1,
-  GROUP_BOLD = 2,
-  GROUP_CAPS = 4
 /** a string's UTF-16 code units that are no white space. The comparisons below are ECMAScript's `\s`, its
  *  WhiteSpace and LineTerminator code points (ECMA-262's White Space and Line Terminators: U+0009-U+000D, U+0020, U+00A0,
  *  U+FEFF and the Space_Separator code points U+1680, U+2000-U+200A, U+202F, U+205F, U+3000; U+2028, U+2029): the same 25
@@ -307,17 +317,24 @@ function nonSpace(s: string): number {
   }
   return n
 }
+/** a group's bits: what it sets of the face, one bit each */
+const GROUP_ITALIC = 1,
+  GROUP_BOLD = GROUP_ITALIC << 1,
+  GROUP_CAPS = GROUP_BOLD << 1
 /** what a declaration sets, as a group's bits: an italic, bold or small capitals switch (\em, \itshape, \bfseries, \sc, …):
  *  latex.ltx's \em, \itshape, \slshape, \bfseries, \scshape, article.cls's \it, \sl, \bf, \sc */
 const declared = (src: string | undefined): number =>
   (/^\\(?:em|it|itshape|sl|slshape)$/.test(src ?? '') ? GROUP_ITALIC : 0) |
   (/^\\(?:bf|bfseries)$/.test(src ?? '') ? GROUP_BOLD : 0) |
   (/^\\(?:sc|scshape)$/.test(src ?? '') ? GROUP_CAPS : 0)
-/** the unit's base style without what its own groups set, and its declarations: a declaration sets its group from where it
- *  stands, at the unit's top level the rest of it (the \sc rule, for every switch: the part's style is the state of the unit's
- *  glyphs, its declarations' already, so that "{\em …}" read over it would toggle an italic base upright where its glyphs
- *  outside its styled pieces stand upright) */
-export function baseOf(unit: TokensInput['unit'], base: TStyle): TStyle {
+/** the unit's base small capitals without what its own groups set, and its declarations: a declaration sets its group from
+ *  where it stands, at the unit's top level the rest of it (the \sc rule). Its weight and slant are the part's as stated
+ *  (`stated`, Part.paper.bases: the engine's reading of TeX's glyphs, the unit's own text's, each attribute outside the scopes
+ *  that set it, docs/PDF-READER.md §18.114), never read again here: this count of the row's characters under the groups decided
+ *  a weight from a translation's wording (2611.23651v2's kicker drawn regular, its every glyph bold). Small capitals are still
+ *  read so: the engine states no base of them by scope (not this round). A part made before states none (`stated` false): its
+ *  style is its glyphs' whole, its weight and slant read out of its groups by the same count, as before */
+export function baseOf(unit: TokensInput['unit'], base: TStyle, stated = true): TStyle {
   let total = 0,
     after = 0,
     inItalic = 0,
@@ -366,8 +383,8 @@ export function baseOf(unit: TokensInput['unit'], base: TStyle): TStyle {
     }
   }
   const out = { ...base }
-  if (total && base.italic && inItalic >= 0.5 * total) out.italic = false
-  if (total && base.bold && inBold >= 0.5 * total) out.bold = false
+  if (!stated && total && base.italic && inItalic >= 0.5 * total) out.italic = false
+  if (!stated && total && base.bold && inBold >= 0.5 * total) out.bold = false
   if (total && base.caps && inCaps >= 0.5 * total) out.caps = false
   return out
 }
@@ -536,10 +553,19 @@ export function tokens(i: TokensInput): Tokens {
   const plain = i.tagWords ? plainTracker() : null
   const measured = resolved.measured ?? null
   const { fill: _fill, ...given } = i.base
-  const base: TStyle = measured?.st ? { ...given, ...measured.st } : baseOf(unit, given)
+  // (the base as the part states it: TeX's glyphs' weight and slant, the unit's own text's; its small capitals by baseOf, and a
+  // part made before its weight and slant too: TokensInput.statedBase)
+  const base: TStyle = measured?.st ? { ...given, ...measured.st } : baseOf(unit, given, i.statedBase ?? true)
   if (Number.isInteger(measured?.fill) && measured!.fill! > 0) base.color = hexOf(measured!.fill!)
   const stack: TStyle[] = [{ ...base }]
   const style = () => stack.at(-1)!
+  // (the marks' style stack beside it, where the part states a marks' base (Placed.markFace): the same groups and switches over
+  // the marks' base, so that a translated mark is drawn in what TeX set the original's marks in, a letter in what it set its
+  // letters in: an author line's separators regular between bold names, a parenthesis inside `\textbf{…}` outside its
+  // `\textit{…}` upright, a mark inside `\textit{…}` italic)
+  const mb = i.markBase
+  const mstack: TStyle[] = mb ? [{ ...base, bold: mb.bold, italic: mb.italic }] : []
+  const mstyle = () => mstack.at(-1) ?? style()
   const colourRun = (k: number, p: V0Piece): { color?: string | undefined; colourRun?: true } => {
     const rgb = i.colourOf(k)
     if (Number.isInteger(rgb)) return { color: hexOf(rgb!), colourRun: true }
@@ -608,6 +634,7 @@ export function tokens(i: TokensInput): Tokens {
     track: Track | null = null,
     smallAt: ((at: number) => boolean) | null = null,
     ratio = capsK,
+    markSt: TStyle | null = null,
   ) => {
     for (const m of s.matchAll(/\s+|\S+/g)) {
       const chunk = m[0]
@@ -642,6 +669,20 @@ export function tokens(i: TokensInput): Tokens {
         }
         off += ch.length
       }
+      // (with `markSt`, a piece's runs of marks, characters no letter or digit (@readarxiv/text isLetterOrDigit), each set apart
+      // in that style after the piece's own break points are found (its hyphen's, its slash's: `alpha-` and `beta` stay two
+      // pieces, `alpha`, `-` glued, `beta` its own): a translated mark drawn in the marks' base, glued to its word)
+      const marksRuns = (x: string): { s: string; mark: boolean }[] => {
+        if (!markSt) return [{ s: x, mark: false }]
+        const out: { s: string; mark: boolean }[] = []
+        for (const ch of clustersOf(x)) {
+          const mark = !isLetterOrDigit(ch)
+          const last = out.at(-1)
+          if (last && last.mark === mark) last.s += ch
+          else out.push({ s: ch, mark })
+        }
+        return out
+      }
       parts.forEach((p, n) => {
         const pieces =
           p.cls !== 'latin'
@@ -652,10 +693,11 @@ export function tokens(i: TokensInput): Tokens {
                 ? p.s.split(/(?<=[A-Za-zÀ-ɏЀ-ӿ][-/])(?=[A-Za-zÀ-ɏЀ-ӿ])/)
                 : [p.s]
         let po = 0
-        pieces.forEach((s, q) => {
-          const face0 = faceOf(st, p.cls)
+        for (const { s, mark, q, u } of pieces.flatMap((s0, q) => marksRuns(s0).map((x, u) => ({ ...x, q, u })))) {
+          const st0 = mark && markSt ? markSt : st
+          const face0 = faceOf(st0, p.cls)
           const from = m.index + p.off + po
-          const all = p.cls === 'latin' && !!st.upper
+          const all = p.cls === 'latin' && !!st0.upper
           const runs =
             !all && p.cls === 'latin' && selfCaps(face0, s)
               ? caseRuns(s, ratio, upper, smallAt && ((x) => smallAt(from + x)))
@@ -669,12 +711,12 @@ export function tokens(i: TokensInput): Tokens {
               len = run ? run.n : s.length
             const t: Token = {
               s: rs,
-              st,
+              st: st0,
               face,
               cls: p.cls,
               w100: 0,
               ...extra,
-              ...(q > 0 && at === 0 ? { brk: true } : {}),
+              ...(q > 0 && u === 0 && at === 0 ? { brk: true } : {}),
             }
             if (k !== 1) t.sc = k
             if (track && len) {
@@ -691,8 +733,8 @@ export function tokens(i: TokensInput): Tokens {
             if (at > 0) {
               t.glue = true
               t.cont = true
-            } else if (q === 0 && n > 0 && !(!keepAll && (p.cls === 'cjk' || parts[n - 1]!.cls === 'cjk')))
-              t.glue = true
+            } else if (u > 0) t.glue = true
+            else if (q === 0 && n > 0 && !(!keepAll && (p.cls === 'cjk' || parts[n - 1]!.cls === 'cjk'))) t.glue = true
             // (a mark's blank half as its face draws it, measured in the face's own file (script.ts markOf): none where its ink
             // crosses its em's middle, nor where an alphabet's target sets a curly quote in its Latin face, which holds no measure)
             if (p.cls === 'cjk' && s.length === 1) t.punct = markOf(s, face.ids)
@@ -702,7 +744,7 @@ export function tokens(i: TokensInput): Tokens {
               p.cls === 'latin' &&
               P.hyphen &&
               !extra.ph &&
-              st.fam !== 'mono' &&
+              st0.fam !== 'mono' &&
               s.length >= minWord &&
               unit.kind !== 'heading' &&
               !unit.title
@@ -715,7 +757,7 @@ export function tokens(i: TokensInput): Tokens {
             push(t)
           }
           po += s.length
-        })
+        }
       })
     }
   }
@@ -757,7 +799,9 @@ export function tokens(i: TokensInput): Tokens {
   }
   const kernOn = (g: { em?: number; bp?: number; brk: boolean }) => {
     const size = resolved.orig?.size
-    const em = g.em ?? (g.bp !== undefined && size! > 0 ? g.bp / size! : 0)
+    // (an em of the size it is set at: a group's at its own, TStyle.rel, as the letters beside it are; a length in points the
+    // same at every size)
+    const em = g.em !== undefined ? g.em * (style().rel ?? 1) : g.bp !== undefined && size! > 0 ? g.bp / size! : 0
     if (!(em > 0)) return
     while (tokens.at(-1)?.space) tokens.pop()
     const t = tokens.at(-1)
@@ -883,11 +927,16 @@ export function tokens(i: TokensInput): Tokens {
             : null
         : null
       const map = sm ? transformMap(s, text) : null
+      // (a mark in the marks' style where the part states a marks' base: Placed.markFace)
+      const markSt = mstack.length ? mstyle() : null
       pushText(
         text,
         style(),
         {},
         map && { at: at!, sh: sh!, base: raw.length - s.length, map, sm: sm === true ? null : sm },
+        null,
+        capsK,
+        markSt,
       )
       return
     }
@@ -903,11 +952,19 @@ export function tokens(i: TokensInput): Tokens {
       if (p.runin && spaceless && opensSentence()) runinId = p.id
       const next = openStyle(p, style(), designs)
       const link = LINK_OPEN.test(p.src as string) && p.id !== undefined ? { link: p.id } : {}
-      stack.push({ ...(next ?? style()), ...colourRun(k, p), ...link })
+      // (its size where the part states one, whatever its command: its share of the member's size, as TeX set its own glyphs, so
+      // absolute and held by what it holds; none stated, the size of the group around it)
+      const size = i.statedBase === false ? undefined : p.face?.size,
+        of = resolved.orig?.size
+      const rel = size! > 0 && of! > 0 ? { rel: size! / of! } : {}
+      const run = colourRun(k, p)
+      if (mstack.length) mstack.push({ ...(openStyle(p, mstyle(), designs) ?? mstyle()), ...rel, ...run, ...link })
+      stack.push({ ...(next ?? style()), ...rel, ...run, ...link })
       return
     }
     if (p.t === 'close') {
       if (stack.length > 1) stack.pop()
+      if (mstack.length > 1) mstack.pop()
       if (headId !== null && p.id === headId) afterHead = true
       if (runinId !== null && p.id === runinId) {
         afterRunin = !endsWith(CLOSING_END)
@@ -926,10 +983,14 @@ export function tokens(i: TokensInput): Tokens {
       const sw = applyCmd(p.src, style(), designs)
       if (sw && /^\\[A-Za-z]+$/.test(p.src)) {
         stack[stack.length - 1] = sw
+        if (mstack.length) mstack[mstack.length - 1] = applyCmd(p.src, mstyle(), designs) ?? mstyle()
         return
       }
       const run = colourRun(k, p)
-      if (run.colourRun) stack[stack.length - 1] = { ...style(), ...run }
+      if (run.colourRun) {
+        stack[stack.length - 1] = { ...style(), ...run }
+        if (mstack.length) mstack[mstack.length - 1] = { ...mstyle(), ...run }
+      }
     }
     const r = resolved.get(k)
     if (!r) return
@@ -1008,13 +1069,15 @@ export function tokens(i: TokensInput): Tokens {
       }
       return
     }
+    // (a symbol drawn as text a mark: in the marks' style where the part states a marks' base)
+    const cur = r.mode === 'symbol' ? mstyle() : style()
     // (a rendering of the page's own text in the font state TeX set its glyphs in, where the part states it (El.style, read.ts):
     // its typewriter face, its weight, its slant and its small capitals over the run's. It is text no translation replaces, and
     // the original's style is its own: 2608.06701v1 p5's "Periodic Advisor", italic by the paper's macro, was drawn upright in
     // the run's style, and "LIVEPLAN", in faked small capitals, in full capitals; a group around it that TeX applied is in its
     // glyphs (\emph's italic), and a rendering of no stated style, or an attribute its style does not state, takes the run's)
-    const own: TStyle = r.math
-      ? { ...style(), italic: /[A-Za-z]/.test(r.text) && r.text.length <= 3, caps: false }
+    const ownFace: TStyle = r.math
+      ? { ...cur, italic: /[A-Za-z]/.test(r.text) && r.text.length <= 3, caps: false }
       : r.mode === 'orig-text' && r.st && r.st.fam !== 'math'
         ? {
             ...style(),
@@ -1025,6 +1088,8 @@ export function tokens(i: TokensInput): Tokens {
             caps: r.st.caps ?? style().caps,
           }
         : style()
+    // (and the size its glyphs share where it is not the member's, El.size: TStyle.rel, read.ts)
+    const own: TStyle = r.st?.rel !== undefined ? { ...ownFace, rel: r.st.rel } : ownFace
     if (r.math && own.upper) own.upper = false
     // (the share its faked small capitals are set at: its own (El.style.sc, its text in TeX's case, each small one a lowercase
     // letter caseRuns draws so), else the unit's)

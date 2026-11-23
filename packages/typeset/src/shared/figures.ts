@@ -45,6 +45,8 @@ export type FigureRow = FitFigure & {
     /** a group's fill where its style states one (0xRRGGBB, 0 black): TeX's line in a picture over two colours (2611.03178v1's
      *  label and the address after it in the link's colour); none: the figure text's own */
     fill?: number
+    /** a group's size where its style states its own, to the figure text's (TStyle.rel): its run measured and drawn at it */
+    rel?: number
   }
 }
 /** a figure text's family, weight and slant (FigureRow.cls) */
@@ -56,7 +58,7 @@ export type FigureUnit = {
   pieces?: readonly (({ t: string; s?: string; tr?: boolean } | TextPiece) & { cls?: FigureClass })[]
 }
 /** a run of a figure's translation in one face (figureRuns), and its fill where its group states one (FigureClass.fill) */
-type FigureRun = { s: string; face: Face; cls: 'cjk' | 'latin'; fill?: number }
+type FigureRun = { s: string; face: Face; cls: 'cjk' | 'latin'; fill?: number; rel?: number }
 /** a figure text's outcome: drawn (its text, runs, size, where its anchor keeps it, its width, its turn in degrees
  *  anticlockwise, its fill) or why not */
 export type Figure = {
@@ -105,6 +107,8 @@ export function fontClassOf(name: string): { fam: 'serif' | 'sans' | 'mono' | 'm
   return { fam, bold, italic }
 }
 
+/** a run's size to its figure text's: a group's own where its style states one (TStyle.rel), else 1 */
+export const runRel = (r: { rel?: number }): number => r.rel ?? 1
 /** a figure's translation in its runs by script, each in its face; and by style, where its characters
  *  (`at`, by code point) hold their own (a group's run on A), each run in its style's face. A run asks its face's small
  *  capitals only where the face has one for every lower-case letter of it (`ownCaps`, @readarxiv/text ownSmallCapsOf); else
@@ -134,7 +138,13 @@ function figureRuns(
   return runs.map((r) => {
     const face0 = r.st ? faceOf(r.cls, r.st) : faceOf(r.cls)
     const face = face0.caps && !(face0.id && ownCaps(face0.id, r.s)) ? { ...face0, caps: false } : face0
-    return { s: r.s, face, cls: r.cls, ...(typeof r.st?.fill === 'number' ? { fill: r.st.fill } : {}) }
+    return {
+      s: r.s,
+      face,
+      cls: r.cls,
+      ...(typeof r.st?.fill === 'number' ? { fill: r.st.fill } : {}),
+      ...(r.st?.rel !== undefined && r.st.rel !== 1 ? { rel: r.st.rel } : {}),
+    }
   })
 }
 /** a translation's pieces as one text, as the figure is drawn (a piece that is no text a space, white space one space, trimmed),
@@ -156,9 +166,9 @@ function textOfPieces(pieces: NonNullable<FigureUnit['pieces']>): { text: string
   while (out.at(-1)?.c === ' ') out.pop()
   return { text: out.map((x) => x.c).join(''), at: out.map((x) => x.cls) }
 }
-/** figureRuns' width at size 1, each run's in its face */
+/** figureRuns' width at size 1, each run's in its face at its own size (runRel) */
 const figureRunsWidth = (runs: readonly FigureRun[], m: FitMeasure): number =>
-  runs.reduce((a, r) => a + m.w100(r.s, r.face) / 100, 0)
+  runs.reduce((a, r) => a + (m.w100(r.s, r.face) / 100) * runRel(r), 0)
 
 /** the blank halves at the edges of a figure text's line, before its ink and after it, em of its size: its line set as the
  *  breaker sets every line (B.break leadOf, hangOf) at its target's first state (firstCompress), its first and last characters
@@ -166,8 +176,9 @@ const figureRunsWidth = (runs: readonly FigureRun[], m: FitMeasure): number =>
  *  its em's middle, nor for a curly quote in an alphabet's Latin face) */
 function blanksOf(runs: readonly FigureRun[], rules: FiguresInput['rules']): [number, number] {
   const compress = firstCompress(rules)
+  // (a mark's blank half in ems of its run's own size, runRel, as the breaker's are of its token's, TStyle.rel)
   const edge = (r: FigureRun | undefined, ch: string | undefined) => ({
-    t: { punct: r?.cls === 'cjk' && ch ? markOf(ch, r.face.ids) : null },
+    t: { punct: r?.cls === 'cjk' && ch ? markOf(ch, r.face.ids) : null, st: { rel: r ? runRel(r) : 1 } as TStyle },
   })
   const a = runs[0],
     z = runs.at(-1)
@@ -218,6 +229,7 @@ export function figures(i: FiguresInput): { figures: Figure[]; wait: [FaceId, st
         caps: !!cf.caps,
         design: cf.design ?? i.designs[fam] ?? i.designs.serif,
         ...(cf.fill !== undefined ? { fill: cf.fill } : {}),
+        ...(cf.rel !== undefined ? { rel: cf.rel } : {}),
       }
     }
     const st = styleOf(f.cls ?? fontClassOf(f.font))

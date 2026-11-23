@@ -9,12 +9,12 @@ import type { FitBlock, FitParams, FitState, LaidItem, LaidLine } from '../fit/t
 import type { Mins } from './hyph.ts'
 import type { FitMeasure } from './measure.ts'
 import type { Slot } from './slots.ts'
-import type { Face, Token } from './tokens.ts'
+import { type Face, relOf, type Token } from './tokens.ts'
 
 /** a breaking at a state: its lines, the tokens it laid from (its own copy where it cut one), how many it set of all */
 export type Broken = { lines: LaidLine[]; tokens: Token[]; rest: number; total: number; spilled?: boolean }
 /** a mark that may stand at a line's edge: a laid item's token's mark class, and whether the mark has lost its blank half */
-type EdgeMark = { t: Pick<Token, 'punct'>; cut?: boolean } | null | undefined
+type EdgeMark = { t: Pick<Token, 'punct' | 'st'>; cut?: boolean } | null | undefined
 /** a crop as the breaker reads it (Token.crop, a record there): its rectangle at the original's scale, its page and TeX
  *  baseline, the segment's box it was cut from (`gap.box`), its copy text, its url package's break points (`breaks`: the x
  *  between two of its glyphs and the copy text's UTF-16 code units before it) and the edges a cut left (`cut`: 1 its left, 2
@@ -101,7 +101,7 @@ export function lineExtent(line: { items: readonly LaidItem[] }, f: number, scal
     }
     if (!t.s || t.space || !t.face) continue
     const ink = m.ink100(t.s, t.face),
-      k = (t.sup ? 0.62 : 1) * (t.sc ?? 1),
+      k = (t.sup ? 0.62 : 1) * (t.sc ?? 1) * relOf(t),
       up = t.sup ? 0.36 * f : 0
     ta = Math.max(ta, up + (ink.a * k * f) / 100)
     td = Math.max(td, (ink.d * k * f) / 100 - up)
@@ -149,15 +149,16 @@ const urlCut = (t: BreakToken, room: number, scale: number, least: boolean) => {
 const kernOf = (t: Pick<Token, 'kernW'>, f: number): number => ((t.kernW ?? 0) * f) / 100
 /** a token's own width at size f: no kern after it (B.tokens' kernOn's `kernW`), which its item holds apart (kernOf) */
 /** what tokW reads of a token: the breaker's and the walk's (fit/walk.ts fitLays' bound) */
-type Measured = Pick<Token, 'cw' | 'space' | 'w100' | 'cls' | 's'> & { crop?: unknown }
+type Measured = Pick<Token, 'cw' | 'space' | 'w100' | 'cls' | 's' | 'st'> & { crop?: unknown }
 const tokW = (t: Measured, f: number, st: FitState, scale: number): number => {
   if (t.crop) return (t.cw as number) * scale
   if (t.space) return (t.w100 * f) / 100
   let w = (t.w100 * f) / 100
   // (the tracking after each character a reader sees, a grapheme cluster (script.ts charsOf), as the drawing's letter spacing is
-  // set after each (CSS Text 3 §8.2, a typographic character unit): a decomposed Hangul syllable one character, not three)
-  if (t.cls === 'cjk') w += st.track * f * charsOf(t.s as string)
-  else if (st.trackLatin) w += st.trackLatin * f * charsOf(t.s as string)
+  // set after each (CSS Text 3 §8.2, a typographic character unit): a decomposed Hangul syllable one character, not three; in
+  // ems of the size the token is drawn at, a group's at its own, TStyle.rel)
+  if (t.cls === 'cjk') w += st.track * f * relOf(t) * charsOf(t.s as string)
+  else if (st.trackLatin) w += st.trackLatin * f * relOf(t) * charsOf(t.s as string)
   return w
 }
 /**
@@ -229,9 +230,11 @@ const noLineStart = (P: Pick<FitParams, 'noStart' | 'noEnd'>): ((ch: string) => 
   const kinsoku = kinsokuOf(P.noStart ?? '', P.noEnd ?? '')
   return (ch) => noStart(ch) || kinsoku.starts(ch)
 }
-const leadOf = (it: EdgeMark, compress: number): number => (it?.t.punct === 'open' && compress >= 1 ? 0.5 : 0)
+// (a mark's blank half, in ems of the size it is drawn at: a group's at its own, TStyle.rel, as its advance is)
+const leadOf = (it: EdgeMark, compress: number): number =>
+  it?.t.punct === 'open' && compress >= 1 ? 0.5 * relOf(it.t) : 0
 const hangOf = (it: EdgeMark, compress: number): number =>
-  it?.t.punct === 'close' && !it.cut && compress < 2 ? 0.5 : 0
+  it?.t.punct === 'close' && !it.cut && compress < 2 ? 0.5 * relOf(it.t) : 0
 /**
  * Tokens into slots, greedily, at font size f: each line { ...slot, items: [{ t, w, shift }] } with the items' natural
  * widths (punctuation compressed as the state allows), the space a line may shrink, and `rest`, the first token left.
@@ -563,25 +566,28 @@ function breakLines(
         tw -= lead
         shift = -lead
       } else if (t.punct && st.compress >= 2) {
-        tw -= half
-        if (t.punct === 'open') shift = -half
+        // (a mark's blank half at the size it is drawn at, a group's at its own, TStyle.rel)
+        tw -= half * relOf(t)
+        if (t.punct === 'open') shift = -half * relOf(t)
       } else if (t.punct && st.compress === 1) {
         if (prev?.punct === 'close') {
           // two marks together: the first loses its trailing blank half (the second keeps its own)
           const last = items.length ? items.at(-1) : line.items.at(-1)
           if (last && !last.cut) {
-            last.w -= half
+            const h = half * relOf(last.t)
+            last.w -= h
             last.cut = true
-            if (items.length) w -= half
-            else line.x -= half
+            if (items.length) w -= h
+            else line.x -= h
           }
         } else if (t.punct === 'open' && prev?.punct) {
           // an opening mark after another mark: its leading blank half
-          tw -= half
-          shift = -half
+          tw -= half * relOf(t)
+          shift = -half * relOf(t)
         }
       }
-      const asp = t.asp && (line.items.length || items.length) ? P.autospace * f : 0
+      // (in ems of the size the token is drawn at: a group's at its own, TStyle.rel)
+      const asp = t.asp && (line.items.length || items.length) ? P.autospace * f * relOf(t) : 0
       // (`kern`: the explicit glue after it, an advance of its own beside its width, which trim drops at a line's end: no part of
       // what it draws, a crop's image, a word's box)
       const kern = kernOf(t, f)
@@ -696,7 +702,10 @@ function breakLines(
     return (
       gaps > 0 &&
       stretch > STRETCH_MIN * f &&
-      need <= squeezable(all, g.hang > 0, st.compress, P).length * half + gapSqueeze * gaps + 1e-9 &&
+      need <=
+        squeezable(all, g.hang > 0, st.compress, P).reduce((x, it) => x + half * relOf(it.t), 0) +
+          gapSqueeze * gaps +
+          1e-9 &&
       need / gaps < stretch
     )
   }
@@ -918,7 +927,7 @@ function breakLines(
           } else {
             const t = tokens[q]!,
               chars = graphemesOf(t.s as string)
-            const per = chars.map((c) => (P.measure.w100(c, t.face as Face) * (t.sc ?? 1) * f) / 100)
+            const per = chars.map((c) => (P.measure.w100(c, t.face as Face) * (t.sc ?? 1) * relOf(t) * f) / 100)
             let k = 0,
               head = 0
             while (k < chars.length && used + head + per[k]! <= cap) head += per[k++]!
@@ -949,7 +958,7 @@ function breakLines(
               setToken(q, {
                 ...t,
                 s: tail,
-                w100: P.measure.w100(tail, t.face as Face) * (t.sc ?? 1),
+                w100: P.measure.w100(tail, t.face as Face) * (t.sc ?? 1) * relOf(t),
                 glue: false,
                 cont: false,
                 asp: false,
@@ -963,7 +972,7 @@ function breakLines(
           const chars = graphemesOf(t0.s)
           let k = 0,
             used = 0
-          const per = chars.map((c) => (P.measure.w100(c, t0.face as Face) * (t0.sc ?? 1) * f) / 100)
+          const per = chars.map((c) => (P.measure.w100(c, t0.face as Face) * (t0.sc ?? 1) * relOf(t0) * f) / 100)
           while (k < chars.length && used + per[k]! <= cap) used += per[k++]!
           // (in a merged cell's fill, P.words: only where a word ends inside it, the last that fits; none, and the state fails)
           if (words && t0.wordEnds) {
@@ -986,7 +995,7 @@ function breakLines(
           setToken(i, {
             ...t0,
             s: tail,
-            w100: P.measure.w100(tail, t0.face as Face) * (t0.sc ?? 1),
+            w100: P.measure.w100(tail, t0.face as Face) * (t0.sc ?? 1) * relOf(t0),
             glue: false,
             asp: false,
             ...wordsAfter(t0, chars.slice(0, k).join('').length),
@@ -1041,7 +1050,8 @@ function breakLines(
           if (words && t0.wordEnds && !t0.wordEnds.includes(pts[q]!)) continue
           const head = `${word.slice(0, pts[q])}-`
           const hw =
-            (P.measure.w100(head, t0.face as Face) * f) / 100 + (st.trackLatin ? st.trackLatin * f * head.length : 0)
+            (P.measure.w100(head, t0.face as Face) * relOf(t0) * f) / 100 +
+            (st.trackLatin ? st.trackLatin * f * relOf(t0) * head.length : 0)
           if (hw <= room + 0.01) {
             cut = { head, hw, at: pts[q] }
             break
@@ -1054,7 +1064,7 @@ function breakLines(
           setToken(i, {
             ...t0,
             s: tail,
-            w100: P.measure.w100(tail, t0.face as Face) * (t0.sc ?? 1),
+            w100: P.measure.w100(tail, t0.face as Face) * (t0.sc ?? 1) * relOf(t0),
             glue: false,
             asp: false,
             ...wordsAfter(t0, cut.at!),

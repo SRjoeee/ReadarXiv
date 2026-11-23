@@ -14,6 +14,15 @@
 // body in a group of its own, `\rtwo{…}`; a bibliography entry of `\bibinfo{…}` fields), most of its text's outside the groups
 // whose command names their style (an `\emph{…}` journal's face is the command's; none outside: the group is the unit's
 // text, nothing stated).
+// Its size: the one size its own text's glyphs share (facts.ts oneSize: up the line, math fonts aside, alike to the hundredth
+// of a point; a faked small capital aside, a lowercase source letter TeX set as a capital, which NFSS draws at its share of
+// the size), stated where it is not the size the group is drawn at by default (a group whose glyphs stand at several sizes
+// states none: a median of them is the size of none of its runs): the size of the nearest group around it whose size is stated, else the
+// unit's base, its own text's (the glyphs of no group's; where every letter is a group's, all of them). The face compares
+// role, weight and slant, never a size, so a kicker `{\small\bfseries #1}` beside a title `{\fontsize{30}{35}\selectfont
+// \bfseries …}` (both bold, both sans) and `{\small …}` inside a line stated nothing, and their translations were drawn at the
+// unit's one size (2611.23651v2 p1, docs/PDF-READER.md §18.114). A group stated for its size alone keeps its source's style
+// name: the statement is the part's (SpanAt.style), never the unit's content.
 // Its stop: the glyphs
 // TeX set between the glyph of the group's last letter and the glyph of the source's next letter after it, where the source
 // between the two writes no character (white space, or an element whose ink is its own) and both words are matched whole
@@ -23,15 +32,27 @@
 // a digit there is TeX's prose (a macro's own words), no stop.
 import type { Piece, Style } from '@readarxiv/format'
 import { lcs } from '../align/myers.ts'
-import { changeOf, classifyFont, faceKeyOf, fold, mostOf, type StyleGlyph, styleOf, unitSize } from '../locate/facts.ts'
+import {
+  changeOf,
+  classifyFont,
+  faceKeyOf,
+  fold,
+  mostOf,
+  oneSize,
+  type StyleGlyph,
+  styleOf,
+  unitSize,
+} from '../locate/facts.ts'
 
 type Span = Extract<Piece, { t: 'span' }>
 
 /** what TeX set for a group that its source does not say: its face (`style` its glyphs' Style, `change` what it changes of
- *  the face around it, LaTeX's names) where it is not that one's; its stop */
+ *  the face around it, LaTeX's names) where it is not that one's; its size where it is not the size it is drawn at by default
+ *  (`style` then too, `sized`; `change` absent where its face is the face around it); its stop */
 export interface GroupFact {
   style?: Style
   change?: string
+  sized?: true
   stop?: string
 }
 
@@ -44,6 +65,11 @@ const TERMINAL = /^\p{Terminal_Punctuation}+$/u
  *  content; past it the letters not reached are not matched, and their groups state nothing */
 const WORK_PER_LETTER = 256
 
+/** a face declaration (latex.ltx's \em, \itshape, \slshape, \upshape, \bfseries, \mdseries, \scshape, \normalfont and the
+ *  families', LaTeX 2.09's \bf, \it, \sl, \sc, \tt, \rm, \sf): the rest of its group is set in what it sets, which the
+ *  typesetter applies where it stands, so that no group's own face is read off the text after it */
+const FACE_DECLARATION =
+  /^\\(?:em|itshape|slshape|upshape|bfseries|mdseries|scshape|normalfont|ttfamily|rmfamily|sffamily|bf|it|sl|sc|tt|rm|sf)(?![A-Za-z@])/
 /** the face most of glyphs are set in, a math font's glyphs aside where others are there */
 const faceOf = (gs: readonly StyleGlyph[]): string | undefined => {
   const text = gs.filter((g) => classifyFont(g.base).fam !== 'math')
@@ -71,14 +97,18 @@ export function groupFacts(
   const to: number[] = []
   /** the element a character is of (its text `textOf`'s), by order, -1 the text's own */
   const elOf: number[] = []
+  /** each character as the source writes it (its case: a faked small capital's reading) */
+  const srcCh: string[] = []
+  /** whether a character stands after a face declaration in its own group's text (`{\small \em aside}`: its italic the \em's) */
+  const switched: boolean[] = []
   let els = 0
   const P: number[] = []
   const ranges = new Map<Span, [number, number]>()
   const parent = new Map<Span, Span | null>()
   const depth = new Map<Span, number>()
   {
-    type Frame = { span: Span | null; list: readonly Piece[]; k: number; named: boolean }
-    const stack: Frame[] = [{ span: null, list: content, k: 0, named: false }]
+    type Frame = { span: Span | null; list: readonly Piece[]; k: number; named: boolean; sw: boolean }
+    const stack: Frame[] = [{ span: null, list: content, k: 0, named: false, sw: false }]
     while (stack.length) {
       const top = stack[stack.length - 1] as Frame
       if (top.k >= top.list.length) {
@@ -91,14 +121,17 @@ export function groupFacts(
         ranges.set(p, [group.length, group.length])
         parent.set(p, top.span)
         depth.set(p, stack.length)
-        stack.push({ span: p, list: p.content, k: 0, named: top.named || p.style !== 'other' })
+        stack.push({ span: p, list: p.content, k: 0, named: top.named || p.style !== 'other', sw: false })
         continue
       }
+      if (p.t === 'el' && FACE_DECLARATION.test((p.src ?? '').trim())) top.sw = true
       const shown = p.t === 'text' ? p.s : p.t === 'el' ? textOf(p) : undefined
       const chars = shown === undefined ? ['\ufffc'] : [...shown]
       const el = p.t === 'el' && shown !== undefined ? els++ : -1
       for (const ch of chars) {
+        switched.push(top.sw)
         group.push(top.span)
+        srcCh.push(ch)
         named.push(top.named)
         quiet.push(shown === undefined || SPACE.test(ch))
         elOf.push(el)
@@ -184,18 +217,73 @@ export function groupFacts(
 
   const out = new Map<Span, GroupFact>()
   const fact = (s: Span): GroupFact => out.get(s) ?? out.set(s, {}).get(s)!
+  /** the glyphs of the letters from `a` to `b` that `keep` keeps, a faked small capital aside (a lowercase source letter TeX set
+   *  as a capital: NFSS's virtual small capitals, at their share of the size, which is no size of the text's) */
+  const sizedIn = (a: number, b: number, keep: (i: number) => boolean): StyleGlyph[] =>
+    glyphsIn(a, b, (i) => {
+      if (!keep(i)) return false
+      const ch = srcCh[i] as string
+      const m = matched[from[i] as number] as number
+      const u = m >= 0 ? (glyphs[gOf[m] as number] as StyleGlyph).u : ''
+      return !(ch !== ch.toUpperCase() && u !== u.toLowerCase() && u === u.toUpperCase())
+    })
+  /** their size, the median of them (the unit's base: the size most of its text is set at) */
+  const sizeIn = (a: number, b: number, keep: (i: number) => boolean): number | undefined =>
+    unitSize(sizedIn(a, b, keep))
+  /** a size as the page states it, to the hundredth of a point (the coordinates' grid): two sizes TeX set alike */
+  const r2 = (v: number) => Math.round(v * 100) / 100
+  // (the unit's base size: its own text's, the glyphs of no group's; where every letter is a group's, all of them)
+  const base = sizeIn(0, group.length, (i) => group[i] === null) ?? sizeIn(0, group.length, () => true)
+  /** each group's size as stated, by which a group inside it is drawn by default */
+  const stated = new Map<Span, number>()
+  const inherited = (s: Span): number | undefined => {
+    for (let up = parent.get(s) ?? null; up; up = parent.get(up) ?? null) if (stated.has(up)) return stated.get(up)
+    return base
+  }
   /** the stop at each place a group's text ends, the group it is stated on (the innermost of those that end there) */
   const stops = new Map<number, { s: Span; stop: string }>()
+  // (in the order the groups open: a group's statement is read before the groups inside it)
   for (const [s, [a, b]] of ranges) {
-    // ---- its face: its own text's, where the face around it is another
-    const gs = glyphsIn(a, b, (i) => group[i] === s)
+    // ---- its size: the one its own text's glyphs share, where it is not the size the group is drawn at by default
+    const size = oneSize(sizedIn(a, b, (i) => group[i] === s))
+    const by = inherited(s)
+    // ---- its face: its own text's before any face declaration inside it (the rest the declaration's, which the typesetter
+    // applies where it stands), where the face around it is another; its size its own where it has one, else the one it is
+    // drawn at by default (a group of several sizes states none)
+    const gs = glyphsIn(a, b, (i) => group[i] === s && !switched[i])
     const face = gs.length ? faceOf(gs) : undefined
     const around = face === undefined ? undefined : aroundOf(s)
     if (face !== undefined && around !== undefined && face !== around) {
       const { upper: _upper, fill: _fill, ...st } = styleOf(gs)
       void [_upper, _fill]
-      fact(s).style = { ...st, size: unitSize(gs) ?? st.size }
+      fact(s).style = { ...st, size: size ?? by ?? st.size }
       fact(s).change = changeOf(face, around)
+    }
+    if (size !== undefined && by !== undefined && r2(size) !== r2(by)) {
+      stated.set(s, size)
+      const f = fact(s)
+      if (f.style) f.style = { ...f.style, size }
+      else {
+        // (stated for its size alone: the face at its opening, its own text's before a declaration inside it, else the face
+        // around it, so that the declaration's own face is applied once: `{\small \em aside}` italic, never turned back)
+        const all = glyphsIn(a, b, (i) => group[i] === s)
+        const { upper: _upper, fill: _fill, ...st } = styleOf(gs.length ? gs : all)
+        void [_upper, _fill]
+        const around = gs.length ? undefined : aroundOf(s)
+        const [role, bold, slant] = around ? around.split('|') : []
+        f.style = around
+          ? {
+              ...st,
+              role: role as Style['role'],
+              ...(bold ? { bold: 1 as const } : { bold: undefined }),
+              ...(slant ? { slant: 1 as const } : { slant: undefined }),
+              size,
+            }
+          : { ...st, size }
+        if (f.style.bold === undefined) delete f.style.bold
+        if (f.style.slant === undefined) delete f.style.slant
+      }
+      f.sized = true
     }
     // ---- its stop: TeX's punctuation between its last letter and the source's next one, the source writing none there
     let last = b - 1

@@ -281,6 +281,10 @@ export const El = z.object({
   // its text in runs of one fill (0xRRGGBB, -1 none told), where its glyphs hold more than one: each space the fill before it
   fills: z.array(z.tuple([z.string(), int])).optional(),
   style: Style.optional(),
+  // the size its glyphs share where it is not its member's (`style`'s size is their most common, of several too): an element
+  // drawn as its text is drawn at it, a group's size drawn so (docs/PDF-READER.md §18.114); absent where its glyphs stand at
+  // several sizes or at the member's, and for faked small capitals (`style.sc`). A typesetter of before strips it (FORMAT stays)
+  size: num.optional(),
   brackets: z.tuple([Ink, Ink]).optional(),
   leads: flag.optional(),
   after: z.string().optional(),
@@ -484,6 +488,13 @@ export const Placed = z.object({
   // `read`, the pitch of its lines on A (their gaps' median, a gap that rule opened among them) or 1.2 of its size
   lead: num,
   style: Style,
+  // the face TeX set the unit's marks in outside every group (its punctuation, separators and symbols there), where it is not
+  // its letters' (`style`'s weight and slant, the face of its letters outside every group): a translated character outside every
+  // group is drawn in the one of the two bases it stands for, a letter in `style`'s, a mark in this (@readarxiv/text
+  // isLetterOrDigit, one reading). An author line `\textbf{…}, \textbf{…}` whose reply drops the names' groups draws its names
+  // bold and its commas regular, as TeX set them (docs/PDF-READER.md §18.114). Absent, a mark is drawn as a letter is; a
+  // typesetter of before strips it and draws as it did, so FORMAT stays
+  markFace: z.object({ bold: flag.optional(), slant: z.literal(1).optional() }).optional(),
   align: z.enum(['j', 'l', 'c', 'r']),
   // a table cell of several lines set in a box of its cell (a \makecell's, a \shortstack's, a nested one-column tabular's): how
   // its lines stand in that box, read off A (their left edges, middles or right edges together; all three, the cell's class),
@@ -614,6 +625,12 @@ export const Part = z.object({
     named: z.array(Named).optional(),
     persons: z.array(Person).optional(),
     splits: z.array(Split).optional(),
+    // 1: each member's style is its letters' base outside every group that sets it, and its groups' faces are stated against it
+    // (Placed.style, SpanAt.style, Placed.markFace: docs/PDF-READER.md §18.114). Absent, a part made before (PIPELINE 119): its
+    // style is the face of its glyphs whole, its groups' among them, which a typesetter reads the groups out of by its own count
+    // of the row's characters under them, as it did, and its stated sizes its glyphs' most common, of several too, which it
+    // reads none of; so a part stored before is laid as it was (FORMAT stays)
+    bases: z.literal(1).optional(),
   }),
   flows: z.array(z.array(Placed)),
   ties: z.array(Tie).optional(),
