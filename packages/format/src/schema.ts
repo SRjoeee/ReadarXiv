@@ -281,6 +281,10 @@ export const El = z.object({
   // its text in runs of one fill (0xRRGGBB, -1 none told), where its glyphs hold more than one: each space the fill before it
   fills: z.array(z.tuple([z.string(), int])).optional(),
   style: Style.optional(),
+  // the size its glyphs share where it is not its member's (`style`'s size is their most common, of several too): an element
+  // drawn as its text is drawn at it, a group's size drawn so (docs/PDF-READER.md §18.114); absent where its glyphs stand at
+  // several sizes or at the member's, and for faked small capitals (`style.sc`). A typesetter of before strips it (FORMAT stays)
+  size: num.optional(),
   brackets: z.tuple([Ink, Ink]).optional(),
   leads: flag.optional(),
   after: z.string().optional(),
@@ -624,7 +628,8 @@ export const Part = z.object({
     // 1: each member's style is its letters' base outside every group that sets it, and its groups' faces are stated against it
     // (Placed.style, SpanAt.style, Placed.markFace: docs/PDF-READER.md §18.114). Absent, a part made before (PIPELINE 119): its
     // style is the face of its glyphs whole, its groups' among them, which a typesetter reads the groups out of by its own count
-    // of the row's characters under them, as it did; so a part stored before is laid as it was (FORMAT stays)
+    // of the row's characters under them, as it did, and its stated sizes its glyphs' most common, of several too, which it
+    // reads none of; so a part stored before is laid as it was (FORMAT stays)
     bases: z.literal(1).optional(),
   }),
   flows: z.array(z.array(Placed)),

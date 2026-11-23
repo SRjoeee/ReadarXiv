@@ -495,16 +495,17 @@ function readElements(fx: FactsIndex, r: MemberReading): void {
     if (fill !== undefined || (el.text !== undefined && !(gs.length === 0 && mem.told?.has(id)))) {
       const sc = mem.smallCaps?.get(id)
       const { upper, ...read } = styleOf(gs)
-      // (its size the one its glyphs share, a symbol's math font's too; of several, the member's, by which it is drawn by default:
-      // the most of them is the size of none of its runs, as a group of several sizes states none (docs/PDF-READER.md §18.114),
-      // and the typesetter draws an element as its text at its stated size)
-      const size = !gs.length || oneSize(gs, true) !== undefined ? read.size : mem.style.size
       el.style = {
         ...read,
-        size,
         ...(sc !== undefined ? { sc } : upper ? { upper } : {}),
         ...(fill !== undefined ? { fill } : {}),
       }
+      // (its size where its glyphs share one, a symbol's math font's too, that is not the member's (El.size: the typesetter draws
+      // it as its text at it); none for glyphs at several sizes, whose most common is the size of none of its runs (2608.00812v1's
+      // `(i)`, its parentheses at 10.38, its letter at 9.96), as a group of several sizes states none (docs/PDF-READER.md
+      // §18.114), nor for faked small capitals, drawn at their share (El.style.sc)
+      if (sc === undefined && gs.length && oneSize(gs, true) !== undefined && r2(read.size) !== r2(mem.style.size))
+        el.size = read.size
     }
     // (its own brackets: its first and last glyphs where they are a pair of them, "[" "]" around a citation's numbers:
     // the brackets a translation that brackets it takes)

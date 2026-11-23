@@ -342,16 +342,9 @@ function readingsOf(
     const page = ink[0]?.[0] ?? 1
     // (the style most of its glyphs are set in (El.style), its own font state where it is drawn as the page's text: its
     // typewriter face, weight, slant and small capitals, faked (El.style.sc, its text in TeX's case) or its face's own, over
-    // the run's (tokens.ts); none where the part states none, the run's then. And its size where its glyphs' is not the
-    // member's (TStyle.rel, absolute, as a group's): `{\small\texttt{…}}`, a citation TeX set larger than its cell; none for an
-    // element of no ink, whose style no glyph states, nor for faked small capitals, whose size is their small letters', the
-    // share they are set at (El.style.sc))
-    const own =
-      el?.style && el.ink.length && el.style.sc === undefined && el.style.size > 0 && size > 0
-        ? Math.round(el.style.size * 100) !== Math.round(size * 100)
-          ? el.style.size / size
-          : undefined
-        : undefined
+    // the run's (tokens.ts); none where the part states none, the run's then. And the size its glyphs share where it is not the
+    // member's (El.size; TStyle.rel, absolute, as a group's): `{\small\texttt{…}}`, a citation TeX set larger than its cell)
+    const own = el?.size !== undefined && el.size > 0 && size > 0 ? el.size / size : undefined
     const gst: TStyle | null = el?.style
       ? {
           fam: el.style.role,
