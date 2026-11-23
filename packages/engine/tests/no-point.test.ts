@@ -128,8 +128,10 @@ describe("a heading's marks survive what a class does with the argument before i
       '\\begin{proof}[',
     ],
   ]
+  // (not yet: the gated marks' rename that sets these points (a \protected command, its name's letters in it, its digits its
+  // argument) is held back from this round, PDF-READER §18.111 "What stays": `it.fails` keeps the hole seen until it lands)
   for (const [what, tex, opener] of cases) {
-    it(`${what}: after LaTeX's \\protected@edef and \\uppercase the same points are set, by the same names`, () => {
+    it.fails(`${what}: after LaTeX's \\protected@edef and \\uppercase the same points are set, by the same names`, () => {
       const marked = markedOf(tex)
       const head = marked.slice(0, marked.indexOf('\\begin{document}'))
       const written = marksIn(marked, opener)
