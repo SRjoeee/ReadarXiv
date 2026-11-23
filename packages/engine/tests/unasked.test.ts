@@ -158,6 +158,19 @@ describe('a unit TeX never sets is not asked of a translator', () => {
     expect(got.members[1]).toEqual([false, 'marks'])
     expect(got.askedIds).toContain(note.id)
   })
+  it('a note nested in a unit TeX never set is left out with it: only a unit asked keeps its nested units (the review of #674)', () => {
+    const note = unitOf('footnote', 'A note of ours set nowhere.', { why: 'marks' })
+    const content = [
+      text('A branch of ours'),
+      { t: 'unit' as const, id: '1', unit: note.id, pre: '', post: '' },
+      text(' TeX never takes.'),
+    ]
+    const para: InstrumentUnit = { id: unitId('para', content), kind: 'para', content, why: 'marks' }
+    const got = askedOf([unitOf('para', 'A paragraph of ours.'), para, note], [[0]], ['A paragraph of ours.'])
+    expect(got.members[1]).toEqual([false, 'marks'])
+    expect(got.members[2]).toEqual([false, 'marks'])
+    expect(got.asked).toEqual(['para'])
+  })
   it('a unit of no glyph unlocated otherwise (no ink, no mark of its own asked) is asked as before', () => {
     const units = [unitOf('para', 'A paragraph of ours.'), unitOf('footnote', 'A note of ours set nowhere here.')]
     const got = askedOf(units, [[0]], ['A paragraph of ours.'])
