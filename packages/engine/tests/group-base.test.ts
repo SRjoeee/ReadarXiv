@@ -73,6 +73,29 @@ describe('a unit’s base face, read off TeX’s glyphs', () => {
       italic: false,
     })
   })
+  it('no letter of its own but its punctuation: the base the marks TeX set outside the groups show', () => {
+    // (`\textbf{While} $j \leq n$:` the colon regular, `\textit{Wix Bookings}; \textit{iCal URL};` the semicolons upright:
+    // read off the letters alone, every letter a group's, the base was the groups' and the marks were drawn bold, italic)
+    const bold = [group('\\textbf{', 'bold', [t('While')]), t(' '), el('$j$'), t(':\n')]
+    expect(face(bold, [...set('While', BOLD), ...set(':', REGULAR)])).toEqual({ bold: false, italic: false })
+    const italic = [
+      group('\\textit{', 'italic', [t('Wix Bookings')]),
+      t('; '),
+      group('\\textit{', 'italic', [t('iCal URL')]),
+      t(';'),
+    ]
+    expect(
+      face(italic, [
+        ...set('Wix Bookings', ITALIC),
+        ...set(';', REGULAR),
+        ...set('iCal URL', ITALIC),
+        ...set(';', REGULAR),
+      ]),
+    ).toEqual({
+      bold: false,
+      italic: false,
+    })
+  })
   it('text of its own: its own text’s face, whatever its groups hold', () => {
     const content = [group('\\textbf{', 'bold', [t('A long bold opening of the paragraph')]), t(' and words.')]
     const glyphs = [...set('A long bold opening of the paragraph', BOLD), ...set('and words.', REGULAR)]
