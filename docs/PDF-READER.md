@@ -9402,6 +9402,52 @@ unit's own text is not TeX's, and the original is the right drawing).
   the original's, as before); TRANSLATE stays (no unit's content, id or wire moves: the rows production holds are kept);
   LAYOUT and the marks digest stay (no TeX moves; today's layout maker reads no instrument of this engine).
 
+### 18.111 A group is drawn in the weight and at the size TeX set its own text in; the base is TeX's glyphs', never a count of the translation (the coordinator's ruling of 2026-11-23)
+
+2611.23651v2 p1 (the owner's report, on production): the small bold violet kicker above the title, a paper's macro
+`\newcommand{\eyebrow}[1]{{\small\bfseries\color{kicker}#1}\par}`, is one unit with the title under it
+(`{\fontsize{30}{35}\selectfont\bfseries …\par}`: the source reader reads no `\par` a definition holds, its own round), and its
+translation was drawn at the title's size and in a regular weight. Two causes, both the drawing's:
+
+- **No group had a size of its own.** The unit's size is the median of its glyphs (15 at 9.96, 15 at 29.89: 29.89); every run
+  was drawn at its line's one size (`emit/display.ts`), a stated `SpanAt.style.size` was dropped (`lay/read.ts` rowPieces), and
+  the engine stated none here: a group's face is compared by role, weight and slant (`locate/facts.ts` faceKeyOf), never a
+  size, so a group set at another size in the face around it stated nothing.
+- **The base weight was guessed from the translation.** The part states the unit bold (every glyph of it is), and the typesetter
+  took that bold off (`baseOf`): 7 of the row's 11 characters stood under the title's `\bfseries`, half or more, so the rest was
+  read as not bold, and the kicker, a group naming no style, took that base. A rule whose answer moves with the translator's
+  wording is no fact; the released reader read the base off the glyphs (`layer2.mjs` measuredStyle) and drew the kicker bold.
+
+The rule now, one reading of TeX's glyphs:
+
+- **A group's size** (`marks/faces.ts` groupFacts, on B, TeX's own output): its own text's glyphs' size (facts.ts unitSize: the
+  median up the line, math fonts aside; a faked small capital aside, a lowercase source letter TeX set as a capital, which NFSS
+  draws at its share and the lay already draws so), stated where it is not the size the group is drawn at by default: the size
+  of the nearest group around it whose size is stated, else the unit's base. Any group, of a command or a bare one: the
+  instrument (`marksOf`) states its Style in `SpanAt.style` (its own glyphs' face and its size) and keeps its span's style name,
+  so the unit's content, its id and its wire do not move. Two sizes alike to the hundredth of a point are one (the page's grid).
+- **The unit's base** (`locate/group-style.ts`, on A): its weight and slant are its own text's (the letters in no group and in
+  no switch's run); where every letter is a group's, each attribute is read outside the scopes that set it by their
+  definition, its weight outside `\textbf{…}` and a `\bfseries` run, its slant outside `\textit{…}`, a `\emph` or `\em` run's
+  slant turned back (TeX's state around those runs, which their glyphs show for what they do not set: `\textbf{RQ1:}
+  \textit{…}` regular upright, a unit wholly in `\emph` upright); where none, all its text's. `geometry.ts` states that base
+  always. Its size, where the unit has text of its own beside its groups, is that text's; where every letter is a group's, the
+  median of them all (the size most of its text is set at, by which the lay's knobs, its size steps and its pitch's em, are
+  read): the base is then the size of no run the translation keeps in a group, and every group whose glyphs differ states its own.
+- **The typesetter applies what is stated and reads nothing more**: the base is the part's style (`breaker/tokens.ts`; the count
+  of the row's characters under the groups goes for weight and slant, `capsBaseOf` keeps it for small capitals alone, which the
+  engine does not yet state by scope); a group's stated size is its tokens' share of the member's size (`TStyle.rel`, absolute,
+  held by what it holds), through the measure, the breaker's line extents, the char splits, the bands and the drawing; a
+  group's stated face where its command names no style, as before.
+- **A line of mixed sizes** is set as TeX sets one: its height its tallest box's (the breaker's ink extents, `lineExtent`, now of
+  each token at its own size), and TeX's \lineskip rule between two lines (the paper's \lineskip and \lineskiplimit,
+  `P.lineskip`, read there since §18.15): where the line's tallest ink comes nearer the line above than \lineskiplimit, the two
+  baselines are its depth and that height plus \lineskip apart, the later lines of its flow pushed with it; a smaller group
+  never moves a line (TeX keeps \baselineskip).
+
+Not this round: a size switch at a unit's top level with no group around it (`text \small more`, a declaration's run, which needs
+the statement face switches have); small capitals' base by scope.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server

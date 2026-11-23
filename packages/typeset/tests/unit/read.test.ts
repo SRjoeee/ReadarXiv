@@ -353,7 +353,7 @@ describe('the reading from the part', () => {
   })
   it('takes the base style as the part states it, read off TeX’s glyphs: no count of the row’s characters under its groups', () => {
     // (the engine states the unit's base its own text's, each attribute outside the scopes that set it (locate/group-style.ts,
-    // docs/PDF-READER.md §18.108): `\textbf{Bold words} rest` regular, its group bold by its command; a unit whose every glyph
+    // docs/PDF-READER.md §18.111): `\textbf{Bold words} rest` regular, its group bold by its command; a unit whose every glyph
     // is bold, its groups' and its own text's alike, bold: the typesetter draws what the part states, whatever the row's wording)
     const src = sourcePieces([
       { t: 'span', id: '0', style: 'bold', open: '\\textbf{', close: '}', content: [{ t: 'text', s: 'Bold words' }] },
