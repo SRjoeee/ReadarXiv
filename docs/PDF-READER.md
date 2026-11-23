@@ -9641,6 +9641,18 @@ mechanism for a turned header cell, a turned caption of several lines and a side
   crop in a frame and a level one are cut clear of each other's. For a quarter turn a box of the frame is a box of the page
   and the cut is exact; for any other turn the page's box of a turned box holds more than its ink (none such in the lab's
   papers: every element of a framed unit stands in a quarter turn).
+- **As a level unit's, in the frame** (the review of #673). A turned glyph paints by its own ink, not its Unicode: pageInk's band
+  of it (`up`, `down`, carried into the document's DocTurned) as lines.ts isInk reads a level glyph's outline, so that a CMEX
+  delimiter PDF.js maps to white space stands on its line and in its element's crop, which reaches that ink. A framed citation's,
+  reference's or text macro's crop copies as its glyphs read (`El.copy`, facts.ts textOf), never the source's reading ("?",
+  "[·]"). A framed symbol whose turned ink holds a letter or a digit, or stands off its line's baseline, is drawn as its ink
+  (`Member.asInk`, geometry.ts's guard). A label TeX set on a line of its own states that line's alignment against the
+  member's measure in the frame (`Label.align`, facts-pass.ts readLabelLine's reading), so that its relabel is a row of its own.
+  An annotation over a held unit's turned glyphs is its member's (`Link.owner`, by their glyph points, locate/links.ts), and the
+  typesetter lays a frame's links with the frame, their boxes in it, and turns them back onto the page (a link left where it
+  was keeps its own box on A). The reader registers a frame's member on the page, its lines' and pieces' boxes turned onto it
+  (composer.ts onPage): the text layer matches its run there and sets its translation where the run stood, and the marks stand
+  over it. The replay ink gate reads a part's frames' members, each in its frame (tests/replay/ink-gate.ts).
 - **Not covered**: a page with /Rotate (unread whole, `ink.ts`: 3 pages of the lab's 245 papers, 1409.0575v3's landscape tables,
   shown as the original); a mirrored glyph (a box alone: 3 text items of one paper's figure); a unit on two pages or in two
   turns (none in the lab's papers); one whose turned glyphs share no direction, read as before (`stats.turned.mixed`, which no
