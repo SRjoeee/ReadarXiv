@@ -57,7 +57,11 @@ const boxToFrame = (ux: number, uy: number, b: readonly number[]): [number, numb
 }
 
 /** every box of ink on page `p` of A in the frame of direction (ux, uy), but the member's own turned glyphs (`mine`) and boxes
- *  (`mineBoxes`): its level glyphs' boxes, its other turned glyphs' bands, its painted boxes (a rule, an image, a fill) */
+ *  (`mineBoxes`): its level glyphs' boxes, its other turned glyphs' bands, its painted boxes (a rule, an image, a fill). A turned
+ *  glyph is ink where it paints (`paints`: CMEX's delimiters PDF.js maps to white space among them), its band along its own
+ *  direction from its origin to its advance's end, up and down to its font's band or its own ink's, whichever reaches further
+ *  (a big delimiter's outline past its font's), the box of that band's four corners in the frame: a glyph of another turn (45
+ *  degrees) is bounded whole, where two of its corners bounded a line across it */
 function inkBoxesOf(
   inkA: Doc,
   p: number,
@@ -70,10 +74,19 @@ function inkBoxesOf(
   const out: [number, number, number, number][] = []
   for (const g of pg.glyphs) if (!g.blank) out.push(boxToFrame(ux, uy, [g.x0, g.bottom, g.x1, g.top]))
   ;(pg.turned ?? []).forEach((t, j) => {
-    if (mine.has(j) || !/\S/.test(t.u)) return
-    const [ox, oy] = [t.ox - t.uy * t.descent * t.size, t.oy + t.ux * t.descent * t.size]
-    const [tx, ty] = [t.ex - t.uy * t.ascent * t.size, t.ey + t.ux * t.ascent * t.size]
-    out.push(boxToFrame(ux, uy, [Math.min(ox, tx), Math.min(oy, ty), Math.max(ox, tx), Math.max(oy, ty)]))
+    if (mine.has(j) || !paints(t)) return
+    const lo = Math.min(t.descent, t.down ?? t.descent) * t.size,
+      hi = Math.max(t.ascent, t.up ?? t.ascent) * t.size
+    const c = [
+      [t.ox, t.oy],
+      [t.ex, t.ey],
+    ].flatMap(([x, y]) => [lo, hi].map((h) => toFrame(ux, uy, x! - t.uy * h, y! + t.ux * h)))
+    out.push([
+      Math.min(...c.map((q) => q[0])),
+      Math.min(...c.map((q) => q[1])),
+      Math.max(...c.map((q) => q[0])),
+      Math.max(...c.map((q) => q[1])),
+    ])
   })
   for (let b = 0; b < pg.kinds.length; b++) {
     // (a painted path's or an image's box: a glyph set turned is a box of kind -4, read above as its glyph)

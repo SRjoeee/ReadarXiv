@@ -9789,7 +9789,10 @@ mechanism for a turned header cell, a turned caption of several lines and a side
   box): its style off its turned glyphs as any turned run's, its glyphs as level glyphs of the frame cut into lines by locate's
   own reading (`lines.ts` cutLines), its measure its lines' extent (`read`: TeX states none of a turned box's measure here),
   its room along its lines to the nearest ink on their band and under its last line to the nearest ink across its measure,
-  every glyph, turned glyph and painted box of the page seen through the inverse turn; the cells of one table in a frame tied
+  every glyph, turned glyph and painted box of the page seen through the inverse turn (a turned glyph where it paints, CMEX's
+  delimiters PDF.js maps to white space among them, by the four corners of its band along its own direction, its font's or
+  its own ink's, whichever reaches further: a glyph of another turn is bounded whole and a big delimiter by its outline, the
+  review of #676); the cells of one table in a frame tied
   by TeX's grid as the page's are (`Located.frames`). Not framed: a unit on two pages or in two turns (`turned: two pages`,
   `turned: two turns`), or one whose text glyphs are all white space, its ink its pieces' (`turned: no text of ink`: no text
   of its own to lay nor ink to read its turn by; read for it, the reading threw and the paper's prepare with it).
@@ -9841,7 +9844,9 @@ mechanism for a turned header cell, a turned caption of several lines and a side
   "[·]"). A framed symbol whose turned ink holds a letter or a digit, or stands off its line's baseline, is drawn as its ink
   (`Member.asInk`, geometry.ts's guard). A label TeX set on a line of its own states that line's alignment against the
   member's measure in the frame (`Label.align`, facts-pass.ts readLabelLine's reading), so that its relabel is a row of its own.
-  An annotation over a held unit's turned glyphs is its member's (`Link.owner`, by their glyph points, locate/links.ts), and the
+  An annotation over a held unit's turned glyphs is its member's (`Link.owner`, by their glyph points, locate/links.ts: more
+  than half of every turned glyph under it, a held member's or none's, as a level annotation's are weighed; the review of
+  #676), and the
   typesetter lays a frame's links with the frame, their boxes in it, and turns them back onto the page (a link left where it
   was keeps its own box on A). The reader registers a frame's member on the page, its lines' and pieces' boxes turned onto it
   (composer.ts onPage): the text layer matches its run there and sets its translation where the run stood, and the marks stand
