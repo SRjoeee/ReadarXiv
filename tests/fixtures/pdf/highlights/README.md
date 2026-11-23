@@ -16,6 +16,6 @@ them.
 | `final.pdf` | Our final pass of the marked original, as the front half makes it (`layout/paper.mjs` `markedOfPaper`): what the instrument reads (B). |
 | `made.json` | What the front half hands the instrument besides it: the marking's options (`options`, the mark probe's answers among them: `texts`, `decorated`) and the marked compile's log (`log`). |
 
-Made again by `scripts/make-highlight-fixture.mjs` (the pinned TeX Live in Docker, no network, the date pinned, so the same source
+Made again by `scripts/make-tex-fixture.mjs highlights` (the pinned TeX Live in Docker, no network, the date pinned, so the same source
 gives the same bytes; `--check` makes them in a scratch folder and exits 1 where they differ): after a change of the front half's
 marking or its probe. The test that reads them: `tests/pdf-reader/highlights.test.ts`.

@@ -24,6 +24,7 @@ import { END, TRAIL } from './facts.ts'
 import { factsOf } from './facts-pass.ts'
 import { keepArtefacts } from './artefacts.ts'
 import { endMarks } from './end-marks.ts'
+import { framesOnPage, type PaintedFrame } from './frames.ts'
 import { frameMeasures, lineGeometry, rooms } from './geometry.ts'
 import { flowsAndTies, rowAligns } from './flows.ts'
 import { leadNames } from './leads.ts'
@@ -41,11 +42,36 @@ export { urlBreaks } from './geometry.ts'
 export { TEXT_NAMES } from './page-units.ts'
 export type { Place } from './work.ts'
 
+// ---- each A page's closed painted paths that hold text (frames.ts), read before the ink step takes A's raw pages: given
+// (`frames`), else read off the raw pages (their lines, fills and colours: what the frames keep once the pages are let go)
+function paintedOf(inkA: Doc, o: LocateOptions): Map<number, readonly PaintedFrame[]> {
+  const out = new Map<number, readonly PaintedFrame[]>()
+  inkA.pages.forEach((pg, i) => {
+    const raw = o.pages?.[i]
+    const f = o.frames?.[i] ?? (raw ? framesOnPage(raw, pg) : null)
+    if (f?.length) out.set(i + 1, f)
+  })
+  return out
+}
+
 // ---- the facts of each located member read off the page for the typesetter (facts-pass.ts)
 function facts(w: Work, owned: Owned): void {
-  const { ins, inkA, m, unitB, roleB, pieceB, pageA, framesA } = w.ix
+  const { ins, inkA, m, unitB, roleB, pieceB, pageA, framesA, paintedA } = w.ix
   const { members, units } = w
-  factsOf({ ins, inkA, m, members, owned, pageA, unitB, roleB, pieceB, units, framed: new Set(framesA.keys()) })
+  factsOf({
+    ins,
+    inkA,
+    m,
+    members,
+    owned,
+    pageA,
+    unitB,
+    roleB,
+    pieceB,
+    units,
+    framed: new Set(framesA.keys()),
+    painted: paintedA,
+  })
 }
 
 /** locate's phases, called in the order they run, which is the contract: each phase's file says what it reads of the record
@@ -53,7 +79,7 @@ function facts(w: Work, owned: Owned): void {
  *  no field of the record: locate makes it and hands each phase the face it may use (ownership.ts), `Claims` to the phases
  *  that claim, `Owned` to those that read who owns a glyph, nothing to the others */
 export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions = {}): Located {
-  const w = open(ins, inkA, m)
+  const w = open(ins, inkA, m, paintedOf(inkA, o))
   const claims = ownershipOf({ size: w.ix.pageA.length, aToB: m.aToB, unitB: w.ix.unitB })
   placeUnits(w, claims) // 1
   claimTrails(w, claims) // 2

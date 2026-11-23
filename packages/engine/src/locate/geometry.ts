@@ -27,6 +27,7 @@ import {
   unitSize,
   urlCopyOf,
 } from './facts.ts'
+import { frameOf, frameUnder, type PaintedFrame } from './frames.ts'
 import { groupStyleOf, hasScopes, namesFace } from './group-style.ts'
 import { groupStyleOf as commandStyleOf } from './ink.ts'
 import { type CutLine, cutLines, isInk, lineSize, r2 } from './lines.ts'
@@ -780,7 +781,7 @@ export function frameMeasures(w: Work): void {
 }
 
 export function rooms(w: Work): void {
-  const { ins, inkA, m, framesA } = w.ix
+  const { ins, inkA, m, framesA, paintedA } = w.ix
   const { members, units } = w
   const ink = inkIndex(inkA)
   // (TeX's paragraph separation where each unit's paragraph ends: its \baselineskip and \parskip, LINES_TEX's AXT-LINES)
@@ -791,7 +792,18 @@ export function rooms(w: Work): void {
   for (const mem of members)
     if (mem.lines.length) {
       const g = gaps.get(mem)
+      // (its frame on each page, a closed path a reader sees round its text there (frames.ts, docs/PDF-READER.md §18.112): not a
+      // cell's, whose room is its walls', nor a figure text's, whose container its figure reading reads)
+      const framed = !(mem.figure || (mem.unit >= 0 && units[mem.unit]?.cell))
+      const frameOn = (page: number) =>
+        framed
+          ? frameOf(
+              paintedA.get(page),
+              mem.lines.filter((l) => l[0] === page && !(l[9] & 1)),
+            )
+          : null
       const room = roomOf(mem, inkA, m.offA, ink, {
+        frame: frameOn,
         frames: framesA,
         // (a table's cell keeps its own room, a figure text, an ink figure and a name theirs: no run's room is theirs to borrow)
         runs: !(
@@ -1003,16 +1015,22 @@ function inkIndex(inkA: Doc): { under: InkUnder; next: InkNext } {
   }
 }
 
-/** the free depth under a member's last line in its column, to the first ink not its own (a page's glyph or box), the page's
- *  bottom edge where there is none; the distance to the next text line of its column, baseline to baseline; and, with TeX's
- *  facts, the room under each run of its text lines and its paragraph's separation (Room.runs, Room.sep: what a translation
- *  may borrow, PDF-READER §18.11) */
+/** the free depth under a member's last line in its column, to the first ink not its own (a page's glyph or box, its frame's
+ *  painted line: `tex.frame`, PDF-READER §18.112), the page's bottom edge where there is none; the distance to the next text line
+ *  of its column, baseline to baseline; and, with TeX's facts, the room under each run of its text lines and its paragraph's
+ *  separation (Room.runs, Room.sep: what a translation may borrow, PDF-READER §18.11), the next ink there its frame's line where
+ *  nearer */
 function roomOf(
   mem: Member,
   inkA: Doc,
   offA: Int32Array,
   ink: { under: InkUnder; next: InkNext },
-  tex: { frames: ReadonlyMap<number, TexFrame>; runs: boolean; sep: number | undefined },
+  tex: {
+    frames: ReadonlyMap<number, TexFrame>
+    runs: boolean
+    sep: number | undefined
+    frame?: (page: number) => PaintedFrame | null
+  },
 ): Room {
   const inkBelow = ink.under
   const last = mem.lines.at(-1)!
@@ -1039,9 +1057,10 @@ function roomOf(
   }
   // (the free depth under a line across x0..x1: from its bottom to the first ink under it, whoever's it is (its own kept rows and
   // elements under it too), the page's bottom edge where there is none)
+  const frameOn = tex.frame ?? (() => null)
   const depthUnder = (l: Line, x0: number, x1: number): number => {
     const pg = inkA.pages[l[0] - 1]!
-    const next = inkBelow(l[0], l[6] - 0.5, x0, x1)
+    const next = Math.max(inkBelow(l[0], l[6] - 0.5, x0, x1), frameUnder(frameOn(l[0]), l[6] - 0.5, x0, x1))
     return r2(Math.min(pg.view[3] - pg.view[1], Math.max(0, l[6] - (Number.isFinite(next) ? next : pg.view[1]))))
   }
   // (its last text line: the last line not kept, the first where every line is; its block)
@@ -1119,7 +1138,12 @@ function roomOf(
     }
     const foot = tex.frames.get(end[0])?.foot
     if (foot !== undefined) {
-      const next = ink.next(end[0], end[6] - 0.5, ox0, from === e ? mx1 : ox1)
+      // (and its frame's painted line under the run there, a reader's border: the next ink too)
+      const nx1 = from === e ? mx1 : ox1
+      const next = Math.max(
+        ink.next(end[0], end[6] - 0.5, ox0, nx1),
+        frameUnder(frameOn(end[0]), end[6] - 0.5, ox0, nx1),
+      )
       const pg = inkA.pages[end[0] - 1]!
       runs.push([e, r2(end[4] - (Number.isFinite(next) ? next : pg.view[1])), r2(end[4] - foot)])
     }

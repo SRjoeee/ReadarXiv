@@ -184,7 +184,9 @@ export interface TurnedGlyph {
 }
 /** a figure's painted path as its lines (pageInk's `turned`): its segments on the page (x0, y0, x1, y1 stride 4), whether it
  *  strokes and fills, its half line width on the page, whether its fill is a tiling pattern's (`pattern`) and whether it covers
- *  what was painted under it (`opaque`: a colour at an alpha of 1, under no blend mode but Normal and no soft mask) */
+ *  what was painted under it (`opaque`: a colour at an alpha of 1, under no blend mode but Normal and no soft mask), and its
+ *  fill's colour as the page's operators set it (0xRRGGBB, every colour space as PDF.js turns it to RGB; none for a pattern's
+ *  or PDF.js's transparent: `colour`), which tells a fill a reader sees from one of the colour under it (locate/frames.ts) */
 export interface Shape {
   segs: Float32Array
   stroke: boolean
@@ -192,6 +194,7 @@ export interface Shape {
   hw: number
   pattern?: true
   opaque?: true
+  colour?: number
 }
 /** why a page's ink is not read whole: nothing read, past a cap, past the walk's backstop; null where it is read whole */
 export type Unread = 'rotated' | 'capped' | 'timedOut'
@@ -1851,6 +1854,7 @@ export function inkReader(
       fill,
       ...(fill && s.tile ? { pattern: true } : {}),
       ...(opaque ? { opaque: true } : {}),
+      ...(fill && s.fill !== NO_FILL ? { colour: s.fill } : {}),
       hw: Math.max(0.25, (s.lw / 2) * Math.sqrt(Math.abs(m[0] * m[3] - m[1] * m[2]))),
     })
   }
