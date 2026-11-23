@@ -47,7 +47,12 @@ function classOf(st: Placed['style'], designs: PaperReading['designs'], size?: n
   }
 }
 
-function unitOf(row: Row | undefined, m: Placed, designs: PaperReading['designs']): FigureUnit | undefined {
+function unitOf(
+  row: Row | undefined,
+  m: Placed,
+  designs: PaperReading['designs'],
+  bases: boolean,
+): FigureUnit | undefined {
   if (!row?.ok) return undefined
   const styles = new Map((m.spans ?? []).flatMap(([id, x]) => (x.style ? [[id, x.style] as const] : [])))
   const pieces: NonNullable<FigureUnit['pieces']>[number][] = []
@@ -57,7 +62,9 @@ function unitOf(row: Row | undefined, m: Placed, designs: PaperReading['designs'
       else if (p.t === 'el') pieces.push({ t: 'text', s: ' ', ...(cls ? { cls } : {}) })
       else {
         const st = styles.get(p.id)
-        walk(p.content, st ? classOf(st, designs, m.style.size) : cls)
+        // (its size where the part states the convention, Part.paper.bases: a part made before stated a run's most common size,
+        // of several too, which no typesetter read)
+        walk(p.content, st ? classOf(st, designs, bases ? m.style.size : undefined) : cls)
       }
   }
   walk(row.content, undefined)
@@ -137,7 +144,7 @@ export function figuresOf(
     figures: rowsOf,
     unit: (id) => {
       const t = byOrd.get(id)!.text
-      return unitOf(typeof t === 'string' ? rows.get(t) : undefined, byOrd.get(id)!, o.paper.designs)
+      return unitOf(typeof t === 'string' ? rows.get(t) : undefined, byOrd.get(id)!, o.paper.designs, !!o.paper.bases)
     },
     src: (id) =>
       shown({ t: 'text', s: byOrd.get(id)?.plain ?? '' })

@@ -195,7 +195,8 @@ export type TokensInput = {
   to: string
   base: TStyle
   /** false where the part states no base of its letters (Part.paper.bases absent: a part made before PIPELINE 119), whose
-   *  style is its glyphs' whole: baseOf reads its weight and slant out of its groups by its count, as before */
+   *  style is its glyphs' whole: baseOf reads its weight and slant out of its groups by its count, and no stated size is read
+   *  (a group's face, an element's style: its glyphs' most common size then, of several too), as before */
   statedBase?: boolean
   /** the face TeX set the unit's marks in outside every group where it is not its letters' (Placed.markFace): a translated
    *  mark outside every group and every face switch's run is drawn in it, a letter in `base` (@readarxiv/text isLetterOrDigit) */
@@ -952,7 +953,7 @@ export function tokens(i: TokensInput): Tokens {
       const link = LINK_OPEN.test(p.src as string) && p.id !== undefined ? { link: p.id } : {}
       // (its size where the part states one, whatever its command: its share of the member's size, as TeX set its own glyphs, so
       // absolute and held by what it holds; none stated, the size of the group around it)
-      const size = p.face?.size,
+      const size = i.statedBase === false ? undefined : p.face?.size,
         of = resolved.orig?.size
       const rel = size! > 0 && of! > 0 ? { rel: size! / of! } : {}
       const run = colourRun(k, p)
@@ -1075,7 +1076,7 @@ export function tokens(i: TokensInput): Tokens {
     // the run's style, and "LIVEPLAN", in faked small capitals, in full capitals; a group around it that TeX applied is in its
     // glyphs (\emph's italic), and a rendering of no stated style, or an attribute its style does not state, takes the run's)
     // (and its size where its glyphs' is not the member's, El.style.size: TStyle.rel, read.ts)
-    const rel = r.st?.rel !== undefined ? { rel: r.st.rel } : {}
+    const rel = r.st?.rel !== undefined && i.statedBase !== false ? { rel: r.st.rel } : {}
     const own: TStyle = r.math
       ? { ...cur, italic: /[A-Za-z]/.test(r.text) && r.text.length <= 3, caps: false, ...rel }
       : r.mode === 'orig-text' && r.st && r.st.fam !== 'math'

@@ -21,6 +21,7 @@ import {
   type InkBox,
   labelParts,
   mostOf,
+  oneSize,
   pinnedOf,
   rightToLeft,
   shortSkipLines,
@@ -494,8 +495,13 @@ function readElements(fx: FactsIndex, r: MemberReading): void {
     if (fill !== undefined || (el.text !== undefined && !(gs.length === 0 && mem.told?.has(id)))) {
       const sc = mem.smallCaps?.get(id)
       const { upper, ...read } = styleOf(gs)
+      // (its size the one its glyphs share, a symbol's math font's too; of several, the member's, by which it is drawn by default:
+      // the most of them is the size of none of its runs, as a group of several sizes states none (docs/PDF-READER.md §18.114),
+      // and the typesetter draws an element as its text at its stated size)
+      const size = !gs.length || oneSize(gs, true) !== undefined ? read.size : mem.style.size
       el.style = {
         ...read,
+        size,
         ...(sc !== undefined ? { sc } : upper ? { upper } : {}),
         ...(fill !== undefined ? { fill } : {}),
       }
