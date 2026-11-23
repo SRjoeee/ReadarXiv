@@ -317,9 +317,10 @@ function nonSpace(s: string): number {
   }
   return n
 }
+/** a group's bits: what it sets of the face, one bit each */
 const GROUP_ITALIC = 1,
-  GROUP_BOLD = 2,
-  GROUP_CAPS = 4
+  GROUP_BOLD = GROUP_ITALIC << 1,
+  GROUP_CAPS = GROUP_BOLD << 1
 /** what a declaration sets, as a group's bits: an italic, bold or small capitals switch (\em, \itshape, \bfseries, \sc, …):
  *  latex.ltx's \em, \itshape, \slshape, \bfseries, \scshape, article.cls's \it, \sl, \bf, \sc */
 const declared = (src: string | undefined): number =>
@@ -1075,10 +1076,8 @@ export function tokens(i: TokensInput): Tokens {
     // the original's style is its own: 2608.06701v1 p5's "Periodic Advisor", italic by the paper's macro, was drawn upright in
     // the run's style, and "LIVEPLAN", in faked small capitals, in full capitals; a group around it that TeX applied is in its
     // glyphs (\emph's italic), and a rendering of no stated style, or an attribute its style does not state, takes the run's)
-    // (and the size its glyphs share where it is not the member's, El.size: TStyle.rel, read.ts)
-    const rel = r.st?.rel !== undefined ? { rel: r.st.rel } : {}
-    const own: TStyle = r.math
-      ? { ...cur, italic: /[A-Za-z]/.test(r.text) && r.text.length <= 3, caps: false, ...rel }
+    const ownFace: TStyle = r.math
+      ? { ...cur, italic: /[A-Za-z]/.test(r.text) && r.text.length <= 3, caps: false }
       : r.mode === 'orig-text' && r.st && r.st.fam !== 'math'
         ? {
             ...style(),
@@ -1087,9 +1086,10 @@ export function tokens(i: TokensInput): Tokens {
             bold: r.st.bold ?? style().bold,
             italic: r.st.italic ?? style().italic,
             caps: r.st.caps ?? style().caps,
-            ...rel,
           }
         : style()
+    // (and the size its glyphs share where it is not the member's, El.size: TStyle.rel, read.ts)
+    const own: TStyle = r.st?.rel !== undefined ? { ...ownFace, rel: r.st.rel } : ownFace
     if (r.math && own.upper) own.upper = false
     // (the share its faked small capitals are set at: its own (El.style.sc, its text in TeX's case, each small one a lowercase
     // letter caseRuns draws so), else the unit's)
