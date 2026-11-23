@@ -4,6 +4,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- Fixed: in the PDF reader, the section headings of a paper set with REVTeX 4.0, whose class sets them in capitals, and a proof's note that thmtools sets, such as "Proof of Theorem 2", are translated as the paper writes them, their formulas and references kept. They had been translated from the text read off the page.
 - Fixed: in the PDF reader, a note the paper sets apart in a group or after the commands that number it, such as an unnumbered note of the title's authors written with `\footnotetext`, is translated as the paper's own note, each of its lines on its own line as printed. Its lines had been run together, read off the page.
 - Fixed: in the PDF reader, a note whose call stands right after a displayed formula, and a note's mark there before a word, are translated with the paragraph they stand in. The paragraph had stayed in the original language.
 - Fixed: in the PDF reader, a paragraph holding a command of the paper's own that prints nothing, such as one that hides a passage the author struck out, is translated, and so is a title whose acknowledgement the paper's class sets without a mark in the title. Both had stayed in the original.
