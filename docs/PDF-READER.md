@@ -9402,13 +9402,13 @@ unit's own text is not TeX's, and the original is the right drawing).
   the original's, as before); TRANSLATE stays (no unit's content, id or wire moves: the rows production holds are kept);
   LAYOUT and the marks digest stay (no TeX moves; today's layout maker reads no instrument of this engine).
 
-### 18.108 Every unit and every piece TeX sets gets its points (the owner's report of 2026-11-23; the coordinator's round 2 of the marking)
+### 18.111 Every unit and every piece TeX sets gets its points (the owner's report of 2026-11-23; the coordinator's round 2 of the marking)
 
 A unit whose marks the marked original should carry and on whose page TeX sets no point of it is unlocated (`own/own.ts`
 `ownOf`: no start, no end point; `locate/place.ts` `unlocated: marks`); where TeX printed it, its glyphs are then read as an
 ink unit's (`inknotes`, `inkorphan`), translated with no structure of the source's: 2604.10456v1 (the owner's report) drew a
 note of three forced lines run together in two. Over the lab's 245 papers 74 units were unlocated so (lane nopoint's survey);
-41 of them are text TeX never sets (§18.108's last item), 3 notes REVTeX 4.2 sets as bibliography entries, and the rest are
+41 of them are text TeX never sets (§18.111's last item), 3 notes REVTeX 4.2 sets as bibliography entries, and the rest are
 the holes below, each closed at its root.
 
 - **A note nested in a unit the walk drops is a unit of its own** (`source/latex-front.ts` Builder `flush`). The walk makes a
