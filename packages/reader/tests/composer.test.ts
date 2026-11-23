@@ -600,6 +600,56 @@ describe('another target, the toggles (a generation in place)', () => {
   })
 })
 
+describe('a part’s frames (the units TeX set turned, Part.frames)', () => {
+  it('the toggles hold a frame’s member as any member of its kind: a turned cell the original’s with the tables off', async () => {
+    // (the stand-in lay over the page's flows and its frames' members, as layPage lays both)
+    const base = standInLay()
+    const lay = Object.assign(
+      (part: Part, rows: Rows) =>
+        base({ ...part, flows: [...part.flows, ...(part.frames ?? []).flatMap((f) => f.flows)] } as Part, rows),
+      {
+        get calls() {
+          return base.calls
+        },
+      },
+    ) as unknown as ReturnType<typeof standInLay>
+    const part = {
+      ...partOf(1, [member(10, 1, 0, 'para')]),
+      frames: [{ dir: [0, 1], flows: [[member(11, 1, 1, 'cell')]] }],
+    } as unknown as Part
+    const w = world({
+      pages: new Map([[1, part]]),
+      lay,
+      classes: { figures: true, tables: false, heads: true, references: false, names: false },
+    })
+    w.stack.setNear([1])
+    open(w, rowsOf('de', ['u10', 'u11'], true))
+    await settle()
+    w.stack.put(1)
+    expect((w.composer.laid(1) as Page).members.map((m) => [m.ord, m.state])).toEqual([
+      [10, 'laid'],
+      [11, 'refused'],
+    ])
+    expect(w.composer.member(11)).toMatchObject({ ord: 11, kind: 'cell' })
+  })
+  it('registers a frame’s member on the page, its lines turned onto it: what the text layer and the marks match it by', async () => {
+    // (#673: its lines in the frame, x 50 to 300 along the turn (0, 1), its band 658 to 668 across it: on the page x -668 to
+    // -658, y 50 to 300; registered as the frame states them, the text layer matched none of its runs, and set its translation
+    // after all of the page's text)
+    const part = {
+      ...partOf(1, [member(10, 1, 0, 'para')]),
+      frames: [{ dir: [0, 1], flows: [[member(11, 1, 1, 'cell')]] }],
+    } as unknown as Part
+    const w = world({ pages: new Map([[1, part]]) })
+    w.stack.setNear([1])
+    open(w, rowsOf('de', ['u10', 'u11'], true))
+    await settle()
+    const l = w.composer.member(11)!.lines[0]!
+    expect([l[0], l[2], l[3], l[6], l[5]]).toEqual([1, -668, -658, 50, 300])
+    expect(w.composer.member(10)!.lines[0]!.slice(2, 4)).toEqual([50, 300])
+  })
+})
+
 describe('a generation let go', () => {
   it('a commit of the generation before not in place yet is let go, nothing of it put in place', async () => {
     const w = world()

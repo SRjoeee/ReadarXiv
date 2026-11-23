@@ -2252,6 +2252,7 @@ export async function instrumentOf({
     texts: shown,
     inkless: inkless === null ? null : new Set(inkless),
     names: paper.theoremNames ?? null,
+    turned: true,
   })
 
   // ---- the units
@@ -2335,7 +2336,9 @@ export async function instrumentOf({
           }
         : {}),
       ...(align.has(i) ? { align: align.get(i) } : boxed.has(i) ? { align: boxed.get(i) } : {}),
-      ...(unhidden === 'marks' ? { why: 'marks' } : {}),
+      // (why the ownership left it the original's, its own reason: its marks, or its glyphs spelling no source of its (`spell`),
+      // or its range across pages it cannot bound (`across`); the prepare's dump reads it where no glyph of B is the unit's)
+      ...(unhidden === 'marks' || unhidden === 'spell' || unhidden === 'across' ? { why: unhidden } : {}),
     })
   })
   for (let i = units.length; i < inkBase; i++) {
@@ -2391,8 +2394,21 @@ export async function instrumentOf({
     for (let j = 0; j < pg.boxes.length / 4; j++) set(X, j, brow[j], pieceX)
     glyphs.push(G)
     boxes.push(X)
-    // (no source unit owns a turned glyph: own/own.ts reads none; a figure's turned text is locate's, on arXiv's page)
-    turnedOwners.push(ownersOf(pg.turned?.length ?? 0))
+    // (a turned glyph a source unit's text, placeholder or label where its text TeX set turned (own/own.ts TURNED), each
+    // placeholder's piece by the points round its box as a box's; any other turned glyph is no source unit's, a figure's turned
+    // text locate's, on arXiv's page)
+    const T = ownersOf(pg.turned?.length ?? 0),
+      trow = own.turned[i] ?? []
+    if (trow.some((g) => g !== null)) {
+      const atBox = new Map<number, string | null>()
+      pg.turned!.forEach((t, j) => {
+        if (t.box >= 0) atBox.set(t.box, trow[j] ?? null)
+      })
+      const byBox = piecesByPoints(pg.points, pg.boxes.length / 4, (b) => atBox.get(b), 'box')
+      const pieceT = Int32Array.from(pg.turned!, (t) => (t.box >= 0 ? byBox[t.box]! : -1))
+      for (let j = 0; j < trow.length; j++) set(T, j, trow[j], pieceT)
+    }
+    turnedOwners.push(T)
   })
   // (the ink TeX set for a unit's tail pieces past its end point that no point of theirs bounds, its glyphs no unit's that spell
   // what TeX sets for each; and the text macros there whose ink it does not find, whose probe's text then says no more than

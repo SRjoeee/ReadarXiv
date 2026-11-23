@@ -109,9 +109,28 @@ function turnedLine(m: Placed, l: Placed['lines'][number]): Rect | null {
   }
   return { o: [ox, oy], u: [ux, uy], s: [0, L], t: [Math.min(t0, t1), Math.max(t0, t1)] }
 }
-/** a member's line on A as I3 reads it: its run's frame where it is turned, else its ink across and its fonts' box up and down */
-const lineRect = (m: Placed, l: Placed['lines'][number]): Rect =>
-  turnedLine(m, l) ?? page([l[2], Math.min(l[5], l[6]), l[3], Math.max(l[5], l[6])])
+/** a box of a frame of direction `dir` (Part.frames: a unit TeX set turned, its geometry the page's turned back by it) as a
+ *  rectangle of the page, along `dir` from the page's origin; one of the page's own where `dir` is null */
+const inFrame = (dir: readonly [number, number] | null, b: Box): Rect =>
+  dir
+    ? {
+        o: [0, 0],
+        u: [dir[0], dir[1]],
+        s: [Math.min(b[0], b[2]), Math.max(b[0], b[2])],
+        t: [Math.min(b[1], b[3]), Math.max(b[1], b[3])],
+      }
+    : page(b)
+/** a part's members, each with its frame's direction where it is a frame's (Part.frames), null where it is the page's */
+const membersOf = (part: Part | undefined): [Placed, readonly [number, number] | null][] => [
+  ...((part?.flows.flat() ?? []) as Placed[]).map((m): [Placed, null] => [m, null]),
+  ...(part?.frames ?? []).flatMap((f) =>
+    (f.flows.flat() as Placed[]).map((m): [Placed, readonly [number, number]] => [m, f.dir]),
+  ),
+]
+/** a member's line on A as I3 reads it: its run's frame where it is turned, else its ink across and its fonts' box up and down
+ *  (in its frame where it is a frame's) */
+const lineRect = (m: Placed, l: Placed['lines'][number], dir: readonly [number, number] | null = null): Rect =>
+  turnedLine(m, l) ?? inFrame(dir, [l[2], Math.min(l[5], l[6]), l[3], Math.max(l[5], l[6])])
 
 /**
  * The laid members' drawn ink on the page, item by item: a run by its measured ink (`metrics`, then `served` where the first holds
@@ -129,7 +148,7 @@ export function drawnInk(
   // piece by its place among its row's pieces (Item.piece), which the Page does not state: it is read by its ink, which the
   // crop's rectangle holds on its page)
   const pieceInk = new Map<number, [string, Ink][]>()
-  for (const m of (part?.flows.flat() ?? []) as Placed[])
+  for (const [m] of membersOf(part))
     pieceInk.set(m.ord, [
       ...(m.els ?? []).flatMap(([id, e]) => e.ink.map((k): [string, Ink] => [id, k])),
       ...(m.label ? [['label', m.label.ink] as [string, Ink]] : []),
@@ -204,15 +223,19 @@ export function drawnInk(
             ]
             return c[2] > c[0] && c[3] > c[1] ? [c] : []
           })
+          // (a crop of a line laid in a frame, its `dir`: its source and ink in the frame, placed there from the line's origin
+          // turned back, as the reader's paint.ts placeOf reads it)
+          const cd = 'dir' in it && it.dir ? it.dir : null
+          const [cx, cy] = cd ? [cd[0] * x0 + cd[1] * y + (it.x - x0), -cd[1] * x0 + cd[0] * y] : [it.x, y]
           for (const b of boxes)
             out.push({
               ord: it.of ?? m.ord,
               pieces,
-              r: page([
-                it.x + (b[0] - sx0) * it.k,
-                y + (Math.min(b[1], b[3]) - base) * it.k,
-                it.x + (b[2] - sx0) * it.k,
-                y + (Math.max(b[1], b[3]) - base) * it.k,
+              r: inFrame(cd, [
+                cx + (b[0] - sx0) * it.k,
+                cy + (Math.min(b[1], b[3]) - base) * it.k,
+                cx + (b[2] - sx0) * it.k,
+                cy + (Math.max(b[1], b[3]) - base) * it.k,
               ]),
             })
           continue
@@ -281,20 +304,21 @@ export function keptInk(part: Part, page_: Page): Kept[] {
   const pg = page_.page
   const off = new Map(page_.members.map((m) => [m.ord, m.off]))
   const out: Kept[] = []
-  for (const m of part.flows.flat() as Placed[]) {
+  for (const [m, dir] of membersOf(part)) {
     const o = off.get(m.ord) ?? 0
     m.lines.forEach((l) => {
       if (l[0] !== pg) return
       if (o & 1 && !(l[9] & LINE_FLAG.KEPT)) return
-      out.push({ ord: m.ord, kind: 'text', r: lineRect(m, l) })
+      out.push({ ord: m.ord, kind: 'text', r: lineRect(m, l, dir) })
     })
     for (const [id, e] of m.els ?? [])
       if (e.keep || !(o & 2))
-        for (const k of e.ink) if (k[0] === pg) out.push({ ord: m.ord, kind: 'element', piece: id, r: page(inkBox(k)) })
+        for (const k of e.ink)
+          if (k[0] === pg) out.push({ ord: m.ord, kind: 'element', piece: id, r: inFrame(dir, inkBox(k)) })
     if (m.label && m.label.ink[0] === pg && !(o & 4))
-      out.push({ ord: m.ord, kind: 'label', piece: 'label', r: page(inkBox(m.label.ink)) })
+      out.push({ ord: m.ord, kind: 'label', piece: 'label', r: inFrame(dir, inkBox(m.label.ink)) })
     for (const [j, x0, y0, x1, y1] of m.room.stays ?? [])
-      if (m.lines[j]?.[0] === pg) out.push({ ord: m.ord, kind: 'stays', r: page([x0, y0, x1, y1]) })
+      if (m.lines[j]?.[0] === pg) out.push({ ord: m.ord, kind: 'stays', r: inFrame(dir, [x0, y0, x1, y1]) })
   }
   return out
 }
@@ -316,10 +340,10 @@ export function inkOverlaps(
   const kept = keptInk(part, page_)
   // (each member's original lines on the page, as keptInk reads a line: what its own setting met)
   const origOf = new Map<number, Rect[]>()
-  for (const m of part.flows.flat() as Placed[])
+  for (const [m, dir] of membersOf(part))
     origOf.set(
       m.ord,
-      m.lines.filter((l) => l[0] === page_.page).map((l) => lineRect(m, l)),
+      m.lines.filter((l) => l[0] === page_.page).map((l) => lineRect(m, l, dir)),
     )
   const metAlready = (ord: number, r: Rect) => (origOf.get(ord) ?? []).some((o) => meets(o, r))
   // (the inks of a drawn run that meet another ink, glyph by glyph: the first pair, or none)
