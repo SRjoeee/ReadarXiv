@@ -1,4 +1,4 @@
-// A member's frame on arXiv's page (docs/PDF-READER.md §18.108): a closed path the page paints that a reader SEES and whose
+// A member's frame on arXiv's page (docs/PDF-READER.md §18.111): a closed path the page paints that a reader SEES and whose
 // interior holds every one of the member's text lines on the page, read by its painted lines, as a figure text's container is
 // (figure-text.ts containersOf). The room the part states about the member (Room.runs and Room.below under its lines, Room.stays
 // beside them) is read from the page's ink by glyph baselines and painted boxes (geometry.ts inkIndex, facts.ts staysOf): a

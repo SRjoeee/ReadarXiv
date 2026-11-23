@@ -87,7 +87,7 @@ function diff(a: unknown, b: unknown, at = ''): string | null {
     return diff([...a], [...b], `${at}.values`)
   }
   if (a && b && typeof a === 'object' && typeof b === 'object') {
-    // (a shape's fill colour, the one value the walk adds since the copy (PDF-READER §18.108: a frame a reader sees), passed
+    // (a shape's fill colour, the one value the walk adds since the copy (PDF-READER §18.111: a frame a reader sees), passed
     // over on the walk's side alone; every other value of a shape held as before)
     const added = (o: object, other: object) => (k: string) => !(k === 'colour' && 'segs' in o && !('colour' in other))
     const ka = Object.keys(a).filter(added(a, b)), kb = Object.keys(b)

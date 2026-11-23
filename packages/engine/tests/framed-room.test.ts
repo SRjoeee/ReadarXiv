@@ -5,7 +5,7 @@
 // borrows lines and widens a single line past the frame's border (the room under the run is the next ink's, a figure's under
 // the frame). The frame's border is ink across the run under the last line and on each line's band beside it: the room ends
 // there, as it ends at a rule the page paints apart (a box whose top stands under the line, a rule beside it). A frame is a path
-// a reader sees (frames.ts, docs/PDF-READER.md §18.108): a fill of the colour painted under it, no stroke, is none. Pages made
+// a reader sees (frames.ts, docs/PDF-READER.md §18.111): a fill of the colour painted under it, no stroke, is none. Pages made
 // by hand: each glyph 6 pt wide at 10 pt; the frame's paths given as boxes and, as the prepare reads arXiv's page, their lines
 // and paint (each a rectangle, its lines its box's edges), read into the page's frames as locate reads them (framesOnPage); B
 // and A the same page; our own text.

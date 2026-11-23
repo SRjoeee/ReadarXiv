@@ -1,4 +1,4 @@
-// The frames a page paints (locate/frames.ts framesOnPage, docs/PDF-READER.md §18.108): the closed paths that hold text, each
+// The frames a page paints (locate/frames.ts framesOnPage, docs/PDF-READER.md §18.111): the closed paths that hold text, each
 // told seen or not by the page's own operators, no tolerance: a stroke is seen; a fill is seen where its colour is not the colour
 // painted under it (the last fill before it whose region holds its box's edge middles, covering what is under it; the paper's
 // white where none; an image there: no colour this reading knows, seen); a path painted at an alpha of 0 is not. Pages made by

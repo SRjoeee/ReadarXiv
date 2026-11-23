@@ -264,9 +264,10 @@ export const LINE_FLAG = Object.freeze({ KEPT: 1, PINNED: 2, SHORTSKIP: 4, RTL: 
  *  whether it is drawn raised where the source reads as a symbol (phClass2's: the tokens' class; a formula of symbols alone is
  *  `other` with a `sym`), `mark` a footnote's mark (drawn raised whatever its rendering), `literal` a text piece (TeX sets its
  *  characters as written: a code or URL mark; no formula). One of no ink (`ink` []) of a class drawn from its ink (cite, num,
- *  other, display, macro, umacro) states which of three it is: `text` '' TeX set nothing for it; `keep` TeX set it outside the
- *  unit's text (before its start), whatever it set never erased with the unit; neither, its ink was not found, and the
- *  typesetter leaves the unit the original's */
+ *  other, display, macro, umacro) states which of three it is: `text` '' TeX set nothing for it (or what it set stands in the ink
+ *  of the run an author's first piece after its name holds, no point of TeX's between them: drawn there, once); `keep` TeX set it
+ *  outside the unit's text (before its start), whatever it set never erased with the unit; neither, its ink was not found, and
+ *  the typesetter leaves the unit the original's */
 export const El = z.object({
   kind: ElKind,
   unknown: flag.optional(),
@@ -383,7 +384,7 @@ export const Label = z.object({
  *  crowded). `runs`: the room under each run of its text lines (to its last line on a page or in a column, over a kept row of
  *  its own, over another's ink TeX set between two of its lines), each [that line's index, the depth under its baseline of the
  *  next ink across the run (from its lines' own start to their column's end: a glyph's baseline, a box's top, the highest line
- *  wholly under it of the frame a reader sees round the member's lines, docs/PDF-READER.md §18.108), the depth under
+ *  wholly under it of the frame a reader sees round the member's lines, docs/PDF-READER.md §18.111), the depth under
  *  it of TeX's text block bottom in its column there (the foot of the box TeX shipped the column's text in)], stated where TeX
  *  states that foot; `sep` TeX's normal paragraph separation where its paragraph ends, \baselineskip and \parskip, natural (a
  *  heading's, under its title set on lines of its own: its \@startsection after-skip and the \baselineskip and \parskip around
@@ -455,7 +456,7 @@ export const Room = z.object({
     ])
     .optional(),
   // (the ink that stays beside its text lines: ink no member owns (a glyph no unit claims, a rule or an image no member's, the
-  // painted lines of the member's frame, §18.108) on a line's band within its text block, wholly before the line's start or after
+  // painted lines of the member's frame, §18.111) on a line's band within its text block, wholly before the line's start or after
   // its end, each side's pieces as one box: [that line's index, x0, y0, x1, y1]. TeX set it on the line and no translation replaces it: a translation's line laid over it,
   // borrowed or not, keeps off it. A unit's end mark (El.end: amsthm's QED box TeX pushed to its last line's end) is the
   // unit's, claimed and stated as its element, no stay; a part made before states it here)

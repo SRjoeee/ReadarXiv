@@ -549,8 +549,10 @@ function readElements(fx: FactsIndex, r: MemberReading): void {
     }
     // (a forced break: its element's kind, the instrument's reading of the source reader's statement, §18.75)
     if (pieces.get(id)?.kind === 'break') {
-      // (the line TeX ended at it: the last glyph of the unit's before its point on B, carried to A)
-      const j = lineBefore(placeAt.get(`${mem.unit}|${id}`) ?? 0)
+      // (the line TeX ended at it: the last glyph of the unit's before its point on B, carried to A; a unit made on A's, the last
+      // glyph of the line before TeX's point there, its maker's: ink-units.ts rule 3b)
+      const after = mem.breakAfter?.get(id)
+      const j = after !== undefined ? lineOf.get(after) : lineBefore(placeAt.get(`${mem.unit}|${id}`) ?? 0)
       if (j !== undefined) breaks.push([el, j])
       else unplaced.push([id, el])
     }
@@ -1116,7 +1118,7 @@ function readRoom(fx: FactsIndex, r: MemberReading): void {
     if (unit?.cell && side.wall) mem.room.wall = side.wall
   }
   // (the ink that stays beside its text lines, no member's, facts.ts staysOf: a cell's room is its walls', a figure text's
-  // its figure reading's. Its frame's painted lines on each page too (frames.ts, docs/PDF-READER.md §18.108): a frame painted
+  // its figure reading's. Its frame's painted lines on each page too (frames.ts, docs/PDF-READER.md §18.111): a frame painted
   // as one path round its text spans across its lines as a box, never beside them, and a single line was widened over its
   // border; read by its lines, its sides stand beside them as the rules of a frame TeX set apart do)
   if (!unit?.cell && !unit?.figure) {
