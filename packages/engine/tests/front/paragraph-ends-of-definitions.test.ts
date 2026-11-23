@@ -82,6 +82,12 @@ describe('a definition that ends the paragraph in other forms', () => {
       markedOf('\\@endauthor\\rm\\hss \\@startauthor'),
     )
   })
+  it('a bare group after a command of no argument is read: its \\par ends the paragraph', () => {
+    expect(saidOf('\\newcommand{\\lab}[1]{\\noindent{\\bfseries #1\\par}}', '\\lab{A head of ours} Words of the next one.')).toEqual([
+      'A head of ours',
+      'Words of the next one.',
+    ])
+  })
   it('a \\par inside a box’s own text ends that box’s paragraph alone: one unit', () => {
     expect(
       saidOf(

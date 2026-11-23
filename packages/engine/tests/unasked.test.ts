@@ -141,6 +141,23 @@ describe('a unit TeX never sets is not asked of a translator', () => {
     expect(got.texts).toEqual([units[1]!.id])
     expect(got.askedIds).toContain(units[1]!.id)
   })
+  it('a unit nested in a span of a unit asked is asked as before: a span’s content is read too', () => {
+    const note = unitOf('footnote', 'A note of ours.', { why: 'marks' })
+    const content = [
+      text('A paragraph '),
+      {
+        t: 'span' as const,
+        id: '1',
+        style: 'bold',
+        content: [text('with a note'), { t: 'unit' as const, id: '2', unit: note.id, pre: '', post: '' }],
+      },
+      text(' of ours.'),
+    ]
+    const para: InstrumentUnit = { id: unitId('para', content), kind: 'para', content }
+    const got = askedOf([para, note], [[0]], ['A paragraph with a note of ours.'])
+    expect(got.members[1]).toEqual([false, 'marks'])
+    expect(got.askedIds).toContain(note.id)
+  })
   it('a unit of no glyph unlocated otherwise (no ink, no mark of its own asked) is asked as before', () => {
     const units = [unitOf('para', 'A paragraph of ours.'), unitOf('footnote', 'A note of ours set nowhere here.')]
     const got = askedOf(units, [[0]], ['A paragraph of ours.'])
