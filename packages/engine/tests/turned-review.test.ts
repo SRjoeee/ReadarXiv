@@ -172,3 +172,18 @@ describe('the review of a unit TeX set turned (#673)', () => {
     expect(link).toMatchObject({ owner: [mem.ord, '1'], text: '4.2' })
   })
 })
+
+describe('the review of round 2 into main (#676): a unit TeX set turned', () => {
+  it('leaves a turned unit whose text sets no glyph of ink the original’s, its reason stated: the prepare goes on', () => {
+    // (a sideways cell of two formulas and the space between them, which pdfTeX sets as a glyph under \pdfinterwordspaceon:
+    // its text glyphs all white space, its glyphs of ink its formulas'. Its turn was read off its text's ink alone, of which
+    // it had none: the read threw and the paper's prepare with it)
+    const content: Piece[] = [
+      { t: 'el', id: '0', kind: 'math', src: '$x$' },
+      text(' '),
+      { t: 'el', id: '2', kind: 'math', src: '$y$' },
+    ]
+    const { mem } = runOf(content, [[{ s: 'x', role: E, piece: 0 }, { s: ' ' }, { s: 'y', role: E, piece: 2 }]])
+    expect(mem).toMatchObject({ located: false, cause: 'turned: no text of ink' })
+  })
+})
