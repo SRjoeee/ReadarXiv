@@ -127,6 +127,10 @@ export interface Member {
   /** a figure text's runs in another face than its own, by their group's piece id: each one's style, read off its glyphs on A
    *  (ink.ts figureRuns; SpanAt.style) */
   spanStyles?: [string, Style][]
+  /** of those, the groups whose glyphs stand at several sizes: each states no size of its own, its style the member's size in
+   *  the part (bundle.ts), so that the typesetter draws it at the size the figure text's own rule draws it (docs/PDF-READER.md
+   *  §18.111). And a group of a source unit whose face group-style.ts states, likewise (`spanFaces`) */
+  spanSeveral?: string[]
   /** a unit made on A's forced breaks (ink-units.ts rule 3b), by piece id: the last glyph (A, global) of the line TeX ended at
    *  each, the break's line (facts-pass.ts readElements); a source unit's break is placed by its point on B instead */
   breakAfter?: ReadonlyMap<string, number>

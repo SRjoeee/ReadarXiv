@@ -107,7 +107,10 @@ describe('a unit’s base face, read off TeX’s glyphs', () => {
     const top = [group('\\textbf{', 'bold', [t('Mean tokens')]), el('~'), sym('$\\downarrow$', set('↓', SYMBOLS))]
     expect(face(top, set('Mean tokens', BOLD))).toEqual({ bold: false, italic: false })
     const multi = [
-      group('\\multicolumn{2}{c}{', 'other', [group('\\textbf{', 'bold', [t('Overall')]), sym('$\\uparrow$', set('↑', SYMBOLS))]),
+      group('\\multicolumn{2}{c}{', 'other', [
+        group('\\textbf{', 'bold', [t('Overall')]),
+        sym('$\\uparrow$', set('↑', SYMBOLS)),
+      ]),
     ]
     expect(face(multi, set('Overall', BOLD))).toEqual({ bold: false, italic: false })
   })
@@ -126,7 +129,11 @@ describe('a unit’s base face, read off TeX’s glyphs', () => {
     expect(g.groups.map(([id]) => id)).toEqual([(content[1] as { id: string }).id])
     expect(g.several).toEqual([(content[1] as { id: string }).id])
     // (one size: stated, none told apart)
-    const one = groupStyleOf(content, [...set('see the', REGULAR), ...set('Grand Tour', BOLD, 8), ...set('for more', REGULAR)]).face
+    const one = groupStyleOf(content, [
+      ...set('see the', REGULAR),
+      ...set('Grand Tour', BOLD, 8),
+      ...set('for more', REGULAR),
+    ]).face
     expect(one.groups[0]?.[1].size).toBe(8)
     expect(one.several).toEqual([])
   })

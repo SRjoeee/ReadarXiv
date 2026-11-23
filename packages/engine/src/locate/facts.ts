@@ -194,6 +194,17 @@ export function unitSize(gs: readonly StyleGlyph[]): number | undefined {
   return sizes.length ? (sizes[sizes.length >> 1] as number) : undefined
 }
 
+/** the one size a group's glyphs share, as unitSize reads it (its math fonts' glyphs aside), two sizes alike to the hundredth of
+ *  a point (the page's grid) one; undefined where they stand at several (a figure text's run in ink small capitals: its
+ *  capitals at the size, its small capitals smaller) or where none is read. A group states a size of its own only where its
+ *  glyphs share one (docs/PDF-READER.md §18.111): a median of several is the size of none of its runs */
+export function oneSize(gs: readonly StyleGlyph[]): number | undefined {
+  const real1 = gs.filter((g) => real(g) && classifyFont(g.base).fam !== 'math')
+  if (!real1.length) return undefined
+  const r = Math.round((real1[0] as StyleGlyph).size * 100)
+  return real1.every((g) => Math.round(g.size * 100) === r) ? unitSize(real1) : undefined
+}
+
 // ---------------------------------------------------------------- faked small capitals
 /** a faked small capital is set at most this share of the size the unit's letters of the source's case are (a fact of
  *  the classes that fake them) */

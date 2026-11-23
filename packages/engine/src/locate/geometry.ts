@@ -281,9 +281,10 @@ export function lineGeometry(w: Work, owned: Owned): void {
     // around it, a link's that hyperref colours, and the face of a group whose command names none where it is not the face
     // around it, stated for the typesetter to draw its translation in; and where a group or a switch's run is set apart so,
     // the unit's own fill is its own text's, not the one most of all its glyphs hold, which a link holding most of its letters
-    // makes its own. Its weight and slant, its base, are always the reading's (group-style.ts: its own text's, else each read
-    // outside the scopes that set it, an \emph run's turned back): the typesetter draws its translation's text outside every
-    // group in them and reads nothing more of its own (docs/PDF-READER.md §18.111). And its size, where it has text of its own
+    // makes its own. Its weight and slant, its base, are always the reading's (group-style.ts: its own text's glyphs, its marks
+    // and the symbols it draws as text included, else each read outside the scopes that set it, an \emph run's turned back):
+    // the typesetter draws its translation's text outside every group in them and reads nothing more of its own
+    // (docs/PDF-READER.md §18.111). And its size, where it has text of its own
     // beside its groups, is that text's (its letters in no group; faked small capitals aside): every group TeX set at another
     // size states its own (marks/faces.ts), so the base is the size of the text no group claims; where every letter is a
     // group's, the median of them all, the size most of its text is set at, which paces the lay's knobs)
@@ -308,6 +309,11 @@ export function lineGeometry(w: Work, owned: Owned): void {
           const c = classOf.get(el.id)
           return c?.cmd ? commandStyleOf(`\\${c.cmd}`) : undefined
         },
+        // (a symbol the typesetter draws as text where it stands, not raised: its own glyphs)
+        (el) => {
+          const c = classOf.get(el.id)
+          return c?.cls === 'symbol' && c.sym && !c.sym[1] ? (mem.els.get(el.id) ?? []).map(gA) : undefined
+        },
       )
       if (g.fill.groups.length) mem.spanFills = g.fill.groups
       if (g.fill.apart && g.fill.own !== undefined) {
@@ -315,6 +321,7 @@ export function lineGeometry(w: Work, owned: Owned): void {
         else delete mem.style.fill
       }
       if (g.face.groups.length) mem.spanFaces = g.face.groups
+      if (g.face.several.length) mem.spanSeveral = [...(mem.spanSeveral ?? []), ...g.face.several]
       if (g.face.own) {
         if (g.face.own.bold) mem.style.bold = 1
         else delete mem.style.bold

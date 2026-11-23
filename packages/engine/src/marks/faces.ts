@@ -14,9 +14,10 @@
 // body in a group of its own, `\rtwo{…}`; a bibliography entry of `\bibinfo{…}` fields), most of its text's outside the groups
 // whose command names their style (an `\emph{…}` journal's face is the command's; none outside: the group is the unit's
 // text, nothing stated).
-// Its size: the size of its own text's glyphs (facts.ts unitSize: their median, up the line, math fonts aside; a faked small
-// capital aside, a lowercase source letter TeX set as a capital, which NFSS draws at its share of the size), stated where it
-// is not the size the group is drawn at by default: the size of the nearest group around it whose size is stated, else the
+// Its size: the one size its own text's glyphs share (facts.ts oneSize: up the line, math fonts aside, alike to the hundredth
+// of a point; a faked small capital aside, a lowercase source letter TeX set as a capital, which NFSS draws at its share of
+// the size), stated where it is not the size the group is drawn at by default (a group whose glyphs stand at several sizes
+// states none: a median of them is the size of none of its runs): the size of the nearest group around it whose size is stated, else the
 // unit's base, its own text's (the glyphs of no group's; where every letter is a group's, all of them). The face compares
 // role, weight and slant, never a size, so a kicker `{\small\bfseries #1}` beside a title `{\fontsize{30}{35}\selectfont
 // \bfseries …}` (both bold, both sans) and `{\small …}` inside a line stated nothing, and their translations were drawn at the
@@ -31,7 +32,17 @@
 // a digit there is TeX's prose (a macro's own words), no stop.
 import type { Piece, Style } from '@readarxiv/format'
 import { lcs } from '../align/myers.ts'
-import { changeOf, classifyFont, faceKeyOf, fold, mostOf, type StyleGlyph, styleOf, unitSize } from '../locate/facts.ts'
+import {
+  changeOf,
+  classifyFont,
+  faceKeyOf,
+  fold,
+  mostOf,
+  oneSize,
+  type StyleGlyph,
+  styleOf,
+  unitSize,
+} from '../locate/facts.ts'
 
 type Span = Extract<Piece, { t: 'span' }>
 
@@ -197,18 +208,19 @@ export function groupFacts(
 
   const out = new Map<Span, GroupFact>()
   const fact = (s: Span): GroupFact => out.get(s) ?? out.set(s, {}).get(s)!
-  /** the size of the glyphs of the letters from `a` to `b` that `keep` keeps, a faked small capital aside (a lowercase source
-   *  letter TeX set as a capital: NFSS's virtual small capitals, at their share of the size, which is no size of the text's) */
-  const sizeIn = (a: number, b: number, keep: (i: number) => boolean): number | undefined => {
-    const gs = glyphsIn(a, b, (i) => {
+  /** the glyphs of the letters from `a` to `b` that `keep` keeps, a faked small capital aside (a lowercase source letter TeX set
+   *  as a capital: NFSS's virtual small capitals, at their share of the size, which is no size of the text's) */
+  const sizedIn = (a: number, b: number, keep: (i: number) => boolean): StyleGlyph[] =>
+    glyphsIn(a, b, (i) => {
       if (!keep(i)) return false
       const ch = srcCh[i] as string
       const m = matched[from[i] as number] as number
       const u = m >= 0 ? (glyphs[gOf[m] as number] as StyleGlyph).u : ''
       return !(ch !== ch.toUpperCase() && u !== u.toLowerCase() && u === u.toUpperCase())
     })
-    return unitSize(gs)
-  }
+  /** their size, the median of them (the unit's base: the size most of its text is set at) */
+  const sizeIn = (a: number, b: number, keep: (i: number) => boolean): number | undefined =>
+    unitSize(sizedIn(a, b, keep))
   /** a size as the page states it, to the hundredth of a point (the coordinates' grid): two sizes TeX set alike */
   const r2 = (v: number) => Math.round(v * 100) / 100
   // (the unit's base size: its own text's, the glyphs of no group's; where every letter is a group's, all of them)
@@ -223,19 +235,20 @@ export function groupFacts(
   const stops = new Map<number, { s: Span; stop: string }>()
   // (in the order the groups open: a group's statement is read before the groups inside it)
   for (const [s, [a, b]] of ranges) {
-    // ---- its face: its own text's, where the face around it is another
+    // ---- its size: the one its own text's glyphs share, where it is not the size the group is drawn at by default
+    const size = oneSize(sizedIn(a, b, (i) => group[i] === s))
+    const by = inherited(s)
+    // ---- its face: its own text's, where the face around it is another; its size its own where it has one, else the one it
+    // is drawn at by default (a group of several sizes states none)
     const gs = glyphsIn(a, b, (i) => group[i] === s)
     const face = gs.length ? faceOf(gs) : undefined
     const around = face === undefined ? undefined : aroundOf(s)
     if (face !== undefined && around !== undefined && face !== around) {
       const { upper: _upper, fill: _fill, ...st } = styleOf(gs)
       void [_upper, _fill]
-      fact(s).style = { ...st, size: unitSize(gs) ?? st.size }
+      fact(s).style = { ...st, size: size ?? by ?? st.size }
       fact(s).change = changeOf(face, around)
     }
-    // ---- its size: its own text's, where it is not the size the group is drawn at by default
-    const size = sizeIn(a, b, (i) => group[i] === s)
-    const by = inherited(s)
     if (size !== undefined && by !== undefined && r2(size) !== r2(by)) {
       stated.set(s, size)
       const f = fact(s)

@@ -11,9 +11,11 @@
 // The source's letters and the glyphs' letters are matched in order (the longest common subsequence, Myers', as words.ts
 // places a unit's words on A and marks/faces.ts reads a group's face on B), compared folded (compatibility decomposition,
 // marks off, lower case, its letters and digits alone); a text macro's text (the marking
-// probe's, its glyphs the unit's text) is the source's there, an element whose ink is its own has no glyph among them. Its
-// punctuation is no reading of its own: TeX sets the commas between an author line's `\textbf` names regular, and a unit
-// read off them was drawn regular where a translation drops the names' groups (2602.23285v2's author line).
+// probe's, its glyphs the unit's text) is the source's there, an element whose ink is its own has no glyph among them. The
+// unit's own face, its base, reads its marks too (a second alignment, of its letters and its marks alike) and the glyphs of a
+// symbol it draws as text where it stands (`$\uparrow$`): a colon, a semicolon, an arrow are glyphs TeX set in a face, and a
+// run's face is its own glyphs' (docs/PDF-READER.md §18.111): the colon of `\textbf{While} $j \leq n$:` is TeX's regular, the
+// commas between an author line's `\textbf` names too (2602.23285v2).
 //
 // Each attribute is read by its own scopes: each group, and for the fill each colour switch's run (the rest of its group: an
 // element whose class states the fill TeX set its run in, El.colour), for the face each face declaration's run (an element
@@ -35,7 +37,7 @@
 // Votes of glyphs and inequalities, no threshold.
 import type { KnownSpanKind, Piece, Style } from '@readarxiv/format'
 import { lcs } from '../align/myers.ts'
-import { classifyFont, fold, mostOf, type StyleGlyph, styleOf, unitSize } from './facts.ts'
+import { classifyFont, fold, mostOf, oneSize, type StyleGlyph, styleOf, unitSize } from './facts.ts'
 
 type El = Extract<Piece, { t: 'el' }>
 type Span = Extract<Piece, { t: 'span' }>
@@ -51,13 +53,19 @@ interface Face {
  *  (its base size's) */
 interface GroupStyle {
   fill: { own: number | undefined; groups: [id: string, fill: number][]; apart: boolean }
-  face: { own: Face | undefined; groups: [id: string, style: Style][]; apart: boolean }
+  /** `several`: the groups of `groups` whose glyphs stand at several sizes (facts.ts oneSize), which state no size of their
+   *  own (their style's size then the median, for the caller to set to the member's) */
+  face: { own: Face | undefined; groups: [id: string, style: Style][]; several: string[]; apart: boolean }
   text: number[]
 }
 /** what a group style or a face switch sets of a face: its weight (bold, medium), its slant (italic, upright); a face change a
  *  paper's macro was read to make names each (marks/faces.ts, `sans-bold`) */
 const SETS_WEIGHT = /(?:^|-)(?:bold|medium)(?:-|$)/
 const SETS_SLANT = /(?:^|-)(?:italic|upright)(?:-|$)/
+/** a character's code points as the base's alignment reads them: its letters and digits folded (facts.ts fold), a mark (Unicode's
+ *  punctuation or symbol) as itself, compatibility composed */
+const foldMarks = (ch: string): number[] =>
+  /^[\p{P}\p{S}]$/u.test(ch) ? [...ch.normalize('NFKC')].map((c) => c.codePointAt(0) as number) : fold(ch)
 /** a group or a switch that turns the slant around it (latex.ltx's \emph, \em): its run is the other slant of the text around it */
 const TOGGLES_SLANT = /^\\(?:emph|em)(?![A-Za-z@])/
 
@@ -81,7 +89,9 @@ export function hasScopes(content: readonly Piece[], switches: (el: El) => boole
  * TeX sets for an element whose glyphs are the unit's text (a text macro's), none for one whose ink is its own;
  * `colourSwitch` whether an element is a colour switch (its run, the rest of its group, set in the fill TeX's log states for
  * it); `faceSwitch` whether it is a face declaration (its run set in the face it names), `switchStyle` the group style it
- * names (`bold`, `italic`, `mono`: what its run sets of the face; none told, its weight and its slant both)
+ * names (`bold`, `italic`, `mono`: what its run sets of the face; none told, its weight and its slant both); `symbolGlyphs` the
+ * glyphs of an element whose ink is its own and which the typesetter draws as text in the face where it stands (a symbol, the
+ * arrow of `$\uparrow$`), which the base reads as it reads the unit's marks
  */
 export function groupStyleOf(
   content: readonly Piece[],
@@ -90,6 +100,7 @@ export function groupStyleOf(
   colourSwitch: (el: El) => boolean = () => false,
   faceSwitch: (el: El) => boolean = () => false,
   switchStyle: (el: El) => string | undefined = () => undefined,
+  symbolGlyphs: (el: El) => readonly StyleGlyph[] | undefined = () => undefined,
 ): GroupStyle {
   // ---- the scopes (0 the unit's own): each with the scope around it, the group it is (null: a switch's run, the unit), the
   // attribute a switch's run sets, and whether it sets the fill or the face by its definition (or stands inside one that does);
@@ -103,9 +114,13 @@ export function groupStyleOf(
   const weightSet: boolean[] = [false]
   const slantSet: boolean[] = [false]
   const turned: boolean[] = [false]
-  // ---- the source's letters, each with its scope
+  // ---- the source's letters, each with its scope; its letters and marks, each with its scope (the base's reading); and the
+  // glyphs of the symbols it draws as text, each with its scope
   const P: number[] = []
   const scopeOf: number[] = []
+  const PM: number[] = []
+  const scopeOfM: number[] = []
+  const symbols: [glyph: StyleGlyph, scope: number][] = []
   const open = (
     cur: number,
     s: Span | null,
@@ -156,12 +171,20 @@ export function groupStyleOf(
         continue
       }
       const shown = p.t === 'text' ? p.s : p.t === 'el' ? textOf(p) : undefined
-      if (shown === undefined) continue
-      for (const ch of shown)
+      if (shown === undefined) {
+        if (p.t === 'el') for (const g of symbolGlyphs(p) ?? []) symbols.push([g, cur])
+        continue
+      }
+      for (const ch of shown) {
         for (const c of fold(ch)) {
           P.push(c)
           scopeOf.push(cur)
         }
+        for (const c of foldMarks(ch)) {
+          PM.push(c)
+          scopeOfM.push(cur)
+        }
+      }
     }
   }
   walk(content, 0)
@@ -227,39 +250,82 @@ export function groupStyleOf(
     'face',
     faceSet,
   )
-  // ---- the unit's own face, its base, each attribute by its own scopes: its own text's (the letters in no group and no switch's
-  // run; its marks are no reading of their own, docs/PDF-READER.md §18.111: an author line's commas between its bold names are
-  // TeX's regular, and a base read off them drew the names regular where a translation drops their groups); where it has none,
-  // the text's outside every scope that sets that attribute by its definition (its weight outside `\textbf{…}` and a `\bfseries`
-  // run, its slant outside `\textit{…}`, a `\emph` run's slant read turned back: TeX's own state around those runs, which their
-  // glyphs show for what they do not set); where none, all its text's. Read off TeX's glyphs alone: no count of a
-  // translation's characters decides it (docs/PDF-READER.md §18.111)
-  const baseOf = (sets: readonly boolean[], val: (g: StyleGlyph, s: number) => string | undefined) => {
+  // ---- the unit's own face, its base, each attribute by its own scopes, read off TeX's glyphs alone (no count of a
+  // translation's characters decides it, docs/PDF-READER.md §18.111): the face of its glyphs that stand outside every group and
+  // every switch's run, its marks and the symbols it draws as text included (a run's face is its own glyphs': the colon of
+  // `\textbf{While} $j \leq n$:`, regular); where it has none, the face of its glyphs, marks and symbols too, outside every scope
+  // that sets that attribute by its definition (its weight outside `\textbf{…}` and a `\bfseries` run, its slant outside
+  // `\textit{…}`, a `\emph` run's slant read turned back: TeX's own state around those runs, which their glyphs show for what
+  // they do not set; a `\multicolumn`'s or a link's text is in the face around it: the arrow of
+  // `\multicolumn{2}{c}{\textbf{Overall}$\uparrow$}`); where none, its letters', all of them (no glyph of the original then
+  // stands in that face, and a translation's text outside its groups takes the face its groups share: a kicker and a title
+  // both bold, bold)
+  let pm: Int32Array | number[] | null = null
+  /** the letters and marks matched to their glyphs: [source index, glyph] by twos (read once, where a base reading asks it) */
+  const marksPairs = (): ArrayLike<number> => {
+    if (pm) return pm
+    const GM: number[] = []
+    const gOfM: number[] = []
+    glyphs.forEach((g, q) => {
+      for (const c of foldMarks(g.u)) {
+        GM.push(c)
+        gOfM.push(q)
+      }
+    })
+    const raw =
+      PM.length && GM.length
+        ? lcs(Int32Array.from(PM), Int32Array.from(GM), WORK_PER_LETTER * (PM.length + GM.length)).pairs
+        : []
+    const out: number[] = []
+    for (let k = 0; k < raw.length; k += 2) out.push(raw[k] as number, gOfM[raw[k + 1] as number] as number)
+    pm = out
+    return pm
+  }
+  const baseOf = (
+    sets: readonly boolean[],
+    val: (g: StyleGlyph, s: number) => string | undefined,
+    valSymbol: (g: StyleGlyph, s: number) => string | undefined,
+  ) => {
     const direct = new Map<number, string>(),
       outside = new Map<number, string>(),
       every = new Map<number, string>()
     for (let k = 0; k < pairs.length; k += 2) {
       const q = gOf[pairs[k + 1] as number] as number
-      const s = scopeOf[pairs[k] as number] as number
+      const v = val(glyphs[q] as StyleGlyph, scopeOf[pairs[k] as number] as number)
+      if (v !== undefined) every.set(q, v)
+    }
+    const mp = marksPairs()
+    for (let k = 0; k < mp.length; k += 2) {
+      const q = mp[k + 1] as number
+      const s = scopeOfM[mp[k] as number] as number
       const v = val(glyphs[q] as StyleGlyph, s)
       if (v === undefined) continue
-      every.set(q, v)
       if (!sets[s]) outside.set(q, v)
       if (s === 0) direct.set(q, v)
     }
+    // (a symbol's glyphs after the text's, in their order: keyed past them)
+    symbols.forEach(([g, s], k) => {
+      const v = valSymbol(g, s)
+      if (v === undefined) return
+      if (!sets[s]) outside.set(glyphs.length + k, v)
+      if (s === 0) direct.set(glyphs.length + k, v)
+    })
     const from = direct.size ? direct : outside.size ? outside : every
     return mostOf([...from].sort((x, y) => x[0] - y[0]).map(([, v]) => v))
   }
+  // (a glyph's weight and slant its font's, a math font's none; a symbol's weight its font's, a math font's too: TeX sets an
+  // arrow from cmsy regular, from cmbsy bold; its slant none from a math font, whose italic is its letters' design)
   const weightOf = (g: StyleGlyph) => {
     const c = classifyFont(g.base)
     return c.fam === 'math' ? undefined : c.bold ? 'b' : ''
   }
+  const symbolWeightOf = (g: StyleGlyph) => (classifyFont(g.base).bold ? 'b' : '')
   const slantOf = (g: StyleGlyph, s: number) => {
     const c = classifyFont(g.base)
     return c.fam === 'math' ? undefined : c.italic !== (turned[s] as boolean) ? 'i' : ''
   }
-  const baseWeight = baseOf(weightSet, weightOf),
-    baseSlant = baseOf(slantSet, slantOf)
+  const baseWeight = baseOf(weightSet, weightOf, symbolWeightOf),
+    baseSlant = baseOf(slantSet, slantOf, slantOf)
   if (baseWeight !== undefined && baseSlant !== undefined) face.value[0] = `${baseWeight}|${baseSlant}`
   // ---- the unit's own text, its letters in no group (a switch's run at its top level its own): its base size's glyphs
   const inGroup: boolean[] = []
@@ -268,6 +334,7 @@ export function groupStyleOf(
   for (let k = 0; k < pairs.length; k += 2)
     if (!inGroup[scopeOf[pairs[k] as number] as number]) text.add(gOf[pairs[k + 1] as number] as number)
   const faces: [string, Style][] = []
+  const several: string[] = []
   let faceApart = false
   for (let s = 1; s < S; s++) {
     if (!span[s] && sw[s] !== 'face') continue
@@ -289,7 +356,10 @@ export function groupStyleOf(
     const gs = [...face.direct[s]!].sort((x, y) => x - y).map((q) => glyphs[q] as StyleGlyph)
     const { upper: _upper, fill: _fill, ...st } = styleOf(gs)
     void [_upper, _fill]
-    faces.push([sp.id, { ...st, size: unitSize(gs) ?? st.size }])
+    // (at the one size its glyphs share; of several, none: the caller states the member's)
+    const one = oneSize(gs)
+    if (one === undefined) several.push(sp.id)
+    faces.push([sp.id, { ...st, size: one ?? unitSize(gs) ?? st.size }])
   }
   const ownFace = face.value[0]
   return {
@@ -297,6 +367,7 @@ export function groupStyleOf(
     face: {
       own: ownFace === undefined ? undefined : { bold: ownFace.startsWith('b'), italic: ownFace.endsWith('i') },
       groups: faces,
+      several,
       apart: faceApart,
     },
     text: [...text].sort((x, y) => x - y),

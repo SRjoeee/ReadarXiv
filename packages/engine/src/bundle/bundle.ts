@@ -19,6 +19,7 @@ import {
   type Placed,
   type PrepWhy,
   sha256Hex,
+  type Style,
   type Unit,
   write,
 } from '@readarxiv/format'
@@ -221,11 +222,14 @@ function placedOf(
       (unit?.spans ?? []).map(([id, x]): [string, NonNullable<Placed['spans']>[number][1]] => [id, { ...x }]),
     )
     for (const [id, j] of mem.spanOpens ?? []) spans.set(id, { ...spans.get(id), opens: j })
-    for (const [id, style] of mem.spanStyles ?? []) spans.set(id, { ...spans.get(id), style })
+    // (a group whose glyphs stand at several sizes states none: its style at the member's size, drawn as the member)
+    const several = new Set(mem.spanSeveral ?? [])
+    const sized = (id: string, style: Style): Style => (several.has(id) ? { ...style, size: mem.style.size } : style)
+    for (const [id, style] of mem.spanStyles ?? []) spans.set(id, { ...spans.get(id), style: sized(id, style) })
     for (const [id, colour] of mem.spanFills ?? [])
       if (spans.get(id)?.colour === undefined) spans.set(id, { ...spans.get(id), colour })
     for (const [id, style] of mem.spanFaces ?? [])
-      if (spans.get(id)?.style === undefined) spans.set(id, { ...spans.get(id), style })
+      if (spans.get(id)?.style === undefined) spans.set(id, { ...spans.get(id), style: sized(id, style) })
     for (const id of runin ?? []) spans.set(id, { ...spans.get(id), runin: 1 })
     p.spans = [...spans]
   }

@@ -1208,9 +1208,9 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
       },
     ])
     const at = 'a paragraph whose word'.length
-    A.pages[0]!.glyphs.slice(at, at + 4).forEach((g, i) =>
-      Object.assign(g, { font: 'ABCDEF+Helvetica-Bold', base: 'Helvetica-Bold', ...(i > 0 ? { size: 8 } : {}) }),
-    )
+    A.pages[0]!.glyphs.slice(at, at + 4).forEach((g, i) => {
+      Object.assign(g, { font: 'ABCDEF+Helvetica-Bold', base: 'Helvetica-Bold', ...(i > 0 ? { size: 8 } : {}) })
+    })
     const { B, ins } = finalOf(A, [unitOf('para', 'a paragraph whose word continues on its last line')])
     const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
     const fig = L.members[1]!
