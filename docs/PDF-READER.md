@@ -9647,6 +9647,17 @@ page's shape numbers (read by its box, as before).
   no more (2 a size step smaller, 9 at their size); 129 are laid smaller, 114 of them at 0.775, under the fit's floor of 0.8 by
   its further shrink (2610.19159v1 in Japanese: headings on chips a few points wider than their English, single lines in boxes
   narrower than their translations).
+- **The review's fix round on #672** (the sides at each line's height, the paint read inside the edges), over the 245 at the
+  merged line (#671), against the line's chain: every units object, add-on, ownership file and prepare dump byte for byte, 266
+  parts move, only framed members' rooms and stays, as before the round; against the round's own head before it, of the 2,676
+  member-pages whose room the frame moves, every Room.runs and Room.below as before; the stays of 2,603 keep their sides and
+  their x, their y extents now each line's own height; 6 (in 4 papers, beside a rounded corner's arc) move in x, each to where
+  the path stands at that line (2610.21827v1 p1's last line keeps none of the two it had, the boxes of the frame's lower corners
+  reaching 1.87 pt into its column: at its own height the frame stands outside the column); no member framed or unframed by it.
+  One test of our own runs from the PDF's paint to the laid page (`tests/pdf-reader/framed-prepare.test.ts`, the fixture
+  `tests/fixtures/pdf/framed/`): the instrument over our final pass, prepareBack over the stand-in for arXiv's PDF, the part
+  laid with a translation half again as long, every line inside the frame; with the frame's reading taken out the room under the
+  paragraph is the text 3 cm under it and a line is laid across the border.
 
 ## 19. The engine's contract
 
