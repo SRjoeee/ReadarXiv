@@ -80,6 +80,19 @@ describe('a unit TeX never sets is not asked of a translator', () => {
     expect(got.members[2]).toEqual([false, 'marks'])
     expect(got.asked).toEqual(['heading', 'para', 'para'])
   })
+  it('a name the left-out unit writes is still the block’s: the variant of a unit asked that holds it is asked as before', () => {
+    // (2608.14557v1: its authors' units TeX never set, their names drawn from the ink units of the block TeX printed; the names
+    // the reader translates with the block, §19.15, are read from the authors' units, and a unit asked that holds one has its
+    // form with the name, kind `named`)
+    const units = [
+      unitOf('author', 'Ann Lee', { why: 'marks' }),
+      unitOf('affiliation', 'Ann Lee'),
+      unitOf('para', 'We thank Ann Lee for the data.'),
+    ]
+    const got = askedOf(units, [[1, 2]], ['Ann Lee', 'We thank Ann Lee for the data.'])
+    expect(got.members[0]).toEqual([false, 'marks'])
+    expect(got.asked).toEqual(['affiliation', 'para', 'named'])
+  })
   it('a unit of no glyph unlocated otherwise (no ink, no mark of its own asked) is asked as before', () => {
     const units = [unitOf('para', 'A paragraph of ours.'), unitOf('footnote', 'A note of ours set nowhere here.')]
     const got = askedOf(units, [[0]], ['A paragraph of ours.'])
