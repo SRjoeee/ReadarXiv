@@ -142,8 +142,20 @@ export type Item =
    *  url package breaks it), which the reader draws with no antialiased margin; `ink` its own ink, its piece's boxes on its
    *  line as the part states them (its page's PDF units; none where the part states none of its piece: lay/clips.ts), the
    *  reader's to cut it by; `of` the member whose label it is where another member's line draws it (a label no line opens with,
-   *  carried to the end of the name before, lay/flow.ts): lit, cut and counted as that member's */
-  | { s: string; x: number; src: Ink; k: number; piece: string; cut?: 1 | 2 | 3; ink?: Box[]; of?: number }
+   *  carried to the end of the name before, lay/flow.ts): lit, cut and counted as that member's; `dir` a crop of a line laid in a
+   *  frame (a unit TeX set turned, Part.frames): its line from its origin along it as a run's, its `src` and `ink` stated in the
+   *  frame, which the reader turns onto the page (docs/PDF-READER.md §18.113) */
+  | {
+      s: string
+      x: number
+      src: Ink
+      k: number
+      piece: string
+      cut?: 1 | 2 | 3
+      ink?: Box[]
+      of?: number
+      dir?: [ux: number, uy: number]
+    }
 
 /** the fit's knobs a unit under its page's band may take in the fill (shared/fill-page.ts evenOf, docs/PDF-READER.md §18.57): its
  *  tracking, the room TeX left under its blocks, one step of its sizes; and at a column's foot the room past TeX's text block bottom
@@ -154,6 +166,9 @@ export type Laid = {
   ord: number
   page: number
   state: 'laid' | Unlaid
+  /** a member of one of its part's frames (Part.frames: a unit TeX set turned), laid in the frame and stated on the page through
+   *  the frame's direction: its lines turned runs (their items' `dir`), its lit in the frame (`lit.dir`) */
+  frame?: [ux: number, uy: number]
   /** this member's groups turned off on this page: 1 text, 2 elements, 4 label */
   off: number
   /** its fit's size, leading and tracking, and the lines its borrow knob let it lay under a block (99: all its room holds);

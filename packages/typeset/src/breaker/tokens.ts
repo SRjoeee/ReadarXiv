@@ -314,7 +314,7 @@ const capsSwitch = (src: string | undefined): boolean => /^\\(?:sc|scshape)$/.te
 /** the unit's base small capitals without what its own groups set, and its declarations: a declaration sets its group from
  *  where it stands, at the unit's top level the rest of it (the \sc rule). Its weight and slant are the part's as stated
  *  (Placed.style: the engine's reading of TeX's glyphs, the unit's own text's, each attribute outside the scopes that set it,
- *  docs/PDF-READER.md §18.113), never read again here: this count of the row's characters under the groups decided a weight
+ *  docs/PDF-READER.md §18.114), never read again here: this count of the row's characters under the groups decided a weight
  *  from a translation's wording (2611.23651v2's kicker drawn regular, its every glyph bold). Small capitals are still read so:
  *  the engine states no base of them by scope (not this round) */
 export function capsBaseOf(unit: TokensInput['unit'], base: TStyle): TStyle {

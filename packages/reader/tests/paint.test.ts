@@ -432,3 +432,48 @@ describe('a crop cut through its own ink and a device pixel round it, clear of e
     expect(calls).toEqual(['save', 'path', ...c!.clip!.map(dev), 'clip', 'draw', 'restore'])
   })
 })
+
+describe('a crop of a line laid in a frame (a unit TeX set turned, docs/PDF-READER.md §18.113)', () => {
+  // (2608.12502v1's header cell "Before ($t_1$)" a quarter turned: its formula from 448 to 460 along its line in the frame, its
+  // baseline -60 there (x 60 on the page); the translation's line in the frame at baseline -150 (x 150), from 400 (y 400)
+  // along the run, the formula's crop 48 along it)
+  const formula: Box = [448, -63.4, 460, -53]
+  const pageOf = (inks: Page['inks'] = []): Page => ({
+    page: 1,
+    wait: { rows: [], faces: [] },
+    links: [],
+    inks,
+    members: [
+      {
+        ord: 0,
+        page: 1,
+        state: 'laid',
+        off: 3,
+        lit: { left: [], right: [], own: [] },
+        lines: [
+          [
+            400,
+            150,
+            200,
+            [{ s: 't1', x: 198, src: [1, ...formula, -60], k: 1, piece: '1', ink: [formula], dir: [0, 1] }],
+          ],
+        ],
+      },
+    ],
+  })
+  it('cuts its source from the original’s turned ink on the page and draws it moved along the turn, its pixels unturned', () => {
+    const px = 0.5
+    const [c] = cropsOf(pageOf(), { x: px, y: px })
+    // (the formula on the page, (x, y) of the frame at (-y, x): x 53 to 63.4, y 448 to 460; the device pixel round it)
+    close(c!.src, grow([53, 448, 63.4, 460], px))
+    // (drawn where the translation's turned line sets it: 90 across the turn, x + 90 on the page, its place along it the same)
+    close(c!.at, grow([143, 448, 153.4, 460], px))
+    expect(c!.clip).toBeUndefined()
+  })
+  it('is cut clear of another piece’s ink on the page as a level crop is', () => {
+    // (a rule of the original's table 0.6 right of the formula on the page; the clip stated where the crop is drawn)
+    const [c] = cropsOf(pageOf([[1, 64, 440, 70, 470, 440]]), { x: 0.5, y: 0.5 })
+    expect(covers(c!.clip!, [143, 448, 153.4, 460])).toBe(true)
+    expect(reaches(c!.clip!, [153.5, 440, 160, 470], [143, 448, 153.4, 460])).toBe(false)
+  })
+})

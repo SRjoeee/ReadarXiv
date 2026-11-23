@@ -13,8 +13,9 @@ import type { Item, Laid } from '../types.ts'
 
 type Stated = { ord: number; piece: string; ink: Ink }
 
-/** every piece's ink the part states: its elements', its label's and its counter's */
-function inkOf(part: Part): Stated[] {
+/** every piece's ink the part states: its elements', its label's and its counter's (its flows' members': a frame's are its
+ *  frame's, lay/entry.ts layPage) */
+function inkOf(part: Pick<Part, 'flows'>): Stated[] {
   const out: Stated[] = []
   for (const flow of part.flows)
     for (const m of flow) {
@@ -33,6 +34,30 @@ function inkOf(part: Part): Stated[] {
 }
 
 const box = (ink: Ink): Box => [ink[1], ink[2], ink[3], ink[4]]
+
+/** an ink stated in a frame of direction (ux, uy) (Part.frames) on its page: the box of its four corners turned by the frame's
+ *  direction about the page's origin, its baseline that box's bottom (a page's inks are read as boxes alone: paint.ts cropsOf) */
+export function inkOnPage(k: Ink, [ux, uy]: readonly [number, number]): Ink {
+  const c = [
+    [k[1], k[2]],
+    [k[3], k[2]],
+    [k[1], k[4]],
+    [k[3], k[4]],
+  ].map(([x, y]) => [ux * x! - uy * y!, uy * x! + ux * y!] as const)
+  const x0 = Math.min(...c.map((q) => q[0])),
+    y0 = Math.min(...c.map((q) => q[1]))
+  return [k[0], x0, y0, Math.max(...c.map((q) => q[0])), Math.max(...c.map((q) => q[1])), y0]
+}
+
+/** every piece's ink a part states on the pages `pages`, its frames' turned onto the page (inkOnPage): what a crop of any of its
+ *  members is cut clear of, whichever frame it is laid in */
+export function pageInks(part: Part, pages: ReadonlySet<number>): Ink[] {
+  const all = [
+    ...inkOf(part).map((s) => s.ink),
+    ...(part.frames ?? []).flatMap((f) => inkOf(f).map((s) => inkOnPage(s.ink, f.dir))),
+  ]
+  return all.filter((k) => pages.has(k[0]))
+}
 
 /**
  * The page's laid members, each label's crop stating its own ink (`ink`: its label's boxes on its page; an element's crop

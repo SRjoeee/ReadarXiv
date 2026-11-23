@@ -8,9 +8,22 @@ import { r2 } from './lines.ts'
 import type { Owned } from './ownership.ts'
 import { assign, type Located, type LocateOptions, type Member, type Work } from './work.ts'
 
-export function linksOnA(w: Work, owned: Owned, o: LocateOptions): void {
+export function linksOnA(w: Work, owned: Owned, o: LocateOptions, held: readonly { mem: Member }[] = []): void {
   const { inkA, m, pageA } = w.ix
   const { members } = w
+  // (the turned glyphs of the units held to be framed (turned-frames.ts holdTurned), by page: each one's member and its piece (an
+  // element's id, '' its text, null its label's), which no level glyph point tells: an annotation over a sideways caption's
+  // reference holds turned glyphs alone)
+  const turnedOwner = new Map<number, Map<number, [Member, string | null]>>()
+  for (const { mem } of held) {
+    const set = (ap: number, aj: number, piece: string | null) => {
+      const on = turnedOwner.get(ap) ?? turnedOwner.set(ap, new Map()).get(ap)!
+      on.set(aj, [mem, piece])
+    }
+    for (const [ap, aj] of mem.turned) set(ap, aj, '')
+    for (const [id, l] of mem.turnedEls) for (const [ap, aj] of l) set(ap, aj, id)
+    for (const [ap, aj] of mem.turnedLabel) set(ap, aj, null)
+  }
   // ---- links: A's annotations, each owned by the member that owns most of the glyphs under it (by exact ownership, the member
   // that owns more than half of its glyph points), and within it by the element that owns more than half of them, else its
   // text; where its label's glyphs are more than
@@ -53,7 +66,37 @@ export function linksOnA(w: Work, owned: Owned, o: LocateOptions): void {
           owner = [mem.ord, el ? el[0] : '']
           label = !el && 2 * pts.filter((a) => mem.label.includes(a)).length > pts.length
         }
-      } else {
+      }
+      // (one over turned glyphs alone: the held member that owns more than half of their glyph points (each turned glyph's
+      // advance centre on its baseline, white space aside, strictly inside one of its boxes, as pointsOf reads a level glyph's),
+      // within it the element that does, else its text (its label's where they are more than half): read by its frame later,
+      // and its characters the annotation's own)
+      let turnedText = ''
+      const T = pg.turned ?? []
+      const turnedOn = turnedOwner.get(p + 1)
+      if (!pts.length && turnedOn) {
+        const inside = (x: number, y: number) => read.boxes.some((b) => x > b[0] && x < b[2] && y > b[1] && y < b[3])
+        const tps = [...turnedOn.keys()]
+          .sort((a, b) => a - b)
+          .filter((j) => /\S/.test(T[j]!.u) && inside((T[j]!.ox + T[j]!.ex) / 2, (T[j]!.oy + T[j]!.ey) / 2))
+        const by = new Map<Member, [string | null, number][]>()
+        for (const j of tps) {
+          const [mem, piece] = turnedOn.get(j)!
+          ;(by.get(mem) ?? by.set(mem, []).get(mem)!).push([piece, j])
+        }
+        const top = [...by].find(([, l]) => 2 * l.length > tps.length)
+        if (top) {
+          const [mem, l] = top
+          const count = new Map<string | null, number>()
+          for (const [piece] of l) count.set(piece, (count.get(piece) ?? 0) + 1)
+          const el = [...count].find(([piece, n]) => typeof piece === 'string' && piece !== '' && 2 * n > tps.length)
+          owner = [mem.ord, el ? (el[0] as string) : '']
+          label = !el && 2 * (count.get(null) ?? 0) > tps.length
+          owning = mem
+          turnedText = tps.map((j) => T[j]!.u).join('')
+        }
+      }
+      if (!pts.length && !owner) {
         const cx = (x0 + x1) / 2
         const cy = (y0 + y1) / 2
         const holds = (a: number, b: number, c: number, d: number) => cx >= a && cx <= c && cy >= b && cy <= d
@@ -71,7 +114,7 @@ export function linksOnA(w: Work, owned: Owned, o: LocateOptions): void {
       // (the characters of the glyphs under it, its glyph points' in their order: the annotation's own (Link.text, which the
       // typesetter's placeText finds among a piece's drawn characters where PDF.js's overlaidText is not read: the server reading
       // skips it, compile/pdf-lite.ts's text guard)
-      const text = pts.map((a) => pg.glyphs[a - off]!.u).join('')
+      const text = pts.map((a) => pg.glyphs[a - off]!.u).join('') || turnedText
       const border = borderOf(an)
       out.push({
         box: [x0, y0, x1, y1],

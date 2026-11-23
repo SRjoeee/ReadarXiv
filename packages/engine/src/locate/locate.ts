@@ -24,6 +24,7 @@ import { END, TRAIL } from './facts.ts'
 import { factsOf } from './facts-pass.ts'
 import { keepArtefacts } from './artefacts.ts'
 import { endMarks } from './end-marks.ts'
+import { frameTurned, holdTurned } from './turned-frames.ts'
 import { framesOnPage, type PaintedFrame } from './frames.ts'
 import { frameMeasures, lineGeometry, rooms } from './geometry.ts'
 import { flowsAndTies, rowAligns } from './flows.ts'
@@ -82,6 +83,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   const w = open(ins, inkA, m, paintedOf(inkA, o))
   const claims = ownershipOf({ size: w.ix.pageA.length, aToB: m.aToB, unitB: w.ix.unitB })
   placeUnits(w, claims) // 1
+  const held = holdTurned(w) // 1b: the units TeX set turned held out of the page's readings, for their frames
   claimTrails(w, claims) // 2
   keepArtefacts(w, claims) // 3
   unitsMadeOnA(w, claims, o) // 4
@@ -98,12 +100,13 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   facts(w, owned) // 12
   flowsAndTies(w) // 13
   rowAligns(w) // 14
-  linksOnA(w, owned, o) // 15
-  return close(w, owned)
+  linksOnA(w, owned, o, held) // 15: an annotation over a held unit's turned glyphs its member's
+  const frames = frameTurned(w, held) // 16: the units TeX set turned, read in their frames
+  return close(w, owned, frames)
 }
 
 /** what locate states, read off the record its phases wrote: the wrap's groups, the ownership's check, the counts */
-function close(w: Work, owned: Owned): Located {
+function close(w: Work, owned: Owned, frames: Located['frames']): Located {
   const { ins } = w.ix
   const { units, members, stats, displays, floatLines } = w
   const born = field(w, 'born')
@@ -139,7 +142,21 @@ function close(w: Work, owned: Owned): Located {
       }
     } else noteUnlocated(mem.cause ?? 'no ink')
   }
-  return { units, members, born, flows, ties, links, groups, figureGroups, stats, displays, floatLines, disagreements }
+  return {
+    units,
+    members,
+    born,
+    flows,
+    ties,
+    frames,
+    links,
+    groups,
+    figureGroups,
+    stats,
+    displays,
+    floatLines,
+    disagreements,
+  }
 }
 
 export { END, TRAIL }
