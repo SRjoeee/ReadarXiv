@@ -9524,15 +9524,21 @@ expansion took off (all in this section's last item), and the rest are the holes
 - **A nested note first after a display has the carrier** (`marks/marks.ts` `carrySource`, `carrySamples`; Devin's finding on
   #669). A whole note whose text is one unit is a nested piece, which `carrySamples` passed over: its `\axtpma` set no point on
   the empty list TeX resumes the paragraph with, and the paragraph read past its source, as at the base before §18.106. Now a
-  nested piece is asked of the display probe as any piece, by its source as the paper writes it (its command, its unit's
-  pieces as written, what closes it: never a stand-in, so that a note that sets a display says so and keeps `\axtpma`), and
-  carried where the probe says it opens none. The note's own marks and its own paragraph's end run inside the carrier's window
+  nested piece is asked of the display probe as any piece, by its source as the marked TeX writes it (its command, its unit's
+  text as patch writes it, what closes it: never a stand-in, so that a note that sets a display says so and keeps `\axtpma`),
+  and carried where the probe says it opens none. One serialiser (`source/latex-front.ts` `writtenSource`, patch's own
+  `writtenPieces` and `controlWordGuard`): a comment the walk drops between a control word and the next word is a space there,
+  as patch writes it, never the two joined into a command the paper never wrote (`\relax%⏎with`, asked as `\relaxwith`, an
+  error, no carrier: the review of #671). The note's own marks and its own paragraph's end run inside the carrier's window
   (inside the note's insert, while the outer paragraph's carrier is pending); a paragraph that holds a note is never empty
   (the call's mark, or the insert a `\footnotetext` puts on the list), so its carrier always stays.
-- **A call that ends in a control word, before a word, keeps its opening mark**: TeX's mark probe answers '2' there because its
-  `{}` box keeps the space the tokenizer skips after the control word, which a closing mark would keep too; that says nothing
-  of the opening mark, which a paper's macro keeps on the same answer. Read so for every class (`\footnotemark of …`, first
-  after a display too, where its carrier is all that gives the paragraph its opening point).
+- **A call that ends in a control word, before a word, keeps its opening mark where TeX says it may**: before a word the call's
+  `{}` box differs from the call as the paper sets it (the space the tokenizer skips after the control word, which a closing mark
+  would keep too), and the mark probe answered '2' there whatever its box with the opening mark was. It now compares that box
+  too (`punctuationSection`): the same as the call's own, code 4, the opening mark alone (`\footnotemark of …`, first after a
+  display too, where its carrier is all that gives the paragraph its opening point); else 2, and no answer at all (an error in
+  the call's own box, a call the probe never reached), no mark, as before this round. A 2 or no answer is never read as
+  approval: an opening mark kept without TeX's is how a line moves (the review of #671).
 - **Their native cases** (our own content, pdfLaTeX, XeLaTeX, LuaLaTeX and latex, with hyperref and without; every text item
   of the marked original at this round's head against the paper's own unmarked compile, to 0.01 pt): the note alone after a
   title's `\maketitle` in a group, after `\renewcommand{\thefootnote}`, of three forced lines in `{\let\thefootnote\relax…}`,

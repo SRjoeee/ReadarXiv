@@ -383,10 +383,10 @@ describe('a footnote first in the paragraph TeX resumes after a display: its ope
     expect(after.pieces.some((p) => displayPiece(p))).toBe(false)
   })
 
-  it('a \\footnotemark first after a display has the carrier where TeX answered its closing mark before a word moves text', () => {
-    // (TeX's mark probe in the pinned image: \\footnotemark's code before a word '2', the space after a control word that
-    // TeX's tokenizer skips kept by a closing mark: neither mark is written, the same `blocked`; before a comma '0', carried)
-    const switches = { '\\footnotemark': '00000020' }
+  it('a \\footnotemark first after a display has the carrier where TeX answered the skipped space the only difference before a word', () => {
+    // (TeX's mark probe in the pinned image: \\footnotemark's code before a word 4, the space after a control word that
+    // TeX's tokenizer skips kept by a closing mark and its opening mark's box the call's own; before a comma '0', carried)
+    const switches = { '\\footnotemark': '00000040' }
     const marks = (s: string) => {
       const u = unit('para', [
         { t: 'text', s: 'We define ' },

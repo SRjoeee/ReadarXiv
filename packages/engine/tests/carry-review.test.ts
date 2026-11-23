@@ -74,7 +74,7 @@ describe("a call's opening mark before a word only where TeX answered the skippe
     const k = pieces.length
     pieces.push({ t: 'ph', src: '\\footnotemark' }, { t: 'text', s: ' of words.' })
     const u = unit(pieces)
-    const switches = codes === null ? {} : { '\\footnotemark': codes }
+    const switches: Record<string, string> = codes === null ? {} : { '\\footnotemark': codes }
     const quiet = afterDisplay ? ['\\footnotemark'] : []
     return (
       layoutMarking([u] as unknown as SourceUnit[], MARK_CLASSES, { lines: false, switches, quiet }).units[0]!
