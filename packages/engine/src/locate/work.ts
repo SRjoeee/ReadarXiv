@@ -127,6 +127,9 @@ export interface Member {
   /** a figure text's runs in another face than its own, by their group's piece id: each one's style, read off its glyphs on A
    *  (ink.ts figureRuns; SpanAt.style) */
   spanStyles?: [string, Style][]
+  /** a unit made on A's forced breaks (ink-units.ts rule 3b), by piece id: the last glyph (A, global) of the line TeX ended at
+   *  each, the break's line (facts-pass.ts readElements); a source unit's break is placed by its point on B instead */
+  breakAfter?: ReadonlyMap<string, number>
   /** its groups whose text TeX set in a fill other than the fill around it, read off its glyphs on A (group-style.ts;
    *  SpanAt.colour where the instrument states none): each one's open piece id and fill */
   spanFills?: [string, number][]
@@ -275,7 +278,7 @@ interface Pitch {
  * by their writer and read through `field`, which throws where the writer has not run:
  * - `jointPiece`: written by 4 unitsMadeOnA; read by 6 lineGeometry.
  * - `displays`, `floatLines`: written by 4 unitsMadeOnA; read by close.
- * - `trailSep`: written by 2 claimTrails; read by 6 lineGeometry.
+ * - `trailSep`, `runShared`: written by 2 claimTrails; read by 6 lineGeometry.
  * - `pitch`: written by 3 keepArtefacts; read by 4 unitsMadeOnA.
  * - `born`: written by 5 unitsBornOnA; read by 7 sentenceStarts and close.
  * - `flows`, `ties`: written by 13 flowsAndTies; read by 14 rowAligns and close (`flows`), close (`ties`).
@@ -300,6 +303,8 @@ export interface Work {
 /** the fields of the record one phase assigns once (Work's comment names each one's writer and readers) */
 interface Assigned {
   trailSep: Map<number, number>
+  /** the pieces after an author's name whose ink is the run their first piece holds (trails.ts runOf), by `${unit}|${piece}` */
+  runShared: Set<string>
   pitch: Pitch
   born: Map<number, { kind: string; content: Piece[] }>
   flows: number[][]

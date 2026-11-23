@@ -68,6 +68,8 @@ interface Made {
    *  (inkUnitsOf's `glyphs.runs`; none where another unit owns them all) and the rules the claim gave them that stand nearest
    *  its glyphs */
   els?: Map<string, { glyphs: number[]; boxes: [number, number][] }>
+  /** an ink unit's forced breaks (by piece id): the last glyph of the line TeX ended at each (inkUnitsOf's `glyphs.breaks`) */
+  breaks?: Map<string, number>
 }
 
 export interface InkInput {
@@ -444,6 +446,13 @@ export function inkOf(o: InkInput): {
       if (w === `u${u.id}.p`) (first !== null ? x.ph : x.text).push(global(p, g))
       else if (w === `u${u.id}`) x.text.push(global(p, g))
     }
+    // (each forced break the maker states, the last glyph of the line TeX ended at it, its content's break elements in their order,
+    // an echo's the unit it echoes's: the line the facts pass states each ends; an echo's key holds where its breaks stand, so
+    // the two hold as many)
+    const anchors = u.glyphs.breaks ?? []
+    const breakIds = anchors.length ? breaksOf(content) : []
+    if (anchors.length && breakIds.length === anchors.length)
+      x.breaks = new Map(anchors.map(([p, g], q) => [breakIds[q]!, global(p, g)]))
     // (each element its own kept run's glyphs, the maker's, so that each placeholder is drawn by its own run: were the first
     // given them all, every run would be drawn at its place and none at the others')
     if (first !== null) {
@@ -1025,6 +1034,8 @@ interface Carried {
   pictures: DocPoint[]
   /** where TeX begins a front matter environment no author's (DocMarks `fronts`) */
   fronts: DocPoint[]
+  /** where TeX ends a line at a forced break (DocMarks `breaks`, B's `kb<n>`): an ink unit's break element (ink-units.ts) */
+  breaks: DocPoint[]
 }
 
 /** B's marks carried onto A's pages: a mark that stands before B glyph n stands before that glyph's partner on A (the first glyph
@@ -1039,6 +1050,7 @@ export function carry(B: Doc, inkA: Doc, m: Mapping, pageA: Int32Array): Carried
     regions: [],
     pictures: [],
     fronts: [],
+    breaks: [],
   }))
   B.pages.forEach((pg, p) => {
     const n = pg.glyphs.length
@@ -1159,6 +1171,10 @@ export function carry(B: Doc, inkA: Doc, m: Mapping, pageA: Int32Array): Carried
       const w = put(x)
       if (w) out[w[0] - 1]!.fronts.push(w[1])
     }
+    for (const x of marks.breaks ?? []) {
+      const w = put(x)
+      if (w) out[w[0] - 1]!.breaks.push(w[1])
+    }
   })
   return out
 }
@@ -1180,6 +1196,7 @@ function pageOf(
     points: c.points,
     paras: c.paras,
     paraEnds: c.paraEnds,
+    breaks: c.breaks,
     afterB: c.afterB,
     regions: c.regions,
     pictures: c.pictures,
@@ -1287,6 +1304,14 @@ function flatOf(content: readonly Piece[], out: TodayPiece[] = []): TodayPiece[]
   }
   return out
 }
+/** a content's forced breaks' element ids, depth first (kind `break`) */
+function breaksOf(content: readonly Piece[], out: string[] = []): string[] {
+  for (const p of content) {
+    if (p.t === 'el' && p.kind === 'break') out.push(p.id)
+    else if (p.t === 'span') breaksOf(p.content, out)
+  }
+  return out
+}
 /** the first element of a content, depth first (the first `ph` piece of its flat pieces) */
 function firstEl(content: readonly Piece[]): string | null {
   for (const p of content) {
@@ -1325,7 +1350,8 @@ export function contentOf(pieces: readonly TodayPiece[]): Piece[] {
         level.push({ t: 'text', s: unicodeOf(p.s) })
         break
       case 'ph':
-        level.push({ t: 'el', id, kind: classOf(p) ?? 'other', src: unicodeOf(p.src) })
+        // (a forced break the ink unit states at TeX's point, ink-units.ts rule 3b: kind `break`, as a source unit's `\\` is)
+        level.push({ t: 'el', id, kind: p.kind === 'break' ? 'break' : (classOf(p) ?? 'other'), src: unicodeOf(p.src) })
         break
       case 'open': {
         const style = groupStyleOf(unicodeOf(p.src))
