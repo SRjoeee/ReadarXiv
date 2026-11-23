@@ -9416,7 +9416,9 @@ mechanism for a turned header cell, a turned caption of several lines and a side
   between a placeholder's two points as that placeholder's, a caption's from TeX's label point to its start as its label
   (kept the original's ink where it is no label's form), and spells them; its turn is their one direction. One whose turned
   glyphs share no direction stays as it was, counted (`stats.turned.mixed`). A unit with level text reads as before: a turned
-  glyph in its range (an axis title TeX set inside a paragraph's range) is none of its. The instrument states those glyphs the
+  glyph in its range (an axis title TeX set inside a paragraph's range) is none of its. The reading is the instrument's
+  (`ownOf`'s `turned`): today's layout maker (`src/pdf-reader/engine/layout/wrap-final.mjs`), which has no frame to lay such a
+  unit in, reads as before, so today's layout file and LAYOUT do not move. The instrument states those glyphs the
   unit's (`Instrument.turned`, a placeholder's by the points round its box), and the ownership's reason reaches the unit
   (`InstrumentUnit.why`: `spell` and `across` beside `marks`; the prepare's dump said `no ink` or `text past its source`).
 - **The frame** (`locate/frames.ts`, locate's phase 16). A located unit, no figure text, its text all turned, on one page, in one

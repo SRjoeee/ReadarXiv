@@ -56,7 +56,7 @@ describe('a unit whose text TeX set turned', () => {
   it('owns a header cell set a quarter turned: its turned glyphs between its points are its text, its turn theirs', () => {
     const pages = [page(['Method', { pt: 't0s' }, { turned: 'Accuracy' }, { pt: 't0e' }])]
     const units: OwnUnit[] = [{ kind: 'cell', pieces: [text(' Accuracy ')] }]
-    const r = ownOf(pages, { units })
+    const r = ownOf(pages, { units, turned: true })
     expect(r.units.get(0)?.unhidden).toBeNull()
     expect(r.units.get(0)?.turn).toEqual([0, 1])
     expect(r.stats.unhidden.spell).toBe(0)
@@ -68,7 +68,7 @@ describe('a unit whose text TeX set turned', () => {
   it('owns a caption of a sideways float with its label: from TeX’s label point to its start, a label’s form', () => {
     const pages = [page([{ pt: 'ka1' }, { turned: 'Table 3: ' }, { pt: '0s' }, { turned: 'Runs of the second set' }, { pt: '0e' }])]
     const units: OwnUnit[] = [{ kind: 'caption', pieces: [text('Runs of the second set')] }]
-    const r = ownOf(pages, { units })
+    const r = ownOf(pages, { units, turned: true })
     expect(r.units.get(0)?.unhidden).toBeNull()
     expect(r.units.get(0)?.labelKept).toBe(false)
     const groups = turnedGroups(r)?.[0] ?? []
@@ -77,17 +77,24 @@ describe('a unit whose text TeX set turned', () => {
   })
   it('leaves a unit whose turned glyphs stand in two turns as it was, counted', () => {
     const pages = [page([{ pt: 't0s' }, { turned: 'Re' }, { turned: 'call', dir: [0, -1] }, { pt: 't0e' }])]
-    const r = ownOf(pages, { units: [{ kind: 'cell', pieces: [text('Recall')] }] })
+    const r = ownOf(pages, { units: [{ kind: 'cell', pieces: [text('Recall')] }], turned: true })
     expect(r.units.get(0)?.unhidden).toBe('spell')
     expect(r.units.get(0)?.turn).toBeUndefined()
     expect(r.stats.turned).toEqual({ units: 0, mixed: 1 })
+    expect(turnedGroups(r)?.[0]?.every((g) => g === null)).toBe(true)
+  })
+  it('reads as before where the turned reading is not asked (today’s layout maker, which has no frame to lay a unit in)', () => {
+    const pages = [page(['Method', { pt: 't0s' }, { turned: 'Accuracy' }, { pt: 't0e' }])]
+    const r = ownOf(pages, { units: [{ kind: 'cell', pieces: [text(' Accuracy ')] }] })
+    expect(r.units.get(0)?.unhidden).toBe('spell')
+    expect(r.stats.turned).toEqual({ units: 0, mixed: 0 })
     expect(turnedGroups(r)?.[0]?.every((g) => g === null)).toBe(true)
   })
   it('reads a unit with level text as before: a turned glyph TeX set in its range (an axis title) is none of its', () => {
     // (a paragraph whose range holds a figure TeX set inside it, its y-axis title turned: the paragraph spells its level glyphs,
     // the title stays no unit's, the figure reading's)
     const pages = [page([{ pt: '0s' }, 'Some text', { turned: 'Loss' }, ' here', { pt: '0e' }])]
-    const r = ownOf(pages, { units: [{ kind: 'para', pieces: [text('Some text here')] }] })
+    const r = ownOf(pages, { units: [{ kind: 'para', pieces: [text('Some text here')] }], turned: true })
     expect(r.units.get(0)?.unhidden).toBeNull()
     expect(r.units.get(0)?.turn).toBeUndefined()
     expect(turnedGroups(r)?.[0]?.every((g) => g === null)).toBe(true)
@@ -95,7 +102,7 @@ describe('a unit whose text TeX set turned', () => {
   it('owns a caption set turned with a reference inside it: the reference’s turned glyph between its points is its placeholder’s', () => {
     const pages = [page([{ pt: '0s' }, { turned: 'Steps of the run, Sect. ' }, { pt: 'p0.1a' }, { turned: '4' }, { pt: 'p0.1b' }, { pt: '0e' }])]
     const units: OwnUnit[] = [{ kind: 'caption', pieces: [text('Steps of the run, Sect. '), ph('\\ref{sec:run}')] }]
-    const r = ownOf(pages, { units })
+    const r = ownOf(pages, { units, turned: true })
     expect(r.units.get(0)?.unhidden).toBeNull()
     const groups = turnedGroups(r)?.[0] ?? []
     expect(groups.at(-1)).toBe('u0.p')

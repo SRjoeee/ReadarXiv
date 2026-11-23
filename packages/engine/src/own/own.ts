@@ -107,6 +107,9 @@ export type OwnOptions = {
   texts?: ReadonlyMap<string | undefined, string> | null
   inkless?: ReadonlySet<string | undefined> | null
   names?: readonly unknown[] | null
+  /** read the units whose text TeX set turned (TURNED): the rebuilt engine's instrument, whose locate lays them in their frame;
+   *  today's layout maker (src/pdf-reader/engine/layout/wrap-final.mjs), which has no frame to lay them in, reads as before */
+  turned?: boolean
 }
 /** what ownOf gives: each page's glyphs' and boxes' groups, each unit's ownership, each page's displays a unit opens with,
  *  and the counts */
@@ -209,7 +212,7 @@ const JOINT = /^[.:;,\u2013\u2014-]{1,2}$/u
  */
 export function ownOf(
   pages: readonly OwnPage[],
-  { units = null, follows = null, texts = null, inkless = null, names = null }: OwnOptions = {},
+  { units = null, follows = null, texts = null, inkless = null, names = null, turned = false }: OwnOptions = {},
 ): Ownership {
   const form = labelFormOf(names)
   const P = pages.length
@@ -907,7 +910,7 @@ export function ownOf(
     }
     return out
   }
-  for (const [id, { s, e }] of [...textOf].sort((a, b) => a[0] - b[0])) {
+  for (const [id, { s, e }] of turned ? [...textOf].sort((a, b) => a[0] - b[0]) : []) {
     if (!s || s[0] !== e[0] || !pages[s[0] - 1]!.turned?.length || work > OWN_WORK) continue
     const p = s[0],
       G = gOwn[p - 1]!,

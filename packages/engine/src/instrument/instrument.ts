@@ -2252,6 +2252,7 @@ export async function instrumentOf({
     texts: shown,
     inkless: inkless === null ? null : new Set(inkless),
     names: paper.theoremNames ?? null,
+    turned: true,
   })
 
   // ---- the units
