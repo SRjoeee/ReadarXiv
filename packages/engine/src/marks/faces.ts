@@ -21,7 +21,7 @@
 // unit's base, its own text's (the glyphs of no group's; where every letter is a group's, all of them). The face compares
 // role, weight and slant, never a size, so a kicker `{\small\bfseries #1}` beside a title `{\fontsize{30}{35}\selectfont
 // \bfseries …}` (both bold, both sans) and `{\small …}` inside a line stated nothing, and their translations were drawn at the
-// unit's one size (2611.23651v2 p1, docs/PDF-READER.md §18.111). A group stated for its size alone keeps its source's style
+// unit's one size (2611.23651v2 p1, docs/PDF-READER.md §18.112). A group stated for its size alone keeps its source's style
 // name: the statement is the part's (SpanAt.style), never the unit's content.
 // Its stop: the glyphs
 // TeX set between the glyph of the group's last letter and the glyph of the source's next letter after it, where the source

@@ -284,7 +284,7 @@ export function lineGeometry(w: Work, owned: Owned): void {
     // makes its own. Its weight and slant, its base, are always the reading's (group-style.ts: its own text's glyphs, its marks
     // and the symbols it draws as text included, else each read outside the scopes that set it, an \emph run's turned back):
     // the typesetter draws its translation's text outside every group in them and reads nothing more of its own
-    // (docs/PDF-READER.md §18.111). And its size, where it has text of its own
+    // (docs/PDF-READER.md §18.112). And its size, where it has text of its own
     // beside its groups, is that text's (its letters in no group; faked small capitals aside): every group TeX set at another
     // size states its own (marks/faces.ts), so the base is the size of the text no group claims; where every letter is a
     // group's, the median of them all, the size most of its text is set at, which paces the lay's knobs)

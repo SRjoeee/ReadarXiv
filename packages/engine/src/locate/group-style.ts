@@ -14,7 +14,7 @@
 // probe's, its glyphs the unit's text) is the source's there, an element whose ink is its own has no glyph among them. The
 // unit's own face, its base, reads its marks too (a second alignment, of its letters and its marks alike) and the glyphs of a
 // symbol it draws as text where it stands (`$\uparrow$`): a colon, a semicolon, an arrow are glyphs TeX set in a face, and a
-// run's face is its own glyphs' (docs/PDF-READER.md §18.111): the colon of `\textbf{While} $j \leq n$:` is TeX's regular, the
+// run's face is its own glyphs' (docs/PDF-READER.md §18.112): the colon of `\textbf{While} $j \leq n$:` is TeX's regular, the
 // commas between an author line's `\textbf` names too (2602.23285v2).
 //
 // Each attribute is read by its own scopes: each group, and for the fill each colour switch's run (the rest of its group: an
@@ -251,7 +251,7 @@ export function groupStyleOf(
     faceSet,
   )
   // ---- the unit's own face, its base, each attribute by its own scopes, read off TeX's glyphs alone (no count of a
-  // translation's characters decides it, docs/PDF-READER.md §18.111): the face of its glyphs that stand outside every group and
+  // translation's characters decides it, docs/PDF-READER.md §18.112): the face of its glyphs that stand outside every group and
   // every switch's run, its marks and the symbols it draws as text included (a run's face is its own glyphs': the colon of
   // `\textbf{While} $j \leq n$:`, regular); where it has none, the face of its glyphs, marks and symbols too, outside every scope
   // that sets that attribute by its definition (its weight outside `\textbf{…}` and a `\bfseries` run, its slant outside

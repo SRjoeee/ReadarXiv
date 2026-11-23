@@ -3247,6 +3247,12 @@ class Builder<F extends WalkFile = WalkFile> {
           .trim()
       )
         prev.trail = [prev.trail, ...shown].filter(Boolean).join(' ')
+      // (a unit nested in this one — a note the footnote branch made a nested piece of it — is a unit of its own once this one
+      // is none: patch writes a nested unit only inside its outer one, so a note left nested in no unit was written as the
+      // paper's own bytes, with no mark, and its forced lines were read off its glyphs as one: `{\let\thefootnote\relax
+      // \footnotetext{…}}`, `\renewcommand{\thefootnote}{…}\footnotetext[1]{…}`, 2604.10456v1 and twelve notes of nine papers
+      // of the lab's 245. Its own pieces, range and id are as they were; only its place among the units is the paper's)
+      for (const p of u.pieces) if (p.t === 'nested') delete p.unit.nested
       return
     }
     const { lead, trail, inner } = displayOutside(u.pieces, this.displays, this.macros)
@@ -7578,6 +7584,79 @@ function headStartOf(pieces: readonly SourcePiece<WalkFile>[]): [number, number]
  *  range copied as the text around it is, a nested one's piece as its source between the outer unit's text), with no
  *  mark and no span: the layout guard's unit left unmarked (compile/guard.ts), whose pieces or marks would not be the
  *  paper (2610.21377's pgffor loop header written back with its body's brace doubled). Empty or absent: as before */
+/**
+ * A unit's pieces as patch writes them: a source's text as the source writes it (a letter an accent made, Builder.letter, is the
+ * accent again), backref's list (BACKREF_LIST, no byte of the source) left out, and a piece that begins a line after a comment's
+ * line end without the indent TeX skips there (SKIPPED); a piece the indents leave empty is no piece (the control word before it
+ * meets the text after it), and the piece an indent stood before is `bared`, which controlWordGuard reads. patch's (render) and
+ * the display probe's (writtenSource): one serialiser
+ */
+function writtenPieces(own: readonly SourcePiece[]): SourcePiece[] {
+  const pieces: SourcePiece[] = []
+  let bare = false
+  for (const p of own.filter((x) => !(x.t === 'ph' && x.src === BACKREF_LIST))) {
+    const q = p.t === 'text' && !p.tr && p.src !== undefined ? { ...p, s: p.src } : p,
+      r = p.t === 'text' && !p.tr ? SKIPPED.get(p) : null
+    if (!r) {
+      pieces.push(bare ? restated({ ...q, bared: true }, q) : q)
+      bare = false
+      continue
+    }
+    let t = (q as TextPiece).s
+    // (an indent right after a control word in the piece, before a letter, becomes one space, which TeX skips there: the
+    // name ends where the source ended it)
+    for (const [o, n] of [...r].sort((x, y) => y[0] - x[0]))
+      t =
+        t.slice(0, o) +
+        (/\\[A-Za-z@]+$/.test(t.slice(0, o)) && /^[A-Za-z@\u0080-\uffff]/.test(t.slice(o + n)) ? ' ' : '') +
+        t.slice(o + n)
+    if (!t) {
+      bare = true
+      continue
+    }
+    pieces.push({ ...(q as TextPiece), s: t, ...(bare || r.some(([o]) => o === 0) ? { bared: true } : {}) })
+    bare = false
+  }
+  return pieces
+}
+/**
+ * What patch writes between a command's piece and the next so that its control word ends where the source ended it: `{}` before
+ * a translation's text (XeTeX reads CJK characters as letters: \\method后 would be one control word); a space before the source's
+ * own word, where a comment stood between them in the source, which ends the name and which the walk passes over
+ * (`\\bfseries%⏎Youqing`, written \\bfseriesYouqing, one undefined name: 2610.40394v1's author block, four TeX errors and its
+ * names gone from the base page; TeX skips the space as it skipped the comment); and a space where an indent TeX skips was all
+ * that stood between them (SKIPPED, `bared`): before an address a placeholder holds, and before a letter past ASCII, which XeTeX
+ * and LuaTeX read as a letter of the name. Only there: a source that writes \\fooé itself has TeX read the name it reads
+ */
+function controlWordGuard(p: SourcePiece, next: SourcePiece | undefined, guardControlWords: boolean): string {
+  const src = p.src ?? ''
+  if (guardControlWords && /\\[A-Za-z@]+\*?$/.test(src) && next?.t === 'text' && next.tr && /^[^\s{[]/.test(next.s))
+    return '{}'
+  if (/\\[A-Za-z@]+$/.test(src) && next?.t === 'text' && !next.tr && /^[A-Za-z@]/.test(next.s)) return ' '
+  if (
+    /\\[A-Za-z@]+$/.test(src) &&
+    next?.bared &&
+    /^[A-Za-z@\u0080-\uffff]/.test(next.t === 'text' ? next.s : (next.src ?? ''))
+  )
+    return ' '
+  return ''
+}
+/**
+ * A unit's text as the marked TeX writes it, no mark of ours in it (patch's render, by writtenPieces and controlWordGuard): each
+ * nested unit between what opens and closes it. What a probe is asked of a piece the source writes as a unit of its own (a nested
+ * note's sample, marks/marks.ts carrySource), so that TeX is asked exactly the bytes it sets
+ */
+export function writtenSource(u: SourceUnit): string {
+  const pieces = writtenPieces(u.pieces)
+  let out = ''
+  for (let k = 0; k < pieces.length; k++) {
+    const p = pieces[k]!
+    if (p.t === 'nested') out += p.pre + writtenSource(p.unit) + p.post
+    else if (p.t === 'text') out += p.s
+    else out += (p.src ?? '') + controlWordGuard(p, pieces[k + 1], true)
+  }
+  return out
+}
 export function patch(
   project: PatchProject,
   translated: ReadonlyMap<SourceUnit, readonly SourcePiece[]> /* Map unit -> pieces */,
@@ -7589,36 +7668,7 @@ export function patch(
   // length of what closes it after it (its piece's `post`)
   const render = (u: SourceUnit, inner: Inner[] | null = null): Uint8Array => {
     const srcEnc = project.transcode?.has(u.file) ? 'utf8' : 'latin1'
-    // a source's text as the source writes it: a letter an accent made (Builder.letter) is the accent again
-    // (backref's list, BACKREF_LIST, is no byte of the source: written as nothing; the marked original's copy holds its marks instead)
-    // (and a piece that begins a line after a comment's line end without the indent TeX skips there: SKIPPED)
-    // (a piece the indents leave empty writes nothing and is no piece: the control word before it meets the text after it.
-    // `bared`, the piece an indent stood before where it stands now: the control word guard below reads it)
-    const pieces: SourcePiece[] = []
-    let bare = false
-    for (const p of (translated.get(u) ?? u.pieces).filter((x) => !(x.t === 'ph' && x.src === BACKREF_LIST))) {
-      const q = p.t === 'text' && !p.tr && p.src !== undefined ? { ...p, s: p.src } : p,
-        r = p.t === 'text' && !p.tr ? SKIPPED.get(p) : null
-      if (!r) {
-        pieces.push(bare ? restated({ ...q, bared: true }, q) : q)
-        bare = false
-        continue
-      }
-      let t = (q as TextPiece).s
-      // (an indent right after a control word in the piece, before a letter, becomes one space, which TeX skips there: the
-      // name ends where the source ended it)
-      for (const [o, n] of [...r].sort((x, y) => y[0] - x[0]))
-        t =
-          t.slice(0, o) +
-          (/\\[A-Za-z@]+$/.test(t.slice(0, o)) && /^[A-Za-z@\u0080-\uffff]/.test(t.slice(o + n)) ? ' ' : '') +
-          t.slice(o + n)
-      if (!t) {
-        bare = true
-        continue
-      }
-      pieces.push({ ...(q as TextPiece), s: t, ...(bare || r.some(([o]) => o === 0) ? { bared: true } : {}) })
-      bare = false
-    }
+    const pieces = writtenPieces(translated.get(u) ?? u.pieces)
     const m = mark?.(u)
     let [startAt, startCut] = m ? startOf(pieces, u.kind === 'cell') : [-1, 0]
     // the marks that open the piece the start mark goes before (a layout opening mark, marks/marks.ts layoutMarking's
@@ -7721,30 +7771,8 @@ export function patch(
       if (k === startAt && startCut === -1) parts.push(utf8Bytes(m!.start))
       parts.push(bytesOf(p.src, srcEnc))
       if (k === endAt && endAfter) parts.push(utf8Bytes(m!.end))
-      // XeTeX reads CJK characters as letters: \method后 would be one control word. {} ends the name
-      const next = pieces[k + 1]
-      if (
-        guardControlWords &&
-        /\\[A-Za-z@]+\*?$/.test(p.src) &&
-        next?.t === 'text' &&
-        next.tr &&
-        /^[^\s{[]/.test(next.s)
-      )
-        parts.push(utf8Bytes('{}'))
-      // (the source's own word right after a control word: in the source a comment stood between them, which ends the name and
-      // which the walk passes over — `\\bfseries%⏎Youqing`, written \\bfseriesYouqing, one undefined name: 2610.40394v1's author
-      // block, four TeX errors and its names gone from the base page. A space ends it as the comment did; TeX skips it)
-      // the same where an indent TeX skips was all that stood between them (SKIPPED, `bared`): before an address a placeholder
-      // holds, and before a letter past ASCII, which XeTeX and LuaTeX read as a letter of the name. Only there: a source that
-      // writes \\fooé itself has TeX read the name it reads)
-      else if (/\\[A-Za-z@]+$/.test(p.src) && next?.t === 'text' && !next.tr && /^[A-Za-z@]/.test(next.s))
-        parts.push(utf8Bytes(' '))
-      else if (
-        /\\[A-Za-z@]+$/.test(p.src) &&
-        next?.bared &&
-        /^[A-Za-z@\u0080-\uffff]/.test(next.t === 'text' ? next.s : (next.src ?? ''))
-      )
-        parts.push(utf8Bytes(' '))
+      const guard = controlWordGuard(p, pieces[k + 1], guardControlWords)
+      if (guard) parts.push(utf8Bytes(guard))
     }
     if (m?.before && beforeAt === pieces.length && beforeCut === -1) parts.push(utf8Bytes(m.before))
     if (nested?.length) {
