@@ -5,6 +5,7 @@
 // Writes: the ownership (each trail taken by its member, its element TRAIL or its run's first piece), `trailSep` (assigned:
 // an author's trail's gap, which phase 6 states), `runShared` (assigned: the run's other pieces, which phase 6 states empty).
 import type { Piece } from '@readarxiv/format'
+import { isImage, isPath } from '../doc.ts'
 import { TRAIL } from './facts.ts'
 import { isInk, r2 } from './lines.ts'
 import type { Claims } from './ownership.ts'
@@ -155,7 +156,6 @@ export function claimTrails(w: Work, claims: Claims): void {
       trail.push(a)
       prev = g
     }
-    if (!trail.length) continue
     // (ONE OWNER PER INK: an author's member whose source writes pieces after its name that own no ink — llncs's `\inst{1}`, a
     // class's `\textsuperscript{…}`, `\inst{…}\orcidID{…}`, an `\IEEEauthorrefmark` list —, set past the end mark where a front
     // unit's marks state no point between them (marks.ts: no mark of a piece after a front unit's last text): what TeX set
@@ -164,19 +164,70 @@ export function claimTrails(w: Work, claims: Claims): void {
     // `unproven`: every name of the block drawn in the original, whatever the translator gave (2604.10456v1's eleven). The run
     // is the first piece's ink, a crop of TeX's own setting drawn where the translation sets that piece; each other piece of
     // the run is stated empty (El.text '', phase 6), its ink in the first's, so that the run is drawn once, in TeX's order,
-    // wherever a translation sets the pieces and whatever their order. One gap TeX set before the run (`sep`) is the trail's
-    // statement alone: the run's first piece is laid where the translation sets it, glued there as a piece is)
+    // wherever a translation sets the pieces and whatever their order. The run is what TeX painted there, its boxes too (an
+    // ORCID icon `\orcidlink` draws, no glyph, before a class's mark: 2610.20451v1's "Davide Usseglio", the icon then REVTeX's
+    // "2"), each box no unit's, on the member's last line, painted after its last glyph and before the glyph after the run's
+    // last. One gap TeX set before the run (`sep`) is the trail's statement alone: the run's first piece is laid where the
+    // translation sets it, glued there as a piece is)
     const pieces = AUTHOR_KINDS.has(mem.kind) ? runOf(w, mem) : []
     if (pieces.length) {
-      claims.take(mem, { els: new Map([[pieces[0]!, trail]]) })
+      const boxes = runBoxes(w, mem, trail, last)
+      if (!trail.length && !boxes.length) continue
+      const first = pieces[0]!
+      claims.take(mem, {
+        els: new Map(trail.length ? [[first, trail]] : []),
+        elBoxes: new Map(boxes.length ? [[first, boxes.map(([ap, ai]): [number, number] => [ap, ai])]] : []),
+        elBoxesB: new Map(boxes.length ? [[first, boxes.map(([, , p, x]): [number, number] => [p, x])]] : []),
+      })
       for (const id of pieces.slice(1)) runShared.add(`${mem.unit}|${id}`)
       continue
     }
+    if (!trail.length) continue
     claims.take(mem, { els: new Map([[TRAIL, trail]]) })
     if (sep !== undefined) trailSep.set(mem.ord, sep)
   }
   assign(w, 'trailSep', trailSep)
   assign(w, 'runShared', runShared)
+}
+
+/**
+ * The boxes TeX painted in an author's run (A's [page, index] and B's [page index, box index] of each): on B's page of the
+ * member's last glyph, painted after that glyph and before the glyph after the run's last (`trail`, A's; none: before the glyph
+ * after the member's last), a rule or an image of no unit's with a partner on A's page of that glyph, meeting the member's last
+ * glyph `last` across and not before its start
+ */
+function runBoxes(
+  w: Work,
+  mem: Member,
+  trail: readonly number[],
+  last: { x0: number; top: number; bottom: number },
+): [ap: number, ai: number, p: number, x: number][] {
+  const { ins, B, m, inkA, pageA, pageB } = w.ix
+  const p = (pageB[mem.bLast] as number) - 1
+  const o = m.offB[p] as number
+  const pg = B.pages[p]!
+  const g0 = mem.bLast - o
+  let g1 = g0
+  for (const a of trail) {
+    const b = m.aToB[a] as number
+    if (b >= 0 && b - o > g1) g1 = b - o
+  }
+  const at = pg.boxAt
+  const from = (at[g0] as number | undefined) ?? pg.kinds.length
+  const to = g1 + 1 < pg.glyphs.length ? (at[g1 + 1] as number) : pg.kinds.length
+  const pageOfLast = pageA[m.bToA[mem.bLast] as number] as number
+  const out: [number, number, number, number][] = []
+  for (let x = from; x < to; x++) {
+    const kind = pg.kinds[x] as number
+    const ap = m.boxPage[p]?.[x] ?? 0
+    if (!(isPath(kind) || isImage(kind)) || ap !== pageOfLast || (ins.boxes[p]?.unit[x] ?? -1) >= 0) continue
+    const ai = m.boxIndex[p]![x] as number
+    const bx = inkA.pages[ap - 1]!.boxes
+    const [x0, y0, y1] = [bx[4 * ai] as number, bx[4 * ai + 1] as number, bx[4 * ai + 3] as number]
+    if (x0 < last.x0 || y0 >= last.top || y1 <= last.bottom) continue
+    out.push([ap, ai, p, x])
+  }
+  return out
 }
 
 /** a unit's pieces in the source's order, a group's inside where it stands: its texts, its elements and nested units */
