@@ -9486,10 +9486,12 @@ ends the first inside the unit with a break placeholder, `\\` of kind `break`, a
 and the lay's forced-break rule (§18.77, `unit/breaks.ts`) ends the translation's line there. A unit whose lines stand on two
 pages, a biblatex entry's (§19.10), takes the point TeX set after its first page's line, carried after that page's last glyph,
 where nothing TeX set stands between them; and, where arXiv's page ends at that line and our compile's does not, the point
-carried before the next page's line, before its first glyph. An ink unit that echoes another unit (a source unit, or an ink unit
-of the same letters before it) takes that unit's pieces; where its breaks stand in its letters is a part of its echo key, so that
-occurrences whose forced breaks differ are not one echo, and an echo keeps its own breaks' places (its content's break elements
-in their order, `locate/ink.ts`). The ink units that hold such a point change their content, so their ids move and their rows are
+carried before the next page's line, before its first glyph. An ink unit that echoes another takes that unit's pieces. Two ink
+units are one echo only where their forced breaks stand alike in their letters (a part of the ink units' echo key), so that
+occurrences whose breaks differ are not one; an ink unit echoes a source unit by its letters and placeholders, as before (a
+running head or a contents line TeX set on one line repeats a title its source breaks, and keeps that unit's row). Every echo
+keeps its own breaks' places, mapped in order onto its content's break elements (`locate/ink.ts`), a source unit's only where
+its break pieces stand where the ink unit's breaks do; else its breaks stay unplaced, as an echo's were. The ink units that hold such a point change their content, so their ids move and their rows are
 asked again.
 
 - **Reach**, over the lab's 245 papers: 10 ink units of 10 papers hold 26 of TeX's forced breaks inside them (8 notes, an orphan

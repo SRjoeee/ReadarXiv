@@ -914,17 +914,19 @@ function echoKey(u: TodayUnit | undefined): string | null {
         .join(' '),
     ),
   )
-  // (and where each of its forced breaks stands in its letters, as an ink unit's key states its own: rule 3b)
-  const at: number[] = []
-  let n = 0
-  for (const p of u.pieces)
-    if (p.t === 'text') n += spellOf(utf8(p.s ?? '')).length
-    else if (p.t === 'ph' && p.kind === 'break') at.push(n)
-  return s.length < 4
-    ? null
-    : `${s}#${u.pieces.filter((p) => p.t === 'ph' && statedClassOf(p) !== null).length}${at.length ? `#${at.join(',')}` : ''}`
+  return s.length < 4 ? null : `${s}#${u.pieces.filter((p) => p.t === 'ph' && statedClassOf(p) !== null).length}`
 }
 const ECHO_ORDER: Readonly<Record<string, number>> = { heading: 0, caption: 1 }
+/** whether a unit's forced break pieces (kind `break`) stand at `at` in its letters (spellOf of its texts), each where an ink
+ *  unit's break stands in its own (rule 3b) */
+function sameBreaks(pieces: readonly TodayPiece[], at: readonly number[]): boolean {
+  const own: number[] = []
+  let n = 0
+  for (const p of pieces)
+    if (p.t === 'text') n += spellOf(utf8(p.s ?? '')).length
+    else if (p.t === 'ph' && p.kind === 'break') own.push(n)
+  return own.length === at.length && own.every((x, k) => x === at[k])
+}
 
 /**
  * The ink units of a document. `pages` as the wrap reads them (wrap.ts: each glyph { u, x0, x1, ix0, ix1, y, size, top,
@@ -1353,10 +1355,15 @@ export function inkUnitsOf(
     let echo: number | null = null,
       own: TodayPiece[] = pieces,
       kept: Ph[] = phs
+    // (an ink unit echoes another only where their forced breaks stand where its own do, `inkKey`: two occurrences whose breaks
+    // differ are not one; a source unit by its letters and placeholders, as before: a running head or a contents line TeX set
+    // on one line repeats a title its source breaks, and keeps that unit's row, its own breaks placed where they match the
+    // unit's in number, locate/ink.ts)
     const spell = spellOf(plain),
-      key = `${spell}#${phs.length}${breakAt.length ? `#${breakAt.join(',')}` : ''}`
+      key = `${spell}#${phs.length}`,
+      inkKey = breakAt.length ? `${key}#${breakAt.join(',')}` : key
     const e = units ? echoOf.get(key) : undefined
-    const before = e === undefined && spell.length >= 4 ? inkEchoOf.get(key) : undefined
+    const before = e === undefined && spell.length >= 4 ? inkEchoOf.get(inkKey) : undefined
     if (e !== undefined || before !== undefined) {
       echo = e ?? out[before!]!.id
       own = (e !== undefined ? units![e]!.pieces : out[before!]!.pieces).map((p) => ({ ...p }))
@@ -1369,7 +1376,7 @@ export function inkUnitsOf(
     const textGlyphs = lines.flatMap((l) =>
       l.words.filter((w) => w.fam === 'text').flatMap((w) => w.gs.map((g): [number, number] => [l.page, g])),
     )
-    if (echo === null && spell.length >= 4 && !inkEchoOf.has(key)) inkEchoOf.set(key, out.length)
+    if (echo === null && spell.length >= 4 && !inkEchoOf.has(inkKey)) inkEchoOf.set(inkKey, out.length)
     // (the casts: a unit's class one INK_KIND makes units of, the ledger's classes of rule 1 or the names)
     out.push({
       id,
@@ -1383,7 +1390,9 @@ export function inkUnitsOf(
         ph: kept.flatMap((p) => p.gs),
         runs: kept.map((p): [number, [number, number][]] => [p.k, p.gs]),
         ...(labelled.length ? { label: labelled } : {}),
-        ...(forced.length ? { breaks: forced } : {}),
+        // (its own breaks' anchors: an echo of an ink unit's stand where that unit's do (its key), a source unit's only where its
+        // break pieces stand there too, else none, its breaks unplaced as an echo's were)
+        ...(forced.length && (e === undefined || sameBreaks(units![e]!.pieces, breakAt)) ? { breaks: forced } : {}),
       },
       rows: rowsOf(id, INK_KIND[cls as keyof typeof INK_KIND], cls, lines, kept, own.length, pages),
     })
