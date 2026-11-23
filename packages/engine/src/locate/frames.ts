@@ -133,28 +133,32 @@ function asUnder(
 ): boolean {
   const cx = (box[0] + box[2]) / 2,
     cy = (box[1] + box[3]) / 2
-  // (where the path crosses the line x = cx (`across` 0, the ys) or y = cy (1, the xs): each segment's point there, both ends
-  // of one lying along it)
-  const crossings = (across: 0 | 1, at: number): number[] => {
-    const out: number[] = []
+  // (the outermost of the path's crossings of the line x = cx (`across` 0: its least and greatest y) or y = cy (1: x), each
+  // segment's point there, both ends of one lying along it; null where none crosses. Read one by one: a path holds any number
+  // of segments, past any bound on a call's arguments)
+  const outermost = (across: 0 | 1, at: number): [number, number] | null => {
+    let lo = Number.POSITIVE_INFINITY,
+      hi = Number.NEGATIVE_INFINITY
     for (let i = 0; i + 3 < segs.length; i += 4) {
       const a = segs[i + across] as number,
         c = segs[i + 2 + across] as number,
         a2 = segs[i + 1 - across] as number,
         c2 = segs[i + 3 - across] as number
       if ((a - at) * (c - at) > 0) continue
-      if (a === c) out.push(a2, c2)
-      else out.push(a2 + ((at - a) / (c - a)) * (c2 - a2))
+      const p = a === c ? Math.min(a2, c2) : a2 + ((at - a) / (c - a)) * (c2 - a2),
+        q = a === c ? Math.max(a2, c2) : p
+      if (p < lo) lo = p
+      if (q > hi) hi = q
     }
-    return out
+    return lo <= hi ? [lo, hi] : null
   }
-  const ys = crossings(0, cx),
-    xs = crossings(1, cy)
+  const ys = outermost(0, cx),
+    xs = outermost(1, cy)
   const pts = [
-    [cx, (ys.length ? Math.min(...ys) : box[1]) + INSIDE],
-    [cx, (ys.length ? Math.max(...ys) : box[3]) - INSIDE],
-    [(xs.length ? Math.min(...xs) : box[0]) + INSIDE, cy],
-    [(xs.length ? Math.max(...xs) : box[2]) - INSIDE, cy],
+    [cx, (ys ? ys[0] : box[1]) + INSIDE],
+    [cx, (ys ? ys[1] : box[3]) - INSIDE],
+    [(xs ? xs[0] : box[0]) + INSIDE, cy],
+    [(xs ? xs[1] : box[2]) - INSIDE, cy],
   ] as const
   return pts.every(([x, y]) => colourAt(b, x, y, shapes, U, K, B) === colour)
 }

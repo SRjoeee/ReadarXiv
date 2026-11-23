@@ -9568,10 +9568,15 @@ expansion took off (all in this section's last item), and the rest are the holes
   text: `parNamesOf`). Only a command TeX surely acts on counts (texCommands, the reader's own scan of conditionals): none in a
   branch TeX skips (`#1\iffalse\par\fi`), none an operand (`\let\saved\par`), none in a definition inside the body, none in a
   conditional whose branch the source cannot tell (`\ifdefined`), none in a branch of the paper's own `\newif` conditional TeX
-  does not take, read with the paper's conditionals and the values TeX reads them at as every other scan of the walk is
-  (`#1\ifdraft\par\fi`, `\ifdraft` never set: false); none that the paper defines anew, its own command as the walk reads it
-  (`\renewcommand{\medbreak}{}`); an environment's content is passed to its own `\end`, one of the same name inside it whole (a
-  minipage in a minipage: the review of #676); and a call of another such macro ends the paragraph on that
+  does not take, read with the paper's conditionals and only the values PROVEN wherever a call runs: never set (false, as
+  `\newif` leaves it), or set to one value before the main file's `\begin{document}` or in a package of the paper's
+  (`#1\ifdraft\par\fi`, `\ifdraft` never set: no end); one set in the document's text, or in a file it may input there, holds
+  at a call by the order TeX meets them, so its branches are not sure and no end is read (a `\drafttrue` after the call: the
+  review of #677); none that the paper defines anew, its own command as the walk reads it (`\renewcommand{\medbreak}{}`); an
+  environment's content is passed to its own `\end`, one of the same name inside it whole (a minipage in a minipage: the review
+  of #676). Where the reading cannot tell what TeX runs it reads no end, two of TeX's paragraphs one unit as before (recorded,
+  the review of #677: a same-named `\begin` in a branch TeX skips is counted as nesting, a redefinition TeX skips still taken
+  for the command's; neither reached by the 245); and a call of another such macro ends the paragraph on that
   macro's side of its arguments, before or after them, so that the side travels through a wrapper (`\outer{#1}` calling `\inner`,
   `\textbf{#1}\par`: after the argument; the review of #674). Not where the body ends in a command that takes what follows the
   call (`\newcommand{\labelthen}[1]{#1\par\strong}`, called `\labelthen{A}{B}`): TeX's paragraph ends inside the call, where no

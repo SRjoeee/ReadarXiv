@@ -4043,26 +4043,30 @@ const isConditional = (name: string, ifs: ReadonlySet<string>) =>
 /**
  * The paper's \\newif conditionals TeX resolves the same wherever it reads them: one set true or false (\\longtrue) only
  * where TeX surely acts on it, never in a definition's body, and always to the same value; one never set, false, as
- * \\newif leaves it. A Map of the conditional's name to its value; one set otherwise is not in it
+ * \\newif leaves it. A Map of the conditional's name to its value; one set otherwise is not in it. With `until` (each text's
+ * offset an assignment must stand before): the values PROVEN wherever the document's text runs, one set at or after its text's
+ * bound (in the document's body, in a file it may input there) not in it
  */
-function newifValues(texts: readonly string[], ifs: ReadonlySet<string>) {
+function newifValues(texts: readonly string[], ifs: ReadonlySet<string>, until?: readonly number[]) {
   const set = new Map<string, Set<boolean> | null>()
   if (!ifs.size) return new Map()
   // only a file that sets one is read (a package's files mostly do not)
   const sets = new RegExp(
     String.raw`\\(?:${[...ifs].map((n) => n.slice(2).replace(/@/g, '\\@')).join('|')})(?:true|false)(?![A-Za-z@])`,
   )
-  for (const t of texts.filter((x) => sets.test(x)))
+  texts.forEach((t, k) => {
+    if (!sets.test(t)) return
     for (const c of texCommands(t, { ifs })) {
       const m = /^(.+?)(true|false)$/.exec(c.name),
         name = m && `if${m[1]}`
       if (!name || !ifs.has(name)) continue
-      if (c.inDef || !c.sure) {
+      if (c.inDef || !c.sure || (until && c.at >= (until[k] ?? 0))) {
         set.set(name, null)
         continue
       }
       if (set.get(name) !== null) (set.get(name) ?? set.set(name, new Set()).get(name)!).add(m[2] === 'true')
     }
+  })
   const out = new Map<string, boolean>()
   for (const name of ifs) {
     const v = set.get(name)
@@ -7340,8 +7344,19 @@ function readProject(
     ].map((m) => m[1]!),
   )
   const ifValues = newifValues(sources.map(sourceText), ifs)
-  // (the paper's macros, read with its conditionals: a definition's paragraph end in a branch TeX does not take is none)
-  const macros = paperMacros(own, { ifs, ifValues })
+  // (the paper's macros, read with its conditionals: a definition's paragraph end in a branch TeX does not take is none, and one
+  // in a branch it takes surely is; a definition's paragraph end is read wherever a call stands, so only a value PROVEN there
+  // counts: never set (false, as \\newif leaves it), or set before the main file's \\begin{document} or in a package of the
+  // paper's (.sty, loaded in the preamble). One set in the document's text, or in a file it may input there, holds at a call by
+  // the order TeX meets them, which this reading does not follow: its branches are not sure, and no paragraph end is read there)
+  const proven = newifValues(
+    sources.map(sourceText),
+    ifs,
+    sources.map((f) =>
+      f === mainFile.rel ? Math.max(0, documentBounds(sourceText(f)).begin) : /\.sty$/i.test(f) ? Number.POSITIVE_INFINITY : 0,
+    ),
+  )
+  const macros = paperMacros(own, { ifs, ifValues: proven })
   // (the job's .bbl, where the package holds it and it is BibTeX's, a thebibliography: what \\bibliography reads. Not biber's,
   // which is biblatex's data — \\entry, \\field — and no text, which \\bibliography, biblatex's alias of \\addbibresource, never reads)
   const bblName = `${jobName(mainFile.rel)}.bbl`,
@@ -7364,7 +7379,7 @@ function readProject(
     ownAccents: ownAccents(ownTexts),
     ownLetters: ownLetters(ownTexts),
     macros,
-    parNames: parNamesOf(ownTexts, { ifs, ifValues }, macros),
+    parNames: parNamesOf(ownTexts, { ifs, ifValues: proven }, macros),
     envMacros,
     ifs,
     ifValues,
