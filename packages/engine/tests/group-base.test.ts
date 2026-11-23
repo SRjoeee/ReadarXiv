@@ -40,7 +40,7 @@ const switches = new Map([
   ['\\bfseries', 'bold'],
   ['\\em', 'italic'],
 ])
-const face = (content: Piece[], glyphs: StyleGlyph[]) =>
+const faces = (content: Piece[], glyphs: StyleGlyph[]) =>
   groupStyleOf(
     content,
     glyphs,
@@ -49,7 +49,11 @@ const face = (content: Piece[], glyphs: StyleGlyph[]) =>
     (e) => switches.has(e.src),
     (e) => switches.get(e.src),
     (e) => symbols.get(e.id),
-  ).face.own
+  ).face
+/** the letters' base */
+const face = (content: Piece[], glyphs: StyleGlyph[]) => faces(content, glyphs).own
+const REG = { bold: false, italic: false }
+const B = { bold: true, italic: false }
 
 describe('a unit’s base face, read off TeX’s glyphs', () => {
   it('a kicker set by a paper’s macro and a title by its \\bfseries, both bold, no text of its own: bold', () => {
@@ -87,32 +91,64 @@ describe('a unit’s base face, read off TeX’s glyphs', () => {
     const glyphs = [...set('A long bold opening of the paragraph', BOLD), ...set('and words.', REGULAR)]
     expect(face(content, glyphs)).toEqual({ bold: false, italic: false })
   })
-  it('no letter of its own but its marks: the face TeX set them in, whatever its groups’ (a run’s face is its own glyphs’)', () => {
-    // (`\textbf{While} $j \leq n$:` the colon regular; a cell's `\textit{Messi}; \textit{Copa del Rey};` the semicolons
-    // upright: read off the letters alone, every letter a group's, the base was the groups' and the marks were drawn bold, italic)
+  it('two bases off TeX’s glyphs outside every group: the letters’ and the marks’ (a translated letter stands for letters, a mark for marks)', () => {
+    // (an author line `\\textbf{Yasuko Matsubara}, \\textbf{Jimeng Sun}`: its letters all bold, its commas outside the groups
+    // regular. One base read off the commas drew the names regular where a reply drops their groups (2602.23285v2-ja p1); read off
+    // the letters alone, the commas bold. Two: the names bold, the commas regular, whatever the reply keeps)
+    const names = [
+      group('\\textbf{', 'bold', [t('Yasuko Matsubara')]),
+      t(', '),
+      group('\\textbf{', 'bold', [t('Jimeng Sun')]),
+    ]
+    const g1 = faces(names, [...set('Yasuko Matsubara', BOLD), ...set(',', REGULAR), ...set('Jimeng Sun', BOLD)])
+    expect(g1.own).toEqual(B)
+    expect(g1.marks).toEqual(REG)
+    // (`\\textbf{While} $j \\leq n$:` the colon regular; a cell's `\\textit{Messi}; \\textit{Copa del Rey};` its semicolons
+    // upright, its letters italic)
     const bold = [group('\\textbf{', 'bold', [t('While')]), t(' '), el('$j$'), t(':\n')]
-    expect(face(bold, [...set('While', BOLD), ...set(':', REGULAR)])).toEqual({ bold: false, italic: false })
+    const g2 = faces(bold, [...set('While', BOLD), ...set(':', REGULAR)])
+    expect(g2.own).toEqual(B)
+    expect(g2.marks).toEqual(REG)
     const italic = [
       group('\\textit{', 'italic', [t('Messi')]),
       t('; '),
       group('\\textit{', 'italic', [t('Copa del Rey')]),
       t(';'),
     ]
-    const glyphs = [...set('Messi', ITALIC), ...set(';', REGULAR), ...set('Copa del Rey', ITALIC), ...set(';', REGULAR)]
-    expect(face(italic, glyphs)).toEqual({ bold: false, italic: false })
+    const g3 = faces(italic, [
+      ...set('Messi', ITALIC),
+      ...set(';', REGULAR),
+      ...set('Copa del Rey', ITALIC),
+      ...set(';', REGULAR),
+    ])
+    expect(g3.own).toEqual({ bold: false, italic: true })
+    expect(g3.marks).toEqual(REG)
+    // (letters of its own: both its own text's, the marks' its marks')
+    const own = [group('\\textbf{', 'bold', [t('Lead')]), t(' and words, more.')]
+    const g4 = faces(own, [...set('Lead', BOLD), ...set('and words, more.', REGULAR)])
+    expect(g4.own).toEqual(REG)
+    expect(g4.marks).toEqual(REG)
   })
-  it('a symbol it draws as text where it stands: its glyph’s weight, a math font’s too (the arrow of a table head)', () => {
-    // (`\textbf{Mean tokens}~$\downarrow$`: the arrow cmsy's, regular; and inside `\multicolumn{…}{\textbf{Overall}$\uparrow$}`,
-    // a group that sets no face, the face around it: regular. Read off the letters alone, the arrows were drawn bold)
+  it('a symbol it draws as text where it stands: a mark, its glyph’s weight, a math font’s too (the arrow of a table head)', () => {
+    // (`\\textbf{Mean tokens}~$\\downarrow$`: the arrow cmsy's, regular; and inside `\\multicolumn{…}{\\textbf{Overall}$\\uparrow$}`,
+    // a group that sets no face, the face around it: regular. The letters' base bold, every letter the bold group's)
     const top = [group('\\textbf{', 'bold', [t('Mean tokens')]), el('~'), sym('$\\downarrow$', set('↓', SYMBOLS))]
-    expect(face(top, set('Mean tokens', BOLD))).toEqual({ bold: false, italic: false })
+    const g1 = faces(top, set('Mean tokens', BOLD))
+    expect(g1.own).toEqual(B)
+    expect(g1.marks).toEqual(REG)
     const multi = [
       group('\\multicolumn{2}{c}{', 'other', [
         group('\\textbf{', 'bold', [t('Overall')]),
         sym('$\\uparrow$', set('↑', SYMBOLS)),
       ]),
     ]
-    expect(face(multi, set('Overall', BOLD))).toEqual({ bold: false, italic: false })
+    const g2 = faces(multi, set('Overall', BOLD))
+    expect(g2.own).toEqual(B)
+    expect(g2.marks).toEqual(REG)
+  })
+  it('a unit of marks alone: its letters’ base its marks’, TeX’s', () => {
+    expect(faces([t('(—)')], set('(—)', REGULAR))).toMatchObject({ own: REG, marks: REG })
+    expect(faces([group('\\textbf{', 'bold', [t('—')])], set('—', BOLD))).toMatchObject({ own: B, marks: B })
   })
   it('a group whose glyphs stand at several sizes states no size of its own: told apart, its style’s size for the caller', () => {
     // (a link in faked small capitals, its capitals at 10 and the rest at 8: the median of them is the size of none of its runs)
