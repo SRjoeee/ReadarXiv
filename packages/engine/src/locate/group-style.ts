@@ -344,7 +344,9 @@ export function groupStyleOf(
     return { letters, marks: marksOwn ?? letters }
   }
   // (a glyph's weight and slant its font's, a math font's none; a symbol's weight its font's, a math font's too: TeX sets an
-  // arrow from cmsy regular, from cmbsy bold; its slant none from a math font, whose italic is its letters' design)
+  // arrow from cmsy regular, from cmbsy bold; a symbol's slant none, whatever its font: math sets a capital Greek letter from
+  // cmr upright and a letter from cmmi italic by its design, not by the text's face (2610.20581v1 p4's italic theorem, its
+  // `$\Omega$` upright, its period italic))
   const weightOf = (g: StyleGlyph) => {
     const c = classifyFont(g.base)
     return c.fam === 'math' ? undefined : c.bold ? 'b' : ''
@@ -355,7 +357,7 @@ export function groupStyleOf(
     return c.fam === 'math' ? undefined : c.italic !== (turned[s] as boolean) ? 'i' : ''
   }
   const weight = basesOf(weightSet, weightOf, symbolWeightOf),
-    slant = basesOf(slantSet, slantOf, slantOf)
+    slant = basesOf(slantSet, slantOf, () => undefined)
   if (weight.letters !== undefined && slant.letters !== undefined) face.value[0] = `${weight.letters}|${slant.letters}`
   const marksFace =
     weight.marks !== undefined && slant.marks !== undefined ? `${weight.marks}|${slant.marks}` : undefined

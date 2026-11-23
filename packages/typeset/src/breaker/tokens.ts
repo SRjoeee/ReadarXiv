@@ -523,8 +523,13 @@ export function tokens(i: TokensInput): Tokens {
   if (Number.isInteger(measured?.fill) && measured!.fill! > 0) base.color = hexOf(measured!.fill!)
   const stack: TStyle[] = [{ ...base }]
   const style = () => stack.at(-1)!
-  /** whether a face switch set the rest of the unit's top level (its run no base's: the marks' base reaches no mark in it) */
-  let topSwitched = false
+  // (the marks' style stack beside it, where the part states a marks' base (Placed.markFace): the same groups and switches over
+  // the marks' base, so that a translated mark is drawn in what TeX set the original's marks in, a letter in what it set its
+  // letters in: an author line's separators regular between bold names, a parenthesis inside `\textbf{…}` outside its
+  // `\textit{…}` upright, a mark inside `\textit{…}` italic)
+  const mb = i.markBase
+  const mstack: TStyle[] = mb ? [{ ...base, bold: mb.bold, italic: mb.italic }] : []
+  const mstyle = () => mstack.at(-1) ?? style()
   const colourRun = (k: number, p: V0Piece): { color?: string | undefined; colourRun?: true } => {
     const rgb = i.colourOf(k)
     if (Number.isInteger(rgb)) return { color: hexOf(rgb!), colourRun: true }
@@ -873,9 +878,8 @@ export function tokens(i: TokensInput): Tokens {
             : null
         : null
       const map = sm ? transformMap(s, text) : null
-      // (outside every group and every face switch's run, a mark in the marks' base where the part states one: Placed.markFace)
-      const mb = i.markBase
-      const markSt = mb && stack.length === 1 && !topSwitched ? { ...style(), bold: mb.bold, italic: mb.italic } : null
+      // (a mark in the marks' style where the part states a marks' base: Placed.markFace)
+      const markSt = mstack.length ? mstyle() : null
       pushText(
         text,
         style(),
@@ -904,11 +908,14 @@ export function tokens(i: TokensInput): Tokens {
       const size = p.face?.size,
         of = resolved.orig?.size
       const rel = size! > 0 && of! > 0 ? { rel: size! / of! } : {}
-      stack.push({ ...(next ?? style()), ...rel, ...colourRun(k, p), ...link })
+      const run = colourRun(k, p)
+      if (mstack.length) mstack.push({ ...(openStyle(p, mstyle(), designs) ?? mstyle()), ...rel, ...run, ...link })
+      stack.push({ ...(next ?? style()), ...rel, ...run, ...link })
       return
     }
     if (p.t === 'close') {
       if (stack.length > 1) stack.pop()
+      if (mstack.length > 1) mstack.pop()
       if (headId !== null && p.id === headId) afterHead = true
       if (runinId !== null && p.id === runinId) {
         afterRunin = !endsWith(CLOSING_END)
@@ -927,11 +934,14 @@ export function tokens(i: TokensInput): Tokens {
       const sw = applyCmd(p.src, style(), designs)
       if (sw && /^\\[A-Za-z]+$/.test(p.src)) {
         stack[stack.length - 1] = sw
-        if (stack.length === 1) topSwitched = true
+        if (mstack.length) mstack[mstack.length - 1] = applyCmd(p.src, mstyle(), designs) ?? mstyle()
         return
       }
       const run = colourRun(k, p)
-      if (run.colourRun) stack[stack.length - 1] = { ...style(), ...run }
+      if (run.colourRun) {
+        stack[stack.length - 1] = { ...style(), ...run }
+        if (mstack.length) mstack[mstack.length - 1] = { ...mstyle(), ...run }
+      }
     }
     const r = resolved.get(k)
     if (!r) return
@@ -1015,8 +1025,10 @@ export function tokens(i: TokensInput): Tokens {
     // the original's style is its own: 2608.06701v1 p5's "Periodic Advisor", italic by the paper's macro, was drawn upright in
     // the run's style, and "LIVEPLAN", in faked small capitals, in full capitals; a group around it that TeX applied is in its
     // glyphs (\emph's italic), and a rendering of no stated style, or an attribute its style does not state, takes the run's)
+    // (a symbol drawn as text a mark: in the marks' style where the part states a marks' base)
+    const cur = r.mode === 'symbol' ? mstyle() : style()
     const own: TStyle = r.math
-      ? { ...style(), italic: /[A-Za-z]/.test(r.text) && r.text.length <= 3, caps: false }
+      ? { ...cur, italic: /[A-Za-z]/.test(r.text) && r.text.length <= 3, caps: false }
       : r.mode === 'orig-text' && r.st && r.st.fam !== 'math'
         ? {
             ...style(),
