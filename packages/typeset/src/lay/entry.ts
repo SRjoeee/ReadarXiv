@@ -304,6 +304,53 @@ function unservedOf(tokens: Tokens, metrics: Metrics): { inked: Set<number>; lab
 
 /** layPage: page `part.page` laid from its part and the target's rows */
 export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics, o: EntryOptions = {}): Page {
+  const flat = layFlows(part, given, rules, metrics, o)
+  if (!part.frames?.length) return flat
+  // (the units TeX set turned, by turn (Part.frames, docs/PDF-READER.md §18.108): each frame laid as a part's flows are, in its
+  // own coordinates (the page turned back), by every rule of the lay; then each laid line stated from its origin on the page
+  // along the turn, as a figure text's turned line is (Laid.lines: its items' `dir`, their places along it from x0), and lit in
+  // the frame, which is the turned run's frame (Laid.lit `dir`): the reader draws, lights and selects it through the turn)
+  const subs = part.frames.map((f) => {
+    const { frames: _f, links: _l, ties: _t, ...rest } = part
+    const sub = layFlows({ ...rest, flows: f.flows, ...(f.ties ? { ties: f.ties } : {}) }, given, rules, metrics, {
+      ...o,
+      linkFates: undefined,
+    })
+    return { sub, dir: f.dir }
+  })
+  const members = [...flat.members]
+  for (const { sub, dir } of subs) for (const m of sub.members) members.push(turnedOf(m, dir))
+  const rows = [...new Set([...flat.wait.rows, ...subs.flatMap((s) => s.sub.wait.rows)])]
+  const faces = [...flat.wait.faces, ...subs.flatMap((s) => s.sub.wait.faces)]
+  const inks = [...(flat.inks ?? []), ...subs.flatMap((s) => s.sub.inks ?? [])]
+  return {
+    ...flat,
+    wait: { rows, faces: [...new Map(faces.map((x) => [x[0], x])).values()] },
+    members: rows.length ? members.map((m) => ({ ...m, state: 'waiting' as const, off: 0, lines: [] })) : members,
+    ...(inks.length ? { inks } : {}),
+  }
+}
+/** a member laid in a frame of direction (ux, uy) stated on its page: each line from its origin there (the frame's (x0, y)
+ *  turned by the frame's direction), its items' places along it and their `dir`; its lit in the frame, the turned run's */
+function turnedOf(m: Laid, [ux, uy]: [number, number]): Laid {
+  return {
+    ...m,
+    frame: [ux, uy],
+    lines: m.lines.map(([y, x0, x1, items]) => {
+      const px = ux * x0 - uy * y,
+        py = uy * x0 + ux * y
+      return [
+        py,
+        px,
+        px + (x1 - x0),
+        items.map((it) => ({ ...it, x: px + (it.x - x0), dir: [ux, uy] as [number, number] })),
+      ] as Laid['lines'][number]
+    }),
+    lit: { ...m.lit, dir: [ux, uy] },
+  }
+}
+/** a part's flows laid (layPage's, its frames aside) */
+function layFlows(part: Part, given: Rows, rules: Rules, metrics: Metrics, o: EntryOptions = {}): Page {
   const page = part.page
   const members = part.flows.flat()
   // (the kinds the reader leaves the original's: its "what to translate", Rules.leave)

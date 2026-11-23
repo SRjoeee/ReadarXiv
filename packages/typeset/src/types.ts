@@ -154,6 +154,9 @@ export type Laid = {
   ord: number
   page: number
   state: 'laid' | Unlaid
+  /** a member of one of its part's frames (Part.frames: a unit TeX set turned), laid in the frame and stated on the page through
+   *  the frame's direction: its lines turned runs (their items' `dir`), its lit in the frame (`lit.dir`) */
+  frame?: [ux: number, uy: number]
   /** this member's groups turned off on this page: 1 text, 2 elements, 4 label */
   off: number
   /** its fit's size, leading and tracking, and the lines its borrow knob let it lay under a block (99: all its room holds);

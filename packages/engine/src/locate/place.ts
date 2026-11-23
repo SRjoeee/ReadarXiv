@@ -137,6 +137,26 @@ export function place(
     mem.cause = unit.why ?? (boxes.length ? 'no text' : 'no ink')
     return mem
   }
+  // (a source unit whose text TeX set turned (own/own.ts TURNED): its turned glyphs by role. Its text's are its own, laid in its
+  // frame (frames.ts); its label's stay A's ink where they stand, turned (no label of a turned unit is read yet: its translation
+  // is laid after it, as TeX set its text); an element's ink, a glyph or a box, is no crop of a turned unit's yet: such a unit
+  // stays the original's, `turned: an element`, counted (docs/PDF-READER.md §18.108))
+  if (turnedB.length && !unit.figure && name === undefined) {
+    const T = ins.turned ?? []
+    const roleOf = ([p, j]: [number, number]) => T[p]?.role[j]
+    if (
+      turnedB.some((x) => roleOf(x) === ROLE.element) ||
+      boxes.some(([p, x]) => ins.boxes[p]!.role[x] === ROLE.element)
+    ) {
+      mem.cause = 'turned: an element'
+      return mem
+    }
+    turnedB = turnedB.filter((x) => roleOf(x) === ROLE.text)
+    if (!turnedB.length && !list.length) {
+      mem.cause = 'no ink'
+      return mem
+    }
+  }
   let bad: string | null = null
   const aIdx: number[] = []
   // (B's glyphs with no partner inside the unit, between two of its own whose partners A sets one right after the other:

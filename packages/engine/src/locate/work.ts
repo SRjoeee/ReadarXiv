@@ -77,6 +77,9 @@ export interface Member {
   room: Room
   pages: number[]
   join?: [number] | [number, 1]
+  /** a unit whose text TeX set turned, read in its frame (frames.ts): its turn's direction on the page, its lines, lead and room
+   *  in the frame's coordinates (its page's turned back by it) */
+  frame?: [number, number]
   dir?: [number, number]
   /** a figure text set turned (`dir`): its run, its first glyph's origin, its box's length along `dir` and its room before and
    *  after its box along it (Placed.run; its line is its box on the page), as figure-text.ts tells them */
@@ -154,6 +157,14 @@ export interface Located {
   born: Map<number, { kind: string; content: Piece[] }>
   flows: number[][]
   ties: ({ rule: 'cells'; cells: number[][]; head?: 1 } | { rule: 'size'; ords: number[] })[]
+  /** the frames of the units whose text TeX set turned (frames.ts): by page and turn, their flows and ties (taken off `flows`
+   *  and `ties`), each member's facts in the frame */
+  frames: {
+    page: number
+    dir: [number, number]
+    flows: number[][]
+    ties: ({ rule: 'cells'; cells: number[][]; head?: 1 } | { rule: 'size'; ords: number[] })[]
+  }[]
   links: Map<
     number,
     {

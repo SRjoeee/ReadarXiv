@@ -1,9 +1,9 @@
 // @vitest-environment node
-// RED (lane turned, the fix not built): the instrument over a marked compile of our own (pdf-lib, Helvetica, points written as a
-// marked compile writes them, `/axt-<name> ri`), its pages read by PDF.js as the box reads them (readPdf with `turned`).
+// The instrument over a marked compile of our own (pdf-lib, Helvetica, points written as a marked compile writes them,
+// `/axt-<name> ri`), its pages read by PDF.js as the box reads them (readPdf with `turned`).
 // (1) The spell check's verdict reaches the unit's statement: a unit the ownership refuses as `spell` stays the original's for
-// THAT reason (InstrumentUnit.why), as one it refuses as `marks` does (instrument.ts states `why` for `marks` alone, so the
-// prepare's dump reads `no ink` or `text past its source` for a spell refusal: the cause lost).
+// THAT reason (InstrumentUnit.why), as one it refuses as `marks` does (instrument.ts stated `why` for `marks` alone, so the
+// prepare's dump read `no ink` or `text past its source` for a spell refusal: the cause lost).
 // (2) A table cell whose text TeX set turned (\rotatebox{90}{…}: a rotation in the content stream) is owned by its turned glyphs
 // between its points, and the instrument states them its own (Instrument.turned), as it states a level glyph's owner.
 import * as PL from '@cantoo/pdf-lib'
@@ -28,7 +28,7 @@ const unitOf = (kind: string, s: string, more: Record<string, unknown> = {}) =>
 const run = async (content: string, units: never[]) =>
   instrumentOf({ paper: { units }, finalPdf: await pdfOf(content), pdfjs, documentOptions: DOCUMENT_OPTIONS, made: { compiler: 'pdflatex', tree: '2025', front: 'test' } })
 
-describe('the spell check’s verdict (RED: the fix is not built)', () => {
+describe('the spell check’s verdict', () => {
   it('is the unit’s stated reason: a paragraph whose points hold words its source does not write', async () => {
     // (TeX set "Hello World" between the points of a unit whose source writes "Hello": no line of its own to let go, the
     // ownership refuses it as spell)
@@ -38,7 +38,7 @@ describe('the spell check’s verdict (RED: the fix is not built)', () => {
   })
 })
 
-describe('a table cell whose text TeX set turned (RED: the fix is not built)', () => {
+describe('a table cell whose text TeX set turned', () => {
   it('is owned by its turned glyphs between its points, which the instrument states its own', async () => {
     // (a header cell's word set a quarter turned, \rotatebox{90}: its text matrix rotated by the content stream's cm; a level
     // cell beside it)

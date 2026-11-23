@@ -24,6 +24,7 @@ import { END, TRAIL } from './facts.ts'
 import { factsOf } from './facts-pass.ts'
 import { keepArtefacts } from './artefacts.ts'
 import { endMarks } from './end-marks.ts'
+import { frameTurned } from './frames.ts'
 import { frameMeasures, lineGeometry, rooms } from './geometry.ts'
 import { flowsAndTies, rowAligns } from './flows.ts'
 import { leadNames } from './leads.ts'
@@ -73,11 +74,12 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   flowsAndTies(w) // 13
   rowAligns(w) // 14
   linksOnA(w, owned, o) // 15
-  return close(w, owned)
+  const frames = frameTurned(w) // 16: the units TeX set turned, in their frames, off the page's flows and ties
+  return close(w, owned, frames)
 }
 
 /** what locate states, read off the record its phases wrote: the wrap's groups, the ownership's check, the counts */
-function close(w: Work, owned: Owned): Located {
+function close(w: Work, owned: Owned, frames: Located['frames']): Located {
   const { ins } = w.ix
   const { units, members, stats, displays, floatLines } = w
   const born = field(w, 'born')
@@ -113,7 +115,21 @@ function close(w: Work, owned: Owned): Located {
       }
     } else noteUnlocated(mem.cause ?? 'no ink')
   }
-  return { units, members, born, flows, ties, links, groups, figureGroups, stats, displays, floatLines, disagreements }
+  return {
+    units,
+    members,
+    born,
+    flows,
+    ties,
+    frames,
+    links,
+    groups,
+    figureGroups,
+    stats,
+    displays,
+    floatLines,
+    disagreements,
+  }
 }
 
 export { END, TRAIL }

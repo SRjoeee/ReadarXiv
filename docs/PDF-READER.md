@@ -9402,6 +9402,53 @@ unit's own text is not TeX's, and the original is the right drawing).
   the original's, as before); TRANSLATE stays (no unit's content, id or wire moves: the rows production holds are kept);
   LAYOUT and the marks digest stay (no TeX moves; today's layout maker reads no instrument of this engine).
 
+### 18.108 Text TeX set turned is laid in its frame and drawn through its turn (the owner's word of 2026-11-23)
+
+The owner: 「旋转排版的文字，我希望即使旋转了，如果它是我们知道的文字而不是公式啥的，能翻就翻。」 TeX does not set turned text: it
+sets a box LEVEL and then turns it (`\rotatebox`, `sideways`, `sidewaystable`, `turn`, a landscape float). The closest to what
+the translated TeX would compile to: the unit laid in its unturned frame by the ordinary lay and drawn through its turn. One
+mechanism for a turned header cell, a turned caption of several lines and a sideways page; no lay of its own for turned text.
+
+- **The ownership** (`own/own.ts`, TURNED). pageInk reads a glyph whose matrix is not level as a box of kind -4 and, read with
+  `turned`, a turned glyph (`ink.ts` emit, turnedGlyph: a rotation of the page's axes, no mirror nor shear); the ownership read
+  the level glyphs alone, so a unit set turned spelled nothing (`spell`) and stayed the original's. Now a unit whose range holds
+  no level glyph of ink takes the turned glyphs between its points (by their boxes' places in the stream) as its text, those
+  between a placeholder's two points as that placeholder's, a caption's from TeX's label point to its start as its label
+  (kept the original's ink where it is no label's form), and spells them; its turn is their one direction. One whose turned
+  glyphs share no direction stays as it was, counted (`stats.turned.mixed`). A unit with level text reads as before: a turned
+  glyph in its range (an axis title TeX set inside a paragraph's range) is none of its. The instrument states those glyphs the
+  unit's (`Instrument.turned`, a placeholder's by the points round its box), and the ownership's reason reaches the unit
+  (`InstrumentUnit.why`: `spell` and `across` beside `marks`; the prepare's dump said `no ink` or `text past its source`).
+- **The frame** (`locate/frames.ts`, locate's phase 16). A located unit, no figure text, its text all turned, on one page, in one
+  turn: its lines, lead, measure and room read in the page's coordinates turned back by its turn about the page's origin
+  ((x, y) of the page is (ux x + uy y, -uy x + ux y) there; every unit of one turn on a page shares one frame, as a turned
+  table's cells share TeX's box), its lines cut where the baseline moves, its measure its lines' extent (`read`: TeX states
+  none of a turned box's measure here), its room along its lines to the nearest ink on their band and under its last line to
+  the nearest ink across its measure, every glyph, turned glyph and painted box of the page seen through the inverse turn. It
+  leaves the page's flows and ties for its frame's (`Located.frames`; a tie whose members are all of one frame goes with
+  them). Not framed: a unit on two pages or in two turns (`turned: two pages`, `turned: two turns`).
+- **The part** (`Part.frames`): by turn, its direction and its flows and ties, each member stated in the frame, its lines'
+  page the page's; a page that held nothing else to lay has a part for them, its flows none. FORMAT stays 1, by the format's
+  own rule (ARCHITECTURE.md §5): a reader of before strips the field (zod's object strips what it does not know), lays the
+  page's flows as before and leaves the framed units the original's, their groups on, as it did when no part held them; it
+  never lays them level. The other form weighed, the members in the page's flows with their turn and FORMAT 2, would have an
+  older reader refuse every new part where this one has it read the rest of the page as before, for nothing gained.
+- **The lay** (`lay/entry.ts` layPage): each frame laid as a part's flows are, by every rule of the lay, nothing new but the
+  frame; then each laid line stated from its origin on the page along the turn, its items' places along it and their `dir`,
+  as a figure text's turned line is, and lit in the frame (Laid.lit `dir`, the turned run's frame: the same coordinates); the
+  member carries its frame (`Laid.frame`). A frame's row not come makes its page wait, as any row does.
+- **The reader**: nothing of its own. Its painter draws a line of turned items about its origin (`compose/paint.ts`, the
+  figure texts' path); its groups turn off a laid member's text group, the turned glyphs' too (the wrap's turned groups,
+  `wrap/wrap.ts`): the original's turned glyphs are erased as a level unit's are. The text layer, selection and copy read the
+  items as a figure text's turned run's; the highlight passes over a member lit along a direction (`highlight.ts`), as over a
+  turned figure text: not lit by sentence, a member lit whole is not drawn either (not done: the highlight of turned runs is
+  the figure texts' too). Hover and the panes' sync read the lit boxes, so the same.
+- **Not this round's**: an element of a turned unit, a glyph or a box, a formula, a reference, a citation, a paper's macro of
+  ink: its ink is no crop of a turned unit yet, so such a unit stays the original's (`turned: an element`, counted); a turned
+  caption's label is left the original's ink where it stands (no label of a turned unit is read yet: its translation is laid
+  after it, as TeX set its text); a page with /Rotate (unread whole, `ink.ts`); a mirrored or sheared glyph (a box alone).
+  Figure texts keep their own one-line run (S.figures): one could later be a frame of one line, not changed now.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server
