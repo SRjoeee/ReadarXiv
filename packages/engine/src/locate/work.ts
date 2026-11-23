@@ -50,7 +50,7 @@ export interface Member {
   readonly elBoxesB: ReadonlyMap<string, readonly [number, number][]>
   /** A's turned glyphs ([page, index among the page's turned]): a figure text set turned, a unit whose text TeX set turned */
   readonly turned: readonly [number, number][]
-  /** a unit whose text TeX set turned (frames.ts): its elements' turned glyphs by piece id, and its label's */
+  /** a unit whose text TeX set turned (turned-frames.ts): its elements' turned glyphs by piece id, and its label's */
   readonly turnedEls: ReadonlyMap<string, readonly [number, number][]>
   readonly turnedLabel: readonly [number, number][]
   lines: Line[]
@@ -80,7 +80,7 @@ export interface Member {
   room: Room
   pages: number[]
   join?: [number] | [number, 1]
-  /** a unit whose text TeX set turned, read in its frame (frames.ts): its turn's direction on the page, its lines, lead and room
+  /** a unit whose text TeX set turned, read in its frame (turned-frames.ts): its turn's direction on the page, its lines, lead and room
    *  in the frame's coordinates (its page's turned back by it) */
   frame?: [number, number]
   dir?: [number, number]
@@ -163,7 +163,7 @@ export interface Located {
   born: Map<number, { kind: string; content: Piece[] }>
   flows: number[][]
   ties: ({ rule: 'cells'; cells: number[][]; head?: 1 } | { rule: 'size'; ords: number[] })[]
-  /** the frames of the units whose text TeX set turned (frames.ts): by page and turn, their flows and ties (taken off `flows`
+  /** the frames of the units whose text TeX set turned (turned-frames.ts): by page and turn, their flows and ties (taken off `flows`
    *  and `ties`), each member's facts in the frame */
   frames: {
     page: number

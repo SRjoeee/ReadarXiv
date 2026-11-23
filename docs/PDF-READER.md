@@ -9588,7 +9588,7 @@ mechanism for a turned header cell, a turned caption of several lines and a side
   unit in, reads as before, so today's layout file and LAYOUT do not move. The instrument states those glyphs the
   unit's (`Instrument.turned`, a placeholder's by the points round its box), and the ownership's reason reaches the unit
   (`InstrumentUnit.why`: `spell` and `across` beside `marks`; the prepare's dump said `no ink` or `text past its source`).
-- **The frame** (`locate/frames.ts`). A located unit, no figure text, its text all turned, on one page, in one turn, is held
+- **The frame** (`locate/turned-frames.ts`). A located unit, no figure text, its text all turned, on one page, in one turn, is held
   out of every reading of the level page right after the members are placed (phase 1b, `holdTurned`): read in the page's
   axes, a turned header's box widened its table's measure and a caption's separation was read against it (a first chain
   over the 245 moved 126 other members' lines or rooms in 9 papers so). After the last reading (phase 16, `frameTurned`) it
@@ -9620,7 +9620,7 @@ mechanism for a turned header cell, a turned caption of several lines and a side
   not text stays the original's ink, turned with it). Each of a turned unit's turned glyphs is the unit's in its role, as a
   level glyph is (`locate/place.ts`): its text's; an element's, a placeholder's by its piece (a formula, a `\ref`, a `\cite`,
   a paper's macro of ink), its rules and images with it; its label's. An element is stated as every element is
-  (`frames.ts` frameElements, geometry.ts's reading): its glyphs cut into the unit's lines with its text's (a formula's told
+  (`turned-frames.ts` frameElements, geometry.ts's reading): its glyphs cut into the unit's lines with its text's (a formula's told
   apart from the text, lines.ts), its ink a box per line in the frame, on that line's baseline; its glyphs in its `.e` group,
   erased with the unit and drawn again as its crop where the translation sets it, by the ordinary rules (its glue, its fit,
   its kind's drawing). One of no ink says which of three it is by the instrument's facts alone: TeX set nothing for it
@@ -9628,7 +9628,7 @@ mechanism for a turned header cell, a turned caption of several lines and a side
   text (`outside`), or neither, and the typesetter leaves the unit the original's; B's level stream between its points
   proves nothing here, a turned unit setting nothing there. A turned element's glyph of no piece leaves its unit the
   original's (`turned: an element of no piece`). The label (a caption's, from TeX's label point) is read as a level caption's
-  (`frames.ts` frameLabel: its line, its style, the line of its own it stands on, its name, number and punctuation by
+  (`turned-frames.ts` frameLabel: its line, its style, the line of its own it stands on, its name, number and punctuation by
   `labelParts`), its glyphs in its `.l` group: the structural-names rule (§19.11) draws it anew in the target's word for its
   float's type, as a level caption's, on the frame's line, through the turn; nothing of a second rule.
 - **The crop through the turn** (the reader's `paint.ts` cropsOf, `placeOf`). The translation's line keeps the original's

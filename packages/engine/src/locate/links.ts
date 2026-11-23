@@ -11,7 +11,7 @@ import { assign, type Located, type LocateOptions, type Member, type Work } from
 export function linksOnA(w: Work, owned: Owned, o: LocateOptions, held: readonly { mem: Member }[] = []): void {
   const { inkA, m, pageA } = w.ix
   const { members } = w
-  // (the turned glyphs of the units held to be framed (frames.ts holdTurned), by page: each one's member and its piece (an
+  // (the turned glyphs of the units held to be framed (turned-frames.ts holdTurned), by page: each one's member and its piece (an
   // element's id, '' its text, null its label's), which no level glyph point tells: an annotation over a sideways caption's
   // reference holds turned glyphs alone)
   const turnedOwner = new Map<number, Map<number, [Member, string | null]>>()

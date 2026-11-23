@@ -423,7 +423,7 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
     .filter((u) => u.kind === 'name' && u.name === undefined)
     .map((u) => [textOf(u.content), u.id])
   const partDigests: (string | null)[] = []
-  // (the page's frames of units TeX set turned (locate/frames.ts), those of which a reader could lay a member: a page that holds
+  // (the page's frames of units TeX set turned (locate/turned-frames.ts), those of which a reader could lay a member: a page that holds
   // nothing else to lay has a part for them, its flows none)
   const framesOn = (p: number) =>
     (located.frames ?? []).filter((f) => f.page === p && f.flows.some((fl) => fl.some((o) => states[o]!.drawn)))

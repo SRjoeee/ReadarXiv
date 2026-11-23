@@ -1,4 +1,4 @@
-// A source unit whose text TeX set turned is placed in its frame (locate/frames.ts, docs/PDF-READER.md §18.112): TeX sets a box
+// A source unit whose text TeX set turned is placed in its frame (locate/turned-frames.ts, docs/PDF-READER.md §18.112): TeX sets a box
 // level and turns it, so the unit's lines, lead and room are read in the page's coordinates turned back by its turn, and the
 // part states it in a frame of that turn (Part.frames), off the page's flows, which a typesetter lays as it lays a part's
 // flows. A cell of a table's header set by \rotatebox{90}{…}, its turned glyphs its own (the instrument's turned owners).
