@@ -55,6 +55,11 @@ interface BundleInput {
   recovered?: Head['recovered']
 }
 
+/** the kinds of unit the reader reads beyond its lay, which leave the units a translator is asked for never: a heading, which
+ *  its contents list with its row as its title and the original's outline's page where no part places it (packages/reader
+ *  session/contents.ts listedOf: one TeX set whose marks a class took off owns no glyph and is listed so), and an abstract,
+ *  the context every batch is given (session/rows.ts contextOf) */
+const READ_BEYOND_LAY: ReadonlySet<string> = new Set(['heading', 'abstract'])
 /** each member's state in the bundle: why it stays the original's (PrepWhy), and the groups the add-on could not part */
 export interface MemberState {
   why?: PrepWhy
@@ -367,8 +372,10 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
   const all = located.units ?? ins.units
   // (a unit every member of which the locate left unlocated because TeX set no point of it and it owns no glyph of B
   // (`unlocated: marks`, place.ts: the ownership's why 'marks'): a false branch of a conditional, a class's keywords it never
-  // prints, a title it throws away. Nothing of it is on a page, and what TeX printed of it, where it printed any, is an ink
-  // unit's, asked as that: it is not asked. One another unit asked names in its content (a nested unit) is kept, and the names
+  // prints, a picture's text, whose glyphs the figure reading makes its own units of (PDF-READER §18.102), an author's unit a
+  // class prints from its own store. Nothing of it is on a page, and what TeX printed of it, where it printed any, is an ink
+  // unit's, asked as that: it is not asked. One another unit asked names in its content (a nested unit) is kept, so is one of a
+  // kind the reader reads beyond its lay (READ_BEYOND_LAY: a heading, an abstract), and the names
   // of the block are read from every unit as before (names.ts: an author's unit TeX never set still writes its names, which the
   // block TeX printed draws: 2608.14557v1), only what is written left without it)
   const everyMember = new Map<number, boolean>()
@@ -378,7 +385,8 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
   for (const u of all)
     for (const q of u.content as readonly { t: string; unit?: string }[])
       if (q.t === 'unit' && q.unit) named.add(q.unit)
-  const neverSet = (u: (typeof all)[number], i: number) => everyMember.get(i) === true && !named.has(u.id)
+  const neverSet = (u: (typeof all)[number], i: number) =>
+    everyMember.get(i) === true && !named.has(u.id) && !READ_BEYOND_LAY.has(u.kind)
   /** the ids asked: of a unit some instance of which TeX set (or another names), and every unit born on A */
   const asked = new Set<string>()
   const seen = new Set<string>()
