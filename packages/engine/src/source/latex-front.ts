@@ -4733,11 +4733,12 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
     return true
   }
   // (the end of a paper macro's call whose body ends the paragraph after its prose, parAfter: the unit ends there, at the first
-  // token the walk reads past it, as at a written \par)
+  // token the walk reads past it, as at a written \par; the white space right after the call, which TeX skips in vertical mode,
+  // still the unit's, as it is a unit's before a blank line, so that a unit TeX's \par ends where it ended already keeps its text)
   let parAt = -1
   while (i < to && !ctx.ended) {
     walkSteps++
-    if (parAt >= 0 && i >= parAt) {
+    if (parAt >= 0 && i >= parAt && (then || !/\s/.test(s[i]!))) {
       parAt = -1
       endText()
       b.flush()

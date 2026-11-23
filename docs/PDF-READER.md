@@ -9552,8 +9552,11 @@ expansion took off (all in this section's last item), and the rest are the holes
   (a group ends no paragraph); an argument's, a box's or an environment's `\par` is that box's paragraph alone. Not covered: a
   class's command whose body the paper does not ship (acmart's `\institution`), and `\\` in centred or ragged text, which LaTeX
   sets as `\par` there, inside one unit by design (one sentence); nor a table's cell, a heading's, a caption's or an author
-  block's own text, whose readings bound them otherwise. The units split move their ids (unitId(kind, content)): their rows
-  are asked again, every other unit's id and row kept.
+  block's own text, whose readings bound them otherwise; nor a definition that ends a table's cell or row (`&`, `\\` in its
+  body: 2609.36054v2's `\formataffil`). The white space after a call that ends the paragraph, which TeX skips in vertical mode,
+  stays the unit's, as it does before a blank line: a unit TeX's `\par` ended where it ended already keeps its text and its id
+  (2610.21477v1's last `\PromptItem` of each box). The units split move their ids (unitId(kind, content)): their rows are asked
+  again, every other unit's id and row kept.
 - **A unit TeX never sets is not asked of a translator** (`bundle/bundle.ts`, the units). A unit every member of which the
   locate leaves unlocated because TeX set no point of it and it owns no glyph of B (`unlocated: marks`, the ownership's why
   `marks`) is on no page: the false branch of a conditional, the keywords a class stores and never prints, the title IEEEtran
