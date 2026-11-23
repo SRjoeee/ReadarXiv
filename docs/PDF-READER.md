@@ -9421,14 +9421,18 @@ mechanism for a turned header cell, a turned caption of several lines and a side
   unit in, reads as before, so today's layout file and LAYOUT do not move. The instrument states those glyphs the
   unit's (`Instrument.turned`, a placeholder's by the points round its box), and the ownership's reason reaches the unit
   (`InstrumentUnit.why`: `spell` and `across` beside `marks`; the prepare's dump said `no ink` or `text past its source`).
-- **The frame** (`locate/frames.ts`, locate's phase 16). A located unit, no figure text, its text all turned, on one page, in one
-  turn: its lines, lead, measure and room read in the page's coordinates turned back by its turn about the page's origin
-  ((x, y) of the page is (ux x + uy y, -uy x + ux y) there; every unit of one turn on a page shares one frame, as a turned
-  table's cells share TeX's box), its lines cut where the baseline moves, its measure its lines' extent (`read`: TeX states
-  none of a turned box's measure here), its room along its lines to the nearest ink on their band and under its last line to
-  the nearest ink across its measure, every glyph, turned glyph and painted box of the page seen through the inverse turn. It
-  leaves the page's flows and ties for its frame's (`Located.frames`; a tie whose members are all of one frame goes with
-  them). Not framed: a unit on two pages or in two turns (`turned: two pages`, `turned: two turns`).
+- **The frame** (`locate/frames.ts`). A located unit, no figure text, its text all turned, on one page, in one turn, is held
+  out of every reading of the level page right after the members are placed (phase 1b, `holdTurned`): read in the page's
+  axes, a turned header's box widened its table's measure and a caption's separation was read against it (a first chain
+  over the 245 moved 126 other members' lines or rooms in 9 papers so). After the last reading (phase 16, `frameTurned`) it
+  is located again and read in the page's coordinates turned back by its turn about the page's origin ((x, y) of the page is
+  (ux x + uy y, -uy x + ux y) there; every unit of one turn on a page shares one frame, as a turned table's cells share TeX's
+  box): its style off its turned glyphs as any turned run's, its glyphs as level glyphs of the frame cut into lines by locate's
+  own reading (`lines.ts` cutLines), its measure its lines' extent (`read`: TeX states none of a turned box's measure here),
+  its room along its lines to the nearest ink on their band and under its last line to the nearest ink across its measure,
+  every glyph, turned glyph and painted box of the page seen through the inverse turn; the cells of one table in a frame tied
+  by TeX's grid as the page's are (`Located.frames`). Not framed: a unit on two pages or in two turns (`turned: two pages`,
+  `turned: two turns`).
 - **The part** (`Part.frames`): by turn, its direction and its flows and ties, each member stated in the frame, its lines'
   page the page's; a page that held nothing else to lay has a part for them, its flows none. FORMAT stays 1, by the format's
   own rule (ARCHITECTURE.md §5): a reader of before strips the field (zod's object strips what it does not know), lays the
@@ -9450,6 +9454,18 @@ mechanism for a turned header cell, a turned caption of several lines and a side
   caption's label is left the original's ink where it stands (no label of a turned unit is read yet: its translation is laid
   after it, as TeX set its text); a page with /Rotate (unread whole, `ink.ts`); a mirrored or sheared glyph (a box alone).
   Figure texts keep their own one-line run (S.figures): one could later be a frame of one line, not changed now.
+- **Reach**, as measured over the lab's 245 papers from their stored compiles (no compile key moves): 61 units framed in 11
+  papers (59 cells, 6 of them turned 60 degrees, and 2 captions of a sideways figure), 36 of them cells the paper keeps as
+  written (a word, a name: drawn as the original's ink, by their rule); of the 32 placements of turned text a survey found
+  left the original's (lane turned), 25 drawn translated and 7 left for an element of ink (`turned: an element`: a formula,
+  a reference, a citation in a turned cell or caption). No unit is in two turns or on two pages. Every other object byte
+  for byte: every units object, ownership file and part but the 14 parts that gain a frame and the two pages that gain one
+  (2610.38776v1 p20 and p21, sideways figures); 18 prepare dumps differ (the framed units' states, and the reason of four
+  units the spell check refuses, now `spell` where it read `no ink`). The reader's lay with every row answered: drawn
+  51,603 -> 51,628 (the 25), no unit drawn before lost, 5,872 -> 5,874 pages laid.
+- **Versions**: PIPELINE moves (the parts, the units' states); FORMAT 1 stays (above); TRANSLATE stays (no unit's content, id
+  or wire moves: every units object byte for byte, the rows production holds are kept); LAYOUT and the marks digest stay (no
+  TeX moves; today's layout maker does not ask the turned reading).
 
 ## 19. The engine's contract
 
