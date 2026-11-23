@@ -59,6 +59,8 @@ export type CommandSample = {
   src: string
   call: boolean
   own?: true
+  /** a front unit's piece between its texts, asked as it stands (betweenOf): its command `front <src>` (frontKey) */
+  front?: true
   glued?: string
   ahead?: undefined
 }
@@ -310,7 +312,34 @@ export function probeSamples(units: readonly Unit[], complete: CompleteGiven | n
         own.set(cmd, { command: cmd, src: p.src!, call: false, own: true, ...(glued ? { glued } : {}) })
       }
     }
-  return [...seen.values(), ...own.values(), ...aheadSamples(units)]
+  // (each front unit's piece between its texts of the paper's macros' class, a name's mark, as it stands, once, at most
+  // FRONT_PROBE_MAX: its closing mark before the next name's text is TeX's answer for that call alone, layoutMarking's `between`)
+  const fronts = new Map<string, CommandSample>(),
+    isFront = frontMarks(units as Parameters<typeof frontMarks>[0])
+  for (const u of units)
+    for (const k of betweenOf(u, !!isFront(u as Parameters<typeof isFront>[0]))) {
+      const p = u.pieces[k]!
+      if (p.t !== 'ph' || classOf(p) !== 'macro' || !fit(p.src!) || p.src!.length > COMPLETE_SRC_MAX) continue
+      const key = frontKey(p.src!)
+      if (!fronts.has(key) && fronts.size < FRONT_PROBE_MAX)
+        fronts.set(key, { command: key, src: p.src!, call: false, own: true, front: true })
+    }
+  return [...seen.values(), ...own.values(), ...fronts.values(), ...aheadSamples(units)]
+}
+/** the key of a front piece's answer in the probe's switches: its source as it stands, a key no command's name can be */
+export const frontKey = (src: string): string => `front ${src}`
+/** at most this many front pieces a paper's probe asks about (probeSamples' `front`) */
+export const FRONT_PROBE_MAX = 64
+/** the pieces between a front unit's texts that set ink (BETWEEN_TEXTS), by index: after its first text of letters and before
+ *  its last (layoutMarking's `between`, probeSamples' `front`) */
+function betweenOf(u: Unit, isFront: boolean): number[] {
+  if (!isFront) return []
+  const lettered = (q: Piece) => q.t === 'text' && /\p{L}/u.test(q.s)
+  const first = u.pieces.findIndex(lettered),
+    last = u.pieces.findLastIndex(lettered),
+    out: number[] = []
+  for (let k = first + 1; first >= 0 && k < last; k++) if (BETWEEN_TEXTS(u.pieces[k]!)) out.push(k)
+  return out
 }
 /** a source the probe sets in a box: no comment or parameter sign, no \verb, at most 400 code units (probeSamples' `fit`) */
 const probeFit = (src: string | undefined): boolean =>
@@ -3088,7 +3117,8 @@ export function layoutMarking(
   /** the call the probe asked about for each complete macro (probeSamples, over the same units): a call of it with other
    *  arguments may end in another glyph, which TeX kerns otherwise with what follows (`\\fmt{x}{V}.` under mathptmx, the
    *  probe's `\\fmt{x}{x}.`), so its answer is that call's, and a call of no arguments's at all */
-  const asked = switches && closed.size ? (probeSamples(units, closed).filter((s) => s.own) as CommandSample[]) : []
+  const asked =
+    switches && closed.size ? (probeSamples(units, closed).filter((s) => s.own && !s.front) as CommandSample[]) : []
   const probed = new Map<string | null, string>(asked.map((s) => [s.command, s.src]))
   /** the placeholder each complete macro's probed call is glued to (probeSamples' `glued`), TeX's answer for it the `call`
    *  follower's: a call glued to a placeholder of that source has its closing mark where TeX answered that a mark between the
@@ -3127,6 +3157,15 @@ export function layoutMarking(
         : gluedTo(p, next)
           ? codes[7]
           : codes[next?.t === 'text' && next.s[0] && PUNCT.includes(next.s[0]) ? PUNCT.indexOf(next.s[0]) : 6]
+    return code === 'x' ? '2' : code
+  }
+  /** what TeX answered for a front piece between its unit's texts, its call as it stands, before what follows it (probeSamples'
+   *  `front`): a code as answer's, 'x' as '2'; undefined where the probe asked nothing of it (no switches, past
+   *  FRONT_PROBE_MAX, a piece of no sample) — and no closing mark then */
+  const frontSaid = (p: Piece, next: Piece | undefined): string | undefined => {
+    const codes = p.t === 'ph' && p.src ? switches?.[frontKey(p.src)] : undefined
+    if (!codes) return undefined
+    const code = codes[next?.t === 'text' && next.s[0] && PUNCT.includes(next.s[0]) ? PUNCT.indexOf(next.s[0]) : 6]
     return code === 'x' ? '2' : code
   }
   /** whether a piece after one that may look ahead may have its marks: TeX answered so for a footnote's call */
@@ -3175,18 +3214,15 @@ export function layoutMarking(
     // \protect before it, it is stored as it is and set where the note is: 2610.20484's \texttt and 2610.11256's \href in a
     // \thanks were LOST, their marks gone)
     const lead = front(u) ? ROBUST_LEAD : ''
-    // (a front unit's pieces between its texts: those after its first text of letters and before its last, BETWEEN_TEXTS)
-    const lettered = (q: Piece) => q.t === 'text' && /\p{L}/u.test(q.s)
-    const firstText = lead ? u.pieces.findIndex(lettered) : -1,
-      lastText = lead ? u.pieces.findLastIndex(lettered) : -1
     // (a piece that sets ink between the texts of a front unit — a name's mark in a unit of several names, `Ann Lee\\inst{1},
-    // Bob Ray` — has a point on each side, so that TeX states where its ink begins and ends between the names': not taken for
-    // letters of the word before it (`bare`), and its closing mark where only a look ahead of
-    // its own command would keep it off and TeX answered nothing for it (`raw`); every other rule of the marking as for any piece:
-    // none after a command that reads what follows it, the opening point of one after a forced break before the break (and its
-    // closing one after it), TeX's answers. PDF-READER §18.111)
-    const between = (k: number): boolean =>
-      firstText >= 0 && k > firstText && k < lastText && BETWEEN_TEXTS(u.pieces[k]!)
+    // Bob Ray` — gets its closing mark before the next name's text where TeX's probe answered, for that call as it stands and
+    // what follows it, that the mark changes nothing (frontSaid, probeSamples' `front`): a macro that reads what follows it,
+    // `\\@ifnextchar,{…}{…}`, would read the mark and print other content. No answer, no closing mark: the member stays as the
+    // line reads it. Every other rule of the marking as for any piece: no mark of its own glued to a word unless TeX said its box
+    // begins apart (`bare`), none after a command that reads what follows it, the opening point of one after a forced break before
+    // the break. PDF-READER §18.111)
+    const betweens = new Set(betweenOf(u, !!lead)),
+      between = (k: number): boolean => betweens.has(k)
     // (its closing mark before the next name's text alone: before another piece, whose ink would be no one's where that piece
     // gets no mark of its own, 2608.11884v1's `\\textsuperscript{1,2}\\corresponding`, the two pieces one run as before)
     const closesBetween = (k: number): boolean => {
@@ -3270,8 +3306,7 @@ export function layoutMarking(
         before?.t === 'text' &&
         WORD_END.test(before.s) &&
         !parted.has(p.src) &&
-        !(BOXY.test(p.src!) && !prefixed) &&
-        !between(k)
+        !(BOXY.test(p.src!) && !prefixed)
       ) {
         bare.add(k)
         return [piece]
@@ -3284,7 +3319,8 @@ export function layoutMarking(
       // TeX answered that its opening mark and a closing one after that mark move nothing: both so, the closing one inside the text
       // after it, past its first character (`movedAt`); a paper's macro keeps its opening mark alone, as for 2; a text piece whose
       // source is not its text there (an accent's letter joined to it), none)
-      const raw = cls === 'macro' && !answered(p) ? undefined : answer(p, next)
+      const fronted = cls === 'macro' && between(k) ? frontSaid(p, next) : undefined
+      const raw = fronted ?? (cls === 'macro' && !answered(p) ? undefined : answer(p, next))
       // (4, before a word: TeX answered that the call's `{}` box differs from the call as the paper sets it — the space its
       // tokenizer skips after a control word, which a closing mark would keep — and that its box with the opening mark is the
       // call's own (punctuationSection): its opening mark alone, as for a paper's macro — `\footnotemark of`, first after a display
@@ -3336,7 +3372,7 @@ export function layoutMarking(
       if (
         said === '1' ||
         !closes ||
-        (looks(p) && !(cls === 'footnote' && said === '0') && !(raw === undefined && closesBetween(k))) ||
+        (looks(p) && !(cls === 'footnote' && said === '0') && !(fronted === '0' && closesBetween(k))) ||
         (ENDS_IN_CS.test(p.src ?? '') && !identifierPiece(p.src)) ||
         /\s$/.test(p.src ?? '') ||
         ENDS_ENV.test(p.src ?? '')
@@ -3383,9 +3419,9 @@ export function layoutMarking(
         }
         if (f < head) continue
         out[f] = [{ t: 'ph', src: `${lead}\\axtpma{${cls === 'footnote' ? 'n' : 'p'}${i}.${j}a}` }, ...out[f]!]
-        // (in a front unit, its closing one after it where it stands between the unit's texts: `between`)
-        if (closesBetween(j))
-          out[j] = [q, { t: 'ph', src: `${lead}\\axtpm{${cls === 'footnote' ? 'n' : 'p'}${i}.${j}b}` }]
+        // (in a front unit, its closing one after it where it stands between the unit's texts and TeX answered 0 for it: `between`)
+        if (closesBetween(j) && cls === 'macro' && frontSaid(q, u.pieces[j + 1]) === '0')
+          out[j] = [q, { t: 'ph', src: `${lead}\\axtpm{p${i}.${j}b}` }]
       }
     }
     // (a closing mark after the punctuation mark its piece's command moves: the text after the piece cut after that mark)

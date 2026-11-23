@@ -24,8 +24,15 @@ const markedOf = (code: string | null) => {
           .map((s, i) => (!s.ahead && s.command.startsWith('front ') ? `LAYOUT-PROBE 1 punct ${i} ${code.repeat(8)}` : ''))
           .join('\n')
   const switches = log === null ? null : readMarkProbe(log, samples)
+  // (its box begun apart from a word, as TeX answers for a call that opens with \textsuperscript: its opening mark may stand)
   const tex = new TextDecoder('latin1').decode(
-    originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES, switches, complete: paper.project.complete }).get('main.tex'),
+    originalFiles(paper, {
+      lines: true,
+      layout: LAYOUT_CLASSES,
+      switches,
+      apart: ['\\authmarkx{1}'],
+      complete: paper.project.complete,
+    }).get('main.tex'),
   )
   return tex.slice(tex.indexOf('\\author'), tex.indexOf('\\maketitle'))
 }

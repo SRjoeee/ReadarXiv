@@ -9574,20 +9574,23 @@ expansion took off (all in this section's last item), and the rest are the holes
   names (§19.15) are still read from every unit: an author's unit TeX never set writes the names the block TeX printed draws
   (2608.14557v1, acmart's), and a unit asked that holds one keeps its form with the name (kind `named`). Every other unit is asked
   as before.
-- **A piece between the texts of a front unit gets a point on each side** (`marks/marks.ts` `BETWEEN_TEXTS`, layoutMarking
-  `between`). An author block's unit of several names sets each name's mark after it, between the unit's texts (`Ann
-  Lee\IEEEauthorrefmark{1}, Bob Ray`, `Ann Lee\textsuperscript{1}, Bob Ray`, `Ann Lee\inst{1}, Bob Ray`). The marking gave such
-  a piece no point (a paper's macro glued to the word before it is read as letters of that word) or its opening point alone (a
-  command may read what follows it): TeX stated no point between that ink and the next name's, and the ownership could not tell
-  them apart (lane own-2's 15 members `unproven`). A piece that sets ink there (an inline formula, a command with an argument;
-  not one of TeX's and LaTeX's that set no ink, `INVISIBLE`) is no longer read as letters of the word before it, and has its
-  closing mark where only its command's possible look ahead kept it off and TeX answered nothing for that command and what
-  follows it, before the next name's text alone (before another piece, whose ink would be no one's where that piece gets no
-  mark of its own: 2608.11884v1's `\textsuperscript{1,2}\corresponding`, the two one run as before); each mark robust as the
-  unit's (`\protect`). Every other rule of the marking holds as for any piece: no mark after a command that
-  reads what follows it (`\xspace`), TeX's answers where the probe gave one, and a piece first on a row after `\\` keeps its
-  opening point before the break (nothing of ours between a break and what follows it) and has its closing one after it. A
-  piece before the unit's first text or after its last (a trail, the ownership's own rule) keeps the reading of before.
+- **A piece between the texts of a front unit gets its closing point where TeX answers so** (`marks/marks.ts` `BETWEEN_TEXTS`,
+  `betweenOf`, probeSamples' `front`, layoutMarking `frontSaid`). An author block's unit of several names sets each name's mark
+  after it, between the unit's texts (`Ann Lee\IEEEauthorrefmark{1}, Bob Ray`, `Ann Lee\textsuperscript{1}, Bob Ray`, `Ann
+  Lee\inst{1}, Bob Ray`). The marking gave such a piece its opening point at most (a command may read what follows it): TeX stated
+  no point between that ink and the next name's, and the ownership could not tell them apart (lane own-2's 15 members `unproven`).
+  A piece that sets ink there (an inline formula, a command with an argument; not one of TeX's and LaTeX's that set no ink,
+  `INVISIBLE`) of the paper's macros' class is now asked of the mark probe as it stands, its call a sample of its own (`front
+  <src>`, at most FRONT_PROBE_MAX a paper), and has its closing mark before the next name's text alone where TeX answered that a
+  mark there changes nothing (0); with no answer, or another, none, and the member stays as the line reads it. A first version set
+  the closing mark where no answer was (the review of #674): a macro that reads what follows it, `\@ifnextchar,{…}{…}`, read the
+  mark instead of the comma and the marked paper printed other content. Before another piece none (its ink would be no one's where
+  that piece gets no mark of its own: 2608.11884v1's `\textsuperscript{1,2}\corresponding`, the two one run as before); each mark
+  robust as the unit's (`\protect`). Every other rule of the marking holds as for any piece: no mark of its own glued to a word
+  unless TeX said its box begins apart (`bare`, the ink probe's answer), no mark after a command that reads what follows it
+  (`\xspace`), and a piece first on a row after `\\` keeps its opening point before the break (nothing of ours between a break and
+  what follows it), its closing one after it on TeX's answer too. A piece before the unit's first text or after its last (a trail,
+  the ownership's own rule) keeps the reading of before.
 - **A name after `\\` is a name by what its row sets** (`source/latex-front.ts` `MARK_AFTER`). The source reader takes the
   rows of an author block's names after its first for places unless the row says it is names: an affiliation's mark after a
   name, a note, "and". llncs's affiliation mark is `\inst`, which that reading did not know: 2604.10456v1's names after `\\`,

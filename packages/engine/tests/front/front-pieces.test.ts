@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { openPaper, originalFiles } from '../../src/compile/live.ts'
-import { LAYOUT_CLASSES } from '../../src/marks/marks.ts'
+import { LAYOUT_CLASSES, probeSamples, readMarkProbe } from '../../src/marks/marks.ts'
 
 // A piece between the texts of a front unit gets a point on each side (F, PDF-READER §18.111). An author block's unit of several
 // names sets each name's marks after it, between its texts: `Ann Lee\IEEEauthorrefmark{1}, Bob Ray\IEEEauthorrefmark{2}`,
@@ -14,7 +14,19 @@ import { LAYOUT_CLASSES } from '../../src/marks/marks.ts'
 const enc = (s: string) => new TextEncoder().encode(s)
 const markedOf = (cls: string, body: string) => {
   const paper = openPaper(new Map([['main.tex', enc(`${cls}\n\\begin{document}\n${body}\n\\end{document}\n`)]]))
-  const tex = new TextDecoder('latin1').decode(originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES }).get('main.tex'))
+  // (TeX's answers for the front pieces, as TeX answers for these calls: 0 before every follower, each box begun apart from a
+  // word; front-pieces-probed.test.ts holds the marks to the answers)
+  const samples = probeSamples(paper.units, paper.project.complete)
+  const log = samples.map((s, i) => (!s.ahead && s.front ? `LAYOUT-PROBE 1 punct ${i} ${'0'.repeat(8)}` : '')).join('\n')
+  const tex = new TextDecoder('latin1').decode(
+    originalFiles(paper, {
+      lines: true,
+      layout: LAYOUT_CLASSES,
+      switches: readMarkProbe(log, samples),
+      apart: samples.flatMap((s) => (!s.ahead && s.front ? [s.src] : [])),
+      complete: paper.project.complete,
+    }).get('main.tex'),
+  )
   return tex.slice(tex.indexOf('\\begin{document}'))
 }
 /** the marks right around a piece's source in the marked text: [before it, after it] */
