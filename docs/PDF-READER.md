@@ -9696,7 +9696,9 @@ path the page paints (every segment's end met by another's, as a figure text's c
 interior holds the middle of every one of the member's text lines there and whose painted lines touch none of them; none for a
 table's cell (its walls, §18.13) or a figure text (its container). Its painted lines are ink: under a run, the highest of them
 wholly under the run's last line across the run is the run's next ink where it is nearer than the glyph or box the page states
-(a line that rises past the line's foot is a side, beside the run, as a rule TeX set beside a paragraph is), and the free depth
+(a line that rises past the line's foot across the run is a side, beside the run, as a rule TeX set beside a paragraph is; each
+line read by its part across the run, so that a diamond's lower edge, rising past the foot beyond the run, is the border under it
+across it: the review of #676), and the free depth
 under the last line (`Room.below`) ends there too; beside a line, where its path stands at the line's own height stays beside it
 (`Room.stays`): each segment's part within the line's fonts' box (a stroke's half width over and under), so that a sloped side,
 a diamond's or a rounded corner's arc, is a wall where it is at that line and not where its whole box reaches (Devin's review on
@@ -9707,8 +9709,10 @@ overlay cannot: the frame is arXiv's painted ink under the translation, and grow
 page, which the reader never does.
 
 A frame is a path a reader SEES, by the page's own operators and no tolerance: a stroke (painted at an alpha over 0), or a fill
-whose colour is not the colour painted under it at one of its box's four edge middles at least, each read by its own paint a
-thousandth of a point inside its edge (on the edge itself the even-odd test counts a rectangle's right and top outside it, and a
+whose colour is not the colour painted under it at one of its four edge middles at least (its path's own: from each of its box's
+edge middles in along the box's middle line to the path's outermost crossing there, the box's edge middle itself for a
+rectangle, a rounded one or a circle; a turned rectangle's box's middles stand on the paper outside it: the review of #676),
+each read by its own paint a thousandth of a point inside its edge (on the edge itself the even-odd test counts a rectangle's right and top outside it, and a
 fill flush with those edges of a fill of its colour read the paper's white: Devin's review on #672): the colour of the last fill
 before it whose region holds that point and covers what is under it (opaque, a colour), the paper's white where none; an image,
 a shading, a pattern, a fill that covers nothing whole or a path whose lines were not kept under a point is a colour this
