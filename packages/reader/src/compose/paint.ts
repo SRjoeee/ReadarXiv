@@ -144,7 +144,7 @@ function less(r: Rect, n: Rect): Rect[] {
 }
 
 /** a box of the frame of direction (ux, uy) on the page: the box of its four corners turned by the direction about the page's
- *  origin (a frame's (x, y) is the page's (ux x - uy y, uy x + ux y), docs/PDF-READER.md §18.108) */
+ *  origin (a frame's (x, y) is the page's (ux x - uy y, uy x + ux y), docs/PDF-READER.md §18.111) */
 const onPage = ([ux, uy]: readonly [number, number], b: readonly number[]): Rect => {
   const c = [
     [b[0]!, b[1]!],

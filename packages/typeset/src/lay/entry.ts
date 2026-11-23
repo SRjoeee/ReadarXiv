@@ -306,7 +306,7 @@ function unservedOf(tokens: Tokens, metrics: Metrics): { inked: Set<number>; lab
 export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics, o: EntryOptions = {}): Page {
   const flat = layFlows(part, given, rules, metrics, o)
   if (!part.frames?.length) return flat
-  // (the units TeX set turned, by turn (Part.frames, docs/PDF-READER.md §18.108): each frame laid as a part's flows are, in its
+  // (the units TeX set turned, by turn (Part.frames, docs/PDF-READER.md §18.111): each frame laid as a part's flows are, in its
   // own coordinates (the page turned back), by every rule of the lay; then each laid line stated from its origin on the page
   // along the turn, as a figure text's turned line is (Laid.lines: its items' `dir`, their places along it from x0), and lit in
   // the frame, which is the turned run's frame (Laid.lit `dir`): the reader draws, lights and selects it through the turn)

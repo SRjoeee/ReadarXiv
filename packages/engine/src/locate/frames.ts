@@ -1,4 +1,4 @@
-// A unit whose text TeX set turned, in its frame (docs/PDF-READER.md §18.108): TeX sets a box LEVEL and then turns it
+// A unit whose text TeX set turned, in its frame (docs/PDF-READER.md §18.111): TeX sets a box LEVEL and then turns it
 // (\rotatebox, `sideways`, `sidewaystable`, a landscape float), so the unit is stated as it stands in its box, unturned: its
 // lines, its leading, its measure and its room read off its glyphs and the page's ink seen through the inverse of its turn,
 // and the turn beside them (Located.frames, Part.frames). The typesetter lays it there as it lays any unit of its kind and

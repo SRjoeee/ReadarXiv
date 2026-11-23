@@ -82,6 +82,7 @@ export function unitsMadeOnA(w: Work, claims: Claims, o: LocateOptions): void {
       if (x.unit.figure && !x.unit.content.some((q) => q.t === 'el') && !x.unit.figure.para && !x.label?.length)
         mem.plain = sourceText(x.unit.content)
       if (x.spanStyles) mem.spanStyles = x.spanStyles
+      if (x.breaks) mem.breakAfter = x.breaks
       members.push(mem)
       if (!x.text.length && !x.ph.length && !x.turned.length) {
         mem.cause = 'no ink'

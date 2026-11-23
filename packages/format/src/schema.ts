@@ -264,9 +264,10 @@ export const LINE_FLAG = Object.freeze({ KEPT: 1, PINNED: 2, SHORTSKIP: 4, RTL: 
  *  whether it is drawn raised where the source reads as a symbol (phClass2's: the tokens' class; a formula of symbols alone is
  *  `other` with a `sym`), `mark` a footnote's mark (drawn raised whatever its rendering), `literal` a text piece (TeX sets its
  *  characters as written: a code or URL mark; no formula). One of no ink (`ink` []) of a class drawn from its ink (cite, num,
- *  other, display, macro, umacro) states which of three it is: `text` '' TeX set nothing for it; `keep` TeX set it outside the
- *  unit's text (before its start), whatever it set never erased with the unit; neither, its ink was not found, and the
- *  typesetter leaves the unit the original's */
+ *  other, display, macro, umacro) states which of three it is: `text` '' TeX set nothing for it (or what it set stands in the ink
+ *  of the run an author's first piece after its name holds, no point of TeX's between them: drawn there, once); `keep` TeX set it
+ *  outside the unit's text (before its start), whatever it set never erased with the unit; neither, its ink was not found, and
+ *  the typesetter leaves the unit the original's */
 export const El = z.object({
   kind: ElKind,
   unknown: flag.optional(),
@@ -623,7 +624,7 @@ export const Part = z.object({
   // and its parts): what is not text in the unit is the original's turned ink, cut as a crop and drawn moved along the turn. A
   // typesetter lays a frame as it lays a part's flows, and a reader draws it through its turn. A field of its own: a reader of
   // before strips it and leaves those units the original's,
-  // their groups on, as it did when no part held them (FORMAT stays: ARCHITECTURE.md §5; docs/PDF-READER.md §18.108)
+  // their groups on, as it did when no part held them (FORMAT stays: ARCHITECTURE.md §5; docs/PDF-READER.md §18.111)
   frames: z
     .array(z.object({ dir: z.tuple([num, num]), flows: z.array(z.array(Placed)), ties: z.array(Tie).optional() }))
     .optional(),

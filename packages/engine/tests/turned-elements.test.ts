@@ -1,4 +1,4 @@
-// What is not text in a unit TeX set turned stays the original's ink, turned with it (docs/PDF-READER.md §18.108): an element
+// What is not text in a unit TeX set turned stays the original's ink, turned with it (docs/PDF-READER.md §18.111): an element
 // (a formula, a `\ref`, a `\cite`) is stated as every element is, its ink a box per line of the unit's in the frame (its crop,
 // cut from the original's turned ink, drawn through the turn), its glyphs travelling with it (`.e`); its label read as a level
 // caption's (its name, number and punctuation: the structural-names rule draws it anew in the target's words), its glyphs its
