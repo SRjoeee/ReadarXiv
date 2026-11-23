@@ -65,7 +65,7 @@ describe('a piece between the texts of a front unit: a point on each side', () =
     expect(tex).toContain('\\lab$^1$')
   })
   it('a piece another piece follows keeps the reading of before: its ink runs to the next text, the two one run', () => {
-    // (2608.11884v1: `Rigui Zhou\\textsuperscript{1,2}\\corresponding,`, a paper's macro after the superscript that reads what
+    // (2608.11884v1: `<a name>\\textsuperscript{1,2}\\corresponding,`, a paper's macro after the superscript that reads what
     // follows it and so gets no mark: a closing point between the two left the macro's ink no one's, the name unproven)
     const tex = markedOf(
       '\\documentclass{article}\n\\newcommand{\\corresponding}{\\textsuperscript{*}\\xspace}\n\\usepackage{xspace}',
