@@ -31,13 +31,9 @@ import {
   turnedStyleGlyph,
   unitSize,
 } from './facts.ts'
-import { LABEL_KIND, ON_BASE } from './geometry.ts'
+import { LABEL_KIND, ON_BASE, TEXT_CLASSES } from './geometry.ts'
 import { cutLines, isInk, r2 } from './lines.ts'
 import { field, INKED_CLASSES, type Located, type Member, piecesOf, standsOn, type Work } from './work.ts'
-
-/** the classes the typesetter draws as the page's text where a level element's glyphs are its reading (geometry.ts
- *  TEXT_CLASSES): a framed one is drawn as its crop, its copy text its glyphs' */
-const COPY_CLASSES = new Set(['cite', 'num', 'macro', 'umacro'])
 
 /** a point of the page in the frame of direction (ux, uy) */
 export const toFrame = (ux: number, uy: number, x: number, y: number): [number, number] => [
@@ -248,7 +244,7 @@ function frameElements(w: Work, mem: Member, p: number, ux: number, uy: number, 
     // macro: geometry.ts's TEXT_CLASSES), drawn here as its crop: its copy text its glyphs' as a level element's text is read
     // (facts.ts textOf), what selecting and copying the crop gives, never the source's reading of the command ("?", "[·]"))
     const cls = classOf.get(id)?.cls
-    if (shown.length && cls !== undefined && COPY_CLASSES.has(cls)) el.copy = textOf(shown.map(({ g }) => g))
+    if (shown.length && cls !== undefined && TEXT_CLASSES.has(cls)) el.copy = textOf(shown.map(({ g }) => g))
     // (a symbol, drawn as its reading's character, only where its turned ink is that symbol so drawn: no letter or digit among
     // its glyphs, each on its line's baseline, or over it where its reading raises it; else drawn as its ink, a formula's, as
     // geometry.ts reads a level element: Member.asInk)

@@ -333,7 +333,7 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
         if (fates[k]) o.linkFates![i] = fates[k]
       })
     const links = sub.links.map(([box, to, owner, border]): Page['links'][number] => {
-      const at = inFrame.findIndex((l) => l.box.every((v, k) => Math.abs(v - box[k]!) < 1e-6))
+      const at = inFrame.findIndex((l) => l.box.every((v, k) => v === box[k]))
       return [at >= 0 ? own[at]!.l.box : boxOnPage(box, f.dir), to, owner, border] as Page['links'][number]
     })
     return { sub, dir: f.dir, links }
