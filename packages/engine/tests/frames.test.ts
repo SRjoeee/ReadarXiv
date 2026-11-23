@@ -70,6 +70,32 @@ describe('the frames a page paints: seen by its own operators', () => {
     expect(seenOf(pageOf([[0, 72, 690, 300, 712]], [{ colour: 0xeeeeee }], [0]))).toEqual([[0, false, 'alpha 0']])
     expect(seenOf(pageOf([[0, 72, 600, 300, 640]], [{ colour: 0xeeeeee }]))).toEqual([])
   })
+  it('reads each edge middle by the paint under it there: a white fill half over an image seen, over the paper alone not', () => {
+    // (an image under its left half: what is under its left edge's middle has no colour this reading knows; Codex's review)
+    expect(
+      seenOf(
+        pageOf(
+          [
+            [-3, 60, 680, 180, 720],
+            [0, 72, 690, 300, 712],
+          ],
+          [null, { colour: 0xffffff }],
+        ),
+      ),
+    ).toEqual([[1, true, null]])
+    // (a grey fill under its right half alone, white elsewhere: its right edge's middle stands on the grey, seen)
+    expect(
+      seenOf(
+        pageOf(
+          [
+            [0, 250, 680, 320, 720],
+            [1, 72, 690, 300, 712],
+          ],
+          [{ colour: 0x888888 }, { colour: 0xffffff }],
+        ),
+      ),
+    ).toEqual([[1, true, null]])
+  })
   it('reads no open path a frame, nor a background of the page’s size', () => {
     const r = pageOf([[0, 72, 690, 300, 712]], [{ colour: 0xeeeeee }])
     r.raw.shapes.set(0, { ...r.raw.shapes.get(0)!, segs: Float32Array.from([72, 690, 300, 690, 300, 690, 300, 712]) })
