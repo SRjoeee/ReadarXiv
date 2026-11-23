@@ -2427,13 +2427,15 @@ function parEndsOf(body: string, ends: ReadonlySet<string>): number[] {
 /**
  * Each of the paper's macros whose body ends a paragraph at its top level (parEndsOf): `parBefore` where one stands before the
  * first place its prose argument is set (or, a macro with none, before anything else of its body), `parAfter` where one stands
- * after the last (or after everything else); read through the paper's own macros the body calls, as TeX expands them (a few
- * rounds: a name that calls itself is a name no reading ends)
+ * after the last (or after everything else); read through the paper's own macros the body calls, as TeX expands them, until
+ * nothing more is read (a name that calls itself adds nothing after its first reading)
  */
 function resolveParEnds(macros: Map<string, Macro>, names: ReadonlySet<string>) {
   const ends = new Set<string>(names)
-  for (let round = 0; round < 3; round++) {
-    let moved = false
+  // (until nothing moves: a name added, a side set, each only once, so that a macro ending a paragraph through another's, at any
+  // depth, is read so)
+  for (let moved = true; moved; ) {
+    moved = false
     for (const [name, m] of macros) {
       const at = parEndsOf(m.def, ends)
       if (!at.length) continue
@@ -2457,7 +2459,6 @@ function resolveParEnds(macros: Map<string, Macro>, names: ReadonlySet<string>) 
         moved = true
       }
     }
-    if (!moved) break
   }
 }
 /** the arguments a call of the paper's macro `h` at s[i] hands it, by parameter number (its optional first where it takes one and
@@ -4668,6 +4669,31 @@ function fileCommand(name: string, s: string, end: number, b: Builder, ctx: Ctx)
   } else if (a) ctx.visit(a, ctx.dirs, b.inFloat)
   return e
 }
+/**
+ * Where a call of the paper's macro ends the paragraph TeX is setting, at its body's top level (resolveParEnds): `before` its
+ * prose, the unit ending before the call, as at a written \par; `after` it, after the call; both, or neither (null). Where the
+ * reader's unit is a paragraph of TeX's (PAR_UNITS): not a table's cell, whose grid bounds it, nor a heading's, a caption's or an
+ * author block's, whose own readings do
+ */
+function callEndsParagraph(macro: Macro, b: Builder): { before: boolean; after: boolean } | null {
+  if (b.cellMode || b.within === 'author' || !PAR_UNITS.has(b.kind ?? 'para')) return null
+  return macro.parBefore || macro.parAfter ? { before: !!macro.parBefore, after: !!macro.parAfter } : null
+}
+/**
+ * Whether a command ends the paragraph TeX is setting, as \par does: one of TeX's vertical commands (VERTICAL_COMMANDS), which
+ * the unit ends before and reads again as the next one's head, which the start mark passes over, its ink the original's. Read
+ * inside the unit, 2610.21765v1 p3's `{\bf Protocol …} \vspace{…} \hrule \vspace{…} \textbf{Procedure}` was one unit of two of
+ * TeX's paragraphs, the rule between them drawn as an inline element of its translation; before the text, as the rules over that
+ * title, nothing ends (the caller's). A name the paper defines is its own command. LaTeX's \medbreak family (PAR_COMMANDS) and the
+ * paper's macros of no argument that end a paragraph (parNamesOf) so too, but not in an author block's own text, whose reading
+ * bounds its units otherwise: jmlr2e's block separator `\AND` skips vertically, and read as a paragraph's end there the block's
+ * walk numbered its units otherwise, 2608.08872v1's marked TeX moving with no unit's text
+ */
+function commandEndsParagraph(name: string, b: Builder, ctx: Ctx): boolean {
+  if (VERTICAL_COMMANDS.has(name)) return !ctx.macros.has(name)
+  if (b.within === 'author' || AUTHOR_KINDS.has(b.kind ?? '')) return false
+  return PAR_COMMANDS.has(name) ? !ctx.macros.has(name) : !!ctx.parNames?.has(name)
+}
 /** a table's body walked with its grid known to inGridCell (Builder.cells, §18.75: a `\\` inside a grid cell a forced break of
  *  its text), the grid of the table around it back after */
 function walkInGrid(s: string, from: number, to: number, grid: readonly GridCell[], b: Builder, ctx: Ctx): void {
@@ -4685,6 +4711,11 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
   }
   const startText = () => {
     if (textStart < 0) textStart = i
+  }
+  // (the unit ends here: its text so far, then the unit)
+  const endUnit = () => {
+    endText()
+    b.flush()
   }
   // the command a paper macro's call ends in (its `then`, tailOf), walked next as that command where an argument follows
   // the call: { name, end } with `end` the call's, and s[i…end) the call's source still to place (none where its own
@@ -4740,8 +4771,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
     walkSteps++
     if (parAt >= 0 && i >= parAt && (then || !/\s/.test(s[i]!))) {
       parAt = -1
-      endText()
-      b.flush()
+      endUnit()
     }
     const c = then ? '\\' : s[i]
     // a comment takes its line's end with it; a blank line after it is still \\par, as TeX reads it (`text % note`, then
@@ -4764,8 +4794,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
       let k = i + 1
       while (k < to && (s[k] === ' ' || s[k] === '\t')) k++
       if (s[k] === '\n') {
-        endText()
-        b.flush()
+        endUnit()
         i = k + 1
         continue
       }
@@ -4851,8 +4880,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
       continue
     }
     if (c === '&' && b.cellMode) {
-      endText()
-      b.flush()
+      endUnit()
       i++
       continue
     }
@@ -4876,8 +4904,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
     if (name === 'iffalse' || (name === 'if' && /^[ \t]*\n?[ \t]*[A-Za-z]{2}/.test(s.slice(end, end + 8)))) {
       const stop = branchEnd(s, end, to, ctx.ifs)
       if (stop > 0) {
-        endText()
-        b.flush()
+        endUnit()
         ctx.skipped[name] = (ctx.skipped[name] ?? 0) + 1
         i = stop
         continue
@@ -5059,8 +5086,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
         i = afterEnd
         continue
       }
-      endText()
-      b.flush()
+      endUnit()
       // a TikZ picture: only its texts are prose (tikzText); the drawing stays as it is
       if (env === 'tikzpicture') {
         tikzText(s, afterBegin, bodyEnd, b, ctx)
@@ -5194,8 +5220,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
       continue
     }
     if (name === 'end') {
-      endText()
-      b.flush()
+      endUnit()
       const m = s.slice(end).match(/^\s*\{([^}]+)\}/),
         at = i
       i = end + (m ? m[0].length : 0)
@@ -5216,8 +5241,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
     if (name === 'bibliography') {
       const { args, end: e } = argsAfter(s, end, 1)
       if (args[0]?.kind === 'req') {
-        endText()
-        b.flush()
+        endUnit()
         ctx.bibliography.push(
           ...s
             .slice(args[0].start + 1, args[0].end - 1)
@@ -5271,15 +5295,13 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
       }
     }
     if (name === 'item') {
-      endText()
-      b.flush()
+      endUnit()
       const { args, end: e } = argsAfter(s, end, 1)
       i = args.length && args[0]!.kind === 'opt' ? e : end
       continue
     }
     if (name === 'input' || name === 'include' || name === 'subfile' || IMPORTS.has(name)) {
-      endText()
-      b.flush()
+      endUnit()
       i = fileCommand(name, s, end, b, ctx)
       continue
     }
@@ -5349,8 +5371,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
         i = e
         continue
       }
-      endText()
-      b.flush()
+      endUnit()
       // (a caption's float type where the command says it: \\captionof's first argument, a \\tablecaption's a table's, a
       // sub-caption's its float's `sub` type; else its float's, `inFloat`)
       const savedType = b.captype
@@ -5401,8 +5422,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
         content = args[at],
         opt = args.slice(0, Math.max(at, 0)).findLast((a) => a.kind === 'opt') ?? null
       if (content) {
-        endText()
-        b.flush()
+        endUnit()
         if (opt) {
           const saved = b.kind,
             savedType = b.captype
@@ -5420,8 +5440,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
       }
     }
     if (ctx.ownAuthors?.has(name)) {
-      endText()
-      b.flush()
+      endUnit()
       const e = ownAuthorCall(s, i, end, name, to, b, ctx)
       if (e > 0) {
         i = e
@@ -5430,8 +5449,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
     }
     if (FRONT_MATTER.has(name)) {
       const { args, end: e } = frontArgs(s, end, name, ctx, to)
-      endText()
-      b.flush()
+      endUnit()
       const first = args.find((a) => a.kind === 'req')
       inFront(b, 'author', () => {
         for (const a of args) {
@@ -5508,29 +5526,19 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
     const macro = ctx.macros.get(name),
       own = macro && !(macro.params === 0 && ACCENTS.has(name))
     const call = own && macroArgs(s, end, macro, to)
-    // (a macro whose body ends the paragraph TeX is setting, at its top level (resolveParEnds): before its prose, the unit ends
-    // before the call, as at a written \par; after it, after the call (parAt, above). Where the reader's unit is a paragraph of
-    // TeX's: not a table's cell, whose grid bounds it, nor a heading's, a caption's or an author block's, whose own readings do)
-    if (
-      call &&
-      (macro.parBefore || macro.parAfter) &&
-      !b.cellMode &&
-      b.within !== 'author' &&
-      PAR_UNITS.has(b.kind ?? 'para')
-    ) {
-      if (macro.parBefore) {
-        endText()
-        b.flush()
-      }
-      if (macro.parAfter) parAt = call.end
+    // (a macro whose body ends the paragraph TeX is setting (callEndsParagraph): the unit ends before the call, or after it
+    // (parAt, above))
+    const parEnds = call ? callEndsParagraph(macro, b) : null
+    if (parEnds?.before) {
+      endUnit()
     }
+    if (call && parEnds?.after) parAt = call.end
     // (one whose body ends the row after its arguments, in a cell (rowEndsAfterOf): a row of its own, its text a cell inside
     // its argument's group, the row ended after the call. Read as a pair, its text ran on into the next row's first cell)
     // (not one that stores its text, which the paper sets elsewhere: a front unit with no mark, below)
     if (call && b.cellMode && ctx.rowEndsAfter?.has(name) && !macro.stores) {
       // (the pair's id spent as the call's pair spent it: the pairs after it keep theirs, and their units their hashes)
-      endText()
-      b.flush()
+      endUnit()
       b.pairId++
       const arg = macro.prose ? call.reqs[macro.prose - 1 - (macro.opt ? 1 : 0)] : null
       if (arg?.group) {
@@ -5556,8 +5564,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
     if (call && macro.prose) {
       const arg = call.reqs[macro.prose - 1 - (macro.opt ? 1 : 0)]
       if (arg?.group && macro.stores) {
-        endText()
-        b.flush()
+        endUnit()
         const before = b.units.length,
           saved = b.kind
         // (a command the role table names an author command keeps its role's kinds, its text an author block's names or places
@@ -5620,8 +5627,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
           holdsBlock(s.slice(arg.start + 1, arg.end - 1)) ||
           (proseInEnvironment(macro) && !(b.cellMode && inGridCell(b, s, i)))
         ) {
-          endText()
-          b.flush()
+          endUnit()
           walk(s, arg.start + 1, arg.end - 1, b, ctx)
           b.flush()
           i = call.end
@@ -5696,8 +5702,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
       }
     }
     if (name === 'par') {
-      endText()
-      b.flush()
+      endUnit()
       i = end
       continue
     }
@@ -5861,8 +5866,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
     if (args && !args.known && /^[A-Za-z@]+$/.test(name)) {
       const named = bibliographiesIn(s, end, args.end)
       if (named.length) {
-        endText()
-        b.flush()
+        endUnit()
         for (const names of named) {
           ctx.bibliography.push(...names)
           if (ctx.bbl) ctx.visit(ctx.bbl, [], b.inFloat)
@@ -5896,19 +5900,8 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
       if (m) e += m[0].length
     }
     endText()
-    // (a vertical command where the unit's text has begun ends the paragraph TeX is setting, as \par does (VERTICAL_COMMANDS):
-    // the unit ends before it, and it is read again as the next one's head, which the start mark passes over, its ink the
-    // original's. Read inside the unit, 2610.21765v1 p3's `{\bf Protocol …} \vspace{…} \hrule \vspace{…} \textbf{Procedure}` was one
-    // unit of two of TeX's paragraphs, the rule between them drawn as an inline element of its translation; before the text, as
-    // the rules over that title, nothing ends. A name the paper defines is its own command. LaTeX's \medbreak family and the
-    // paper's macros that end a paragraph (parNamesOf) so too, but not in an author block's own text, whose reading bounds its
-    // units otherwise: jmlr2e's block separator `\AND` skips vertically, and read as a paragraph's end there the block's walk
-    // numbered its units otherwise, 2608.08872v1's marked TeX moving with no unit's text)
-    const parEnd =
-      b.within !== 'author' &&
-      !AUTHOR_KINDS.has(b.kind ?? '') &&
-      (PAR_COMMANDS.has(name) ? !ctx.macros.has(name) : !!ctx.parNames?.has(name))
-    if (((VERTICAL_COMMANDS.has(name) && !ctx.macros.has(name)) || parEnd) && textBegun(b.cur?.pieces ?? [])) b.flush()
+    // (a command that ends the paragraph TeX is setting, where the unit's text has begun: the unit ends before it, commandEndsParagraph)
+    if (commandEndsParagraph(name, b, ctx) && textBegun(b.cur?.pieces ?? [])) b.flush()
     b.ph(s.slice(i, e), i, e)
     // a command with a letter name eats the following spaces in TeX; keep them with it
     i = e
