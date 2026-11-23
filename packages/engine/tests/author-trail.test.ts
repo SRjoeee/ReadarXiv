@@ -222,3 +222,68 @@ describe('the run holds what TeX painted in it, a box too', () => {
     expect(L.groups[0]!.boxes[0], 'the icon in the piece’s group').toBe(`${mem.ord}.1.e`)
   })
 })
+
+describe('a separator TeX set between two names, at a row’s end', () => {
+  // (llncs's `Ann Lee\inst{1} \and Bob Ray\inst{2} \and \\ Cy Day\inst{3} \and Di Fox\inst{4} \and Ed Gu\inst{5}`: each `\and`
+  // sets its separator after the call point of the author it opens, `<i>c`; the separator before a name on its row is that name's
+  // lead, but one TeX set before a row's end (`\\`, a centred block's paragraph end) stands on the row of the name it follows,
+  // its next name on the next row. Left no one's, it stood at the original row's end, past a shorter translated row)
+  const rows = (rowEndAnd: boolean) => {
+    const sep = rowEndAnd ? ', and' : ','
+    const B = docOf([
+      {
+        lines: [
+          { text: 'Ann Lee', x: 72, y: 700 },
+          { text: '1', x: 114, y: 703.6, size: 7 },
+          { text: ',', x: 118.2, y: 700 },
+          { text: 'Bob Ray', x: 124.2, y: 700 },
+          { text: '2', x: 166.2, y: 703.6, size: 7 },
+          { text: sep, x: 170.4, y: 700 },
+          { text: 'Cy Day', x: 72, y: 688 },
+          { text: '3', x: 108, y: 691.6, size: 7 },
+          { text: ', and', x: 112.2, y: 688 },
+          { text: 'Di Fox', x: 142.2, y: 688 },
+          { text: '4', x: 178.2, y: 691.6, size: 7 },
+        ],
+        points: [
+          ['0s', 0],
+          ['0e', 7],
+          ['1c', 8],
+          ['1s', 9],
+          ['1e', 16],
+          ['2c', 17],
+          ['2s', 17 + sep.length],
+          ['2e', 17 + sep.length + 6],
+          ['3c', 17 + sep.length + 7],
+          ['3s', 17 + sep.length + 7 + 5],
+          ['3e', 17 + sep.length + 7 + 5 + 6],
+        ],
+      },
+    ])
+    const units = ['Ann Lee', 'Bob Ray', 'Cy Day', 'Di Fox'].map((n, k) =>
+      authorWith(n, [[`\\inst{${k + 1}}`, 'other', String(k + 1)]]),
+    )
+    // (each line's unit: a name its unit's, its mark and every separator no unit's)
+    const ins = instrumentOf(B, units, [[0, -1, -1, 1, -1, -1, 2, -1, -1, 3, -1]])
+    // (TeX's paragraph end after the first row: the centred block's `\\`)
+    ins.tex = { paragraphEnds: [[17 + sep.length]] }
+    return locate(ins, B, align(B, B))
+  }
+  const inkOf = (L: ReturnType<typeof locate>, u: number) => {
+    const el = elementsOf(L, u).get('1')!
+    return [el.ink.length, el.ink[0]?.[1], el.ink[0]?.[3]]
+  }
+  it('is the run of the name it follows on its row: the class’s comma glued after that name’s marks', () => {
+    // (Bob's \inst{2} and the comma TeX set after the call of Cy's `\and`, before the row's end: one run, its piece's ink)
+    expect(inkOf(rows(false), 1)).toEqual([1, 166.2, 176.4])
+  })
+  it('leaves a separator before a name on the name’s row the next name’s lead, as before', () => {
+    // (Ann's run her \inst{1} alone: the comma before Bob, after Bob's call, on Bob's row, is Bob's lead)
+    expect(inkOf(rows(false), 0)).toEqual([1, 114, 118.2])
+    // (and Cy's run its mark alone: ", and" before Di on Di's row, an ink unit's words)
+    expect(inkOf(rows(false), 2)).toEqual([1, 108, 112.2])
+  })
+  it('leaves a separator holding a word at a row’s end to the ink units, whole (", and" translated as between names)', () => {
+    expect(inkOf(rows(true), 1)).toEqual([1, 166.2, 170.4])
+  })
+})
