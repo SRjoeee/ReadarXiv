@@ -2340,7 +2340,15 @@ function paperMacros(files: readonly { file: string; text: string }[], scan: Par
       })
     }
   resolveKeeps(out)
-  resolveParEnds(out, parNamesOf(files.map((f) => f.text), scan, out), scan)
+  resolveParEnds(
+    out,
+    parNamesOf(
+      files.map((f) => f.text),
+      scan,
+      out,
+    ),
+    scan,
+  )
   return out
 }
 /** what the reading of a definition's paragraph ends knows of the paper (parEndsOf): its \\newif conditionals and the values

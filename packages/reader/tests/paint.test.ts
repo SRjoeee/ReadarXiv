@@ -477,7 +477,10 @@ describe('a crop of a line laid in a frame (a unit TeX set turned, docs/PDF-READ
   it.fails('cuts a framed crop’s own ink at its cut edge in its frame before the turn (a broken URL’s head)', () => {
     // (its piece's ink in the frame from 440 to 480, the head's source from 448 to 460, its right edge cut there)
     const page = pageOf()
-    const item = page.members[0]!.lines[0]![3][0] as Extract<Page['members'][number]['lines'][number][3][number], { src: unknown }>
+    const item = page.members[0]!.lines[0]![3][0] as Extract<
+      Page['members'][number]['lines'][number][3][number],
+      { src: unknown }
+    >
     Object.assign(item, { ink: [[440, -63.4, 480, -53]], cut: 2 })
     const [c] = cropsOf(page, { x: 0.5, y: 0.5 })
     // (on the page the frame's x is the page's y: nothing of the head's source past 460, the cut, where its piece's ink goes on)

@@ -97,7 +97,12 @@ export function framesOnPage(raw: PaintedPage | null | undefined, page: DocPage)
     if (U?.has(b)) {
       frame.seen = false
       frame.why = 'alpha 0'
-    } else if (!sh.stroke && sh.colour !== undefined && !sh.pattern && asUnder(b, box, sh.segs, sh.colour, shapes, U, K, B)) {
+    } else if (
+      !sh.stroke &&
+      sh.colour !== undefined &&
+      !sh.pattern &&
+      asUnder(b, box, sh.segs, sh.colour, shapes, U, K, B)
+    ) {
       frame.seen = false
       frame.why = 'as under'
     }

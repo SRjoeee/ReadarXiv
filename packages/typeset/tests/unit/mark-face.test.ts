@@ -158,13 +158,33 @@ describe('a mark set apart from its word in the marks’ base: the review of rou
   it('never opens a line with a mark set apart from its word in the marks’ base: the word’s last character goes with it', () => {
     // (a word alone as wide as the line, its comma glued after it in the marks' base: the emergency break laid the word and
     // opened the next line with the comma, which a token holding both, cut by characters, never does; the review of #676)
-    const narrow = (w: number): Placed => ({ ...unit({}), lines: [0, 1, 2].map((q) => [1, 0, 60, 60 + w, 700 - 12 * q, 707 - 12 * q, 698 - 12 * q, 60, 60 + w, 0, 9.96] as Placed['lines'][number]), room: { below: 0, next: 12 } })
-    for (const [w, s] of [[50, 'ABCDEFGHIJ, klm nop'], [52, 'A1B2C3D4E5, klm'], [46, 'ABCDEFGHIJ; KLMNOPQRST.']] as const) {
+    const narrow = (w: number): Placed => ({
+      ...unit({}),
+      lines: [0, 1, 2].map(
+        (q) =>
+          [1, 0, 60, 60 + w, 700 - 12 * q, 707 - 12 * q, 698 - 12 * q, 60, 60 + w, 0, 9.96] as Placed['lines'][number],
+      ),
+      room: { below: 0, next: 12 },
+    })
+    for (const [w, s] of [
+      [50, 'ABCDEFGHIJ, klm nop'],
+      [52, 'A1B2C3D4E5, klm'],
+      [46, 'ABCDEFGHIJ; KLMNOPQRST.'],
+    ] as const) {
       const r: Row = { id, ok: true, by: 'test', content: [{ t: 'text', s }] }
       const rows: Rows = { get: (k) => (k === id ? r : undefined), done: true }
       const laid = layPage(part(narrow(w)), rows, rulesFor('de'), metrics).members[0]!
-      const opens = laid.lines.map(([, , , items]) => items.map((it) => ('src' in it ? '' : it.s)).join('').trimStart()[0])
-      expect(opens.filter((c) => c !== undefined && /[,;.]/.test(c)), `${w} ${s}`).toEqual([])
+      const opens = laid.lines.map(
+        ([, , , items]) =>
+          items
+            .map((it) => ('src' in it ? '' : it.s))
+            .join('')
+            .trimStart()[0],
+      )
+      expect(
+        opens.filter((c) => c !== undefined && /[,;.]/.test(c)),
+        `${w} ${s}`,
+      ).toEqual([])
     }
   })
 })
