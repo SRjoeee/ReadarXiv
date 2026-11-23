@@ -10,6 +10,8 @@ import { QUIET_NAMES } from '../src/ink.ts'
 import {
   ASK_TEX,
   CALL_TEX,
+  CARRY_END_TEX,
+  CARRY_TEX,
   classNamesTex,
   DVI_LAYOUT_TEX,
   LAYOUT_CLASSES,
@@ -74,6 +76,8 @@ describe('the marks our marked TeX defines (marks/marks.ts MARK_CS and UNMARK_CS
       ASK_TEX,
       DVI_LAYOUT_TEX,
       CALL_TEX,
+      CARRY_END_TEX,
+      CARRY_TEX,
       classNamesTex(['\\begin{IEEEproof}']),
       regionsTex(['verbatim', 'lstlisting']),
       refsTex(['key']),
@@ -91,7 +95,8 @@ describe('the marks our marked TeX defines (marks/marks.ts MARK_CS and UNMARK_CS
 
   // (a paper of our own with every kind of unit the marking marks: a front block whose head is a paper's macro, a footnote's
   // call and an author's call in it, a heading, a macro's definition that holds text, a paragraph that begins and one that ends
-  // with a paper's macro, a formula, a colour, a paper's own \protect\cite, a cell, a footnote, a reference; and a style whose
+  // with a paper's macro, a formula, a colour, a paper's own \protect\cite, a citation first after a display (the carrier), a
+  // cell, a footnote, a reference; and a style whose
   // abstract writes its name literally)
   const enc = (s: string) => new TextEncoder().encode(s)
   const dec = (b: Uint8Array | undefined) => new TextDecoder('latin1').decode(b)
@@ -109,6 +114,10 @@ describe('the marks our marked TeX defines (marks/marks.ts MARK_CS and UNMARK_CS
     '\\bert{} is a model of words with $x$ in it \\protect\\cite{a} and \\textcolor{red}{red words}.',
     '',
     'We read the words of Smith\\etal',
+    '',
+    'We define the words by',
+    '\\[ x = y \\]',
+    '\\cite{a} gives them.',
     '',
     '\\begin{tabular}{l}',
     'A cell of words\\\\',
@@ -133,7 +142,8 @@ describe('the marks our marked TeX defines (marks/marks.ts MARK_CS and UNMARK_CS
   it("are, with what the marking writes right before one, all it writes: the marked original, our marks taken out, is the paper's", () => {
     const paper = paperOf(MAIN),
       spans: Spans = {}
-    const out = originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES, spans })
+    // (the citation first after a display: TeX's display probe said it opens none, so the carrier stands before it)
+    const out = originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES, spans, quiet: ['\\cite{a}'] })
     const main = dec(out.get('main.tex')).slice(spans.skip),
       sty = dec(out.get('refs.sty'))
     // (each kind written: a front unit's robust lead, a start mark's, a call, a babel name's marks in the style)
@@ -142,6 +152,7 @@ describe('the marks our marked TeX defines (marks/marks.ts MARK_CS and UNMARK_CS
       '\\protect\\axtpma{',
       '\\leavevmode\\axtmark{',
       '\\axtcall{',
+      '\\axtpmd{',
       '\\axttg{',
       '\\axtcolour{',
     ])
@@ -165,11 +176,14 @@ describe('the marks our marked TeX defines (marks/marks.ts MARK_CS and UNMARK_CS
     expect([...carried].sort()).toEqual(['axtcall', 'axtend', 'axthmark', 'axthpk', 'axtmark', 'axtpma'])
     expect(called.head.startsWith(called.mp.marks)).toBe(true)
     expect(called.mp.marks).toContain(CALL_TEX)
-    expect(MARK_CS.filter((n) => !defined(called.head).has(n))).toEqual([])
+    // (the marked preamble is written before the display probe answers: no carrier in it, nor its TeX in the probe's head)
+    expect(called.mp.marks).not.toContain(CARRY_TEX)
+    expect(called.mp.marks).not.toContain(CARRY_END_TEX)
+    expect(MARK_CS.filter((n) => !defined(called.head).has(n))).toEqual(['axtpmd'])
     // (no author's call anywhere: no CALL_TEX in the marked compile, none in the probe, the probe's bytes as they were)
     const single = headOf(paperOf(MAIN.replace(' \\and Bob Ray', '')))
     expect(single.mp.text).not.toContain('\\axtcall')
     expect(single.head).not.toContain(CALL_TEX)
-    expect(MARK_CS.filter((n) => !defined(single.head).has(n))).toEqual(['axtcall'])
+    expect(MARK_CS.filter((n) => !defined(single.head).has(n))).toEqual(['axtpmd', 'axtcall'])
   })
 })

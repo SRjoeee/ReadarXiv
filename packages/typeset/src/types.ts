@@ -29,12 +29,16 @@ export interface Rows {
  * The host's served faces, the typesetter's only platform input. Inside one call it answers from the faces
  * loaded at the call's start. `advance` is the text's advance at `size` (PDF units at size `size`, as a canvas measures it
  * with its font at that many px); `ink` its ink over and under the baseline and how far right of its start its ink ends.
- * `ready`: the face is loaded and holds every character of `text`; 'never' where no slice of it holds one
+ * `ready`: the face is loaded and holds every character of `text`; 'never' where no slice of it holds one, or where a slice it
+ * needs is lost (for now or for the visit: the host's failure, which it tells and mends). `holds`, where the host states it:
+ * whether the served catalogue declares every character of `text` in a face of the string, whatever is loaded or lost (true
+ * where a table it needs cannot be had: not known); a host that states none is read as holding every one
  */
 export interface Metrics {
   ready(face: FaceId, text: string): boolean | 'never'
   advance(face: FaceId, size: number, text: string): number
   ink(face: FaceId, size: number, text: string): [ascent: number, descent: number, right: number]
+  holds?(face: FaceId, text: string): boolean
 }
 
 /** the reader's choices that change what is laid */

@@ -234,8 +234,12 @@ export { LayoutRefusal } from './json.mjs'
   (`\input{\subpath sections/a.tex}`) as the one TeX reads, its name expanded by the bodies the package defines the macro with
   (PDF-READER §18.105), so that a file of 43 holds such a paper with none of that file's units: 2609.35143v1, every section of
   it; none of the lab's 245 papers, nor the gate pack's seven, names a file so, their files the same but their version (the
-  image cover of §18.98 does not reach this maker: its pageInk calls are given no image objects) */
-export const LAYOUT = '44'
+  image cover of §18.98 does not reach this maker: its pageInk calls are given no image objects); 45 (with PIPELINE 111): the
+  marking, which this maker calls through @readarxiv/engine/today (layoutMarking), writes the carrier's opening mark (\axtpmd)
+  before every piece but a display that stands first in the paragraph TeX resumes after a display, an inline formula's for
+  \axtpmm (marks.ts CARRY_TEX, PDF-READER §18.106), so that a file of 44 holds such a paper as made from a marked TeX without
+  that point where the piece is no formula (the papers of the lab's 245 it reaches: PDF-READER §18.106) */
+export const LAYOUT = '45'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour
  *  piece's run's fill [unit, k, 0xRRGGBB], a key the file holds only where it has a row; and, of a maker of 18 on, `unlaid`,

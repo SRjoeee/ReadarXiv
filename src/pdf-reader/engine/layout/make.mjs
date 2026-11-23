@@ -1076,8 +1076,8 @@ export async function makerOf({ units, marks, base, OPS, paper, pdfjs, text = nu
     const { units: copies } = layoutMarking(units, marks.marking.classes, { lines: false, switches: marks.marking.switches, inkless: marks.marking.inkless, complete: marks.marking.complete, apart: marks.marking.apart })
     copies.forEach((c, i) => {
       for (const p of c.pieces) {
-        // (a front matter unit's marks robust: \protect before each, marks.mjs layoutMarking)
-        const m = p.t === 'ph' && /^(?:\\protect)?\\axtpm[am]?\{[pn](\d+)\.(\d+)([ab])\}$/.exec(p.src ?? '')
+        // (a front matter unit's marks robust: \protect before each, marks.mjs layoutMarking; \axtpmd a carrier's opening mark)
+        const m = p.t === 'ph' && /^(?:\\protect)?\\axtpm[amd]?\{[pn](\d+)\.(\d+)([ab])\}$/.exec(p.src ?? '')
         // (backref's list: both its marks, which LAYOUT_TEX's hook sets around the list by the name the entry gives it)
         const named = p.t === 'ph' && /^\\axtbrname\{p(\d+)\.(\d+)\}$/.exec(p.src ?? '')
         if (named && Number(named[1]) === i) { design.set(`${i}.${named[2]}`, { open: true, close: true }); continue }
