@@ -619,8 +619,10 @@ export const Part = z.object({
   // the units of the page whose text TeX set turned (a box set level and turned: \rotatebox, a sideways float), by turn: `dir`
   // the turn's direction on the page (the frame's x axis, a unit vector, the page's y up), and the frame's flows and ties, each
   // member stated in the frame, the page's coordinates turned back by `dir` about the page's origin ((x, y) of the page is
-  // (ux x + uy y, -uy x + ux y) there), its lines' page the page's. A typesetter lays a frame as it lays a part's flows, and a
-  // reader draws it through its turn. A field of its own: a reader of before strips it and leaves those units the original's,
+  // (ux x + uy y, -uy x + ux y) there), its lines' page the page's, and so its elements' ink and its label's (El.ink, Label.ink
+  // and its parts): what is not text in the unit is the original's turned ink, cut as a crop and drawn moved along the turn. A
+  // typesetter lays a frame as it lays a part's flows, and a reader draws it through its turn. A field of its own: a reader of
+  // before strips it and leaves those units the original's,
   // their groups on, as it did when no part held them (FORMAT stays: ARCHITECTURE.md §5; docs/PDF-READER.md §18.108)
   frames: z
     .array(z.object({ dir: z.tuple([num, num]), flows: z.array(z.array(Placed)), ties: z.array(Tie).optional() }))

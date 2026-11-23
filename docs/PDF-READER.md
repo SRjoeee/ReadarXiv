@@ -9449,24 +9449,55 @@ mechanism for a turned header cell, a turned caption of several lines and a side
   items as a figure text's turned run's; the highlight passes over a member lit along a direction (`highlight.ts`), as over a
   turned figure text: not lit by sentence, a member lit whole is not drawn either (not done: the highlight of turned runs is
   the figure texts' too). Hover and the panes' sync read the lit boxes, so the same.
-- **Not this round's**: an element of a turned unit, a glyph or a box, a formula, a reference, a citation, a paper's macro of
-  ink: its ink is no crop of a turned unit yet, so such a unit stays the original's (`turned: an element`, counted); a turned
-  caption's label is left the original's ink where it stands (no label of a turned unit is read yet: its translation is laid
-  after it, as TeX set its text); a page with /Rotate (unread whole, `ink.ts`); a mirrored or sheared glyph (a box alone).
-  Figure texts keep their own one-line run (S.figures): one could later be a frame of one line, not changed now.
-- **Reach**, as measured over the lab's 245 papers from their stored compiles (no compile key moves): 61 units framed in 11
-  papers (59 cells, 6 of them turned 60 degrees, and 2 captions of a sideways figure), 36 of them cells the paper keeps as
-  written (a word, a name: drawn as the original's ink, by their rule); of the 32 placements of turned text a survey found
-  left the original's (lane turned), 25 drawn translated and 7 left for an element of ink (`turned: an element`: a formula,
-  a reference, a citation in a turned cell or caption); none left for two pages or two turns. Every other object byte for
-  byte: every units object and every part but the 14 that gain a frame and the two pages that gain one (2610.38776v1 p20
-  and p21, sideways figures), and so the heads of those 11 papers; 17 prepare dumps differ (the framed units' states in the
-  11, the seven `turned: an element`, and the reason of four units the spell check refuses, now `spell` where it read `no
-  ink`). The reader's lay with every row answered: drawn 51,603 -> 51,628 (the 25), no unit drawn before lost, 5,872 ->
-  5,874 pages laid.
-- **Versions**: PIPELINE moves (the parts, the units' states); FORMAT 1 stays (above); TRANSLATE stays (no unit's content, id
-  or wire moves: every units object byte for byte, the rows production holds are kept); LAYOUT and the marks digest stay (no
-  TeX moves; today's layout maker does not ask the turned reading).
+- **What is not text** (the owner's word: 「如果它是我们知道的文字而不是公式啥的，能翻就翻」: the text is translated, what is
+  not text stays the original's ink, turned with it). Each of a turned unit's turned glyphs is the unit's in its role, as a
+  level glyph is (`locate/place.ts`): its text's; an element's, a placeholder's by its piece (a formula, a `\ref`, a `\cite`,
+  a paper's macro of ink), its rules and images with it; its label's. An element is stated as every element is
+  (`frames.ts` frameElements, geometry.ts's reading): its glyphs cut into the unit's lines with its text's (a formula's told
+  apart from the text, lines.ts), its ink a box per line in the frame, on that line's baseline; its glyphs in its `.e` group,
+  erased with the unit and drawn again as its crop where the translation sets it, by the ordinary rules (its glue, its fit,
+  its kind's drawing). One of no ink says which of three it is by the instrument's facts alone: TeX set nothing for it
+  (Instrument `empty`: its points, between which a turned glyph is a painted box, or its probe), it stands outside the unit's
+  text (`outside`), or neither, and the typesetter leaves the unit the original's; B's level stream between its points
+  proves nothing here, a turned unit setting nothing there. A turned element's glyph of no piece leaves its unit the
+  original's (`turned: an element of no piece`). The label (a caption's, from TeX's label point) is read as a level caption's
+  (`frames.ts` frameLabel: its line, its style, the line of its own it stands on, its name, number and punctuation by
+  `labelParts`), its glyphs in its `.l` group: the structural-names rule (§19.11) draws it anew in the target's word for its
+  float's type, as a level caption's, on the frame's line, through the turn; nothing of a second rule.
+- **The crop through the turn** (the reader's `paint.ts` cropsOf, `placeOf`). The translation's line keeps the original's
+  turn, so a crop is the original's turned ink MOVED where that line sets it: the move from its source to its place, read in
+  the frame (along the line to its place, across it from the source's baseline to the line's, scaled as the line is), is,
+  turned onto the page, a move of the page and the same scale. Its pixels are had as a level crop's are: cut from the page's
+  crop render in the page view's own frame, never turned or resampled through a turn (they stand turned there as the line
+  does on ours); its source and own ink stated in the frame by the part (El.ink), turned onto the page as boxes (`dir` on the
+  crop item), and the page's every piece's ink, level and framed, turned onto the page alike (`clips.ts` pageInks), so that a
+  crop in a frame and a level one are cut clear of each other's. For a quarter turn a box of the frame is a box of the page
+  and the cut is exact; for any other turn the page's box of a turned box holds more than its ink (none such in the lab's
+  papers: every element of a framed unit stands in a quarter turn).
+- **Not covered**: a page with /Rotate (unread whole, `ink.ts`: 3 pages of the lab's 245 papers, 1409.0575v3's landscape tables,
+  shown as the original); a mirrored glyph (a box alone: 3 text items of one paper's figure); a unit on two pages or in two
+  turns, or whose turned glyphs share no direction (none in the lab's papers); figure texts keep their own one-line run
+  (S.figures): one could later be a frame of one line, not changed now. Slanted text is no turned text: a glyph whose
+  matrix's baseline is level is a level glyph whatever its slant (pageInk's level test reads the baseline, not the shear), read
+  by the level rules; a glyph turned and sheared is a box alone, never a turned glyph. Over the lab's 245 papers PDF.js's text
+  content holds 196 sheared items in 8 papers: 115 level slanted ones (faces set oblique by a skewed font matrix: Arial
+  Rounded, MS PGothic, Symbol, a CJK face's bold) and 81 turned and sheared ones in figures (Verdana, Devanagari MT, Symbol,
+  Arial Bold); none is in a frame.
+- **Reach**, as measured over the lab's 245 papers from their stored compiles (no compile key moves): 68 units framed in 15
+  papers (61 cells, 6 of them turned 60 degrees, and 7 captions), 36 of them cells the paper keeps as written (a word, a name:
+  drawn as the original's ink, by their rule); of the 32 placements of turned text a survey found left the original's (lane
+  turned) all 32 drawn: 25 of text alone, 7 holding an element (2608.12502v1's two header cells with `$t_1$`, `$t_2$`;
+  2610.19282v1's two sideways captions with formulas, which give its pages 11 and 15 a part; 2610.38516v1's two with a `\ref`;
+  2608.18626v1's with a `\cite`), and the turned captions' labels drawn anew (7 labels, 2610.38776v1's "Figure 14:" among
+  them). Every level member byte for byte: every units object; the parts that change are those that gain a frame, a frame's
+  member that gains its elements (an element stated as every element is: 57 members hold one, most a placeholder of no ink
+  of the cells kept as written) or its label, and the pages that gain a part (2610.38776v1 p20 and p21, 2610.19282v1 p11 and p15);
+  the dumps, the framed units' states. The reader's lay with every row answered: drawn 51,603 -> 51,635 (the 32), no unit
+  drawn before lost, 5,872 -> 5,876 pages laid.
+- **Versions**: PIPELINE 113 (the parts, the units' states); FORMAT 1 stays (above: an El and a Label of a framed member are
+  the frame's, as its lines are; a reader of before strips the frame whole); TRANSLATE stays (no unit's content, id or wire
+  moves: every units object byte for byte, the rows production holds are kept); LAYOUT and the marks digest stay (no TeX moves;
+  today's layout maker does not ask the turned reading).
 
 ## 19. The engine's contract
 
