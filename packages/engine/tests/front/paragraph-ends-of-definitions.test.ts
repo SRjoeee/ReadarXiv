@@ -199,3 +199,34 @@ describe('a definition that ends the paragraph: the review of round 2 into main 
     ).toEqual(['A sentence of ours with inside it goes on.'])
   })
 })
+
+describe('a definition that ends the paragraph: the review of #677', () => {
+  it('a \\newif flag set later in the document than the call is no value proven at the call: no paragraph end read from it', () => {
+    // (TeX runs `\newif` and the flag is false at the call; the paper's only `\drafttrue` stands after it. Read as true
+    // wherever TeX reads it, the `\par` of the true branch cut the paragraph TeX does not end)
+    const def = '\\newif\\ifdraft\n\\newcommand{\\maybe}[1]{#1\\ifdraft\\par\\fi}'
+    expect(saidOf(def, 'Previous sentence. \\maybe{The first half} continues here.\n\n\\drafttrue Later words.')).toEqual([
+      'Previous sentence. The first half continues here.',
+      'Later words.',
+    ])
+  })
+  // RECORDED, NOT BUILT (Codex and Devin on #677; each fails until it is; over the lab's 245 papers no unit merges by them: the
+  // units at this round's head are the line's byte for byte): where the reading cannot tell what TeX runs, it reads no
+  // paragraph end, two of TeX's paragraphs one unit as before the definitions' ends were read
+  it.fails('an environment opened in a branch TeX skips is no nesting: the \\par after the outer box ends the paragraph', () => {
+    expect(
+      saidOf(
+        '\\newcommand{\\boxedline}[1]{#1 \\begin{minipage}{3cm}\\iffalse\\begin{minipage}{2cm}\\fi Boxed text.\\end{minipage}\\par}',
+        'Previous sentence. \\boxedline{First paragraph.} Second paragraph.',
+      ),
+    ).toHaveLength(2)
+  })
+  it.fails('a redefinition TeX skips leaves the paragraph command its own: \\medbreak still ends the paragraph', () => {
+    expect(
+      saidOf(
+        '\\iffalse\\renewcommand{\\medbreak}{}\\fi\n\\newcommand{\\labelpiece}[1]{#1\\medbreak}',
+        'Previous sentence. \\labelpiece{First paragraph.} Second paragraph.',
+      ),
+    ).toHaveLength(2)
+  })
+})

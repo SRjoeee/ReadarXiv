@@ -207,3 +207,24 @@ describe('the frames a page paints: the review of round 2 into main (#676)', () 
     ])
   })
 })
+
+describe('the frames a page paints: the review of #677', () => {
+  it('reads a fill of a path of 140,002 segments without passing its crossings as arguments (no RangeError)', () => {
+    // (a filled path round our words whose right side zigzags 140,000 times across its box's middle line, x = 145: every
+    // crossing of that line an entry; spread into Math.min's arguments, past the engine's limit, it threw and aborted the
+    // paper's prepare)
+    const n = 140_000
+    const pts: [number, number][] = [[60, 600]]
+    for (let k = 0; k <= n; k++) pts.push([k % 2 ? 230 : 140, 600 + (200 * k) / n])
+    pts.push([60, 800])
+    const segs = new Float32Array(4 * pts.length)
+    pts.forEach(([x, y], k) => {
+      const [x1, y1] = pts[(k + 1) % pts.length]!
+      segs.set([x, y, x1, y1], 4 * k)
+    })
+    const r = pageOf([[0, 60, 600, 230, 800]], [{ colour: 0xffffff }])
+    r.raw.shapes.set(0, { ...r.raw.shapes.get(0)!, segs })
+    expect(() => framesOnPage(r.raw, r.pg)).not.toThrow()
+    expect(seenOf(r)).toEqual([[0, false, 'as under']])
+  })
+})

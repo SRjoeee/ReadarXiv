@@ -174,13 +174,16 @@ describe('a mark set apart from its word in the marks’ base: the review of rou
       const r: Row = { id, ok: true, by: 'test', content: [{ t: 'text', s }] }
       const rows: Rows = { get: (k) => (k === id ? r : undefined), done: true }
       const laid = layPage(part(narrow(w)), rows, rulesFor('de'), metrics).members[0]!
-      const opens = laid.lines.map(
-        ([, , , items]) =>
-          items
-            .map((it) => ('src' in it ? '' : it.s))
-            .join('')
-            .trimStart()[0],
-      )
+      // (laid, every character of the row on its lines, and the first mark on the line of the letter before it: an empty
+      // lay opens no line with a mark either; the review of #677)
+      expect(laid.state, `${w} ${s}`).toBe('laid')
+      const texts = laid.lines.map(([, , , items]) => items.map((it) => ('src' in it ? '' : it.s)).join(''))
+      expect(texts.join('').replace(/\s+/g, ''), `${w} ${s}`).toBe(s.replace(/\s+/g, ''))
+      const mark = s.search(/[,;]/)
+      const at = texts.findIndex((t) => t.includes(s[mark]!))
+      expect(texts[at]!.trimStart().indexOf(s[mark]!), `${w} ${s}`).toBeGreaterThan(0)
+      expect(texts[at]!.trimStart()[texts[at]!.trimStart().indexOf(s[mark]!) - 1], `${w} ${s}`).toBe(s[mark - 1])
+      const opens = texts.map((t) => t.trimStart()[0])
       expect(
         opens.filter((c) => c !== undefined && /[,;.]/.test(c)),
         `${w} ${s}`,
