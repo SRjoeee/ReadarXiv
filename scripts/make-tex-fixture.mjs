@@ -1,19 +1,23 @@
-// The highlights fixture (tests/fixtures/pdf/highlights/): a page of our own whose words carry soul's highlights — through the
-// paper's own macros of two colours and through \hl itself; two of them glued inside one word, in a paragraph and in a caption;
-// one at a word's start, its middle and its end; one run across a line's end —, made as the box's prepare makes a paper's, up to
-// the instrument: the stand-in for arXiv's PDF (highlights.tex compiled as it is), then the engine's front half over it
-// (layout/paper.mjs markedOfPaper: the mark probe, the marked original, our final pass), each compile in the pinned TeX Live
-// (lab/pdf/spikes/compile-image.mjs) with the date pinned, so that the same source gives the same bytes. It writes:
+// The fixtures of one page of our own made as the box's prepare makes a paper's, up to the instrument: the stand-in for arXiv's PDF
+// (the page's source compiled as it is), then the engine's front half over it (layout/paper.mjs markedOfPaper: the mark probe,
+// the marked original, our final pass), each compile in the pinned TeX Live (lab/pdf/spikes/compile-image.mjs) with the date
+// pinned, so that the same source gives the same bytes. Each fixture's folder tests/fixtures/pdf/<name>/ holds its source:
+//   - `highlights` (highlights.tex): words that carry soul's highlights — through the paper's own macros of two colours and
+//     through \hl itself; two of them glued inside one word, in a paragraph and in a caption; one at a word's start, its middle
+//     and its end; one run across a line's end (tests/pdf-reader/highlights.test.ts);
+//   - `framed` (framed.tex): a paragraph in a frame tcolorbox paints as one path round it, two fills, room under the frame
+//     (tests/pdf-reader/framed-prepare.test.ts, docs/PDF-READER.md §18.111).
+// It writes, in the fixture's folder:
 //   - `arxiv.pdf`: the stand-in, what the back half locates on (prepareBack's A);
 //   - `final.pdf`: our final pass, what the instrument reads (B);
 //   - `made.json`: what the front half handed the instrument besides it: the marking's options (`options`) and the marked
 //     compile's log (`log`).
-// The back half (the instrument, locate, the wrap) is run by the tests over these (tests/pdf-reader/highlights.test.ts), so that a
-// change there is held without a compile; a change of the front half's marking is made again here.
-//   pnpm exec tsx scripts/make-highlight-fixture.mjs            # writes the three files
-//   pnpm exec tsx scripts/make-highlight-fixture.mjs --check    # makes them again in a scratch folder; exits 1 where they differ
-// Nothing here is an arXiv paper's: the source and everything made from it are ours, CC0. No request leaves this machine; the image
-// is never pulled.
+// The back half (the instrument, locate, the wrap) is run by the tests over these, so that a change there is held without a
+// compile; a change of the front half's marking is made again here.
+//   pnpm exec tsx scripts/make-tex-fixture.mjs <name>            # writes the three files
+//   pnpm exec tsx scripts/make-tex-fixture.mjs <name> --check    # makes them again in a scratch folder; exits 1 where they differ
+// Nothing here is an arXiv paper's: the sources and everything made from them are ours, CC0. No request leaves this machine; the
+// image is never pulled.
 import { execFile } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -27,10 +31,16 @@ import { DRIVER_OUTPUT_MARK, textOfPdf } from '../src/pdf-reader/engine/layout/b
 import { checkCompileImage, COMPILE_IMAGE, PLATFORM } from '../lab/pdf/spikes/compile-image.mjs'
 
 const run = promisify(execFile)
-const FIXTURE = fileURLToPath(new URL('../tests/fixtures/pdf/highlights/', import.meta.url))
-const MAIN = 'highlights.tex'
-/** the date every compile is pinned at (2026-11-12, UTC midnight): the stand-in's and every compile of the front half's */
-const EPOCH = 1794441600
+/** each fixture's source and the date every compile of it is pinned at (UTC midnight): the stand-in's and every compile of the
+ *  front half's (highlights 2026-11-12, framed 2026-11-23) */
+const FIXTURES = {
+  highlights: { main: 'highlights.tex', epoch: 1794441600 },
+  framed: { main: 'framed.tex', epoch: 1795392000 },
+}
+const NAME = process.argv.slice(2).find(a => !a.startsWith('--'))
+if (!Object.hasOwn(FIXTURES, NAME ?? '')) throw new Error(`which fixture: ${Object.keys(FIXTURES).join(' or ')}`)
+const FIXTURE = fileURLToPath(new URL(`../tests/fixtures/pdf/${NAME}/`, import.meta.url))
+const { main: MAIN, epoch: EPOCH } = FIXTURES[NAME]
 const check = process.argv.includes('--check')
 const NM = fileURLToPath(new URL('../node_modules/pdfjs-dist/', import.meta.url))
 const DOC = { cMapUrl: `${NM}cmaps/`, cMapPacked: true, standardFontDataUrl: `${NM}standard_fonts/`, verbosity: 0, useSystemFonts: false }
@@ -66,7 +76,7 @@ async function compileIn(scratch, files, req) {
 }
 
 await checkCompileImage()
-const scratch = mkdtempSync(join(tmpdir(), 'axt-highlights-'))
+const scratch = mkdtempSync(join(tmpdir(), `axt-${NAME}-`))
 try {
   const source = new Map([[MAIN, new Uint8Array(readFileSync(join(FIXTURE, MAIN)))]])
   // (the stand-in for arXiv's PDF: the source compiled as it is, on the pinned day)
