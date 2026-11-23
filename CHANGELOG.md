@@ -4,6 +4,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- Fixed: in the PDF reader, a paragraph inside a frame the paper paints round it, such as an abstract in a rounded box or a passage on a shaded ground, stays inside the frame: where its translation needs more room than the frame gives, it is set a size smaller. Its last line had been drawn on the frame's border, or a short line past its side.
 - Fixed: in the PDF reader, a note the paper sets apart in a group or after the commands that number it, such as an unnumbered note of the title's authors written with `\footnotetext`, is translated as the paper's own note, each of its lines on its own line as printed. Its lines had been run together, read off the page.
 - Fixed: in the PDF reader, a note whose call stands right after a displayed formula, and a note's mark there before a word, are translated with the paragraph they stand in. The paragraph had stayed in the original language.
 - Fixed: in the PDF reader, with the authors' names translated, a name followed by marks its class sets after it, such as `\inst{1}` and an ORCID after each author in an LNCS paper, is drawn translated with its marks after it, as printed. Such names had stayed in the original.
