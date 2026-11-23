@@ -48,6 +48,22 @@ describe('a piece between the texts of a front unit: a point on each side', () =
     )
     expect(around(tex, '\\inst{1}')).toEqual([true, true])
   })
+  it('a piece first on a row after `\\\\`: its opening point before the break, as the marking sets it there, and its closing one after it', () => {
+    const tex = markedOf(
+      '\\documentclass{IEEEtran}',
+      '\\title{A Title of Ours}\n\\author{\\IEEEauthorblockN{Ann Lee}\n\\IEEEauthorblockA{\\textsuperscript{1}First Place of Ours\\\\\n\\textsuperscript{2}Second Place of Ours}}\n\\maketitle\nWords of ours.',
+    )
+    // (nothing of ours between the break and what follows it: the break looks ahead for `*` and `[`, a row begins with its own
+    // first token)
+    expect(tex).toMatch(/First Place of Ours\\protect\\axtpma\{p\d+\.(\d+)a\}\\\\\n\\textsuperscript\{2\}\\protect\\axtpm\{p\d+\.\1b\}Second/)
+  })
+  it('a piece after a command that may read what follows it gets no mark of ours', () => {
+    const tex = markedOf(
+      '\\documentclass{article}\n\\usepackage{xspace}\n\\newcommand{\\lab}{Lab\\xspace}',
+      '\\title{A Title of Ours}\n\\author{Ann Lee \\lab$^1$, Bob Ray}\n\\maketitle\nWords of ours.',
+    )
+    expect(tex).toContain('\\lab$^1$')
+  })
   it('the controls: a piece after the last text (a trail) and one in a paragraph keep the reading of before', () => {
     const tex = markedOf(
       '\\documentclass{article}',
