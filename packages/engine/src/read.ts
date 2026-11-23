@@ -369,6 +369,8 @@ function docPageOf(
       descent: t.descent,
       form: !!t.form,
       fill: t.fill ?? -1,
+      up: t.up,
+      down: t.down,
     })
   }
   const page: DocPage = {

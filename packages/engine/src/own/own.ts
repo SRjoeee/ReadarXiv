@@ -70,9 +70,12 @@ export type OwnGlyph = Pick<Glyph, 'x0' | 'x1' | 'y' | 'size' | 'top' | 'bottom'
   ix0?: number
   ix1?: number
 }
+/** a glyph set turned as ownOf reads one (pageInk's `turned`, ink.ts turnedGlyph): its character, its box's index among the
+ *  page's boxes (its place in the stream beside the points'; -1 where its clip left none), its direction across the page */
+export type OwnTurned = { u?: string; box: number; ux: number; uy: number; blank?: boolean }
 /** a page as ownOf reads it (pageInk's with `indices`): its glyphs in stream order, its boxes (stride 4), each box's painted
- *  path's place or its kind (< 0), its points, each glyph's boxes before it, its view and its paragraphs' points; a page not
- *  read has none of them */
+ *  path's place or its kind (< 0), its points, each glyph's boxes before it, its view and its paragraphs' points, and the
+ *  glyphs it sets turned (`turned`, read with pageInk's `turned`); a page not read has none of them */
 export type OwnPage = {
   glyphs: readonly OwnGlyph[]
   boxes: readonly number[]
@@ -81,6 +84,7 @@ export type OwnPage = {
   boxAt?: ArrayLike<number>
   view?: View
   paras?: readonly InkPoint[]
+  turned?: readonly OwnTurned[]
 }
 /** a unit's piece as the ownership reads it: the front end's (latex-front.ts), of a file or none */
 type Piece = SourcePiece<string | null>
@@ -94,6 +98,9 @@ export interface UnitOwned {
   pages: Set<number>
   unhidden: Unhidden | null
   labelKept: boolean
+  /** a unit whose text TeX set turned (its text glyphs all turned, none level): their one direction across the page, the turn
+   *  of the box TeX set level and turned (TURNED below) */
+  turn?: [number, number]
 }
 /** ownOf's options: the paper's units, the marking's follows, texts and macros of no ink where known, its theorem names */
 export type OwnOptions = {
@@ -102,12 +109,17 @@ export type OwnOptions = {
   texts?: ReadonlyMap<string | undefined, string> | null
   inkless?: ReadonlySet<string | undefined> | null
   names?: readonly unknown[] | null
+  /** read the units whose text TeX set turned (TURNED, readTurned): the instrument's, whose locate lays them in their frame;
+   *  a caller with no frame to lay such a unit in does not ask it, and reads every unit as a level one */
+  turned?: boolean
 }
 /** what ownOf gives: each page's glyphs' and boxes' groups, each unit's ownership, each page's displays a unit opens with,
  *  and the counts */
 export interface Ownership {
   glyphs: (string | null)[][]
   boxes: (string | null)[][]
+  /** each page's turned glyphs' groups, as `glyphs` states its level ones' (`turned[p - 1][j]`) */
+  turned: (string | null)[][]
   units: Map<number, UnitOwned>
   leads: Map<number, string>[]
   stats: {
@@ -116,6 +128,8 @@ export interface Ownership {
     spell: number[]
     labelKept: number
     leaks: { count: number; units: number[] }
+    /** the units whose text TeX set turned: owned so, and those whose turned glyphs share no one direction (left as they were) */
+    turned: { units: number; mixed: number }
   }
 }
 /** a reading's glyphs and painted boxes, each [page, index] */
@@ -147,6 +161,9 @@ const SPELL_LIST_MAX = 64
 const START = /^([th]?)(\d+)s$/
 /** the point the marked compile sets before a caption's label, \\fnum@<type>, where TeX sets it (marks/marks.ts POINTS_TEX) */
 const LABEL_POINT = /^ka\d+$/
+/** two turned glyphs are set in one turn where their directions' components agree within this (a cosine's share: a turn of
+ *  the box TeX set is one matrix for all its glyphs, its directions equal but for the PDF's rounding of its numbers) */
+export const TURN_SAME = 1e-3
 const END = /^([th]?)(\d+)e$/
 /** a rule TeX paints on a line of a unit's text (OT1's \\_, an underline) is no thicker than this share of the line's size:
  *  its rules are a default rule's 0.4 pt (a twentieth of an 8 pt line, a sixtieth of a 24 pt one); a letter's ink, an icon's,
@@ -227,7 +244,7 @@ const JOINT = /^[.:;,\u2013\u2014-]{1,2}$/u
  */
 export function ownOf(
   pages: readonly OwnPage[],
-  { units = null, follows = null, texts = null, inkless = null, names = null }: OwnOptions = {},
+  { units = null, follows = null, texts = null, inkless = null, names = null, turned = false }: OwnOptions = {},
 ): Ownership {
   const form = labelFormOf(names)
   const P = pages.length
@@ -235,7 +252,8 @@ export function ownOf(
   let work = 0
   const regions = pages.map((pg) => regionsOf({ glyphs: { n: pg.glyphs.length }, boxes: pg.boxes, points: pg.points }))
   const gOwn: (string | null)[][] = pages.map((pg) => new Array(pg.glyphs.length).fill(null)),
-    bOwn: (string | null)[][] = pages.map((pg) => new Array(pg.boxes.length / 4).fill(null))
+    bOwn: (string | null)[][] = pages.map((pg) => new Array(pg.boxes.length / 4).fill(null)),
+    tOwn: (string | null)[][] = pages.map((pg) => new Array(pg.turned?.length ?? 0).fill(null))
   // every point by its name: [page, index]; and each page's points in stream order
   const where = new Map<string, Place[]>()
   // biome-ignore lint/suspicious/useIterableCallbackReturn: a concise arrow, the inner forEach's value, which no one reads
@@ -913,9 +931,35 @@ export function ownOf(
     named.push([`n${m[1]}`, list[0]![0]])
   }
 
+  // ---- the units whose text TeX set turned (TURNED): TeX sets a box level and turns it (\rotatebox, a sideways float), so that
+  // every glyph of its text is a turned one (pageInk's `turned`, ink.ts turnedGlyph: a rotation of the page's axes, no mirror
+  // nor shear) and none is level. A unit whose range holds no level glyph of ink and turned ones in its region takes them as
+  // its text by the same rules as level ones: those between its points (by their boxes' places in the stream, a turned glyph's
+  // box painted where it is shown), those between a placeholder's two points its placeholder's (MR 4, the closed reading), and a
+  // caption's label those from TeX's label point to its start (MR 5). Its turn is the one direction of its text's glyphs; where
+  // they share none, the unit is left as it was (`spell`: its level glyphs spell nothing), counted. A unit with level text is
+  // read as before: the turned glyphs in its range (a figure's axis title TeX set inside a paragraph's range) are none of its
+  const tr = turned
+    ? readTurned({
+        pages,
+        regions,
+        gOwn,
+        tOwn,
+        where,
+        textOf,
+        units,
+        refused: (id) => !!unitOf.get(id)?.unhidden,
+        budget: OWN_WORK - work,
+      })
+    : { units: new Map<number, [number, number]>(), mixed: 0, work: 0 }
+  work += tr.work
+  const turnedUnits = tr.units,
+    turnedMixed = tr.mixed
+
   // ---- each unit's groups and pages, and the spell check (§1.3)
   const text = new Map<number, Place[]>(),
     label = new Map<number, Place[]>()
+  const { text: turnedText, label: turnedLabel } = turnedListsOf(tOwn, unit)
   for (let p = 1; p <= P; p++) {
     const G = gOwn[p - 1]!
     for (let i = 0; i < G.length; i++) {
@@ -1016,6 +1060,15 @@ export function ownOf(
       spell.push(id)
       continue
     }
+    // (a unit set turned: its turn; its turned label a label's form, else left the original's ink, apart from its text as a
+    // turned box's label stands before it)
+    if (turnedUnits.has(id)) {
+      turnedOwned(u, id, turnedUnits.get(id)!, turnedLabel.get(id), pages, tOwn, (s) =>
+        isLabelForm(s, units?.[id]?.bracketed === true, form),
+      )
+      if (u.labelKept) labelKept++
+      continue
+    }
     const lead = label.get(id)
     if (lead) {
       const chars = lead.map(([p, i]) => pages[p - 1]!.glyphs[i]!.u ?? '').join('')
@@ -1091,6 +1144,11 @@ export function ownOf(
    *  (releaseLines) */
   function spells(id: number, src: Source): boolean {
     const G = ([p, i]: Place) => pages[p - 1]!.glyphs[i]!
+    // (a unit set turned: its turned text glyphs, in the stream's order; no line of its is let go, no lead trimmed)
+    if (turnedUnits.has(id)) {
+      const ink = (turnedText.get(id) ?? []).map(([p, j]) => spellOf(pages[p - 1]!.turned![j]!.u ?? '')).join('')
+      return ink === src.text || ink === src.bare || (src.parts.length > 1 && slotted(src.parts, ink))
+    }
     const ink = (text.get(id) ?? []).map((a) => spellOf(G(a).u ?? '')).join('')
     if (ink === src.text || ink === src.bare) return true
     if (src.parts.length > 1 && slotted(src.parts, ink)) return true
@@ -1189,6 +1247,12 @@ export function ownOf(
     }
     return true
   }
+  // (a unit set turned that the spell check left the original's owns none of its turned glyphs: no reader takes them for its)
+  releaseTurned(
+    [...turnedUnits.keys()].filter((id) => !!unitOf.get(id)?.unhidden),
+    tOwn,
+    unitOf,
+  )
   const unhidden: Record<string, number> = Object.fromEntries(UNHIDDEN.map((k) => [k, 0]))
   for (const u of unitOf.values()) if (u.unhidden) unhidden[u.unhidden]!++
   spell.sort((a, b) => a - b)
@@ -1286,6 +1350,7 @@ export function ownOf(
   return {
     glyphs: gOwn,
     boxes: bOwn,
+    turned: tOwn,
     units: unitOf,
     leads,
     stats: {
@@ -1294,8 +1359,146 @@ export function ownOf(
       spell: spell.slice(0, SPELL_LIST_MAX),
       labelKept,
       leaks: { count: leaks.length, units: leaks.slice(0, SPELL_LIST_MAX) },
+      turned: { units: [...unitOf].filter(([, u]) => u.turn).length, mixed: turnedMixed },
     },
   }
+}
+
+/** what readTurned reads: ownOf's pages, their regions, its glyphs' and turned glyphs' groups (`tOwn` written here), its points
+ *  by name, its units' text ranges, its units, whether a reading before left a unit the original's, the work it may still do */
+type TurnedContext = {
+  pages: readonly OwnPage[]
+  regions: readonly ReturnType<typeof regionsOf>[]
+  gOwn: readonly (string | null)[][]
+  tOwn: (string | null)[][]
+  where: ReadonlyMap<string, Place[]>
+  textOf: ReadonlyMap<number, TextRange>
+  units: readonly OwnUnit[] | null
+  refused: (id: number) => boolean
+  budget: number
+}
+/**
+ * The units whose text TeX set turned (TURNED): TeX sets a box level and turns it (\rotatebox, a sideways float), so that every
+ * glyph of its text is a turned one (pageInk's `turned`, ink.ts turnedGlyph: a rotation of the page's axes, no mirror nor shear)
+ * and none is level. A unit whose range holds no level glyph of ink and turned ones in its region takes them as its text by
+ * the same rules as level ones: those between its points (by their boxes' places in the stream, a turned glyph's box painted
+ * where it is shown), those between a placeholder's two points its placeholder's (MR 4, the closed reading), and a caption's
+ * label those from TeX's label point to its start (MR 5), each written to `tOwn`. Its turn is the one direction of its text's
+ * glyphs; where they share none, the unit is left as it was (its level glyphs spell nothing: `spell`), counted (`mixed`). A
+ * unit with level text, or one a reading before left the original's (a placeholder whose ink cannot be told apart), is read
+ * as it was: the turned glyphs in its range (a figure's axis title TeX set inside a paragraph's range) are none of its.
+ * Returns each unit's turn by id, the count of those left, and the glyphs visited
+ */
+function readTurned(c: TurnedContext): { units: Map<number, [number, number]>; mixed: number; work: number } {
+  const { pages, regions, gOwn, tOwn, where, units } = c
+  const out = new Map<number, [number, number]>()
+  let mixed = 0,
+    work = 0
+  const pt = ([p, q]: Place): InkPoint => pages[p - 1]!.points[q]!
+  const at = ([p, q]: Place): number => regions[p - 1]!.at[q]!
+  const before = (a: Place, b: Place): boolean => a[0] < b[0] || (a[0] === b[0] && a[1] < b[1])
+  const turnedOf = (p: number, b0: number, b1: number, r: number): number[] => {
+    const T = pages[p - 1]!.turned ?? [],
+      R = regions[p - 1]!,
+      list: number[] = []
+    work += T.length
+    for (let j = 0; j < T.length; j++) {
+      const b = T[j]!.box
+      if (b >= b0 && b < b1 && R.box[b] === r && tOwn[p - 1]![j] === null) list.push(j)
+    }
+    return list
+  }
+  for (const [id, { s, e }] of [...c.textOf].sort((a, b) => a[0] - b[0])) {
+    if (!s || s[0] !== e[0] || !pages[s[0] - 1]!.turned?.length || work > c.budget || c.refused(id)) continue
+    const p = s[0],
+      G = gOwn[p - 1]!,
+      pg = pages[p - 1]!
+    if (G.some((g, i) => g === `u${id}` && /\S/.test(pg.glyphs[i]!.u ?? ''))) continue
+    const r = at(s)
+    const mine = turnedOf(p, pt(s).box, pt(e).box, r)
+    const dirs = mine.filter((j) => !pg.turned![j]!.blank).map((j) => pg.turned![j]!)
+    if (!dirs.length) continue
+    const [ux, uy] = [dirs[0]!.ux, dirs[0]!.uy]
+    if (dirs.some((t) => Math.abs(t.ux - ux) > TURN_SAME || Math.abs(t.uy - uy) > TURN_SAME)) {
+      mixed++
+      continue
+    }
+    for (const j of mine) tOwn[p - 1]![j] = `u${id}`
+    // (its placeholders' turned glyphs: between each one's two points on its page)
+    for (const [name, list] of where) {
+      const m = OPENING.exec(name)
+      if (!m || Number(m[2]) !== id || list.length !== 1 || list[0]![0] !== p) continue
+      const close = where.get(`${m[1]}${m[2]}.${m[3]}b`) ?? []
+      if (close.length !== 1 || close[0]![0] !== p || before(close[0]!, list[0]!)) continue
+      for (const j of mine)
+        if (pg.turned![j]!.box >= pt(list[0]!).box && pg.turned![j]!.box < pt(close[0]!).box)
+          tOwn[p - 1]![j] = `u${id}.p`
+    }
+    // (a caption's label: from TeX's label point before its start, past no end point, to the start)
+    if (units?.[id]?.kind === 'caption')
+      for (let q = s[1] - 1; q >= 0; q--) {
+        const X = pg.points[q]!
+        if (END.test(X.name)) break
+        if (LABEL_POINT.test(X.name)) {
+          for (const j of turnedOf(p, X.box, pt(s).box, r)) tOwn[p - 1]![j] = `u${id}.l`
+          break
+        }
+      }
+    out.set(id, [ux, uy])
+  }
+  return { units: out, mixed, work }
+}
+/** a unit set turned that spells its source: its turn stated; its turned label a label's form (`labelForm`), else left the
+ *  original's ink, apart from its text as a turned box's label stands before it (`labelKept`) */
+function turnedOwned(
+  u: UnitOwned,
+  id: number,
+  turn: [number, number],
+  label: readonly Place[] | undefined,
+  pages: readonly OwnPage[],
+  tOwn: (string | null)[][],
+  labelForm: (s: string) => boolean,
+): void {
+  u.turn = turn
+  if (!label || labelForm(label.map(([p, j]) => pages[p - 1]!.turned![j]!.u ?? '').join(''))) return
+  for (const [p, j] of label) tOwn[p - 1]![j] = null
+  u.groups.delete(`u${id}.l`)
+  u.labelKept = true
+}
+/** the turned glyphs of units `ids` given back to no group (`tOwn`), their groups cleared */
+function releaseTurned(
+  ids: readonly number[],
+  tOwn: (string | null)[][],
+  unitOf: ReadonlyMap<number, UnitOwned>,
+): void {
+  for (const id of ids) {
+    for (const T of tOwn)
+      for (let j = 0; j < T.length; j++) if (T[j] === `u${id}` || T[j]?.startsWith(`u${id}.`)) T[j] = null
+    unitOf.get(id)?.groups.clear()
+  }
+}
+/** each unit's turned text glyphs and turned label glyphs ([page, index among the page's turned]) by id, its groups and pages
+ *  added to its ownership (`unit`) */
+function turnedListsOf(
+  tOwn: readonly (string | null)[][],
+  unit: (id: number) => UnitOwned,
+): { text: Map<number, Place[]>; label: Map<number, Place[]> } {
+  const text = new Map<number, Place[]>(),
+    label = new Map<number, Place[]>()
+  tOwn.forEach((T, i) => {
+    for (let j = 0; j < T.length; j++) {
+      const g = T[j]
+      if (g === null || g === undefined) continue
+      const dot = g.indexOf('.'),
+        id = Number(dot < 0 ? g.slice(1) : g.slice(1, dot))
+      const u = unit(id)
+      u.groups.add(g)
+      u.pages.add(i + 1)
+      if (dot < 0) (text.get(id) ?? text.set(id, []).get(id)!).push([i + 1, j])
+      else if (g.endsWith('.l')) (label.get(id) ?? label.set(id, []).get(id)!).push([i + 1, j])
+    }
+  })
+  return { text, label }
 }
 
 /**

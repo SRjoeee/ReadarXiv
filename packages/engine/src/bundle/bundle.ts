@@ -423,13 +423,19 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
     .filter((u) => u.kind === 'name' && u.name === undefined)
     .map((u) => [textOf(u.content), u.id])
   const partDigests: (string | null)[] = []
+  // (the page's frames of units TeX set turned (locate/turned-frames.ts), those of which a reader could lay a member: a page that holds
+  // nothing else to lay has a part for them, its flows none)
+  const framesOn = (p: number) =>
+    (located.frames ?? []).filter((f) => f.page === p && f.flows.some((fl) => fl.some((o) => states[o]!.drawn)))
   for (let p = 1; p <= paper.pages; p++) {
     const { a, b, c, take } = takes[p - 1]!
-    if (!take.length) {
+    const frames = framesOn(p)
+    if (!take.length && !frames.length) {
       partDigests.push(null)
       continue
     }
-    const held = new Set(take.flatMap((i) => located.flows[i]!))
+    const framed = frames.flatMap((f) => f.flows.flat())
+    const held = new Set([...take.flatMap((i) => located.flows[i]!), ...framed])
     const ties = located.ties.filter((_, t) => tieOrds[t]!.some((o) => held.has(o)))
     // (the page's annotations, and those of the members with a line on it on their other pages, with their page: a translation
     // draws a member's piece on whichever of its pages its text falls, the link over it there)
@@ -445,8 +451,8 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
     const links = [...own, ...across]
     const named = partNames(
       names,
-      take.flatMap((i) =>
-        located.flows[i]!.flatMap((o) => (typeof placed[o]!.text === 'string' ? [placed[o]!.text] : [])),
+      [...take.flatMap((i) => located.flows[i]!), ...framed].flatMap((o) =>
+        typeof placed[o]!.text === 'string' ? [placed[o]!.text] : [],
       ),
     )
     const part: Part = {
@@ -472,6 +478,15 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
       ),
       ...(ties.length ? { ties } : {}),
       ...(links.length ? { links } : {}),
+      ...(frames.length
+        ? {
+            frames: frames.map((f) => ({
+              dir: f.dir,
+              flows: f.flows.map((fl) => fl.map((o) => placed[o]!)),
+              ...(f.ties.length ? { ties: f.ties } : {}),
+            })),
+          }
+        : {}),
     }
     const { bytes, digest } = write('part', part)
     partDigests.push(digest)
