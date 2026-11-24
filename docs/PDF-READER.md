@@ -10034,6 +10034,40 @@ Not this round:
   unit (a number beside a formula at 7.97 in 10.91 text, 2608.23517v1): no such switch among the units the reader translates.
 - Small capitals' base by scope.
 
+### 18.115 A stored argument the call itself sets stands at the call; a path no one sees is no one's ink (the coordinator's ruling of 2026-11-25, on 2611.18114v1)
+
+**The report.** The owner, on production: many units of 2611.18114v1 drawn in the original, and the layout broken (the first
+page wholly arXiv's; holes before the superscript citation numbers on the second; a line of English in the fourth).
+
+**A: the call is what it sets, where it stands.** The paper redefines natbib's `\citep` to read the token after it: `\unskip`,
+then `\def\wsp@keys{#1}` and `\futurelet` on the next token, a `.` or `,` taken as an argument and set `\rlap`'d under the
+superscript number, natbib's own command (kept by a `\let`) setting `\wsp@keys`. The source reader took the macro for a front
+matter command that hands its text elsewhere, as LaTeX's `\author` keeps its argument for `\maketitle` (`paperMacros`'
+`stores`: its prose parameter stored by a definition in its body and typeset by none of it), so every call ended its unit and
+made the keys a unit of their own (`front`, `held`). The paper's two introduction paragraphs were 13 units each, and 73 units
+of keys, which TeX never prints, stood `unlocated: marks`. Each piece was laid alone in its stretch of TeX's lines (the blank
+before each citation number: a translation shorter than its piece, the number at TeX's place after it), a piece of one line's
+middle too short for its translation stayed the original's (`unfit`), and one paragraph was laid at several leadings. And the
+marked original wrote the next piece's opening marks between the call and the token its `\futurelet` reads: the macro read our
+mark, set the citation plain and the period after it, the line moved by the period's width, and the next unit's first glyph had
+no partner on arXiv's page (`content difference: bonly`, 16 units, the end of the second page's paragraph among them).
+The rule (`source/latex-front.ts` `resolveStoredAtCall`): a stored parameter is set AT THE CALL wherever the call's own expansion
+reads the stored name, its body and every definition of each of the paper's macros it names, each name once (TeX's expansion of
+the call reaches no other definition of the paper's: the bound is the paper's own definitions, not a depth); there the
+parameter's use is the stored name's use (each read with the name standing for the parameter, through `paramUse`): prose only
+where every read is prose. A key handed to a citation is none: the call is one placeholder, which the mark probe asks about
+before the punctuation after it (`probeSamples`), and TeX's answer puts the closing mark after the period the macro takes. The
+same macro storing its keys one call deeper was read so already; natively (the pinned image, our own content) its marked
+compile sets every text item where the original does. `stores` stays for a name no part of the call reads (`\author`'s
+`\@author`, `\icmlaffiliation`'s). Tests: `packages/engine/tests/stored-at-call.test.ts`.
+
+**B: a path the reading gives no box.** A logo cut by `\includegraphics[trim=…,clip]` is a form whose stream paints every path of
+its file; its clip shows a few. The page's reading (`ink.ts` `pageInk`) cuts each box to the clip in force and leaves out one
+wholly outside it, so those paths have no box and no unit can own them; the wrap counted them as ink no unit owns beside an
+owned path and refused the page, `a form partly owned`. Such a path paints nothing anyone sees: it is no one's ink and does not
+count toward a form's owners (`wrap.ts` `planOf`'s `painted`, the forms' groups in `wrapPage`). Visible ink no unit owns keeps
+the rule. Tests: `packages/engine/tests/wrap-clipped.test.ts`.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server
