@@ -2238,6 +2238,7 @@ export async function instrumentOf({
   const read = await readPdf(pdfjs, finalPdf, {
     options: documentOptions,
     turned: true,
+    forms: true,
     rawGlyphs: false,
     shapes: false,
   })

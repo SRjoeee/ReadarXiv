@@ -108,7 +108,7 @@ export type PageInk = {
   breaks?: InkPoint[]
   regions: InkRegion[]
   paths?: number[]
-  /** with `indices`: each box's placed form, the number of the form XObject painted on the page (its outermost `Do`, one each
+  /** with `indices` and `forms`: each box's placed form, the number of the form XObject painted on the page (its outermost `Do`, one each
    *  time it is painted) that painted it, 0 for the page's own: what one included graphic paints (own/own.ts, one ink) */
   boxForms?: number[]
   shows?: number
@@ -130,6 +130,8 @@ export type InkReader = OpsReader<PageInk> & { asks(): string[] }
 export interface PageInkOptions {
   rotate: number
   indices?: boolean
+  /** with `indices`: each box's placed form (`boxForms`) */
+  forms?: boolean
   /** a glyph's outline box by outlineKey, [] for none drawn (readOutlines') */
   outlines?: ReadonlyMap<string, Box4 | []> | null
   /** the outline boxes this reading meets are added to it, by outlineKey */
@@ -1081,6 +1083,7 @@ export function inkReader(
   {
     rotate,
     indices = false,
+    forms = false,
     outlines: given = null,
     collect = null,
     glyphsMax = Infinity,
@@ -1103,7 +1106,7 @@ export function inkReader(
       points: [],
       boxAt: [],
       regions: [],
-      ...(indices ? { paths: [], boxForms: [], shows: 0 } : {}),
+      ...(indices ? { paths: [], ...(forms ? { boxForms: [] } : {}), shows: 0 } : {}),
       ...(turned
         ? { turned: [], shapes: new Map(), pictures: [], figures: new Map(), unseen: new Set(), cut: new Map() }
         : {}),
@@ -1369,7 +1372,7 @@ export function inkReader(
     boxes.push(x0, y0, x1, y1)
     if (indices) {
       paths.push(path)
-      boxForms.push(s.topForm)
+      if (forms) boxForms.push(s.topForm)
     }
   }
   const addBox = (m: Matrix, x0: number, y0: number, x1: number, y1: number, path = -1, alpha = 1): void => {
@@ -2293,7 +2296,7 @@ export function inkReader(
         boxes.push(tiles[o]!, tiles[o + 1]!, tiles[o + 2]!, tiles[o + 3]!)
         if (indices) {
           paths.push(MERGED)
-          boxForms.push(0)
+          if (forms) boxForms.push(0)
         }
       }
     }
@@ -2307,7 +2310,7 @@ export function inkReader(
       fronts,
       ...(breaks.length ? { breaks } : {}),
       regions: regionsOfPoints(regionPoints, glyphs.length),
-      ...(indices ? { paths, boxForms, shows: showAt + 1 } : {}),
+      ...(indices ? { paths, ...(forms ? { boxForms } : {}), shows: showAt + 1 } : {}),
       ...(turned ? { turned: turnedOut, shapes, pictures, figures: figureBoxes, unseen, cut } : {}),
       capped: listed > OPS_CAP || over || deep || many,
       timedOut: late,

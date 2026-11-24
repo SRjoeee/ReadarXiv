@@ -99,7 +99,7 @@ async function inkOf() {
     OPS as unknown as Record<string, number>,
     ops as never,
     pg.commonObjs as never,
-    { rotate: 0, indices: true } as never,
+    { rotate: 0, indices: true, forms: true } as never,
   ) as unknown as {
     glyphs: { u?: string; x0: number; x1: number; y: number; size: number }[]
     boxes: number[]

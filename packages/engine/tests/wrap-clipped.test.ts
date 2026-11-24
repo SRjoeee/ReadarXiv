@@ -15,7 +15,7 @@ import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
 import { pageInk } from '../src/ink.ts'
 import { alignOf } from '../src/remove.ts'
-import { planOf, wrapOf } from '../src/wrap.ts'
+import { paintedOf, planOf, wrapOf } from '../src/wrap.ts'
 
 const OPTIONS = { verbosity: 0, useSystemFonts: false, isEvalSupported: false, fontExtraProperties: true }
 const O = OPS as unknown as Record<string, number>
@@ -55,7 +55,7 @@ async function wrapForm(form: string) {
     paths.map(() => '0.1.t'),
     facts as never,
   )
-  const made = (await wrapOf(bytes, new Map([[1, { facts, ...plan } as never]]), {
+  const made = (await wrapOf(bytes, new Map([[1, { facts, ...plan, painted: paintedOf(paths) } as never]]), {
     PL: PL as never,
     deflate,
     inflate,
