@@ -10091,10 +10091,14 @@ label `.l`, a placeholder TeX set before the start `.p`) takes the boxes in its 
 (`Member.labelBoxes`) are hidden with its group and drawn back in its crop, whose extent is its glyphs' and boxes' together. What
 TeX set in the head stands on the start's line before the start: a box the head takes meets that line and ends where the start
 glyph does at the latest, and a placed form is taken only with its whole placement, every box of it in the range, no one's and
-ending before the start, the placement meeting the line (a logo's bar under the baseline goes with its crown). Without those
-bounds a frame TeX paints round a theorem before its heading (2501.14787v1, `tcolorbox`) read as the heading label's, and a
-figure TeX set beside a paragraph, one of its paths meeting the paragraph's first line, as that paragraph's label, the rest of
-the figure no one's, and the wrap refused the page (2610.30875v1 p5). Tests: `packages/engine/tests/head-boxes.test.ts`.
+ending before the start, the placement meeting the line (a logo's bar under the baseline goes with its crown). A box set in
+the line meets no other line of its column (TeX's lines of one vertical list never meet: a glyph of the start's region that
+does not meet the start's line, across within that line's extent), and a path that meets a painted path standing past the
+start, not holding it whole, is that drawing's (a frame's side; a path that holds it whole is a background behind it). Without
+those bounds a frame TeX paints round a theorem before its heading (2501.14787v1, `tcolorbox`) and a theorem environment's
+rule down its statement's side (2608.29181v2, 30 statements) read as the label's, and a figure TeX set beside a paragraph, one
+of its paths meeting the paragraph's first line, as that paragraph's label, the rest of the figure no one's, and the wrap
+refused the page (2610.30875v1 p5). Tests: `packages/engine/tests/head-boxes.test.ts`.
 
 ## 19. The engine's contract
 

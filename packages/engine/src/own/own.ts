@@ -555,20 +555,58 @@ export function ownOf(
     // ink of its label), and a placed form is taken only with its whole placement, one ink: each of its boxes in the range,
     // no one's, ending before the start, the placement meeting the line (a logo's bar under the baseline with its crown above;
     // 2610.30875v1 p5: a figure set beside a paragraph, one of its paths meeting the paragraph's first line, read as the
-    // paragraph's label and the rest of it no one's: the wrap refused the page)
+    // paragraph's label and the rest of it no one's: the wrap refused the page). And it meets no other line of its column:
+    // TeX's lines of one vertical list never meet (its interline glue), so a box that reaches another is set in no line (a
+    // theorem environment's rule down its statement's side, painted before its head: 2608.29181v2's "Lemma 2.1."). Another
+    // line: a glyph of the start's region that does not meet the start's line (a script raised on that line meets it) and
+    // stands across within the start line's extent (the unit's glyphs on it: a glyph of the other column is none)
     let upBox = S.box
     const startX1 = pg.glyphs[S.glyph]!.x1
+    let others: [number, number][] | null = null
+    const meetsLine = (G: OwnGlyph) => G.bottom < line.top && G.top > line.bottom
+    const otherLines = (): [number, number][] => {
+      if (others) return others
+      others = []
+      let x0 = Infinity,
+        x1 = -Infinity
+      for (let i = S.glyph; i < to; i++) {
+        const G = pg.glyphs[i]!
+        if (gOwn[p - 1]![i] === `u${id}` && meetsLine(G)) {
+          x0 = Math.min(x0, G.x0)
+          x1 = Math.max(x1, G.x1)
+        }
+      }
+      work += pg.glyphs.length
+      pg.glyphs.forEach((G, i) => {
+        if (R.glyph[i] === r && !meetsLine(G) && G.x0 < x1 && G.x1 > x0) others!.push([G.bottom, G.top])
+      })
+      return others
+    }
     const boxesFrom = (b0: number): Place[] => {
       const out: Place[] = []
       const B = pg.boxes,
         F = pg.forms
-      const onLine = (y0: number, y1: number) => caption || (y0 < line.top && y1 > line.bottom)
+      const onLine = (y0: number, y1: number) =>
+        caption || (y0 < line.top && y1 > line.bottom && !otherLines().some(([lo, hi]) => y0 < hi && y1 > lo))
       const inRange = (b: number) =>
         b >= b0 && b < upBox && R.box[b] === r && bOwn[p - 1]![b] === null && (caption || B[4 * b + 2]! <= startX1)
+      // (a path that meets a painted path standing past the start is one drawing with it, a frame's side, not the head's: a
+      // frame round a statement of one line reaches no other line. A path that holds it whole is behind it, a background)
+      const framed = (b: number) => {
+        work += B.length / 4
+        const [x0, y0, x1, y1] = [B[4 * b]!, B[4 * b + 1]!, B[4 * b + 2]!, B[4 * b + 3]!]
+        for (let c = 0; c < B.length / 4; c++) {
+          if (c === b || !((pg.paths[c] ?? -1) >= 0) || !(B[4 * c + 2]! > startX1)) continue
+          const [u0, v0, u1, v1] = [B[4 * c]!, B[4 * c + 1]!, B[4 * c + 2]!, B[4 * c + 3]!]
+          if (u0 <= x1 && u1 >= x0 && v0 <= y1 && v1 >= y0 && !(u0 <= x0 && v0 <= y0 && u1 >= x1 && v1 >= y1))
+            return true
+        }
+        return false
+      }
       for (let b = Math.max(0, b0); b < upBox; b++) {
         const f = F?.[b] ?? 0
         if (!f) {
-          if (inRange(b) && onLine(B[4 * b + 1]!, B[4 * b + 3]!)) out.push([p, b])
+          if (inRange(b) && onLine(B[4 * b + 1]!, B[4 * b + 3]!) && (caption || !framed(b))) out.push([p, b])
           continue
         }
         // (a placement's boxes stand together in the stream, its one `Do`)

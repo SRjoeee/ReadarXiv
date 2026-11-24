@@ -72,7 +72,7 @@ const units = [
 const before: Item[] = [{ pt: '0s' }, { s: 'Ourwordsbefore', y: 700, size: 10, x: 60 }, { pt: '0e' }]
 
 describe("a head's boxes are those TeX set in it, before its start, on its line", () => {
-  it('an icon between the label and the start is the label’s', () => {
+  it('an icon between the label and the start is the label’s (a script raised on the line is of that line)', () => {
     const pages = [
       page([
         ...before,
@@ -80,6 +80,7 @@ describe("a head's boxes are those TeX set in it, before its start, on its line"
         { box: [101, 669, 107, 676] },
         { pt: '1s' },
         { s: 'Ourresult', y: 670, size: 10, x: 109 },
+        { s: '2', y: 674, size: 7, x: 155 },
         { pt: '1e' },
       ]),
     ]
@@ -98,6 +99,40 @@ describe("a head's boxes are those TeX set in it, before its start, on its line"
       ]),
     ]
     expect(boxGroups(ownOf(pages, { units }))).toEqual([null, 'u1.l'])
+  })
+  it('a bar painted beside the statement’s lines before its label reaches its other lines: no ink of the label', () => {
+    // (a theorem environment's rule down its left side, painted before its head, from above the first line to below the last:
+    // TeX's lines of one paragraph never meet, so a box that meets another of the unit's lines is set in none of them)
+    const pages = [
+      page([
+        ...before,
+        { box: [50, 640, 52, 680] },
+        { s: 'Lemma1', y: 670, size: 10, x: 60 },
+        { box: [91, 669, 97, 676] },
+        { pt: '1s' },
+        { s: 'Ourresult', y: 670, size: 10, x: 99 },
+        { s: 'holdsonthislinetoo', y: 655, size: 10, x: 60 },
+        { pt: '1e' },
+      ]),
+    ]
+    expect(boxGroups(ownOf(pages, { units }))).toEqual([null, 'u1.l'])
+  })
+  it('a frame’s side round a statement of one line, painted before its label, is the frame’s: it meets ink set past the start', () => {
+    const pages = [
+      page([
+        ...before,
+        { box: [50, 650, 560, 652] },
+        { box: [50, 650, 52, 690] },
+        { box: [558, 650, 560, 690] },
+        { box: [50, 688, 560, 690] },
+        { s: 'Lemma1', y: 670, size: 10, x: 60 },
+        { box: [91, 669, 97, 676] },
+        { pt: '1s' },
+        { s: 'Ourresult', y: 670, size: 10, x: 99 },
+        { pt: '1e' },
+      ]),
+    ]
+    expect(boxGroups(ownOf(pages, { units }))).toEqual([null, null, null, null, 'u1.l'])
   })
   it('a placed form on the line is taken whole, its bar under the baseline with it; a figure set beside the lines is not', () => {
     const pages = [
