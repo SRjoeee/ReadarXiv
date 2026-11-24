@@ -10100,6 +10100,15 @@ rule down its statement's side (2608.29181v2, 30 statements) read as the label's
 of its paths meeting the paragraph's first line, as that paragraph's label, the rest of the figure no one's, and the wrap
 refused the page (2610.30875v1 p5). Tests: `packages/engine/tests/head-boxes.test.ts`.
 
+**E: a paper's macro of glue alone states its glue.** The author line's names are separated by the style's `\authorsep`
+(`\hskip 1.15em \@plus .4em\relax`); the instrument states an element's glue from its source (`\hskip 1.15em`, `\quad`), and
+`\authorsep` stated none, so the typesetter set a word space where TeX set 1.15 em. A call of a macro of no argument whose body
+is glue alone (`latex-front.ts` `glueBody`: the body as TeX reads it, its stretch and shrink and a trailing `\relax` left out)
+states that body on its placeholder (`statedGlue`, not enumerable: the unit's hash and JSON as before), and the instrument
+states its glue as for the source written in place (El.glue). Over the 245 it states a glue in the author block of
+2610.37818v1 (`\hspace{2.5em}`) and in the references of the papers whose bibliography's `\newblock` is `\hskip .11em` (with its
+stretch and shrink or without), which the reader draws as arXiv's. Tests: `packages/engine/tests/glue-body.test.ts`.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server

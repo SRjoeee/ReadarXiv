@@ -27,13 +27,18 @@ describe('the glue a paper macro of glue alone sets', () => {
       ['c', '\\quad'],
       ['d', '\\textbf{x}'],
       ['e', '\\hskip 1em\\textbf{x}'],
+      // (a stretch and a shrink both: LaTeX's \newblock in a bibliography)
+      ['g', '\\hskip .11em\\@plus.33em\\@minus.07em'],
+      ['h', '\\hskip 1em plus 1fil minus 2pt'],
     ])
-    expect(['\\a', '\\b{}', '\\c', '\\d', '\\f'].map((s) => glueBody(s, m))).toEqual([
+    expect(['\\a', '\\b{}', '\\c', '\\d', '\\f', '\\g', '\\h'].map((s) => glueBody(s, m))).toEqual([
       '\\hskip 1.15em',
       '\\hspace{2pt}',
       '\\quad',
       null,
       null,
+      '\\hskip .11em',
+      '\\hskip 1em',
     ])
   })
   it('the reader states it on the call, and the instrument states the glue', () => {

@@ -72,9 +72,13 @@ export function glueBody(src: string, macros: ReadonlyMap<string, string>): stri
   const m = /^\\([A-Za-z@]+)(?:\{\})?$/.exec(src)
   const body = m ? macros.get(m[1]!) : undefined
   if (body === undefined) return null
+  // (its shrink, then its stretch: TeX reads `plus` before `minus`, each its own trailing component, `\\@minus` a control word
+  // that a run of no backslash cannot reach past)
+  const component = /\s*(?:\\@(?:plus|minus)|(?<![A-Za-z@])(?:plus|minus))(?![A-Za-z@])[^\\]*$/
   const g = body
     .replace(/\\relax\s*$/, '')
-    .replace(/\s*(?:\\@(?:plus|minus)|(?<![A-Za-z@])(?:plus|minus))(?![A-Za-z@])[^\\]*$/, '')
+    .replace(component, '')
+    .replace(component, '')
     .trim()
   return /^\\(?:hspace\*?|hskip|kern)(?![A-Za-z@])/.test(g) || /^\\(?:quad|qquad|enspace|thinspace)$/.test(g) ? g : null
 }
