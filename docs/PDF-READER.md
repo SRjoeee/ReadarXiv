@@ -12052,7 +12052,8 @@ staging). LAYOUT stays 16: the layout file does not change; the base PDF's bytes
   the wrap's `names`, required as `texts` is, the printed names of the theorem-like environments its files define, openPaper's
   `theoremNames`, `source/paper-names.mjs`; §19.14); where it is not and
   its glyphs stand apart from the text's, the label is left the original's ink (`labelKept`: no `.l` group, the body alone
-  drawn; the coordinator's amendment of 2026-10-28), else `spell`.
+  drawn; the coordinator's amendment of 2026-10-28), its glyphs and every box its claim took (the one-ink law) given back
+  together: a box left in the group of a label no crop draws was erased with the unit and drawn by no one; else `spell`.
 - **The wrap** (`layout/wrap.mjs` `wrapOf`): our bytes and ONE incremental section of their cross-reference kind
   (`appendSection`): each wrapped page's dict again under its number, `/Resources` our page's with `/Properties` mapping
   `/axt<group>` to its OCG, ONE new content stream (its pieces joined, deflated at a fixed level: the same inputs give the same

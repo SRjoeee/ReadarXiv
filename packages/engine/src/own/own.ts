@@ -1178,7 +1178,14 @@ export function ownOf(
           continue
         }
         for (const [p, i] of lead) gOwn[p - 1]![i] = null
-        u.groups.delete(`u${id}.l`)
+        // (and every box the label's claim took, the one-ink law's: left in a group no crop draws, it was erased with the
+        // unit and drawn by no one)
+        const l = `u${id}.l`
+        for (const p of u.pages) {
+          const B = bOwn[p - 1]!
+          for (let b = 0; b < B.length; b++) if (B[b] === l) B[b] = null
+        }
+        u.groups.delete(l)
         u.labelKept = true
       }
     }
