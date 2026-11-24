@@ -153,7 +153,10 @@ export function ownershipOf(of: { size: number; aToB: ArrayLike<number>; unitB: 
     }
     for (const [id, l] of ink.els ?? []) append(to.els, id, l, claim)
     for (const x of ink.textBoxes ?? []) to.textBoxes.push(x)
-    for (const x of ink.labelBoxes ?? []) (to.labelBoxes ??= []).push(x)
+    if (ink.labelBoxes?.length) {
+      to.labelBoxes ??= []
+      for (const x of ink.labelBoxes) to.labelBoxes.push(x)
+    }
     for (const [id, l] of ink.elBoxes ?? []) append(to.elBoxes, id, l)
     for (const [id, l] of ink.elBoxesB ?? []) append(to.elBoxesB, id, l)
     for (const x of ink.turned ?? []) to.turned.push(x)
