@@ -73,6 +73,10 @@ export interface WrapPlan {
   textOf?(group: string): string
   /** the figure groups its shows hold, read once (figureGroupsOf) */
   figureGroups?: Set<string>
+  /** the paths (the reading's numbers, alignOf's) the page's reading gives a box: a path it gives none paints nothing anyone
+   *  sees (wholly outside the clip in force or its form's box, ink.ts pageInk) and holds no one's ink; absent, every path is read
+   *  as ink (planOf states it) */
+  painted?: Set<number>
 }
 export type WrapWhy = (typeof WRAP_WHYS)[number]
 export type WrapRefusal = { refused: WrapWhy; why: string }
@@ -282,7 +286,7 @@ const IMAGE_BOX = -3
  * images: Map j -> group, lost }: an image's box (IMAGE_BOX) a placeholder owns is the page's j-th image painted, its boxes
  * of that kind in their order, where they are as many as the reading's (`facts.images`, alignOf's: an image clipped away gives
  * no box, one in an annotation's appearance or a soft mask's group is not the page's); where they are not, none is wrapped and
- * the groups that owned one are `lost` (their units the original's)
+ * the groups that owned one are `lost` (their units the original's); and `painted`, the paths the reading gives a box
  */
 export function planOf(
   glyphs: { n?: number; k?: number }[],
@@ -290,11 +294,13 @@ export function planOf(
   paths: ArrayLike<number>,
   groupOfBox: (string | null)[],
   facts: { codes?: unknown; paths?: unknown; images?: number } | null = null,
-): Omit<WrapPlan, 'facts'> & { images: Map<number, string>; lost: Set<string> } {
+): Omit<WrapPlan, 'facts'> & { images: Map<number, string>; lost: Set<string>; painted: Set<number> } {
   const shows = new Map<number, (string | null | undefined)[]>(),
     rules = new Map<number, string>(),
     images = new Map<number, string>(),
-    lost = new Set<string>()
+    lost = new Set<string>(),
+    painted = new Set<number>()
+  for (let b = 0; b < paths.length; b++) if ((paths[b] as number) >= 0) painted.add(paths[b] as number)
   glyphs.forEach((g, i) => {
     // (a glyph of no show, its n absent or -1, is in no run; one of no place k in its show has none to take: the row's places alone
     // are read, which a key `undefined` never was)
@@ -316,7 +322,7 @@ export function planOf(
     for (const g of images.values()) lost.add(g)
     images.clear()
   }
-  return { shows, paths: rules, images, lost }
+  return { shows, paths: rules, images, lost, painted }
 }
 
 /** a show's codes' groups: each code read (in ink) its own, a code not read (no ink of its own: invisible, or none) its
@@ -840,6 +846,12 @@ function wrapPage(
     }
     const d = formOf.get(top(e.cont))
     if (!d) continue
+    // (a path the reading gives no box paints nothing anyone sees: no one's ink, nothing the form's owner must share; a logo
+    // cut by \includegraphics' trim and clip paints every path of its file, its clip showing a few)
+    if (e.kind === 'paint' && plan.painted) {
+      const m = paintM.get(e)
+      if (m !== undefined && !plan.painted.has(m)) continue
+    }
     const set = inForm.get(d) ?? inForm.set(d, new Set()).get(d)!
     for (const g of gs) set.add(isFigure(g) ? null : g)
     if (gs.some(isFigure)) groupsOf.set(e, gs)

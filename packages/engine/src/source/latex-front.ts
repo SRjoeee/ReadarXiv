@@ -2339,6 +2339,7 @@ function paperMacros(files: readonly { file: string; text: string }[], scan: Par
         ...(then ? { then } : {}),
       })
     }
+  resolveStoredAtCall(out, files)
   resolveKeeps(out)
   resolveParEnds(
     out,
@@ -2537,6 +2538,72 @@ function callArgsOf(s: string, i: number, h: Macro) {
     k = e0
   }
   return out
+}
+/** the definers whose next control sequence is the name they define, not a read of it (storedReadsOf) */
+const DEFINES_NEXT =
+  /\\(?:[gex]?def|let|futurelet|(?:re)?newcommand\*?|providecommand\*?|DeclareRobustCommand\*?)\s*\{?\s*$/
+/**
+ * A stored prose parameter set AT THE CALL (paperMacros' `stores`, read again here): a macro whose body stores its prose
+ * parameter in a definition (`\\def\\x@keys{#1}`) hands that text elsewhere, as LaTeX's \\author keeps its argument for \\maketitle,
+ * only where nothing the call itself expands reads the stored name. TeX expands the call's body and, in turn, every macro of the
+ * paper that body names, and the one after it names (2611.18114's \\citep: `\\unskip\\def\\wsp@keys{#1}\\futurelet\\wsp@next
+ * \\wsp@citecheck`, \\wsp@citecheck choosing \\wsp@citeplain or \\wsp@citeover, each setting `\\wsp@citep{\\wsp@keys}`): where any of
+ * them reads the stored name, the text is set right where the call stands, and the call is no front matter command. Read as one,
+ * each citation cut its paragraph in two, its keys a unit TeX never prints, and the marked original's next marks stood between
+ * the call and the period its \\futurelet takes (a line moved). There the parameter's use is the stored name's use where it is
+ * read (each read, the name standing for the parameter, through paramUse): prose only where every read is prose; a key handed to
+ * a citation, a width, anything else, is none, and the call one placeholder, as the same macro storing its keys one call deeper
+ * is read. The walk visits each of the paper's definitions once: what bounds it is the set of the paper's own macros (TeX's
+ * expansion of the call reaches nothing else of the paper's), not a depth; a command the paper does not define is TeX's or a
+ * package's, and what it does with the text is that command's argument's role, read at the call as paramUse reads it.
+ */
+function resolveStoredAtCall(macros: Map<string, Macro>, files: readonly { text: string }[]) {
+  const DEF =
+    /\\(?:[gex]?def\s*\\([A-Za-z@]+)\s*(?:#\d\s*)*|(?:re)?newcommand\*?\s*(?:\{\s*\\([A-Za-z@]+)\s*\}|\\([A-Za-z@]+))\s*(?:\[\d\]\s*)?)(?=\{)/g
+  for (const m of macros.values()) {
+    if (!m.stores || m.prose === undefined) continue
+    // (the names the prose parameter is stored in, by the definitions in the body that hold it)
+    const names = new Set<string>()
+    for (const d of m.def.matchAll(DEF)) {
+      const at = d.index + d[0].length,
+        e = matchGroup(m.def, at)
+      if (e > 0 && new RegExp(`#${m.prose}(?!\\d)`).test(m.def.slice(at, e))) names.add((d[1] ?? d[2] ?? d[3])!)
+    }
+    if (!names.size) continue
+    // (the call's own expansion: its body, then each of the paper's macros it names, once each)
+    const seen = new Set<string>(),
+      queue: string[] = [m.def]
+    let read = false,
+      prose = true
+    while (queue.length) {
+      const body = queue.shift()!
+      for (const name of names) {
+        const re = new RegExp(`\\\\${name}(?![A-Za-z@])`, 'g')
+        let marked = '',
+          last = 0,
+          here = false
+        for (const r of body.matchAll(re)) {
+          if (DEFINES_NEXT.test(body.slice(Math.max(0, r.index - 40), r.index))) continue
+          marked += `${body.slice(last, r.index)}#0`
+          last = r.index + r[0].length
+          here = true
+        }
+        if (!here) continue
+        read = true
+        marked += body.slice(last)
+        const use = throughBoxes(paramUse(marked, 0, marked.length))
+        if (!use.text.has(0) || use.other.has(0)) prose = false
+      }
+      for (const c of body.matchAll(/\\([A-Za-z@]+)/g)) {
+        if (seen.has(c[1]!) || names.has(c[1]!)) continue
+        seen.add(c[1]!)
+        queue.push(...bodiesOf(files, c[1]!))
+      }
+    }
+    if (!read) continue
+    delete m.stores
+    if (!prose) m.prose = undefined
+  }
 }
 /**
  * Each of the paper's macros' kept parameters (`keeps`: parameter -> the macro it is kept in), as their definitions state them:
