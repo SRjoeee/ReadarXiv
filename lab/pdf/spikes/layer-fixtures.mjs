@@ -640,19 +640,23 @@ for (const [id, target] of asked) {
       const rf = join(out, 'record.json'), uf = join(out, 'units.json')
       if (existsSync(rf) && existsSync(uf)) {
         const had = JSON.parse(readFileSync(rf, 'utf8'))
-        if (!(had.units?.length === hashes.length && had.units.every((u, i) => u.hash === hashes[i]))) {
-          const byHash = new Map((had.units ?? []).map(u => [u.hash, u]))
-          const none = hashes.filter(h => !byHash.has(h)).length
-          if (none) console.log(`kept ${id}:${target}: ${none} of the cut's ${hashes.length} units have no row in its record: left as it was`)
+        // (a record holds the rows of the cut's first units, by their places: a unit past them, a bibliography's entry, has none)
+        const rows = had.units ?? []
+        if (!rows.every((u, i) => u.hash === hashes[i])) {
+          const byHash = new Map(rows.map(u => [u.hash, u]))
+          let k = 0
+          while (k < hashes.length && byHash.has(hashes[k])) k++
+          const lost = rows.filter(u => hashes.includes(u.hash) && hashes.indexOf(u.hash) >= k).length
+          if (lost) console.log(`kept ${id}:${target}: ${lost} of its record's ${rows.length} rows stand past the cut's first unit it has no row of: left as it was`)
           else {
-            const record = { ...had, units: hashes.map(h => byHash.get(h)) }
+            const record = { ...had, units: hashes.slice(0, k).map(h => byHash.get(h)) }
             const meta = JSON.parse(readFileSync(uf, 'utf8'))
             const { units, unread } = await layerUnits(paper, record)
             const states = {}
             for (const u of record.units) states[u.state] = (states[u.state] ?? 0) + 1
             write(rf, JSON.stringify(record))
             write(uf, JSON.stringify({ ...meta, engine: engineCommit, pipeline: PIPELINE_VERSION, layout: LAYOUT, states, unread, units }))
-            console.log(`rekeyed ${id}:${target}: its record's ${had.units.length} rows to the cut's ${hashes.length} units by their sources' hashes`)
+            console.log(`rekeyed ${id}:${target}: its record's ${rows.length} rows to the cut's first ${k} units by their sources' hashes`)
           }
         }
       }
