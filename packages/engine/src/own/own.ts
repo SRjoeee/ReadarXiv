@@ -80,6 +80,8 @@ export type OwnPage = {
   glyphs: readonly OwnGlyph[]
   boxes: readonly number[]
   paths: readonly (number | undefined)[]
+  /** each box's placed form (pageInk's `boxForms`: the form XObject painted that painted it, 0 for the page's own), where read */
+  forms?: readonly number[]
   points: readonly InkPoint[]
   boxAt?: ArrayLike<number>
   view?: View
@@ -1347,6 +1349,7 @@ export function ownOf(
     if (k && stream.every((g, q) => O[g] === null && g === first - stream.length + q))
       for (const g of before) O[g] = `${group}.l`
   }
+  oneInk(pages, bOwn)
   return {
     glyphs: gOwn,
     boxes: bOwn,
@@ -1502,11 +1505,39 @@ function turnedListsOf(
 }
 
 /**
+ * One included graphic is one ink: every box a placed form paints (pageInk's `boxForms`, the form XObject's outermost `Do`, one
+ * number each time it is painted: a form reused is each placement) is owned whole by the one piece TeX set it in. A `Do` stands
+ * at one place in the stream, so the claims by points give its boxes one owner; what a reading of a part of it leaves (a box no
+ * claim took) is that owner's too. Where its boxes hold two owners the placement is left as the claims made it (the wrap refuses
+ * a form partly owned). 2611.18114v1's \\afficon logos in its affiliations: a logo's bar under the line's baseline was read as
+ * the text's rule and its crown as no one's, and the page was refused
+ */
+function oneInk(pages: readonly OwnPage[], bOwn: (string | null)[][]) {
+  pages.forEach((pg, i) => {
+    const forms = pg.forms
+    if (!forms?.length) return
+    const owner = new Map<number, string | null | undefined>() // placement -> its one owner, undefined none yet, null two
+    for (let b = 0; b < forms.length; b++) {
+      const f = forms[b] ?? 0,
+        g = bOwn[i]![b] ?? null
+      if (!f || g === null) continue
+      const o = owner.get(f)
+      if (o === undefined) owner.set(f, g)
+      else if (o !== g) owner.set(f, null)
+    }
+    for (let b = 0; b < forms.length; b++) {
+      const o = owner.get(forms[b] ?? 0)
+      if (o && ((pg.paths[b] ?? -1) >= 0 || pg.paths[b] === IMAGE_BOX)) bOwn[i]![b] = o
+    }
+  })
+}
+/**
  * The painted rules of `boxes` ([page, index] of `pages`' boxes) that stand on a line of `glyphs` ([page, index]): a unit's
  * text's (ownOf), and an ink unit's (locate/ink-units.ts claimInk; 1512.03385v1's Table 1 caption, whose three OT1 \_ rules
  * would stay under its translation). A rule: a painted box no thicker than RULE_EM of its line's size and at least twice as
  * long as thick, its middle within half a size of the line's baseline, across within the line's glyphs' extent and half a
- * size past either end, and no part of a frame: no other thin box of `boxes` that is no such rule meets it within its own
+ * size past either end, painted by no placed form (one included graphic is one ink: oneInk), and no part of a frame: no other
+ * thin box of `boxes` that is no such rule meets it within its own
  * thickness (amsthm's \openbox, a \fbox: their upright sides; kept whole the page's; a box behind the text, thick both ways, is
  * none). A line: the glyphs on one baseline of a page (a placeholder between them, its runs one line). The work is counted as
  * it is done (each glyph and box read, each line and box compared): past `max` the reading stops, `over`, with no rule (a PDF's
@@ -1514,14 +1545,20 @@ function turnedListsOf(
  * { rules, work, over }
  */
 export function lineRulesOf(
-  pages: readonly { glyphs: readonly OwnGlyph[]; boxes: readonly number[]; paths: readonly (number | undefined)[] }[],
+  pages: readonly {
+    glyphs: readonly OwnGlyph[]
+    boxes: readonly number[]
+    paths: readonly (number | undefined)[]
+    forms?: readonly number[]
+  }[],
   glyphs: readonly Place[],
   boxes: readonly Place[],
   max = Infinity,
 ): { rules: Place[]; work: number; over: boolean } {
   let work = boxes.length
   const over = () => ({ rules: [], work, over: true })
-  const painted = boxes.filter(([p, b]) => (pages[p - 1]!.paths[b] ?? -1) >= 0)
+  // (a path a placed form paints is that form's ink, one included graphic's, never a rule of a line: own.ts oneInk)
+  const painted = boxes.filter(([p, b]) => (pages[p - 1]!.paths[b] ?? -1) >= 0 && !(pages[p - 1]!.forms?.[b] ?? 0))
   if (!painted.length) return { rules: [], work, over: work > max }
   const lines: LineRun[] = []
   let last: LineRun | null = null

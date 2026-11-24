@@ -114,6 +114,7 @@ type BPage = {
   cut?: PageInk['cut']
   boxes: number[]
   paths: number[]
+  forms?: number[]
   points: InkPoint[]
   paras?: InkPoint[]
   paraEnds?: PageInk['paraEnds']
@@ -2268,6 +2269,7 @@ export async function instrumentOf({
       cut: raw.cut,
       boxes: raw.boxes,
       paths: raw.paths!,
+      ...(raw.boxForms ? { forms: raw.boxForms } : {}),
       points: raw.points.map(lower),
       paras: raw.paras ?? [],
       paraEnds: raw.paraEnds ?? [],
