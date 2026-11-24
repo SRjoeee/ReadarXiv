@@ -62,6 +62,26 @@ export function phPiece(src: string, brk = BREAK_SOURCE.test(src)): PhPiece {
   if (brk) Object.defineProperty(p, 'brk', { value: true })
   return p
 }
+/**
+ * The glue a call of a paper's macro of no argument sets where the macro's body is glue alone (te_preprint.sty's
+ * `\\newcommand{\\authorsep}{\\hskip 1.15em \\@plus .4em\\relax}`): that body as TeX reads it, its stretch and shrink (`\\@plus`,
+ * `\\@minus`, `plus`, `minus`) and a trailing `\\relax` left out, so that the instrument states the glue's natural width
+ * (El.glue) as it does for `\\hskip` written in place; null for any other source or body
+ */
+export function glueBody(src: string, macros: ReadonlyMap<string, string>): string | null {
+  const m = /^\\([A-Za-z@]+)(?:\{\})?$/.exec(src)
+  const body = m ? macros.get(m[1]!) : undefined
+  if (body === undefined) return null
+  const g = body
+    .replace(/\\relax\s*$/, '')
+    .replace(/\s*(?:\\@(?:plus|minus)|(?<![A-Za-z@])(?:plus|minus))(?![A-Za-z@])[^\\]*$/, '')
+    .trim()
+  return /^\\(?:hspace\*?|hskip|kern)(?![A-Za-z@])/.test(g) || /^\\(?:quad|qquad|enspace|thinspace)$/.test(g) ? g : null
+}
+/** the glue a placeholder sets, as the reader stated it where it made the piece (glueBody; not enumerable, so that the unit's
+ *  hash, its marks and its JSON are as before) */
+export const statedGlue = (p: { t?: string } | null | undefined): string | null =>
+  p?.t === 'ph' ? ((p as { glue?: string }).glue ?? null) : null
 /** whether a piece is a forced break of its unit's text, as the reader stated it where it made the piece (phPiece) */
 export const forcedBreak = (p: { t?: string } | null | undefined): boolean =>
   p?.t === 'ph' && (p as { brk?: unknown }).brk === true
@@ -3416,6 +3436,8 @@ class Builder<F extends WalkFile = WalkFile> {
     if (!this.cur) this.cur = { file: this.file, kind: this.kind ?? 'para', start, end, pieces: [] }
     const p = brk ? phPiece(src, true) : phPiece(src)
     if (closes !== undefined) Object.defineProperty(p, 'closes', { value: closes })
+    const glue = glueBody(src, this.macros)
+    if (glue !== null) Object.defineProperty(p, 'glue', { value: glue })
     if (display) this.displays.add(p)
     this.cur.pieces.push(p)
     this.cur.end = end

@@ -53,7 +53,7 @@ import {
 } from '../marks/marks.ts'
 import { ownOf } from '../own/own.ts'
 import { READ_ALONE, regionsOf, WANT } from '../own/stream.ts'
-import { BACKREF_LIST, forcedBreak, lastTexLog, startOf } from '../source/latex-front.ts'
+import { BACKREF_LIST, forcedBreak, lastTexLog, startOf, statedGlue } from '../source/latex-front.ts'
 import { bundleUnitsOf } from './units.ts'
 import { phClass, texToText } from './layer1.ts'
 import { textPieceOf } from '../source/text-piece.ts'
@@ -886,9 +886,11 @@ function sourceFactsOf(
   first: Map<string, string>,
   colours: ReadonlyMap<number, number> | null,
   brk: boolean,
+  glue: string | null = null,
 ): Partial<PieceClass> {
   const x: Partial<PieceClass> = {}
-  const g = glueOf(src)
+  // (its glue: its source's, or the glue the reader stated its macro's body sets, glueBody)
+  const g = glueOf(src) ?? (glue === null ? null : glueOf(glue))
   if (g)
     x.glue =
       g.em !== undefined
@@ -1032,7 +1034,7 @@ export function classesOf(
     // (the text TeX set for it where the document uses it, every glyph stated as itself: the loop's first pass's ask)
     const said = (c.cls === 'macro' || c.cls === 'umacro') && told ? (told.get(p.src) ?? told.get(src)) : undefined
     if (typeof said === 'string' && /\S/.test(said)) x.told = said
-    Object.assign(x, sourceFactsOf(src, k, first, colours, statedBreak(p)))
+    Object.assign(x, sourceFactsOf(src, k, first, colours, statedBreak(p), statedGlue(p)))
     // (a piece that sets a URL \urldef stored: the \url piece's class and copy, a text piece, a URL)
     if (shown.has(k)) {
       const u = unicodeOf(pieces[shown.get(k)!]!.src),
