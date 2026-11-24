@@ -869,6 +869,8 @@ export function adapt(i: AdaptInput): Adapted {
     wide,
     ...(rowStart ? { rowStart } : {}),
     ...(lineOf ? { line: lineOf } : {}),
+    // (a run-in title, TeX's gap under it `runin` (\@sect's test): its lines are the first of the paragraph after it)
+    ...(m.room?.gap?.[0] === 'runin' ? { runin: true } : {}),
   }
   return { member }
 }

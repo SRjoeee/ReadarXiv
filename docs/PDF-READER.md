@@ -3629,6 +3629,19 @@ parity check's anchor measure reads as farther from the original than today's on
 stays on TeX's) meet there, and the paragraph above, the one B′ takes the room from, has none. A paragraph of one line has no
 leading at all, and the gap under it stays TeX's.
 
+**A run-in title is the first line of its paragraph (2026-11-25).** A heading whose after-skip is zero or less (`Room.gap`
+`runin`, \@sect's own test) is set by TeX in the first line of the paragraph after it: one paragraph, one `\baselineskip`.
+Where the title fills TeX's line, the paragraph's text begins on TeX's next line, and the two are two units: the title's
+line stayed on TeX's baseline as a paragraph of one line, and the text, its translation spread by the page's fill, opened
+one TeX pitch under it and went on at its own wider leading: one TeX paragraph drawn at two leadings (the owner on
+production, 2611.20688v1-zh p8, "Consistency between the editing plan and the output.": 11.96 pt under the title, 17.93
+between the text's lines). The head pass now reads the title as its paragraph's first line: the gap under it follows the
+text's own leading and pitch at each leading the pass tries, the text starting lower within its own lines, as under a
+widow line (`headOf`, `runin` carried from the part by `lay/adapt.ts`); where its own lines leave no room it stays as TeX
+set it. A title that shares its line with its text (the common form) has its text's first line pinned on its row and is
+untouched. Over the line's stored chain of the 245 papers: 2,082 run-in titles, 37 of them (20 papers) alone on TeX's line
+over their text's first line, each a title of one line; the lay alone moves (no stored object, no version).
+
 **A paragraph that borrows room spreads into it; a paragraph over frames keeps TeX's share where the page's band allows
 (2026-11-10).** The owner, on the references' leading: 「关于参考文献行距方案，就按你推荐的推进」 ("On the references'
 leading, go ahead as you recommend"). Three things were recommended, and he took them together. First, the gap under a
