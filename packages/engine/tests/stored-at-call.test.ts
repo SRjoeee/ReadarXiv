@@ -75,4 +75,19 @@ describe('a paper macro that stores its argument and sets it at its own call', (
     const paper = paperOf(deferred('\\global\\let\\showkicker\\our@kicker'))
     expect(paper.units.filter((u) => u.held && u.front).map(shape)).toEqual(['para: A kicker of our own words'])
   })
+  // (#679's review: a conditional tests a token's meaning and expands none of it, \\ifdefined's one operand, \\ifx's two; the
+  // walk reads a stored name there as a read at the call. Over the lab's 245 papers no paper's setter tests its stored name
+  // so: left for later, this test kept as the expected failure until it is built)
+  it.fails('the other side: the stored name tested by \\ifdefined or \\ifx is not a read at the call', () => {
+    for (const inBody of [
+      '\\ifdefined\\our@kicker\\relax\\fi',
+      '\\ifx\\our@kicker\\empty\\relax\\fi',
+      '\\ifx\\empty\\our@kicker\\relax\\fi',
+    ]) {
+      const paper = paperOf(deferred(inBody))
+      expect(paper.units.filter((u) => u.held && u.front).map(shape), inBody).toEqual([
+        'para: A kicker of our own words',
+      ])
+    }
+  })
 })

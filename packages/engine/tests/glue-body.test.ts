@@ -41,6 +41,16 @@ describe('the glue a paper macro of glue alone sets', () => {
       '\\hskip 1em',
     ])
   })
+  // (#679's review: a body that sets text after its glue's stretch is no glue alone, TeX reading the stretch's one dimen and
+  // setting the rest; glueBody strips the keyword to the body's end. Over the lab's 245 papers no paper's macro has such a body:
+  // left for later, this test kept as the expected failure until it is built)
+  it.fails('a body that sets text after its stretch is no glue alone', () => {
+    const m = new Map([
+      ['i', '\\hskip 1em plus 2pt separator'],
+      ['j', '\\hskip 1em \\@plus 2pt\\@minus 1pt x'],
+    ])
+    expect(['\\i', '\\j'].map((s) => glueBody(s, m))).toEqual([null, null])
+  })
   it('the reader states it on the call, and the instrument states the glue', () => {
     const units = unitsOf('\\newcommand{\\sep}{\\hskip 1.15em \\@plus .4em\\relax}')
     const p = units[0]!.pieces.find((x) => x.t === 'ph')!
