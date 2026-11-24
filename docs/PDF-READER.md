@@ -10065,8 +10065,24 @@ compile sets every text item where the original does. `stores` stays for a name 
 its file; its clip shows a few. The page's reading (`ink.ts` `pageInk`) cuts each box to the clip in force and leaves out one
 wholly outside it, so those paths have no box and no unit can own them; the wrap counted them as ink no unit owns beside an
 owned path and refused the page, `a form partly owned`. Such a path paints nothing anyone sees: it is no one's ink and does not
-count toward a form's owners (`wrap.ts` `planOf`'s `painted`, the forms' groups in `wrapPage`). Visible ink no unit owns keeps
-the rule. Tests: `packages/engine/tests/wrap-clipped.test.ts`.
+count toward a form's owners (`wrap.ts` `paintedOf`, WrapPlan's `painted`, the forms' groups in `wrapPage`). Visible ink no unit
+owns keeps the rule. Tests: `packages/engine/tests/wrap-clipped.test.ts`.
+
+**C: TeX asked about a placeholder after a paper's macro, as the unit carries its marks; one included graphic is one ink.** With
+B the first page was still refused: the Columbia logo (`\textsuperscript{3}\afficon[…]{logo_columbia}`, `\afficon` a paper's
+macro around `\includegraphics[trim=…,clip]`) had two paths with a box, a bar 0.58 pt tall under the line's baseline that the
+text's reading took as its rule (`own.ts` `lineRulesOf`) and the crown, left to no one. The logo's piece had no point: a
+placeholder right after a paper's macro, which may read what follows (`marks.ts` LOOKS_AHEAD), is marked only where the look-ahead
+probe says its marks move nothing, and the probe asked about the classes of AHEAD_FOLLOWS alone, on the assumption that a paper's
+macro is found by the text TeX sets for it, which a macro setting ink and no text belies. So: a paper's macro is among
+AHEAD_FOLLOWS (a text symbol stays out: it reads nothing and is found by its character), and each look-ahead sample carries the
+lead its unit's marks carry (`\protect` for a front unit, whose marks are robust), the probe's boxes set the marks with it, its
+key holds it (a body pair's key as before), and the marking reads the answer for a front unit too: an answer about another token
+list is no answer. On the paper TeX answered 0 for its four `\textsuperscript{n}\afficon` pairs, and each logo has its own points.
+And every box one placed form paints (`ink.ts` `pageInk`'s `boxForms` under `forms`: the outermost `Do`, one number each time a
+form is painted) is no rule of a line (`lineRulesOf`) and is owned whole by its one owner (`own.ts` `oneInk`); a placement whose
+boxes hold two owners is left as the claims made it, which the wrap refuses. Over the 245 the look-ahead samples move in 38
+papers (195 pairs, 95 of them a front unit's). Tests: `packages/engine/tests/one-ink.test.ts`.
 
 ## 19. The engine's contract
 
