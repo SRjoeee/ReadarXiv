@@ -1850,3 +1850,58 @@ describe("F3's `script`: a figure text the engine cannot draw as it was set is t
     expect(texts.every((t) => t.why !== 'script')).toBe(true)
   })
 })
+
+// A figure's title with a logo set between two of its words: "Agent Tool + [logo]ITAL + Model 5" (a logo of filled paths standing
+// for a letter, the word's other letters glyphs after it). The logo is no glyph and holds none of the text's: the relation
+// reading judges it other ink, which keeps nothing (§18.36 step 2), and the text is laid in its own room, the whole of its line,
+// as if the logo were not there: a translation of another length stands over it. The original's relation is the logo's place
+// IN the line, between two words, as an inline graphic is a piece of a paragraph's line: carried as an element of the text at
+// that place (its ink moved with the translation, never sent as a word), the translation never stands over it. Recorded with
+// `it.fails` (2026-11-25): the geometry that would tell it from ink not the text's (its whole path inside the gap and the
+// line's box) misjudges the case itself, the logo standing taller than its line by either reading of the box (its glyphs'
+// ink, the reading's band); a hole to rule, not yet a rule. Content of our own.
+describe('figure-lines: ink between two of a figure text’s own words on its line, holding none of them (an inline logo)', () => {
+  const T = 'TimesNewRomanPS-BoldMT'
+  /** the title on one line: its words, the logo's room 12 pt wide after "+ " (three word spaces), its paths there */
+  const titled = () => {
+    const { page, fig } = pageOf([[{ text: 'Agent Tool +    ITAL + Model 5', font: T, x: 100, gaps: true }]])
+    const g = page.glyphs as Glyph[]
+    const plus = g.findIndex((x) => x.u === '+')
+    const i = g.findIndex((x) => x.u === 'I')
+    // (the logo: three filled paths inside the band of the line, between the "+" and the "I", holding no glyph's ink centre)
+    const a = g[plus]!.x1 + 1,
+      b = g[i]!.x0 - 0.3
+    const parts = [
+      rect(a, 700, a + 4, 708, { fill: true, stroke: false }),
+      rect(a + 3, 700, b, 708, { fill: true, stroke: false }),
+      rect(a + 1, 704, a + 3, 706, { fill: true, stroke: false }),
+    ]
+    fig.units[0]!.why = 'crowded'
+    fig.met.set(0, { items: parts.map((s, j) => boxMet(j, s)), under: null })
+    return { page, fig, g, plus, i }
+  }
+  it('lays the title translated (the case’s premise: no ink but its own double keeps a figure text, step 2)', () => {
+    const { page, fig } = titled()
+    const [t, ...rest] = figureLinesOf([page], fig, () => false, null)
+    expect(rest).toEqual([])
+    expect(t!.why).toBeNull()
+  })
+  it.fails('carries the logo as an element of the text where it stands, between the words its ink stands between', () => {
+    const { page, fig, g, plus, i } = titled()
+    const [t] = figureLinesOf([page], fig, () => false, null)
+    // (one element holding the logo's three paths, no glyph of the text's; in the text's order after the "+" and before the "I")
+    expect(t!.els.map((e) => [e.glyphs, [...e.boxes].sort()])).toEqual([[[], [0, 1, 2]]])
+    const at = t!.order.findIndex((o) => o.t === 'el')
+    const before = t!.order.slice(0, at).flatMap((o) => (o.t === 'text' ? o.glyphs : []))
+    const after = t!.order.slice(at + 1).flatMap((o) => (o.t === 'text' ? o.glyphs : []))
+    expect([before.at(-1) === plus || g[before.at(-1)!]!.blank, after.find((j) => !g[j]!.blank)]).toEqual([true, i])
+  })
+  it('leaves a shape beside the line’s first or last word as it is: an icon before a label is none of it (F0, step 2)', () => {
+    // (the control: the same paths before the title's first word, standing between none of its words: no element, laid)
+    const { page, fig } = pageOf([[{ text: 'Agent Tool + ITAL + Model 5', font: T, x: 120 }]])
+    fig.units[0]!.why = 'crowded'
+    fig.met.set(0, { items: [boxMet(0, rect(104, 700, 116, 708, { fill: true, stroke: false }))], under: null })
+    const [t] = figureLinesOf([page], fig, () => false, null)
+    expect([t!.why, t!.els]).toEqual([null, []])
+  })
+})

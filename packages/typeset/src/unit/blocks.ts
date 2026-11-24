@@ -16,7 +16,7 @@
 import { median, type Rect, rectKey, rectKeyNoX0 } from '../util.ts'
 
 /** how far apart two baselines are told (PDF units): a line's is stated to a hundredth, as the slots' feet read it */
-const ON_BASE = 0.05
+export const ON_BASE = 0.05
 
 /** a line as the unit's reading knows it (`lineInfo`) */
 export type LineInfo = {
