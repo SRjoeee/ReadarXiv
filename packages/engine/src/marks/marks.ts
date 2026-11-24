@@ -3232,6 +3232,14 @@ export function layoutMarking(
     // \protect before it, it is stored as it is and set where the note is: 2610.20484's \texttt and 2610.11256's \href in a
     // \thanks were LOST, their marks gone)
     const lead = front(u) ? ROBUST_LEAD : ''
+    // (the pieces inside the unit's own marks, as patch writes them: from its head's end to its last text, every piece of a unit
+    // marked whole (AUTHOR_WIDE) or of one with no text (no end mark). A look-ahead answer gives marks to a piece inside alone: one past the end mark (2610.20848v1's
+    // keywords, `Radio astronomy\axtend{38e} \sep \src`) is no piece of the unit's ink, and its opening point there read the
+    // whole line)
+    const um = own(u),
+      headAt = headEnd(u.pieces, 0),
+      lastAt = u.pieces.findLastIndex((p) => p.t === 'text' && /[^ \t\r\n]/.test(p.s)),
+      inside = (k: number): boolean => !!um?.whole || lastAt < 0 || (k >= headAt && k <= lastAt)
     // (a piece that sets ink between the texts of a front unit — a name's mark in a unit of several names, `Ann Lee\\inst{1},
     // Bob Ray` — gets its closing mark before the next name's text where TeX's probe answered, for that call as it stands and
     // what follows it, that the mark changes nothing (frontSaid, probeSamples' `front`): a macro that reads what follows it,
@@ -3297,7 +3305,7 @@ export function layoutMarking(
       // call's too, which its own answer leaves none there; its closing mark is its own answer's. A front unit's as well: its
       // marks robust (`lead`), the probe's boxes set them so (aheadSection), the answer keyed by the lead: an answer about
       // another token list is none)
-      const pairSaid = aheadSaid(u.pieces, k, lead)
+      const pairSaid = inside(k) ? aheadSaid(u.pieces, k, lead) : null
       const ahead =
         !!pairSaid && pairSaid.m === after && opened.has(after) && (pairSaid.code === '0' || pairSaid.code === '1')
       // (`reads`: the piece before this one may read what follows it, so that nothing of ours may stand between them)
@@ -3458,7 +3466,7 @@ export function layoutMarking(
     // white space, which may be a line's end before a blank one, or in an environment's \end, whose skip of the spaces after it
     // the probe's box cannot show; a front unit's with its lead, as the probe's box set it)
     for (let q = 1; q < out.length; q++) {
-      const said = aheadSaid(u.pieces, q, lead),
+      const said = inside(q) ? aheadSaid(u.pieces, q, lead) : null,
         k = said?.at ?? -1,
         m = said?.m
       if (

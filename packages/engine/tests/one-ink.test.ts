@@ -16,7 +16,7 @@ import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
 import { openPaper } from '../src/compile/live.ts'
 import { pageInk } from '../src/ink.ts'
-import { aheadSection, probeSamples } from '../src/marks/marks.ts'
+import { aheadKey, aheadSection, layoutMarking, MARK_CLASSES, probeSamples } from '../src/marks/marks.ts'
 import { lineRulesOf } from '../src/own/own.ts'
 
 const enc = (s: string) => new TextEncoder().encode(s)
@@ -127,5 +127,48 @@ describe('one included graphic is one ink', () => {
     const boxes = ink.paths.map((_, b) => [1, b] as [number, number])
     const { rules } = lineRulesOf([page], glyphs, boxes)
     expect(rules.map(([, b]) => b)).toEqual([0])
+  })
+})
+
+describe("a look-ahead answer marks a piece inside its unit's marks alone", () => {
+  // (2610.20848v1's keywords: `Radio astronomy \\sep \\src`, the unit's end mark after its last text, `\\sep` and `\\src` past it:
+  // TeX's 0 for the pair gave `\\src` an opening point past the end, its reading ran over the whole line)
+  const piece = (p: { t: string; s?: string; src?: string }) => (p.t === 'text' ? p.s : p.src)
+  const unitOf = (pieces: { t: string; s?: string; src?: string }[]) =>
+    ({ kind: 'para', file: 'main.tex', start: 0, end: 0, pieces }) as unknown as Parameters<
+      typeof layoutMarking
+    >[0][number]
+  const switches = { [aheadKey('\\sep', ' ', '\\src')]: '0' }
+  const marked = (pieces: { t: string; s?: string; src?: string }[]) =>
+    (
+      layoutMarking([unitOf(pieces)], MARK_CLASSES, { lines: false, switches }).units[0]!.pieces as unknown as {
+        t: string
+        s?: string
+        src?: string
+      }[]
+    )
+      .map(piece)
+      .join('')
+  it("inside the unit (text after the pair): TeX's answer gives the piece its marks", () => {
+    const out = marked([
+      { t: 'text', s: 'Our words ' },
+      { t: 'ph', src: '\\sep' },
+      { t: 'text', s: ' ' },
+      { t: 'ph', src: '\\src' },
+      { t: 'text', s: ' and more of ours.' },
+    ])
+    expect(out).toContain('\\axtpma{p0.3a}\\src')
+  })
+  it("past the unit's last text: the pair stays unmarked, as at the line", () => {
+    const out = marked([
+      { t: 'text', s: 'Our words ' },
+      { t: 'ph', src: '\\sep' },
+      { t: 'text', s: ' our last words ' },
+      { t: 'ph', src: '\\sep' },
+      { t: 'text', s: ' ' },
+      { t: 'ph', src: '\\src' },
+      { t: 'text', s: '\n' },
+    ])
+    expect(out).not.toContain('p0.5a')
   })
 })
