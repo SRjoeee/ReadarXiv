@@ -10152,7 +10152,13 @@ superscript of the author line was lost. Each braced group right after the prose
 commands': the look-ahead probe sets the call, the call with marks inside the tail's braces, and the call with the tail emptied
 (`marks.ts` `tailSamples`, with the unit's lead as C's samples), and the marking marks the tail only where the marked call is the
 call's own box and the emptied one another (the tail sets something). A tail TeX never prints (`\term{key word}{sec:ours}`'s
-`\label` key) answers otherwise and stays as the paper writes it. The tail's opening mark is `\axthpk`'s, which sets its point on
+`\label` key) answers otherwise and stays as the paper writes it. Where the emptied call is the call's own box, TeX sets nothing
+for the tail and answers 1 (an empty group, a key, hyperref's PDF string); the instrument states such a tail's span empty
+(`marks.ts` `tailsSettingNothing`, read from the probe's log beside the ink probe's facts), as it does a macro the ink probe says
+sets no ink: with no mark and no statement its element's ink was unknown and its paragraph stayed the original (#679's review;
+343 elements in 2 papers of the 245). An answer 2 proves nothing of the tail's ink and leaves it as it was. Today's maker reads
+a tail's answer and a front unit's lead in its switches' keys (`layout/marks.mjs` `TAIL_KEY`, `LEAD`); it refused every
+paper with a tail sample before. The tail's opening mark is `\axthpk`'s, which sets its point on
 the empty list of a box (`\ifinner`): the tail's braces open the list of whatever box its macro sets it in (here
 `\textsuperscript`'s), where `\axtpma`'s rule for the paragraph TeX resumes after a display, never a box's, set nothing, and the
 element had no opening point and no ink. With the names shown, 2611.18114v1's author line draws each name with its superscript

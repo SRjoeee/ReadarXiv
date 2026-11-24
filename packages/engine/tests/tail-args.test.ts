@@ -7,7 +7,15 @@
 // Content of our own.
 import { describe, expect, it } from 'vitest'
 import { openPaper } from '../src/compile/live.ts'
-import { aheadSection, layoutMarking, MARK_CLASSES, probeSamples, tailKey, tailSamples } from '../src/marks/marks.ts'
+import {
+  aheadSection,
+  layoutMarking,
+  MARK_CLASSES,
+  probeFactsOf,
+  probeSamples,
+  tailKey,
+  tailSamples,
+} from '../src/marks/marks.ts'
 import { tailGroups, tailPiece } from '../src/source/latex-front.ts'
 
 const enc = (s: string) => new TextEncoder().encode(s)
@@ -57,5 +65,20 @@ describe("a pair's tail argument is a piece of its own", () => {
     const src = (i: number) => laid.units[i]!.pieces.map((x) => x.src ?? (x as { s?: string }).s ?? '').join('')
     expect(src(0)).toMatch(/\\authorname\{Cy Doe\}\{\\axthpk\{p0\.\d+a\}3\\axtpm\{p0\.\d+b\}\}/)
     expect(src(1)).toContain('\\term{key word}{sec:ours}')
+  })
+})
+
+describe('a tail TeX sets nothing for is stated empty (#679 review: an unprinted key kept its paragraph the original)', () => {
+  it('the probe answers 1 where the call with the tail emptied is the call’s own box', () => {
+    const tex = aheadSection(tailSamples(paper().units))
+    expect(tex).toContain('\\ifx\\axt@qa\\axt@qg\\xdef\\axt@qo{1}')
+  })
+  it('the instrument’s probe facts name each tail TeX answered 1: no element of unknown ink', () => {
+    const p = paper()
+    const log = 'LAYOUT-PROBE 1 ahead 0 0\nLAYOUT-PROBE 1 ahead 1 1\n'
+    const k = p.units[1]!.pieces.findIndex((x) => tailPiece(x))
+    expect(probeFactsOf(log, p.units).tails).toEqual([{ unit: 1, piece: String(k) }])
+    // (an answer 2, the tail sets something its marks would move, is no proof of no ink)
+    expect(probeFactsOf('LAYOUT-PROBE 1 ahead 1 2\n', p.units).tails).toEqual([])
   })
 })

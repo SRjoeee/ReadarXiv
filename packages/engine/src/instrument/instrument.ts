@@ -2541,8 +2541,14 @@ export async function instrumentOf({
   const places = placesOf(pages, units.length)
   // (the pieces TeX sets no ink for (inklessPieces), and those TeX's points prove set nothing of their own (boundedEmpty): their
   // span stated empty, by unit index and piece id)
+  // (and the pairs' tail arguments TeX's tail samples answered set nothing: probeFactsOf's `tails`, marks.ts tailsSettingNothing)
   const empty = inklessPieces(units, { classes: classesBy, inkless })
   const stated = new Set(empty.map((x) => `${x.unit}|${x.piece}`))
+  for (const x of probe?.tails ?? [])
+    if (!stated.has(`${x.unit}|${x.piece}`)) {
+      empty.push(x)
+      stated.add(`${x.unit}|${x.piece}`)
+    }
   for (const x of boundedEmpty(pages, units, { glyphs, boxes })) if (!stated.has(`${x.unit}|${x.piece}`)) empty.push(x)
   // (the pieces TeX set before their unit's start point (outsidePieces): whatever they set is no text of the unit's)
   const outside = outsidePieces(pages, units, { glyphs })
