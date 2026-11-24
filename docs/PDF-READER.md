@@ -10084,6 +10084,18 @@ form is painted) is no rule of a line (`lineRulesOf`) and is owned whole by its 
 boxes hold two owners is left as the claims made it, which the wrap refuses. Over the 245 the look-ahead samples move in 38
 papers (195 pairs, 95 of them a front unit's). Tests: `packages/engine/tests/one-ink.test.ts`.
 
+**D: a head owns the boxes TeX set in it.** With the names shown, the first affiliation's label is its number and the Microsoft
+logo (`\textsuperscript{1}\afficon[…]{logo_microsoft}` before the unit's start): the label's reading took glyphs alone, so the
+"1" moved with the translation and the logo stayed where TeX set it. A head's reading (`own.ts` ownOf, the labels' pass: the
+label `.l`, a placeholder TeX set before the start `.p`) takes the boxes in its range with its glyphs, and a label's boxes
+(`Member.labelBoxes`) are hidden with its group and drawn back in its crop, whose extent is its glyphs' and boxes' together. What
+TeX set in the head stands on the start's line before the start: a box the head takes meets that line and ends where the start
+glyph does at the latest, and a placed form is taken only with its whole placement, every box of it in the range, no one's and
+ending before the start, the placement meeting the line (a logo's bar under the baseline goes with its crown). Without those
+bounds a frame TeX paints round a theorem before its heading (2501.14787v1, `tcolorbox`) read as the heading label's, and a
+figure TeX set beside a paragraph, one of its paths meeting the paragraph's first line, as that paragraph's label, the rest of
+the figure no one's, and the wrap refused the page (2610.30875v1 p5). Tests: `packages/engine/tests/head-boxes.test.ts`.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server

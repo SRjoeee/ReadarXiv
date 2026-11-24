@@ -550,14 +550,43 @@ export function ownOf(
     // start (or the head's next point), in the start's region and on its line as a glyph of the head is, no one's yet, go with
     // the glyphs that range gives: a placeholder's or the label's. 2611.18114v1's affiliation line opens with
     // `\\textsuperscript{1}\\afficon{logo_microsoft}`: its logo's paths were no one's, left where TeX set them while the head's "1"
-    // moved with the translation)
+    // moved with the translation). What TeX set in the head stands before the start on its line: a box ends where the start
+    // glyph does at the latest (a frame painted round a theorem before its heading, 2501.14787v1, encloses the line and is no
+    // ink of its label), and a placed form is taken only with its whole placement, one ink: each of its boxes in the range,
+    // no one's, ending before the start, the placement meeting the line (a logo's bar under the baseline with its crown above;
+    // 2610.30875v1 p5: a figure set beside a paragraph, one of its paths meeting the paragraph's first line, read as the
+    // paragraph's label and the rest of it no one's: the wrap refused the page)
     let upBox = S.box
+    const startX1 = pg.glyphs[S.glyph]!.x1
     const boxesFrom = (b0: number): Place[] => {
       const out: Place[] = []
+      const B = pg.boxes,
+        F = pg.forms
+      const onLine = (y0: number, y1: number) => caption || (y0 < line.top && y1 > line.bottom)
+      const inRange = (b: number) =>
+        b >= b0 && b < upBox && R.box[b] === r && bOwn[p - 1]![b] === null && (caption || B[4 * b + 2]! <= startX1)
       for (let b = Math.max(0, b0); b < upBox; b++) {
-        if (R.box[b] !== r || bOwn[p - 1]![b] !== null) continue
-        const B = pg.boxes
-        if (caption || (B[4 * b + 1]! < line.top && B[4 * b + 3]! > line.bottom)) out.push([p, b])
+        const f = F?.[b] ?? 0
+        if (!f) {
+          if (inRange(b) && onLine(B[4 * b + 1]!, B[4 * b + 3]!)) out.push([p, b])
+          continue
+        }
+        // (a placement's boxes stand together in the stream, its one `Do`)
+        let a = b
+        while (a > 0 && F![a - 1] === f) a--
+        let z = b
+        while (z + 1 < F!.length && F![z + 1] === f) z++
+        work += z - a + 1
+        let whole = true,
+          y0 = Infinity,
+          y1 = -Infinity
+        for (let j = a; j <= z && whole; j++) {
+          whole = inRange(j)
+          y0 = Math.min(y0, B[4 * j + 1]!)
+          y1 = Math.max(y1, B[4 * j + 3]!)
+        }
+        if (whole && onLine(y0, y1)) for (let j = a; j <= z; j++) out.push([p, j])
+        b = z
       }
       return out
     }
