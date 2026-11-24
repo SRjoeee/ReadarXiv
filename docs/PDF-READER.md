@@ -3638,7 +3638,9 @@ production, 2611.20688v1-zh p8, "Consistency between the editing plan and the ou
 between the text's lines). The head pass now reads the title as its paragraph's first line: the gap under it follows the
 text's own leading and pitch at each leading the pass tries, the text starting lower within its own lines, as under a
 widow line (`headOf`, `runin` carried from the part by `lay/adapt.ts`); where its own lines leave no room it stays as TeX
-set it. A title that shares its line with its text (the common form) has its text's first line pinned on its row and is
+set it. Only where the text's first line stands its own pitch under the title's last (to the hundredth a baseline is stated
+to, `ON_BASE`): a text TeX set further down (a list's, a theorem's or a heading's skip between) shows the title ended a
+paragraph of its own, and the gap stays TeX's (the display pairs' first try lowered three such units). A title that shares its line with its text (the common form) has its text's first line pinned on its row and is
 untouched. Over the line's stored chain of the 245 papers: 2,082 run-in titles, 37 of them (20 papers) alone on TeX's line
 over their text's first line, each a title of one line; the lay alone moves (no stored object, no version).
 

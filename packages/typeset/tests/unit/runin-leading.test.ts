@@ -21,7 +21,7 @@ const zh = rulesFor('zh')
 const st = { role: 'serif' as const, size: 10, design: 'NimbusRomNo9L-Regu' }
 const bold = { ...st, bold: 1 as const, design: 'NimbusRomNo9L-Medi' }
 const ids = ['h', 'p', 'q'].map((c) => c.repeat(64))
-const row = (id: string, n: number): Row => ({ id, ok: true, by: 'test', content: [{ t: 'text', s: '文'.repeat(n) }] })
+const row = (id: string, n: number): Row => ({ id, ok: true, by: 'test', content: [{ t: 'text', s: String.fromCodePoint(0x6587).repeat(n) }] })
 const at = (y: number, x0 = 72, x1 = 300): Placed['lines'][number] => [1, 0, x0, x1, y, y + 7, y - 2, 72, 300, 0, 10]
 
 /** a heading whose title fills TeX's line at 700 (its gap under it `gap`), the paragraph under it on TeX's next lines at a
