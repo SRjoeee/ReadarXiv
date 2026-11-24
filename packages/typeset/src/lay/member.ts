@@ -53,8 +53,9 @@ export type Prepared = {
   wide: FitBlock[] | null
   /** laid again in its row alone (S.relay) */
   noOver?: boolean
-  /** a run-in title (Room.gap `runin`, \@sect's own test: an after-skip of zero or less): TeX set it in the first line of the
-   *  paragraph after it, one paragraph at one \baselineskip, which the page fill's head pass reads (fill-page.ts headOf) */
+  /** a run-in title (Room.gap `runin`, \@sect's own test: an after-skip of zero or less) alone on its last row (no text joined
+   *  to it there, Placed.join): TeX set it in the first line of the paragraph after it, one paragraph at one \baselineskip,
+   *  which the page fill's head pass reads (fill-page.ts headOf) */
   runin?: true
 }
 /** a member's lay: laid, with what the fill takes of it, or left the original's and why */

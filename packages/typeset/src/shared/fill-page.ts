@@ -336,7 +336,8 @@ export function fillPage(
     const L0 = alone ? f.st.lead : (f.st.leads?.[0] ?? f.st.lead),
       floor = Math.max(1, P.leadFloor ?? 1)
     // (the head at a leading L: under a paragraph's widow, its own leading's, fixed; under a run-in title, the unit's own L)
-    const headAt = (L: number) => headOf(f.p, onPage, L)
+    const laidLines = f.l.lines.length
+    const headAt = (L: number) => headOf(f.p, onPage, L, laidLines)
     if (!(headAt(L0) > 0)) continue
     const withLead = (L: number): FitState =>
       alone
@@ -396,7 +397,12 @@ export function fillPage(
  * pitch, as the paragraph's own lines do: the head at each leading `lead` the pass tries (docs/PDF-READER.md §18.11: one
  * TeX paragraph, one leading; 2611.20688v1-zh p8)
  */
-function headOf(q: FillLaid, onPage: readonly { u: FillLaid; l: Layout; st: FitState }[], lead: number): number {
+function headOf(
+  q: FillLaid,
+  onPage: readonly { u: FillLaid; l: Layout; st: FitState }[],
+  lead: number,
+  lines: number,
+): number {
   const b = q.blocks[0]
   if (!b || (q.P.blockBase ?? 0) !== 0 || !q.P.halfLead?.head || b.startY !== undefined || b.onLead) return 0
   const unitOf = (x: FillLaid) => x.parent ?? x
@@ -408,7 +414,8 @@ function headOf(q: FillLaid, onPage: readonly { u: FillLaid; l: Layout; st: FitS
     // (the line over the unit's first one, its block, the leading the gap under it follows, the block whose pitch it reads)
     let over: { y: number; block: FitBlock; L: number; pitched: FitBlock; s: number }
     const end = l.lines.at(-1)
-    if (unitOf(u).runin === true && end && end.block === u.blocks.length - 1) {
+    // (the unit laid in two lines at least: a paragraph of one line has no leading, and the gap over it stays TeX's)
+    if (unitOf(u).runin === true && lines > 1 && end && end.block === u.blocks.length - 1) {
       // (a run-in title: its last line where it is drawn, the gap the unit's own leading and pitch, the paragraph's; its paragraph
       // the unit's only where the unit's first line is the next line TeX set, its pitch under the title's last: more, and TeX set
       // something between (a list's skip, a theorem's or a heading's: the title ended a paragraph of its own), which keeps TeX's

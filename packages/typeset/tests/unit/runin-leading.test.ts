@@ -71,7 +71,7 @@ const page = (gap: NonNullable<Placed['room']>['gap'], chars = 260, skip = 0) =>
   const part = { format: 1, page: 1, paper: { faces: { fonts: [['NimbusRomNo9L-Regu', 100]] } }, flows: [flow] }
   const [h, p] = layPage(part as never, rows, zh, metrics).members
   const ys = p!.lines.map(([y]) => y)
-  return { head: h!.lines.at(-1)![0], first: ys[0]!, own: ys[0]! - ys[1]!, lines: ys.length }
+  return { head: h!.lines.at(-1)![0], first: ys[0]!, own: ys.length > 1 ? ys[0]! - ys[1]! : 0, lines: ys.length }
 }
 
 describe('a run-in title alone on its line and its text: one TeX paragraph, one leading (§18.11)', () => {
@@ -92,9 +92,59 @@ describe('a run-in title alone on its line and its text: one TeX paragraph, one 
     const m = page(['afterskip', 0, 0])
     expect(m.first).toBe(688)
   })
+  it('leaves a text laid in one line where TeX set it: a paragraph of one line has no leading (Devin on #678)', () => {
+    const m = page(['runin', 10, 0], 20)
+    expect([m.lines, m.first]).toEqual([1, 688])
+  })
   it('leaves the text where TeX set something between it and the title (a skip past its pitch): the title ended its own paragraph', () => {
     // (a list's or a theorem's skip of 8 pt between: the text's first line 20 pt under the title, not TeX's next line)
     const m = page(['runin', 10, 0], 260, 8)
     expect(m.first).toBe(680)
+  })
+})
+
+describe('a run-in title that shares its row with all its text (Devin on #678): the paragraph after is a new one', () => {
+  it('leaves the next paragraph where TeX set it when the title’s text ends on the title’s row', () => {
+    // (title 72-150 and its one-line text joined on its row at 700; a new paragraph one pitch under it, nine lines, spread)
+    const P = 12
+    const ids3 = ['h', 'f', 'p'].map((c) => c.repeat(64))
+    const flow: Placed[] = [
+      {
+        ord: 0,
+        kind: 'heading',
+        text: ids3[0]!,
+        lead: P,
+        style: bold,
+        align: 'j',
+        lines: [at(700, 72, 150)],
+        room: { below: 3, next: P, gap: ['runin', 10, 0], side: [72, 150] },
+      },
+      {
+        ord: 1,
+        kind: 'para',
+        text: ids3[1]!,
+        lead: P,
+        style: st,
+        align: 'j',
+        join: [5],
+        lines: [at(700, 155, 300)],
+        room: { below: 3, next: P, gap: ['parskip', 0, 0] },
+      },
+      {
+        ord: 2,
+        kind: 'para',
+        text: ids3[2]!,
+        lead: P,
+        style: st,
+        align: 'j',
+        lines: Array.from({ length: 9 }, (_, j) => at(688 - P * j, j === 0 ? 84 : 72)),
+        room: { below: 200, next: 212 },
+      },
+    ]
+    const by = new Map([row(ids3[0]!, 6), row(ids3[1]!, 20), row(ids3[2]!, 260)].map((r) => [r.id, r]))
+    const rows: Rows = { get: (k) => by.get(k), done: true }
+    const part = { format: 1, page: 1, paper: { faces: { fonts: [['NimbusRomNo9L-Regu', 100]] } }, flows: [flow] }
+    const p = layPage(part as never, rows, zh, metrics).members.find((m) => m.ord === 2)!
+    expect(p.lines[0]![0]).toBe(688)
   })
 })

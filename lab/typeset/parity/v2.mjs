@@ -415,8 +415,9 @@ for (const pair of pairs) {
           // measure reads)
           ...(!(m.read ?? []).includes('lead') ? { pitch: m.lead } : {}),
           ...(m.label ? { label: m.label } : {}),
-          // (a run-in title, Room.gap `runin`: the ruling of a paragraph under it reads it, verdict.mjs runinRuling)
-          ...(m.room?.gap?.[0] === 'runin' ? { runin: true } : {}),
+          // (a run-in title, Room.gap `runin`, alone on its last row (no follower joined to it there, the next member's
+          // Placed.join, as lay/adapt.ts reads it): the ruling of a paragraph under it reads it, verdict.mjs runinRuling)
+          ...(m.room?.gap?.[0] === 'runin' && !flow[flow.indexOf(m) + 1]?.join ? { runin: true } : {}),
           // (a table cell's room in its column and the ink beside its line, where the part states the room: Room.column,
           // Room.side; the ruling CB reads them, as the typesetter's columnRoomOf does)
           ...(m.kind === 'cell' && m.room?.column ? { column: m.room.column, ...(m.room.side ? { side: m.room.side } : {}) } : {}),
