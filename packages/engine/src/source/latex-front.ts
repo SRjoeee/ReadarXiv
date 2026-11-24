@@ -2586,6 +2586,32 @@ function callArgsOf(s: string, i: number, h: Macro) {
   }
   return out
 }
+/**
+ * A body with what its expansion does not set where it stands blanked (white space of the same length). With no names: each
+ * definition's body, which TeX stores unexpanded (\\def, \\gdef, \\newcommand) or expands into a macro and does not typeset
+ * (\\edef, \\xdef): the expansion runs none of it. With the stored names: a stored name's meaning a \\let copies (`\\let\\a\\b`,
+ * `\\let\\a=\\b`), which sets nothing where it stands (a \\let of another macro is walked: the copy may run, as `\\let\\do\\plain`
+ * then `\\do`). A read of a stored name in either is no read at the call: TeX sets the text where the defined macro runs
+ * (resolveStoredAtCall)
+ */
+function deferredOut(body: string, DEF: RegExp, names: ReadonlySet<string> | null): string {
+  let out = body
+  const blank = (from: number, to: number) => {
+    out = out.slice(0, from) + ' '.repeat(to - from) + out.slice(to)
+  }
+  if (!names)
+    for (const d of body.matchAll(DEF)) {
+      const at = d.index + d[0].length,
+        e = matchGroup(body, at)
+      if (e > 0) blank(at, e)
+    }
+  for (const l of body.matchAll(/\\let\s*\\[A-Za-z@]+\s*=?\s*\\([A-Za-z@]+)(?![A-Za-z@])/g)) {
+    if (!names?.has(l[1]!)) continue
+    const from = l.index + l[0].length - l[1]!.length
+    blank(from, l.index + l[0].length)
+  }
+  return out
+}
 /** the definers whose next control sequence is the name they define, not a read of it (storedReadsOf) */
 const DEFINES_NEXT =
   /\\(?:[gex]?def|let|futurelet|(?:re)?newcommand\*?|providecommand\*?|DeclareRobustCommand\*?)\s*\{?\s*$/
@@ -2623,7 +2649,8 @@ function resolveStoredAtCall(macros: Map<string, Macro>, files: readonly { text:
     let read = false,
       prose = true
     while (queue.length) {
-      const body = queue.shift()!
+      const walked = deferredOut(queue.shift()!, DEF, null),
+        body = deferredOut(walked, DEF, names)
       for (const name of names) {
         const re = new RegExp(`\\\\${name}(?![A-Za-z@])`, 'g')
         let marked = '',
@@ -2641,8 +2668,10 @@ function resolveStoredAtCall(macros: Map<string, Macro>, files: readonly { text:
         const use = throughBoxes(paramUse(marked, 0, marked.length))
         if (!use.text.has(0) || use.other.has(0)) prose = false
       }
-      for (const c of body.matchAll(/\\([A-Za-z@]+)/g)) {
+      // (the macros the expansion runs: none whose body it only defines, nor the name a definition defines)
+      for (const c of walked.matchAll(/\\([A-Za-z@]+)/g)) {
         if (seen.has(c[1]!) || names.has(c[1]!)) continue
+        if (DEFINES_NEXT.test(walked.slice(Math.max(0, c.index - 40), c.index))) continue
         seen.add(c[1]!)
         queue.push(...bodiesOf(files, c[1]!))
       }

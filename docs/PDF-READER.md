@@ -10090,7 +10090,9 @@ where every read is prose. A key handed to a citation is none: the call is one p
 before the punctuation after it (`probeSamples`), and TeX's answer puts the closing mark after the period the macro takes. The
 same macro storing its keys one call deeper was read so already; natively (the pinned image, our own content) its marked
 compile sets every text item where the original does. `stores` stays for a name no part of the call reads (`\author`'s
-`\@author`, `\icmlaffiliation`'s). Tests: `packages/engine/tests/stored-at-call.test.ts`.
+`\@author`, `\icmlaffiliation`'s). A read is one the call's expansion runs: a definition's body the call makes (TeX stores it
+unexpanded, `\gdef\showkicker{\textbf{\our@kicker}}`) and a `\let` of the stored name are no read at the call, and neither is the
+name a definition defines a macro the walk visits (`latex-front.ts` `deferredOut`). Tests: `packages/engine/tests/stored-at-call.test.ts`.
 
 **B: a path the reading gives no box.** A logo cut by `\includegraphics[trim=…,clip]` is a form whose stream paints every path of
 its file; its clip shows a few. The page's reading (`ink.ts` `pageInk`) cuts each box to the clip in force and leaves out one

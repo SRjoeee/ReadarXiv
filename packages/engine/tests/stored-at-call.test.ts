@@ -64,4 +64,15 @@ describe('a paper macro that stores its argument and sets it at its own call', (
     const paper = paperOf(tex)
     expect(paper.units.filter((u) => u.held && u.front).map(shape)).toEqual(['para: A kicker of our own words'])
   })
+  // (TeX stores a definition's body unexpanded and \let copies a meaning: neither sets the stored text where the call stands)
+  const deferred = (inBody: string) =>
+    `\\documentclass{article}\n\\makeatletter\n\\newcommand{\\kicker}[1]{\\gdef\\our@kicker{#1}${inBody}}\n\\makeatother\n\\begin{document}\n\\kicker{A kicker of our own words}\nOur own first paragraph, long enough to be a unit of its own.\n\n\\showkicker\n\\end{document}\n`
+  it('the other side: a read inside a definition the call makes is not a read at the call', () => {
+    const paper = paperOf(deferred('\\gdef\\showkicker{\\par\\textbf{\\our@kicker}\\par}'))
+    expect(paper.units.filter((u) => u.held && u.front).map(shape)).toEqual(['para: A kicker of our own words'])
+  })
+  it('the other side: a \\let of the stored name is not a read at the call', () => {
+    const paper = paperOf(deferred('\\global\\let\\showkicker\\our@kicker'))
+    expect(paper.units.filter((u) => u.held && u.front).map(shape)).toEqual(['para: A kicker of our own words'])
+  })
 })
