@@ -19,6 +19,7 @@ import type { Composer, RowsSource } from './compose/composer.ts'
 import type { FaceTable } from './compose/faces.ts'
 import type { Highlight } from './compose/highlight.ts'
 import type { Lay } from './compose/page.ts'
+import { membersOnPage } from './compose/turn.ts'
 import { CATALOGUE_WORDS, type Words } from './compose/words.ts'
 import { createPanes, DISPLAY_MARKS, type Display, type Panes, type Side, type Zoom } from './panes/panes.ts'
 import { type Kit, loadKit, type PdfBuild } from './pdfjs/kit.ts'
@@ -401,8 +402,9 @@ export function openReader(
             throw e
           })
           const part = read('part', bytes, d) as Part
-          // (the contents' headings placed by the part's members: the contents of this head's alone)
-          if (head === h && contents?.place(part.flows.flat())) outlineSoon()
+          // (the contents' headings placed by the part's members on the page, its frames' turned onto it (membersOnPage): the
+          // contents of this head's alone)
+          if (head === h && contents?.place(membersOnPage(part))) outlineSoon()
           return part
         },
       }

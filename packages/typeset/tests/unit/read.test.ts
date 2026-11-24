@@ -15,7 +15,8 @@ const metrics: Metrics = {
   ink: () => [0.7, 0.2, 0],
 }
 const P = rulesFor('de').set as never
-const paper = paperOf([['NimbusRomNo9L-Regu', 100]], 'de', null)
+// (a part the engine makes states each member's base: Part.paper.bases)
+const paper = { ...paperOf([['NimbusRomNo9L-Regu', 100]], 'de', null), bases: true }
 const member = (o: Partial<Placed> = {}): Placed => ({
   ord: 3,
   kind: 'para',
@@ -351,27 +352,39 @@ describe('the reading from the part', () => {
     })
     expect(readWith(note, 'theorem') ?? null).toBeNull()
   })
-  it('takes the base style from the original’s through today’s baseOf: a majority its own groups set is theirs', () => {
+  it('takes the base style as the part states it, read off TeX’s glyphs: no count of the row’s characters under its groups', () => {
+    // (the engine states the unit's base its own text's, each attribute outside the scopes that set it (locate/group-style.ts,
+    // docs/PDF-READER.md §18.114): `\textbf{Bold words} rest` regular, its group bold by its command; a unit whose every glyph
+    // is bold, its groups' and its own text's alike, bold: the typesetter draws what the part states, whatever the row's wording)
     const src = sourcePieces([
       { t: 'span', id: '0', style: 'bold', open: '\\textbf{', close: '}', content: [{ t: 'text', s: 'Bold words' }] },
       { t: 'text', s: ' rest' },
     ])
-    const m = member({ style: { role: 'serif', size: 10, bold: 1, design: 'NimbusRomNo9L-Medi' } })
-    const got = read(m, [
-      src[0]!,
-      { t: 'text', tr: true, s: 'Fett' } as V0Piece,
-      src[2]!,
-      { t: 'text', tr: true, s: ' Rest' } as V0Piece,
-    ])
-    const toks = got.tokens as unknown as { s?: string; st?: { bold?: boolean } }[]
-    expect(toks.find((t) => t.s === 'Fett')!.st!.bold).toBe(true)
-    expect(toks.find((t) => t.s === 'Rest')!.st!.bold).toBe(false)
+    const tokensFor = (bold: boolean) => {
+      const m = member({
+        style: { role: 'serif', size: 10, ...(bold ? { bold: 1 as const } : {}), design: 'NimbusRomNo9L-Medi' },
+      })
+      const got = read(m, [
+        src[0]!,
+        { t: 'text', tr: true, s: 'Fett' } as V0Piece,
+        src[2]!,
+        { t: 'text', tr: true, s: ' Rest' } as V0Piece,
+      ])
+      return got.tokens as unknown as { s?: string; st?: { bold?: boolean } }[]
+    }
+    const regular = tokensFor(false)
+    expect(regular.find((t) => t.s === 'Fett')!.st!.bold).toBe(true)
+    expect(regular.find((t) => t.s === 'Rest')!.st!.bold).toBe(false)
+    const bold = tokensFor(true)
+    expect(bold.find((t) => t.s === 'Fett')!.st!.bold).toBe(true)
+    expect(bold.find((t) => t.s === 'Rest')!.st!.bold).toBe(true)
   })
-  it('draws a bare group a face switch opens (`{\\em …}`, its switch the command the part states) in that face, a majority of it the base’s as `\\emph`’s is', () => {
-    // (the original's glyphs mostly the group's, italic: the base read off them is italic; the group's \em toggles from the
-    // base its own majority gives back, upright, as TeX's \em toggles from the face around it)
+  it('draws a bare group a face switch opens (`{\\em …}`, its switch the command the part states) in that face, from the base the part states', () => {
+    // (the original's glyphs mostly the group's, italic: the engine reads the base's slant with the \em run's turned back,
+    // upright, and its weight outside the \bf run's, regular (locate/group-style.ts); the group's \em toggles from that base,
+    // as TeX's \em toggles from the face around it)
     const m = member({
-      style: { role: 'serif', size: 10, slant: 1, design: 'NimbusRomNo9L-ReguItal' },
+      style: { role: 'serif', size: 10, design: 'NimbusRomNo9L-ReguItal' },
       spans: [['1', { cmd: 'em' }]],
     })
     const got = read(
@@ -385,7 +398,7 @@ describe('the reading from the part', () => {
     expect(toks.find((t) => t.s === 'Annalen')!.st!.italic).toBe(true)
     expect(toks.find((t) => t.s === 'Band')!.st!.italic).toBe(false)
     const bold = member({
-      style: { role: 'serif', size: 10, bold: 1, design: 'NimbusRomNo9L-Medi' },
+      style: { role: 'serif', size: 10, design: 'NimbusRomNo9L-Medi' },
       spans: [['1', { cmd: 'bf' }]],
     })
     const b = read(
@@ -398,6 +411,39 @@ describe('the reading from the part', () => {
     const bt = b.tokens as unknown as { s?: string; st?: { bold?: boolean } }[]
     expect(bt.find((t) => t.s === 'Satz')!.st!.bold).toBe(true)
     expect(bt.find((t) => t.s === 'gilt.')!.st!.bold).toBe(false)
+  })
+})
+
+describe('the run TeX set after an author’s name for several pieces, as the prepare states it (PDF-READER §18.108)', () => {
+  // (`Ann Lee\inst{1}\orcidID{0000}`: TeX sets the two marks past the end point as one run, no point between them; the part
+  // states the run the first piece's ink and the second empty, El.text '')
+  const m = member({
+    kind: 'author',
+    els: [
+      ['1', { kind: 'other', copy: '1', ink: [[1, 114, 702.6, 140, 708.5, 700]] }],
+      ['2', { kind: 'other', copy: '0000', ink: [], text: '' }],
+    ],
+  })
+  const tr = (s: string) => ({ t: 'text' as const, tr: true, s })
+  const el = (k: number) => ({ t: 'ph', src: k === 1 ? '\\inst{1}' : '\\orcidID{0000}', k }) as V0Piece
+  /** the tokens' text, a crop as `[crop]` */
+  const drawn = (pieces: V0Piece[]) => {
+    const got = read(m, pieces, 'author')
+    const toks = got.tokens as unknown as { s?: string; crop?: unknown; space?: true }[]
+    return {
+      unproven: got.unproven,
+      text: toks.map((t) => (t.crop ? '[crop]' : t.space ? ' ' : (t.s ?? ''))).join(''),
+    }
+  }
+  it('is drawn once, where the translation sets the first piece, in the source’s order', () => {
+    expect(drawn([tr('Anna Li'), el(1), el(2)])).toEqual({ unproven: -1, text: 'Anna Li[crop]' })
+  })
+  it('is drawn once whatever order the translation returns the pieces in', () => {
+    expect(drawn([tr('Anna Li'), el(2), el(1)])).toEqual({ unproven: -1, text: 'Anna Li[crop]' })
+  })
+  it('a reply that separates the pieces: the run drawn whole at the first piece, nothing at the other', () => {
+    expect(drawn([tr('Anna Li'), el(1), tr(' und'), el(2)])).toEqual({ unproven: -1, text: 'Anna Li[crop] und' })
+    expect(drawn([el(2), tr('Anna Li '), el(1)])).toEqual({ unproven: -1, text: 'Anna Li [crop]' })
   })
 })
 

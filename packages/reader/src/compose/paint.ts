@@ -143,6 +143,66 @@ function less(r: Rect, n: Rect): Rect[] {
   return out
 }
 
+/** a box of the frame of direction (ux, uy) on the page: the box of its four corners turned by the direction about the page's
+ *  origin (a frame's (x, y) is the page's (ux x - uy y, uy x + ux y), docs/PDF-READER.md §18.113) */
+const onPage = ([ux, uy]: readonly [number, number], b: readonly number[]): Rect => {
+  const c = [
+    [b[0]!, b[1]!],
+    [b[2]!, b[1]!],
+    [b[0]!, b[3]!],
+    [b[2]!, b[3]!],
+  ].map(([x, y]) => [ux * x! - uy * y!, uy * x! + ux * y!] as const)
+  return [
+    Math.min(...c.map((q) => q[0])),
+    Math.min(...c.map((q) => q[1])),
+    Math.max(...c.map((q) => q[0])),
+    Math.max(...c.map((q) => q[1])),
+  ]
+}
+
+/**
+ * A crop item's source on its page (PDF units [x0, y0, x1, y1]), its own ink there, and the map of the page from its source to
+ * where it is drawn (`to`): its source's base on its line's baseline (`y`), from its place along the line, scaled by `k`. An item
+ * of a line laid in a frame (`dir`, a unit TeX set turned: its line stated from its origin on the page, `lx`, `y`) states its
+ * source and ink in its frame: the map there is the same move and scale, which the turn carries onto the page as a move turned
+ * and the same scale, so the crop is the original's turned ink moved where the translation's turned line sets it, its pixels
+ * never turned (they stand turned on the original's page as the line does on ours); its source and ink on the page the boxes
+ * of their turned corners
+ */
+function placeOf(
+  it: Extract<Item, { src: Ink }>,
+  y: number,
+  lx: number,
+): { from: number; src: Rect; own: Rect[] | null; k: number; to: (r: readonly number[]) => Rect } {
+  const [from, x0, y0, x1, y1, base] = it.src
+  const k = it.k
+  const own = it.ink?.length ? it.ink : null
+  if (!it.dir) {
+    const to = ([a, b, c, d]: readonly number[]): Rect => [
+      it.x + ((a as number) - x0) * k,
+      y + ((b as number) - base) * k,
+      it.x + ((c as number) - x0) * k,
+      y + ((d as number) - base) * k,
+    ]
+    return { from, src: [x0, y0, x1, y1], own: own as Rect[] | null, k, to }
+  }
+  const [ux, uy] = it.dir
+  // (the line's origin in its frame, and the item's place there along it)
+  const fx = ux * lx + uy * y + (it.x - lx),
+    fy = -uy * lx + ux * y
+  const ox = fx - x0 * k,
+    oy = fy - base * k
+  const cx = ux * ox - uy * oy,
+    cy = uy * ox + ux * oy
+  const to = ([a, b, c, d]: readonly number[]): Rect => [
+    k * (a as number) + cx,
+    k * (b as number) + cy,
+    k * (c as number) + cx,
+    k * (d as number) + cy,
+  ]
+  return { from, src: onPage(it.dir, [x0, y0, x1, y1]), own: own ? own.map((b) => onPage(it.dir!, b)) : null, k, to }
+}
+
 /**
  * Each crop of the page: the page its ink is cut from (its Ink's), its source and where it is drawn, both in PDF units
  * [x0, y0, x1, y1], and its clip where it is drawn, where it has one (its source's rectangles moved and scaled as its source
@@ -167,25 +227,21 @@ export function cropsOf(
   const out: ReturnType<typeof cropsOf> = []
   for (const m of page.members) {
     if (m.state !== 'laid') continue
-    for (const [y, , , items] of m.lines)
+    for (const [y, lx, , items] of m.lines)
       for (const it of items) {
         if (!isCrop(it)) continue
-        const [from, x0, y0, x1, y1, base] = it.src
-        const k = it.k
-        const to = ([a, b, c, d]: readonly number[]): [number, number, number, number] => [
-          it.x + ((a as number) - x0) * k,
-          y + ((b as number) - base) * k,
-          it.x + ((c as number) - x0) * k,
-          y + ((d as number) - base) * k,
-        ]
-        const own = it.ink?.length ? it.ink : null
+        const placed = placeOf(it, y, lx)
+        const { from, k, to } = placed
+        const [x0, y0, x1, y1] = placed.src
+        const own = placed.own
         if (!own) {
           out.push({ from, src: [x0, y0, x1, y1], at: to([x0, y0, x1, y1]), piece: it.piece, ord: m.ord })
           continue
         }
+        void k
         // (its own ink, an edge cut between two glyphs cut there; and with the device pixel round it, none past a cut)
-        const cl = (it.cut ?? 0) & 1,
-          cr = (it.cut ?? 0) & 2
+        const cl = it.dir ? 0 : (it.cut ?? 0) & 1,
+          cr = it.dir ? 0 : (it.cut ?? 0) & 2
         const mine = own.flatMap((b): Rect[] => {
           const r: Rect = [cl ? Math.max(b[0], x0) : b[0], b[1], cr ? Math.min(b[2], x1) : b[2], b[3]]
           return r[2] > r[0] && r[3] > r[1] ? [r] : []

@@ -32,6 +32,8 @@ const memberOf = (ord: number, unit: number, fixed = false): Member => ({
   elBoxes: new Map(),
   elBoxesB: new Map(),
   turned: [],
+  turnedEls: new Map(),
+  turnedLabel: [],
   lines: [],
   elements: [],
   style: { role: 'serif', size: 10 },

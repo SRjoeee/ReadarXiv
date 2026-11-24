@@ -12,6 +12,7 @@ import { createMarks } from '../src/compose/marks.ts'
 import { cropsOf, faceScale, svgOf } from '../src/compose/paint.ts'
 import type { Laid, Page } from '../src/compose/page.ts'
 import { laidText, TEXT_ITEMS_MAX, type TextContent } from '../src/compose/text.ts'
+import { onPage } from '../src/compose/composer.ts'
 import type { Clock } from '../src/stack/clock.ts'
 import { IOS_KEEP_PIXELS, KEEP_PIXELS, keepBudget, onIos, pastBudget, skeleton } from '../src/stack/stack.ts'
 import { CATALOGUE_WORDS } from '../src/compose/words.ts'
@@ -949,5 +950,39 @@ describe('a crop cut from its element’s ink between two glyphs (a URL broken w
     expect(tail!.src[0]).toBeCloseTo(277.1, 5)
     expect(tail!.at[0]).toBeCloseTo(72, 5)
     expect(tail!.src[2]).toBeCloseTo(450, 5)
+  })
+})
+
+describe('the laid text layer over a frame’s member (a unit TeX set turned, #673)', () => {
+  it('matches its turned run by the member the registry holds on the page, its translation where the run stood', () => {
+    // (a header cell "Recall" set a quarter turned at x 150 from y 400 up, then a level paragraph: its member in the frame, its
+    // line from 400 to 430 along the turn, its band -152 to -144 across, registered on the page (composer.ts onPage))
+    const cell = {
+      ...placed(2, [[0, 0, 0]]),
+      kind: 'cell',
+      lines: [[1, 0, 400, 430, -150, -144, -152, 400, 430, 0]],
+    } as unknown as Placed
+    const para = placed(3, [[300, 50, 300]])
+    const turnedItem = { ...item('Recall', 150, 400, 30), transform: [0, 10, -10, 0, 150, 400] }
+    const content = contentOf([OC, turnedItem, EMC, OC, item('Later paragraph', 50, 300, 200), EMC])
+    const page: Page = {
+      page: 1,
+      wait: { rows: [], faces: [] },
+      links: [],
+      members: [
+        { ...laid(2, [[400, 150, 180, [{ s: 'Rappel', x: 150, face: 'sans', size: 8, dir: [0, 1] }]]]), frame: [0, 1] },
+        laid(3, [[300, 50, 300, [{ s: 'Paragraphe', x: 50, face: 'sans', size: 10 }]]]),
+      ] as Laid[],
+    }
+    const members = new Map([
+      [2, onPage(cell, [0, 1])],
+      [3, para],
+    ])
+    const r = laidText(content, page, members, facesStub, measure)
+    const strs = (r.content.items as { str?: string }[])
+      .filter((x) => typeof x.str === 'string')
+      .map((x) => x.str?.trim())
+    expect(strs).toEqual(['Rappel', 'Paragraphe'])
+    expect(r.dropped).toBe(2)
   })
 })

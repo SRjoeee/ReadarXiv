@@ -107,9 +107,10 @@ export function rowPieces(m: Placed, content: readonly OutPiece[]): V0Piece[] {
         out.push(e?.nested ? { t: 'nested', k: Number(p.id) } : { t: 'ph', src: srcOfEl(p.id, e), k: Number(p.id) })
       } else {
         const id = Number(p.id)
-        // (the face TeX set it in, where its command names no style the rules know: SpanAt.style)
+        // (the face TeX set it in, where its command names no style the rules know, and the size TeX set it at, where it is not
+        // the size it is drawn at by default: SpanAt.style)
         const st = spans.get(p.id)?.style
-        const face = st ? { face: { role: st.role, bold: st.bold, slant: st.slant } } : {}
+        const face = st ? { face: { role: st.role, bold: st.bold, slant: st.slant, size: st.size } } : {}
         // (a title its source sets in the line with no mark after it: SpanAt.runin, tokens.ts sets the separation after it)
         const runin = spans.get(p.id)?.runin ? { runin: true as const } : {}
         out.push({ t: 'open', src: srcOfSpan(spans.get(p.id)), id, k: id, ...face, ...runin })
@@ -124,7 +125,14 @@ export function rowPieces(m: Placed, content: readonly OutPiece[]): V0Piece[] {
 
 /** the paper's designs and the roles its faces are set in, from its fonts (Part.paper.faces: each with the glyphs it sets):
  *  the families and designs of its fonts tallied by the glyphs each sets, the most set of each family, and familyOfFonts */
-export type PaperReading = { designs: { serif: string; sans: string; mono: string }; roles: Roles; family: string }
+/** a paper's designs, roles and family as its part's faces read; `bases` whether its part states each member's base
+ *  (Part.paper.bases; a part made before states none) */
+export type PaperReading = {
+  designs: { serif: string; sans: string; mono: string }
+  roles: Roles
+  family: string
+  bases?: boolean
+}
 export function paperOf(fonts: readonly (readonly [string, number])[], to: string, cjkFaces: CjkFaces): PaperReading {
   const tally = new Map<string, number>()
   for (const [name, n] of fonts) {
@@ -234,11 +242,12 @@ function drawnAs(
   return { mode: 'crop', page, ...cropOfBox(box), text: copy, ...(mark ? { mark: true } : {}) } as Res
 }
 
-/** each element's reading (U.elements' ElementReading) from its El, by the row's piece index */
+/** each element's reading (U.elements' ElementReading) from its El, by the row's piece index; `size` the member's */
 function readingsOf(
   pieces: readonly V0Piece[],
   els: ReadonlyMap<string, El>,
   L: LineKeys,
+  size: number,
 ): { readings: Map<number, ElementReading>; cls2: (string | null)[] } {
   const readings = new Map<number, ElementReading>()
   const cls2 = clsOf(pieces, els)
@@ -333,7 +342,9 @@ function readingsOf(
     const page = ink[0]?.[0] ?? 1
     // (the style most of its glyphs are set in (El.style), its own font state where it is drawn as the page's text: its
     // typewriter face, weight, slant and small capitals, faked (El.style.sc, its text in TeX's case) or its face's own, over
-    // the run's (tokens.ts); none where the part states none, the run's then)
+    // the run's (tokens.ts); none where the part states none, the run's then. And the size its glyphs share where it is not the
+    // member's (El.size; TStyle.rel, absolute, as a group's): `{\small\texttt{…}}`, a citation TeX set larger than its cell)
+    const own = el?.size !== undefined && el.size > 0 && size > 0 ? el.size / size : undefined
     const gst: TStyle | null = el?.style
       ? {
           fam: el.style.role,
@@ -341,8 +352,11 @@ function readingsOf(
           italic: !!el.style.slant,
           caps: el.style.sc !== undefined || (!!el.style.design && !!classifyFont(el.style.design).caps),
           ...(el.style.sc !== undefined ? { sc: el.style.sc } : {}),
+          ...(own !== undefined ? { rel: own } : {}),
         }
-      : null
+      : own !== undefined
+        ? { rel: own }
+        : null
     const literal = !!el?.literal
     const drawn0 = gap ? drawnAs(cls, gap, supSrc, copy, page, gst, literal, mark) : null
     // (a URL drawn as its one line's crop: where TeX's url package may break it, El.breaks, which the breaker reads)
@@ -386,7 +400,17 @@ function readingsOf(
       ...(el?.tie ? { tie: true as const } : {}),
       symbol:
         cls === 'symbol'
-          ? { leads: !!el?.leads, res: { mode: 'symbol', text: el?.sym?.[0] ?? '', math: true, sup: !!el?.sym?.[1] } }
+          ? {
+              leads: !!el?.leads,
+              res: {
+                mode: 'symbol',
+                text: el?.sym?.[0] ?? '',
+                math: true,
+                sup: !!el?.sym?.[1],
+                // (drawn as text at its glyphs' size where it is not the member's: TStyle.rel)
+                ...(own !== undefined && !el?.sym?.[1] ? { st: { rel: own } } : {}),
+              },
+            }
           : null,
       supSrc,
       source: { mode: 'source', text: nested ? '*' : copy, math: cls === 'other', sup: supSrc },
@@ -529,7 +553,7 @@ export function readMember(i: ReadInput): ReadOut {
   const facts = factsOf(m)
   const { els, spans } = facts
   const L = linesOf(m, i.rects)
-  const { readings, cls2 } = readingsOf(pieces, els, L)
+  const { readings, cls2 } = readingsOf(pieces, els, L, m.style.size)
   // (the lines its source does not write, held: KEPT lines no display's rows are; a display's rows, touched)
   const displayLines = new Set<string>()
   for (const r of readings.values()) for (const l of r.display ?? []) displayLines.add(l)
@@ -598,8 +622,8 @@ export function readMember(i: ReadInput): ReadOut {
   const resolved = Object.assign(
     { get: (k: number) => res.get(k) as never },
     {
-      // (no measured base: the base is baseOf over the unit's groups from its original's style, TeX's font state as A's
-      // glyphs show it (Style): a majority its own groups set is theirs, not the base's)
+      // (no measured base: the base is the original's style as the part states it, TeX's glyphs' weight and slant of the unit's
+      // own text (Style; its small capitals by baseOf over its groups))
       measured: { st: null, fill: m.style.fill ?? 0, pieces: null },
       ...(m.style.sc !== undefined ? { capsRatio: m.style.sc } : {}),
       orig: { size: m.style.size },
@@ -656,6 +680,11 @@ export function readMember(i: ReadInput): ReadOut {
     spacedSource: false,
     to: i.to,
     base: given,
+    // (a part made before states no base of its letters: its groups read out of its glyphs' style by baseOf's count, as before)
+    ...(paper.bases ? {} : { statedBase: false }),
+    // (the face TeX set the unit's marks in outside every group, where it is not its letters': a translated mark there is drawn
+    // in it, Placed.markFace)
+    ...(m.markFace ? { markBase: { bold: !!m.markFace.bold, italic: !!m.markFace.slant } } : {}),
     designs: paper.designs,
     P: i.P,
     lead: i.lead
@@ -679,7 +708,10 @@ export function readMember(i: ReadInput): ReadOut {
       ownRow && !i.lead
         ? // (its face the relabel's as a lead's is (leadOf over the unit's base, tokens.ts): the label's weight, slant and fill on
           // the unit's base style)
-          { text: lab.label!.drawn!, st: { ...baseOf(unit, given), ...(leadOf(lab.label)?.parts[0]?.st ?? {}) } }
+          {
+            text: lab.label!.drawn!,
+            st: { ...baseOf(unit, given, !!paper.bases), ...(leadOf(lab.label)?.parts[0]?.st ?? {}) },
+          }
         : null,
     lead: !!i.lead,
     cjkSize,

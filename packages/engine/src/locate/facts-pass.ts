@@ -21,6 +21,7 @@ import {
   type InkBox,
   labelParts,
   mostOf,
+  oneSize,
   pinnedOf,
   rightToLeft,
   shortSkipLines,
@@ -32,6 +33,7 @@ import {
   tailOf,
 } from './facts.ts'
 import { type ColumnCell, columnBoxes, type FreeWord, innerOf } from './columns.ts'
+import { frameOf, framePieces, type PaintedFrame } from './frames.ts'
 import { ON_BASE } from './geometry.ts'
 import { isInk, r2 } from './lines.ts'
 import { WORD_GAP } from './trails.ts'
@@ -91,6 +93,9 @@ interface FactsInput {
   /** the A pages whose lines' measures are TeX's frame (work.ts framesOnA): a measure there is the block's or its column's
    *  even where a line fills it */
   framed?: ReadonlySet<number>
+  /** each A page's closed painted paths that hold text (work.ts Index.paintedA): a member's frame (frames.ts frameOf), whose
+   *  painted lines stand beside its lines */
+  painted?: ReadonlyMap<number, readonly PaintedFrame[]>
 }
 
 function elsOf(content: readonly Piece[], out = new Map<string, Extract<Piece, { t: 'el' }>>()) {
@@ -115,6 +120,7 @@ interface FactsIndex {
   pieceB: Int32Array
   units: readonly InstrumentUnit[]
   framed: ReadonlySet<number>
+  painted: ReadonlyMap<number, readonly PaintedFrame[]>
   gA: (a: number) => DocGlyph
   /** a page's glyphs that are ink whose baseline is within [lo, hi], each with its global index */
   bandOn: (p: number, lo: number, hi: number) => { x0: number; x1: number; y: number; a: number }[]
@@ -163,6 +169,7 @@ function open({
   pieceB,
   units = ins.units,
   framed = new Set<number>(),
+  painted = new Map(),
 }: FactsInput): FactsIndex {
   const gA = (a: number): DocGlyph => {
     const p = (pageA[a] as number) - 1
@@ -282,6 +289,7 @@ function open({
     pieceB,
     units,
     framed,
+    painted,
     gA,
     bandOn,
     boxes,
@@ -475,6 +483,7 @@ function readElements(fx: FactsIndex, r: MemberReading): void {
   }
   // -- its elements
   const pieces = unit ? elsOf(unit.content) : new Map()
+  const classOf = new Map(unit?.classes ?? [])
   const breaks: [El, number][] = []
   const unplaced: [string, El][] = []
   for (const [id, el] of mem.elements) {
@@ -493,6 +502,15 @@ function readElements(fx: FactsIndex, r: MemberReading): void {
         ...(fill !== undefined ? { fill } : {}),
       }
     }
+    // (its size where its glyphs share one, a symbol's math font's too, that is not the member's (El.size: the typesetter draws
+    // it as its text at it), on an element it may draw as its text: one whose style is stated (no mark: a mark is drawn as its
+    // ink) and a symbol drawn as text where it stands, which states none. None for glyphs at several sizes, whose most common is
+    // the size of none of its runs (2608.00812v1's `(i)`, its parentheses at 10.38, its letter at 9.96), as a group of several
+    // sizes states none (docs/PDF-READER.md §18.114), nor for faked small capitals, drawn at their share (El.style.sc))
+    const c = classOf.get(id)
+    const asText = (el.style !== undefined && !c?.mark) || (c?.cls === 'symbol' && !!c.sym && !c.sym[1])
+    const one = asText && gs.length && mem.smallCaps?.get(id) === undefined ? oneSize(gs, true) : undefined
+    if (one !== undefined && r2(one) !== r2(mem.style.size)) el.size = r2(one)
     // (its own brackets: its first and last glyphs where they are a pair of them, "[" "]" around a citation's numbers:
     // the brackets a translation that brackets it takes)
     const pair = bracketsOf(gs)
@@ -542,8 +560,10 @@ function readElements(fx: FactsIndex, r: MemberReading): void {
     }
     // (a forced break: its element's kind, the instrument's reading of the source reader's statement, §18.75)
     if (pieces.get(id)?.kind === 'break') {
-      // (the line TeX ended at it: the last glyph of the unit's before its point on B, carried to A)
-      const j = lineBefore(placeAt.get(`${mem.unit}|${id}`) ?? 0)
+      // (the line TeX ended at it: the last glyph of the unit's before its point on B, carried to A; a unit made on A's, the last
+      // glyph of the line before TeX's point there, its maker's: ink-units.ts rule 3b)
+      const after = mem.breakAfter?.get(id)
+      const j = after !== undefined ? lineOf.get(after) : lineBefore(placeAt.get(`${mem.unit}|${id}`) ?? 0)
       if (j !== undefined) breaks.push([el, j])
       else unplaced.push([id, el])
     }
@@ -1109,9 +1129,22 @@ function readRoom(fx: FactsIndex, r: MemberReading): void {
     if (unit?.cell && side.wall) mem.room.wall = side.wall
   }
   // (the ink that stays beside its text lines, no member's, facts.ts staysOf: a cell's room is its walls', a figure text's
-  // its figure reading's)
+  // its figure reading's. Its frame's painted lines on each page too (frames.ts, docs/PDF-READER.md §18.112): a frame painted
+  // as one path round its text spans across its lines as a box, never beside them, and a single line was widened over its
+  // border; read by its lines, its sides stand beside them as the rules of a frame TeX set apart do)
   if (!unit?.cell && !unit?.figure) {
-    const stays = staysOf(mem.lines, staysOn, blockOf)
+    const sides = new Map<number, InkBox[]>()
+    const on = (p: number): readonly InkBox[] => {
+      let l = sides.get(p)
+      if (!l) {
+        const text = mem.lines.filter((q) => q[0] === p && !(q[9] & 1))
+        const f = frameOf(fx.painted.get(p), text)
+        l = f ? [...staysOn(p), ...framePieces(f, text)] : (staysOn(p) as InkBox[])
+        sides.set(p, l)
+      }
+      return l
+    }
+    const stays = staysOf(mem.lines, on, blockOf)
     if (stays) mem.room.stays = stays
   }
   // (a figure text's room as its figure reading tells it (figure-text.ts roomOf, its set's cut): along a level run,

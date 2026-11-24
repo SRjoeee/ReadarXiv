@@ -2,8 +2,9 @@
 // paper's headings, the title left out, three levels ranked among the depths it uses; each at its member's first line once a
 // part places it, else the head's outline's page, else the original's outline's; titled by its row once taken; the heading read
 // the last at or above the reading line.
-import type { Placed, Row, Unit } from '@readarxiv/format'
+import type { Part, Placed, Row, Unit } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
+import { membersOnPage } from '../src/compose/turn.ts'
 import { createContents, listedOf, type OutlineDoc, plainOf } from '../src/session/contents.ts'
 
 const id = (c: string) => c.repeat(64)
@@ -168,5 +169,23 @@ describe('the contents', () => {
     expect(c.headingAt(5, 0.5, topOf)).toBe(2)
     // (a top that cannot be told counts as read)
     expect(c.headingAt(1, 0.1, () => null)).toBe(0)
+  })
+})
+
+describe('the contents: the review of round 2 into main (#676)', () => {
+  it('places a heading TeX set turned where it stands on the page, its part’s frame turned onto it', () => {
+    // (Method's member in a frame turned a quarter (0, 1): its line in the frame from 400 to 460 along x, its band -152 to -140
+    // (x 140 to 152 on the page, y 400 to 460). Read from the part's flows alone it had no rectangle, and the heading being
+    // read started at its page's top)
+    const part = {
+      format: 1,
+      page: 2,
+      paper: { faces: { fonts: [] } },
+      flows: [],
+      frames: [{ dir: [0, 1], flows: [[placed(9, [2, 0, 400, 460, -150, -140, -152, 400, 460, 0])]] }],
+    } as unknown as Part
+    const c = createContents(UNITS, HEAD)
+    expect(c.place(membersOnPage(part))).toBe(true)
+    expect(c.firstRect(2)).toEqual([2, 140, 400, 152, 460])
   })
 })

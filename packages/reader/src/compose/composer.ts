@@ -48,6 +48,7 @@ import type { Groups } from './groups.ts'
 import { type LinkHooks, linkLayer } from './links.ts'
 import { createMarks, type MarkBox } from './marks.ts'
 import { committed, type Lay, type Laid, type Page, type Rows } from './page.ts'
+import { membersOnPage } from './turn.ts'
 import {
   cropGrid,
   cropsAway,
@@ -456,13 +457,15 @@ export function createComposer(o: ComposerOptions): Composer {
     if (!p && layer) {
       const l = layer
       p = l.part(n).then((part) => {
+        // (and its frames' members, the units TeX set turned (Part.frames): the toggles hold them as any member of their kind,
+        // and the registry holds each on the page, its geometry turned onto it (onPage), as the text layer matches a run to its
+        // member, the marks stand over it and a pane's sync finds it, in the page's coordinates)
         if (part && layer === l)
-          for (const f of part.flows)
-            for (const m of f)
-              if (!members.has(m.ord)) {
-                members.set(m.ord, m)
-                if (typeof m.text === 'string') toggleOf.set(m.text, toggleKind(m))
-              }
+          for (const m of membersOnPage(part))
+            if (!members.has(m.ord)) {
+              members.set(m.ord, m)
+              if (typeof m.text === 'string') toggleOf.set(m.text, toggleKind(m))
+            }
         return part
       })
       // (a part that cannot be read is asked again on a zoom, coming near or the next scroll)
@@ -1114,3 +1117,5 @@ export function createComposer(o: ComposerOptions): Composer {
 }
 
 export type { Laid }
+
+export { onPage } from './turn.ts'

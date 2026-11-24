@@ -3409,6 +3409,112 @@ describe('an element’s ink is what TeX set for it', () => {
     expect([formula.text, formula.style?.sc]).toEqual(['(HR)', undefined])
   })
 
+  it('states an element’s size where its glyphs share one apart from the member’s; of several, none (El.size)', () => {
+    // (the typesetter draws an element as its text at its stated size (TStyle.rel): `\\code`, every glyph at 8 in 10 pt text, at
+    // 8; 2608.00812v1's `(i)`, its parentheses at 10.38 and its letter at 9.96, at none of them: the most of its glyphs' size
+    // (El.style.size), the parentheses', drew its letter larger than printed. A group of several sizes states none,
+    // docs/PDF-READER.md §18.114. Its style's size stays its glyphs' most common: the bundle reads it for a macro's text)
+    const B = docOf([
+      {
+        lines: [
+          { text: 'see ', x: 72, y: 700 },
+          { text: '(i)', x: 96, y: 700 },
+          { text: ' and ', x: 120, y: 700 },
+          { text: 'code', x: 150, y: 700 },
+          { text: ' work', x: 180, y: 700 },
+          { text: ' ', x: 210, y: 700 },
+          { text: '↓', x: 214, y: 700, size: 8, font: 'ABCDEF+CMSY8' },
+        ],
+      },
+    ])
+    const page = B.pages[0]!
+    for (const k of [4, 6]) page.glyphs[k]!.size = 10.4
+    for (const k of [12, 13, 14, 15]) page.glyphs[k]!.size = 8
+    page.glyphs = pageGlyphsOf(page.glyphs)
+    const macro = (id: string, src: string) => ({ t: 'el' as const, id, kind: 'macro', src })
+    // (and an arrow drawn as text, `$\\downarrow$` in a math font at 8: its glyph's, though it states no style of its own)
+    const content = [
+      text('see '),
+      macro('1', '\\ii'),
+      text(' and '),
+      macro('3', '\\code'),
+      text(' work '),
+      { t: 'el' as const, id: '5', kind: 'math', src: '$\\downarrow$' },
+    ]
+    const ins = ownedBy(
+      B,
+      [
+        paraOf(content, [
+          ['1', { cls: 'umacro' }],
+          ['3', { cls: 'umacro' }],
+          ['5', { cls: 'symbol', sym: ['↓'] }],
+        ]),
+      ],
+      [
+        [
+          [0, T, -1],
+          [0, E, 1],
+          [0, T, -1],
+          [0, E, 3],
+          [0, T, -1],
+          [0, T, -1],
+          [0, E, 5],
+        ],
+      ],
+    )
+    const L = locate(ins, B, align(B, B))
+    expect(elementOf(L, '3').size).toBe(8)
+    expect(elementOf(L, '5').size).toBe(8)
+    expect(elementOf(L, '1').size).toBeUndefined()
+    expect(elementOf(L, '1').style?.size).toBe(10.4)
+  })
+  // RECORDED, NOT BUILT (Devin on #676; #675's second review counted it: 8 text-drawn elements in sized groups over the lab's
+  // 245 papers, 0 of them at the member's size; it fails until it is): an element whose glyphs TeX set at the member's size
+  // inside a group stated at another states no El.size (stated only apart from the member's), and the typesetter draws it at
+  // the group's
+  it.fails('states the size of an element TeX set at the member’s size inside a group of another size (El.size)', () => {
+    const B = docOf([
+      {
+        lines: [
+          { text: 'see ', x: 72, y: 700 },
+          { text: 'small words ', x: 96, y: 700, size: 8 },
+          { text: 'code', x: 150, y: 700 },
+          { text: ' work', x: 180, y: 700 },
+        ],
+      },
+    ])
+    const content = [
+      text('see '),
+      {
+        t: 'span' as const,
+        id: '1',
+        style: 'other' as const,
+        open: '{\\small ',
+        close: '}',
+        content: [text('small words '), { t: 'el' as const, id: '3', kind: 'macro', src: '\\code' }],
+      },
+      text(' work'),
+    ]
+    const ins = ownedBy(
+      B,
+      [
+        {
+          ...paraOf(content, [['3', { cls: 'umacro' }]]),
+          spans: [['1', { cmd: 'small', style: { role: 'serif', size: 8 } }]],
+        },
+      ],
+      [
+        [
+          [0, T, -1],
+          [0, T, -1],
+          [0, E, 3],
+          [0, T, -1],
+        ],
+      ],
+    )
+    const L = locate(ins, B, align(B, B))
+    expect(elementOf(L, '3').size).toBe(10)
+  })
   it('reads the separation to the next member on the row from the member’s ink end, its element’s box with it (§18.60)', () => {
     // (2609.20976v1 p1, JCAP: "Gautam Bhuyan," then his ORCID icon, an element of his unit (a box), then the next name. The join
     // was read from his glyphs' ink end, the icon left out: the icon's crop travels with the name, so the next one was laid the
@@ -4619,11 +4725,11 @@ describe('locate: the face TeX set a unit’s own text in, outside its groups (S
     const tm = partOf(instrumentOf(th.B, [unitWith(tc, { spans: [['1', { cmd: 'emph' }]] })], [[0]]), th.B, th.A)
     expect(tm.style.slant).toBe(1)
   })
-  it('keeps a unit bold whose every letter a bold group holds, its marks between them regular (2602.23285v2’s author line)', () => {
-    // (`\\textbf{Yasuko Matsubara}♣, \\textbf{Jimeng Sun}♡, …`: the commas between the names are TeX's regular, the names'
-    // groups are not `must`, and Microsoft's stored reply moves them to the end, empty. Its own text is its letters', as
-    // today's reader reads it (layer2.mjs measuredStyle, letters and digits alone): none outside the bold groups, so the
-    // unit's face is theirs; read off its commas it was regular, and the names were drawn regular)
+  it('reads a unit whose every letter a bold group holds bold, its marks between them regular: two bases (2602.23285v2’s author line)', () => {
+    // (`\\textbf{Yasuko Matsubara}♣, \\textbf{Jimeng Sun}♡, …`: on arXiv's page the names NimbusRomNo9L-Medi, the commas between
+    // them NimbusRomNo9L-Regu. A translated letter stands for the original's letters and a translated mark for its marks
+    // (PDF-READER §18.114): the letters' base bold (Style.bold), the marks' regular (Placed.markFace), so a reply that drops the
+    // names' groups draws them bold and its separators regular, as TeX set them (2602.23285v2-ja p1, its stored reply)
     const lines = ['Yasuko Matsubara, Jimeng Sun, Takashi']
     const { B, A } = faced(lines, (n, x) => (x === at(16) || x === at(28) ? undefined : 'CMBX10'))
     const content = [
@@ -4642,6 +4748,7 @@ describe('locate: the face TeX set a unit’s own text in, outside its groups (S
     })
     const m = partOf(instrumentOf(B, [u], [[0]]), B, A)
     expect(m.style.bold).toBe(1)
+    expect(m.markFace).toEqual({})
   })
   it('reads a unit with no text of its own off its text outside the groups that name a face (RevTeX, every field a group)', () => {
     const lines = ['S. Weinberg, Physical Review Letters of the', 'Society 40, 223 (1978)']

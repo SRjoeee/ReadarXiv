@@ -1195,6 +1195,54 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     expect(placed.plain).toBe('Task: list all the names')
   })
 
+  it('states no size of its own for a figure text’s run whose glyphs stand at several sizes: ink small capitals, drawn at the member’s (2609.19644v1’s "PREDOPT")', () => {
+    // (a run in another face whose capitals TeX set at the size and its small capitals smaller: its median the small capitals',
+    // drawn at it, its capitals stood smaller than printed. A group states a size only where its glyphs share one)
+    const A = docOf([
+      {
+        lines: [
+          'a paragraph whose word',
+          { text: 'PRED list all the names', y: 640, form: true, font: 'ABCDEF+Helvetica' },
+          { text: 'continues on its last line', y: 600 },
+        ],
+      },
+    ])
+    const at = 'a paragraph whose word'.length
+    A.pages[0]!.glyphs.slice(at, at + 4).forEach((g, i) => {
+      Object.assign(g, { font: 'ABCDEF+Helvetica-Bold', base: 'Helvetica-Bold', ...(i > 0 ? { size: 8 } : {}) })
+    })
+    const { B, ins } = finalOf(A, [unitOf('para', 'a paragraph whose word continues on its last line')])
+    const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
+    const fig = L.members[1]!
+    const addOn = {
+      bytes: new Uint8Array([1, 2, 3]),
+      pages: new Map([[1, { ok: true }]]),
+      groups: new Set(L.groups[0]!.glyphs.filter((g): g is string => g !== null)),
+      ocgs: new Map(),
+      lost: new Set(),
+      stats: {},
+    } as unknown as AddOn
+    const part = [
+      ...bundle({
+        ins,
+        located: L,
+        addOn,
+        original: new Uint8Array(10),
+        paper: { id: '2501.00001', version: 1, pages: 1 },
+        made: 'test',
+      }),
+    ].find((x) => x.kind === 'part')!
+    const placed = read('part', part.bytes, part.digest)
+      .flows.flat()
+      .find((m) => m.kind === 'figure')!
+    const spans = new Map(placed.spans)
+    expect(spans.size).toBe(1)
+    const [style] = [...spans.values()].map((x) => x.style)
+    expect(style).toMatchObject({ role: 'sans', bold: 1, design: 'Helvetica-Bold' })
+    expect(style?.size).toBe(fig.style.size)
+    expect(placed.style.size).toBe(fig.style.size)
+  })
+
   it('states a figure text’s runs by face and by fill: TeX’s line in a picture, a label and its address in the link’s colour, the label a group whose fill it states (2611.03178v1)', () => {
     // (the class's tcolorbox, which pgf draws: "Page:" in \sffamily\bfseries, black, then \texttt's address in the link's colour,
     // TeX's one line: one figure text, its own style the address's (most of its glyphs), the label a group in its face and its
@@ -1532,6 +1580,61 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     expect(note.lines[0]![2]).toBe(76)
   })
 
+  it('keeps the forced line ends TeX set inside a unit made on A: a break element at each of its points, its line stated', () => {
+    // (a note no source unit owns, three lines `a \\ b \\ c` as TeX set them: \@gnewline's point `kb<n>` after each line's last
+    // glyph, B's marks (marks.ts BREAKS_TEX). Read off the ink alone, its lines run together as one paragraph's, and the
+    // translation of three lines was laid head to tail in two (2604.10456v1 p1's note). A short line is no fact of a break: a
+    // wrap before a long word ends one as short; TeX's point is)
+    const lines = [
+      'Body text here',
+      { text: 'Work done at a lab.', x: 72, y: 688 },
+      { text: 'Project lead.', x: 72, y: 676 },
+      { text: 'Corresponding authors.', x: 72, y: 664 },
+    ]
+    const one = 14,
+      two = one + 'Work done at a lab.'.length,
+      three = two + 'Project lead.'.length
+    const made = (kb: boolean) => {
+      const { B, A } = pair({
+        lines,
+        points: [
+          ['bs1', 0],
+          ['be1', three + 'Corresponding authors.'.length],
+        ],
+      })
+      if (kb)
+        B.pages[0]!.marks = {
+          paras: [],
+          paraEnds: [],
+          regions: [],
+          pictures: [],
+          breaks: [
+            { name: 'kb1', glyph: two, box: 0 },
+            { name: 'kb2', glyph: three, box: 0 },
+          ],
+        }
+      const L = locate(instrumentOf(B, [unitOf('para', 'Body text here')], [[0, -1, -1, -1]]), A, align(B, A), {
+        pages: rawOf(A),
+      })
+      const note = L.members.find((m) => m.kind === 'inkorphan')!
+      return { content: L.units[note.unit]!.content, note }
+    }
+    const brk = (id: string): Piece => ({ t: 'el', id, kind: 'break', src: '\\\\' })
+    const forced = made(true)
+    expect(forced.content).toEqual([
+      text('Work done at a lab.'),
+      brk('1'),
+      text(' Project lead.'),
+      brk('3'),
+      text(' Corresponding authors.'),
+    ])
+    // (each break's line the one TeX ended at it, as a source unit's break states it: El.ends)
+    const els = new Map(forced.note.elements)
+    expect(els.get('1')?.ends?.[0]).toBe(0)
+    expect(els.get('3')?.ends?.[0]).toBe(1)
+    // (where TeX set no point, the lines are one paragraph's, as before: its lines wrapped by TeX for all the ink tells)
+    expect(made(false).content).toEqual([text('Work done at a lab. Project lead. Corresponding authors.')])
+  })
   it('makes the text of a float of a type with no counter a note, the page’s own text (NeurIPS’s notice); a figure’s float none', () => {
     // (NeurIPS sets "Preprint. Under review." in \\@float{noticebox}[b], a float type with \\ftype@noticebox and no counter: no
     // \\caption can number it, so TeX says it is no figure, table or algorithm. The marked compile states it, `fn<n>` beside the

@@ -264,9 +264,10 @@ export const LINE_FLAG = Object.freeze({ KEPT: 1, PINNED: 2, SHORTSKIP: 4, RTL: 
  *  whether it is drawn raised where the source reads as a symbol (phClass2's: the tokens' class; a formula of symbols alone is
  *  `other` with a `sym`), `mark` a footnote's mark (drawn raised whatever its rendering), `literal` a text piece (TeX sets its
  *  characters as written: a code or URL mark; no formula). One of no ink (`ink` []) of a class drawn from its ink (cite, num,
- *  other, display, macro, umacro) states which of three it is: `text` '' TeX set nothing for it; `keep` TeX set it outside the
- *  unit's text (before its start), whatever it set never erased with the unit; neither, its ink was not found, and the
- *  typesetter leaves the unit the original's */
+ *  other, display, macro, umacro) states which of three it is: `text` '' TeX set nothing for it (or what it set stands in the ink
+ *  of the run an author's first piece after its name holds, no point of TeX's between them: drawn there, once); `keep` TeX set it
+ *  outside the unit's text (before its start), whatever it set never erased with the unit; neither, its ink was not found, and
+ *  the typesetter leaves the unit the original's */
 export const El = z.object({
   kind: ElKind,
   unknown: flag.optional(),
@@ -280,6 +281,10 @@ export const El = z.object({
   // its text in runs of one fill (0xRRGGBB, -1 none told), where its glyphs hold more than one: each space the fill before it
   fills: z.array(z.tuple([z.string(), int])).optional(),
   style: Style.optional(),
+  // the size its glyphs share where it is not its member's (`style`'s size is their most common, of several too): an element
+  // drawn as its text is drawn at it, a group's size drawn so (docs/PDF-READER.md §18.114); absent where its glyphs stand at
+  // several sizes or at the member's, and for faked small capitals (`style.sc`). A typesetter of before strips it (FORMAT stays)
+  size: num.optional(),
   brackets: z.tuple([Ink, Ink]).optional(),
   leads: flag.optional(),
   after: z.string().optional(),
@@ -382,7 +387,8 @@ export const Label = z.object({
  *  a figure text's depth under its baseline of the nearest stroke under its text (S.figures: a translation that reaches it is
  *  crowded). `runs`: the room under each run of its text lines (to its last line on a page or in a column, over a kept row of
  *  its own, over another's ink TeX set between two of its lines), each [that line's index, the depth under its baseline of the
- *  next ink across the run (from its lines' own start to their column's end: a glyph's baseline, a box's top), the depth under
+ *  next ink across the run (from its lines' own start to their column's end: a glyph's baseline, a box's top, the highest line
+ *  wholly under it of the frame a reader sees round the member's lines, docs/PDF-READER.md §18.112), the depth under
  *  it of TeX's text block bottom in its column there (the foot of the box TeX shipped the column's text in)], stated where TeX
  *  states that foot; `sep` TeX's normal paragraph separation where its paragraph ends, \baselineskip and \parskip, natural (a
  *  heading's, under its title set on lines of its own: its \@startsection after-skip and the \baselineskip and \parskip around
@@ -453,9 +459,9 @@ export const Room = z.object({
       num,
     ])
     .optional(),
-  // (the ink that stays beside its text lines: ink no member owns (a glyph no unit claims, a rule or an image no member's) on a
-  // line's band within its text block, wholly before the line's start or after its end, each side's pieces as one box: [that
-  // line's index, x0, y0, x1, y1]. TeX set it on the line and no translation replaces it: a translation's line laid over it,
+  // (the ink that stays beside its text lines: ink no member owns (a glyph no unit claims, a rule or an image no member's, the
+  // painted lines of the member's frame, §18.112) on a line's band within its text block, wholly before the line's start or after
+  // its end, each side's pieces as one box: [that line's index, x0, y0, x1, y1]. TeX set it on the line and no translation replaces it: a translation's line laid over it,
   // borrowed or not, keeps off it. A unit's end mark (El.end: amsthm's QED box TeX pushed to its last line's end) is the
   // unit's, claimed and stated as its element, no stay; a part made before states it here)
   stays: z.array(z.tuple([int, num, num, num, num])).optional(),
@@ -482,6 +488,13 @@ export const Placed = z.object({
   // `read`, the pitch of its lines on A (their gaps' median, a gap that rule opened among them) or 1.2 of its size
   lead: num,
   style: Style,
+  // the face TeX set the unit's marks in outside every group (its punctuation, separators and symbols there), where it is not
+  // its letters' (`style`'s weight and slant, the face of its letters outside every group): a translated character outside every
+  // group is drawn in the one of the two bases it stands for, a letter in `style`'s, a mark in this (@readarxiv/text
+  // isLetterOrDigit, one reading). An author line `\textbf{…}, \textbf{…}` whose reply drops the names' groups draws its names
+  // bold and its commas regular, as TeX set them (docs/PDF-READER.md §18.114). Absent, a mark is drawn as a letter is; a
+  // typesetter of before strips it and draws as it did, so FORMAT stays
+  markFace: z.object({ bold: flag.optional(), slant: z.literal(1).optional() }).optional(),
   align: z.enum(['j', 'l', 'c', 'r']),
   // a table cell of several lines set in a box of its cell (a \makecell's, a \shortstack's, a nested one-column tabular's): how
   // its lines stand in that box, read off A (their left edges, middles or right edges together; all three, the cell's class),
@@ -612,10 +625,27 @@ export const Part = z.object({
     named: z.array(Named).optional(),
     persons: z.array(Person).optional(),
     splits: z.array(Split).optional(),
+    // 1: each member's style is its letters' base outside every group that sets it, and its groups' faces are stated against it
+    // (Placed.style, SpanAt.style, Placed.markFace: docs/PDF-READER.md §18.114). Absent, a part made before (PIPELINE 119): its
+    // style is the face of its glyphs whole, its groups' among them, which a typesetter reads the groups out of by its own count
+    // of the row's characters under them, as it did, and its stated sizes its glyphs' most common, of several too, which it
+    // reads none of; so a part stored before is laid as it was (FORMAT stays)
+    bases: z.literal(1).optional(),
   }),
   flows: z.array(z.array(Placed)),
   ties: z.array(Tie).optional(),
   links: z.array(Link).optional(),
+  // the units of the page whose text TeX set turned (a box set level and turned: \rotatebox, a sideways float), by turn: `dir`
+  // the turn's direction on the page (the frame's x axis, a unit vector, the page's y up), and the frame's flows and ties, each
+  // member stated in the frame, the page's coordinates turned back by `dir` about the page's origin ((x, y) of the page is
+  // (ux x + uy y, -uy x + ux y) there), its lines' page the page's, and so its elements' ink and its label's (El.ink, Label.ink
+  // and its parts): what is not text in the unit is the original's turned ink, cut as a crop and drawn moved along the turn. A
+  // typesetter lays a frame as it lays a part's flows, and a reader draws it through its turn. A field of its own: a reader of
+  // before strips it and leaves those units the original's,
+  // their groups on, as it did when no part held them (FORMAT stays: ARCHITECTURE.md §5; docs/PDF-READER.md §18.113)
+  frames: z
+    .array(z.object({ dir: z.tuple([num, num]), flows: z.array(z.array(Placed)), ties: z.array(Tie).optional() }))
+    .optional(),
 })
 
 // ---------------------------------------------------------------- what opens a paper

@@ -38,7 +38,7 @@ const member = (o: Partial<Placed> = {}): Placed => ({
 const part = (m: Placed): Part => ({
   format: 1,
   page: 1,
-  paper: { faces: { fonts: [['NimbusRomNo9L-Regu', 100]] } },
+  paper: { faces: { fonts: [['NimbusRomNo9L-Regu', 100]] }, bases: 1 },
   flows: [[m]],
 })
 const rowsOf = (list: Row[], done = false): Rows => {
@@ -2187,13 +2187,13 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     expect(bx0).toBeGreaterThanOrEqual(140 - 1e-9)
     expect(ax1).toBeGreaterThan(137.5)
   })
-  it('keeps italic a unit a declaration at its start sets italic: its style is the state after it, not one to toggle', () => {
-    // (2608.25210v2-zh p4 t72-t75, cells "{\em response_equality_human}": the part states the cell's style italic (A's glyphs),
-    // and its row's \em toggled that base to upright: italic share 0 where today's 0.73-0.78. Today's base was its glyphs'
-    // outside its styled pieces (measuredOf); v2's, its style less what its own groups and declarations set)
+  it('keeps italic a unit a declaration at its start sets italic: its base the state before it, the part’s, toggled', () => {
+    // (2608.25210v2-zh p4 t72-t75, cells "{\em response_equality_human}": its glyphs italic; its row's \em toggled an italic
+    // base to upright: italic share 0 where today's 0.73-0.78. The part states the base as TeX's glyphs show it before the
+    // switch, the \em run's slant turned back (locate/group-style.ts, docs/PDF-READER.md §18.114): upright, which the \em turns)
     const m = member({
       kind: 'cell',
-      style: { role: 'serif', size: 10, design: 'NimbusRomNo9L-ReguItal', slant: 1 },
+      style: { role: 'serif', size: 10, design: 'NimbusRomNo9L-ReguItal' },
       lines: [[1, 0, 72, 140, 700, 707, 698, 72, 300, 0, 10]],
       room: { below: 0, next: 300 },
       els: [['3', { bare: 1, cmd: 'em', kind: 'zero', ink: [] }]],
@@ -2524,6 +2524,36 @@ describe('an element drawn as the page’s text in the font state TeX set its gl
   const liveplan = (x = 100) => el('LivePlan', x, { role: 'serif', size: 10, sc: 0.7, design: 'NimbusRomNo9L-Regu' })
   it('draws an element in its own faked small capitals in a paragraph: its capitals at the run’s size, its small ones at its share', () => {
     expect(sizes(member({ els: [['1', liveplan()]] }), '1')).toEqual([
+      ['L', 1],
+      ['IVE', 0.7],
+      ['P', 1],
+      ['LAN', 0.7],
+    ])
+  })
+  it('draws an element at the size TeX set its glyphs at where it states one apart from the run’s: a `\\small` macro’s text', () => {
+    // (a paper's macro setting a name `{\\small\\texttt{…}}` at 8 in 10 pt text, a citation set larger than its cell: drawn at the
+    // run's size, its stated size dropped (El.style.size), as a figure label's run of its own size was; faked small capitals
+    // state their small letters' size and the share they are set at, El.style.sc: drawn as before, at the share)
+    expect(
+      sizes(
+        member({ els: [['1', { ...el('ResNet', 100, { role: 'mono', size: 8, design: 'CMTT8' }), size: 8 }]] }),
+        '1',
+      ),
+    ).toEqual([['ResNet', 0.8]])
+    // (its size stated, no style of its own: at its size, in the run's face)
+    expect(sizes(member({ els: [['1', { ...el('ResNet', 100), size: 8 }]] }), '1')).toEqual([['ResNet', 0.8]])
+    // (its style's size alone, its glyphs' most common, of several perhaps: drawn at the run's)
+    expect(sizes(member({ els: [['1', el('ResNet', 100, { role: 'mono', size: 8, design: 'CMTT8' })]] }), '1')).toEqual(
+      [['ResNet', 1]],
+    )
+    expect(
+      sizes(
+        member({
+          els: [['1', el('LivePlan', 100, { role: 'serif', size: 7, sc: 0.7, design: 'NimbusRomNo9L-Regu' })]],
+        }),
+        '1',
+      ),
+    ).toEqual([
       ['L', 1],
       ['IVE', 0.7],
       ['P', 1],

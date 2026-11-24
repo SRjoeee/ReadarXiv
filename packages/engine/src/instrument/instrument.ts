@@ -467,20 +467,39 @@ export function piecesOf(
   return stack.length ? stack[0]!.outer : level
 }
 /** each source unit's text glyphs on B (the owners' ROLE.text of it), in B's stream order (page by page, each page's in its
- *  order), by unit index: `doc` B's pages as read, `owners` the instrument's glyph owners by page */
+ *  order), by unit index: `doc` B's pages as read, `owners` the instrument's glyph owners by page, and `turned` the owners of
+ *  each page's glyphs TeX set turned (a unit whose text TeX set turned has its glyphs there: its groups' sizes read off them
+ *  as a level unit's are), each set among the level ones by its place in the stream (DocTurned.at), as a style glyph */
 export function textGlyphsOf<G>(
-  doc: { pages: readonly { glyphs: readonly G[] }[] },
+  doc: {
+    pages: readonly {
+      glyphs: readonly G[]
+      turned?: readonly { u: string; base: string; size: number; fill?: number; at: number }[]
+    }[]
+  },
   owners: readonly Owners[],
-): Map<number, G[]> {
-  const out = new Map<number, G[]>()
+  turned: readonly Owners[] = [],
+): Map<number, (G | { u: string; base: string; size: number; fill: number })[]> {
+  const out = new Map<number, (G | { u: string; base: string; size: number; fill: number })[]>()
+  const push = (u: number, g: G | { u: string; base: string; size: number; fill: number }) =>
+    (out.get(u) ?? out.set(u, []).get(u)!).push(g)
   doc.pages.forEach((pg, p) => {
     const O = owners[p]
     if (!O) return
+    const T = turned[p]
+    const tg = pg.turned ?? []
+    let k = 0
+    const turnedTo = (at: number) => {
+      for (; k < tg.length && tg[k]!.at <= at; k++)
+        if (T && T.role[k] === ROLE.text && T.unit[k]! >= 0)
+          push(T.unit[k]!, { u: tg[k]!.u, base: tg[k]!.base, size: tg[k]!.size, fill: tg[k]!.fill ?? -1 })
+    }
     pg.glyphs.forEach((g, j) => {
+      turnedTo(j)
       if (O.role[j] !== ROLE.text || O.unit[j]! < 0) return
-      const u = O.unit[j]!
-      ;(out.get(u) ?? out.set(u, []).get(u)!).push(g)
+      push(O.unit[j]!, g)
     })
+    turnedTo(Number.POSITIVE_INFINITY)
   })
   return out
 }
@@ -490,10 +509,13 @@ const COMMAND = /^\\[A-Za-z@]/
  * What TeX set for a source unit's groups that their source does not say, stated (packages/engine/src/marks/faces.ts over its
  * text glyphs on B, `glyphs`): a group whose command names no style the table knows (its style `other`: a paper's macro, as
  * 2608.25210v2's `\topic{…}` that sets its argument `{\bf #1.}`), set in a face that is not the face around it, states that
- * face (its `style` named for what it changes, its group's facts in `spans` the face's Style); any group the stop TeX set at its
- * end that its source does not write (`stop`). Then the unit's run-in labels `must` (runIns), each group of a face so read a
- * style group. `textOf` the text TeX sets for an element whose glyphs are the unit's text (a text macro's, PieceClass `text`).
- * In place; returns `spans` (spansOf's, by open piece id) with the faces stated
+ * face (its `style` named for what it changes, its group's facts in `spans` the face's Style); any group, of any command or
+ * none, set at another size than it is drawn at by default states its Style with that size in `spans` (its own glyphs' face
+ * and size; its span's style kept as its source names it: the unit's content, and so its wire, do not move); any group the
+ * stop TeX set at its end that its source does not write (`stop`). Then the unit's run-in labels `must` (runIns), each group
+ * of a face so read a style group. `textOf` the text TeX sets for an element whose glyphs are the unit's text (a text macro's,
+ * PieceClass `text`). In place; returns `spans` (spansOf's, by open piece id, with every group a style is stated for, in
+ * the order of their open pieces) with the faces and sizes stated
  */
 export function marksOf(
   content: Piece[],
@@ -506,13 +528,31 @@ export function marksOf(
   const styles = new Map<string, SpanClass['style']>()
   for (const [s, f] of facts) {
     if (f.stop) s.stop = f.stop
-    if (!f.style || s.style !== 'other' || !COMMAND.test(s.open ?? '')) continue
-    s.style = f.change!
-    faced.add(s)
-    styles.set(s.id, f.style)
+    if (!f.style) continue
+    if (f.change && s.style === 'other' && COMMAND.test(s.open ?? '')) {
+      s.style = f.change
+      faced.add(s)
+      styles.set(s.id, f.style)
+    } else if (f.sized) styles.set(s.id, f.style)
   }
   runIns(content, faced)
-  return spans.map(([id, x]) => (styles.has(id) ? [id, { ...x, style: styles.get(id) }] : [id, x]))
+  const out = spans.map(([id, x]): [string, SpanClass] =>
+    styles.has(id) ? [id, { ...x, style: styles.get(id) }] : [id, x],
+  )
+  const listed = new Set(spans.map(([id]) => id))
+  for (const [id, style] of styles) if (!listed.has(id)) out.push([id, { style }])
+  if (out.length === spans.length) return out
+  // (in the order of their open pieces in the content)
+  const at = new Map<string, number>()
+  const walk = (ps: readonly Piece[]) => {
+    for (const p of ps)
+      if (p.t === 'span') {
+        at.set(p.id, at.size)
+        walk(p.content)
+      }
+  }
+  walk(content)
+  return out.sort((a, b) => (at.get(a[0]) ?? Infinity) - (at.get(b[0]) ?? Infinity))
 }
 
 // ---- the layer's reading of an element's source: texToText2, phClass2, textSymbol and phClassProven, by which the part
@@ -2252,6 +2292,7 @@ export async function instrumentOf({
     texts: shown,
     inkless: inkless === null ? null : new Set(inkless),
     names: paper.theoremNames ?? null,
+    turned: true,
   })
 
   // ---- the units
@@ -2335,7 +2376,9 @@ export async function instrumentOf({
           }
         : {}),
       ...(align.has(i) ? { align: align.get(i) } : boxed.has(i) ? { align: boxed.get(i) } : {}),
-      ...(unhidden === 'marks' ? { why: 'marks' } : {}),
+      // (why the ownership left it the original's, its own reason: its marks, or its glyphs spelling no source of its (`spell`),
+      // or its range across pages it cannot bound (`across`); the prepare's dump reads it where no glyph of B is the unit's)
+      ...(unhidden === 'marks' || unhidden === 'spell' || unhidden === 'across' ? { why: unhidden } : {}),
     })
   })
   for (let i = units.length; i < inkBase; i++) {
@@ -2391,8 +2434,21 @@ export async function instrumentOf({
     for (let j = 0; j < pg.boxes.length / 4; j++) set(X, j, brow[j], pieceX)
     glyphs.push(G)
     boxes.push(X)
-    // (no source unit owns a turned glyph: own/own.ts reads none; a figure's turned text is locate's, on arXiv's page)
-    turnedOwners.push(ownersOf(pg.turned?.length ?? 0))
+    // (a turned glyph a source unit's text, placeholder or label where its text TeX set turned (own/own.ts TURNED), each
+    // placeholder's piece by the points round its box as a box's; any other turned glyph is no source unit's, a figure's turned
+    // text locate's, on arXiv's page)
+    const T = ownersOf(pg.turned?.length ?? 0),
+      trow = own.turned[i] ?? []
+    if (trow.some((g) => g !== null)) {
+      const atBox = new Map<number, string | null>()
+      pg.turned!.forEach((t, j) => {
+        if (t.box >= 0) atBox.set(t.box, trow[j] ?? null)
+      })
+      const byBox = piecesByPoints(pg.points, pg.boxes.length / 4, (b) => atBox.get(b), 'box')
+      const pieceT = Int32Array.from(pg.turned!, (t) => (t.box >= 0 ? byBox[t.box]! : -1))
+      for (let j = 0; j < trow.length; j++) set(T, j, trow[j], pieceT)
+    }
+    turnedOwners.push(T)
   })
   // (the ink TeX set for a unit's tail pieces past its end point that no point of theirs bounds, its glyphs no unit's that spell
   // what TeX sets for each; and the text macros there whose ink it does not find, whose probe's text then says no more than
@@ -2441,7 +2497,7 @@ export async function instrumentOf({
     if (i < units.length) stateDisplays(out[i]!.content, ids, units[i]!.pieces, classesBy[i])
   // (each source unit's groups as TeX set them, read off its text glyphs on B, and its run-in labels: marksOf. The unit's id is
   // its source's, none of these)
-  const textGlyphs = textGlyphsOf(read.doc, glyphs)
+  const textGlyphs = textGlyphsOf(read.doc, glyphs, turnedOwners)
   units.forEach((u, i) => {
     // (an element whose glyphs are the unit's text: a text macro, its text the probe's; a text symbol, its character, own/own.ts)
     const textOf = (el: Extract<Piece, { t: 'el' }>) =>
