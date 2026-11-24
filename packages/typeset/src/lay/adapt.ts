@@ -869,6 +869,10 @@ export function adapt(i: AdaptInput): Adapted {
     wide,
     ...(rowStart ? { rowStart } : {}),
     ...(lineOf ? { line: lineOf } : {}),
+    // (a run-in title, TeX's gap under it `runin` (\@sect's test), alone on its last row: its lines are the first of the
+    // paragraph after it. One whose text joins it on its row (the part's join, `after.join`) has that paragraph there; a unit
+    // under that row is a new paragraph)
+    ...(m.room?.gap?.[0] === 'runin' && !after?.join ? { runin: true } : {}),
   }
   return { member }
 }
