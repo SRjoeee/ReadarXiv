@@ -24,6 +24,7 @@ import {
   markUnits,
   NO_ARG_COMMANDS,
   START_LEAD,
+  tailPiece,
   writtenSource,
 } from '../source/latex-front.ts'
 import { textless } from '../source/arg-roles.ts'
@@ -76,6 +77,9 @@ export type AheadSample = {
   lead: string
   ahead: true
   own?: undefined
+  /** a pair's tail argument's sample (tailSamples): the call as the paper writes it (`src`) is `before`, the tail's braces
+   *  round `inner`, then `after` */
+  tail?: { before: string; inner: string; after: string }
 }
 /** a sample of the mark probe */
 export type ProbeSample = CommandSample | AheadSample
@@ -181,6 +185,10 @@ export const RULE = /^\s*\\rule\b/
 export function classOf(piece: PieceLike | null | undefined): MarkClass | null {
   if (piece?.t === 'nested') return 'footnote'
   if (piece?.t !== 'ph') return null
+  // (a pair's tail argument: a paper's macro's argument, set by its body as the paper's macro sets it (its marks inside its
+  // braces, on TeX's answer alone: tailSamples, layoutMarking), no command of its own that reads ahead (LOOKS_AHEAD) or that the
+  // probe asks about (inkSamples, betweenOf))
+  if (tailPiece(piece)) return 'macro'
   const src = piece.src ?? ''
   // (a forced break sets no ink, and a mark there would move a line: as the source reader states it (forcedBreak, `\\\\` and a
   // paper's row-ending macro inside a grid cell, §18.75), among what INVISIBLE reads)
@@ -334,7 +342,7 @@ export function probeSamples(units: readonly Unit[], complete: CompleteGiven | n
       if (!fronts.has(key) && fronts.size < FRONT_PROBE_MAX)
         fronts.set(key, { command: key, src: p.src!, call: false, own: true, front: true })
     }
-  return [...seen.values(), ...own.values(), ...fronts.values(), ...aheadSamples(units)]
+  return [...seen.values(), ...own.values(), ...fronts.values(), ...aheadSamples(units), ...tailSamples(units)]
 }
 /** the key of a front piece's answer in the probe's switches: its source as it stands, a key no command's name can be */
 export const frontKey = (src: string): string => `front ${src}`
@@ -349,7 +357,8 @@ function betweenOf(u: Unit, isFront: boolean): number[] {
   const first = u.pieces.findIndex(lettered),
     last = u.pieces.findLastIndex(lettered),
     out: number[] = []
-  for (let k = first + 1; first >= 0 && k < last; k++) if (BETWEEN_TEXTS(u.pieces[k]!)) out.push(k)
+  for (let k = first + 1; first >= 0 && k < last; k++)
+    if (BETWEEN_TEXTS(u.pieces[k]!) && !tailPiece(u.pieces[k])) out.push(k)
   return out
 }
 /** a source the probe sets in a box: no comment or parameter sign, no \verb, at most 400 code units (probeSamples' `fit`) */
@@ -388,6 +397,71 @@ export function aheadSamples(units: readonly Unit[]): AheadSample[] {
         key = aheadKey(m.src, gap, next.src!, lead)
       if (!out.has(key))
         out.set(key, { key, src: m.src, gap, follows: next.src!, math: classOf(next) === 'math', lead, ahead: true })
+    }
+  }
+  return [...out.values()]
+}
+/** the call a pair's tail argument at `k` of a unit's pieces belongs to (source/latex-front.ts tailGroups): its source as the
+ *  paper writes it, from its opening to its last tail, the tail's place among its tails and the source before and after it
+ *  there; null where a piece inside the pair is no text, placeholder or pair (a nested unit) */
+function tailCall(
+  pieces: readonly Piece[],
+  k: number,
+): { src: string; n: number; before: string; after: string } | null {
+  let c = k - 1
+  while (c >= 0 && tailPiece(pieces[c])) c--
+  const close = pieces[c]
+  if (close?.t !== 'close') return null
+  const o = pieces.findLastIndex((q, j) => j < c && q.t === 'open' && q.id === close.id)
+  if (o < 0) return null
+  let z = k
+  while (z + 1 < pieces.length && tailPiece(pieces[z + 1])) z++
+  const srcOf = (q: Piece): string | null =>
+    q.t === 'text' ? (q.src ?? q.s) : q.t === 'ph' || q.t === 'open' || q.t === 'close' ? (q.src ?? '') : null
+  const parts = pieces.slice(o, z + 1).map(srcOf)
+  if (parts.some((x) => x === null)) return null
+  const at = k - o
+  return {
+    src: parts.join(''),
+    n: k - c - 1,
+    before: parts.slice(0, at).join(''),
+    after: parts.slice(at + 1).join(''),
+  }
+}
+/** the key of TeX's answer for a pair's tail argument (tailSamples): the marks' lead, the call and the tail's place among its
+ *  tails; never a control word */
+export const tailKey = (src: string, n: number, lead = ''): string => `${lead}${src}#tail${n}#`
+/**
+ * The pairs' tail arguments' samples (source/latex-front.ts tailGroups: `\authorname{Ann Lee}{1,2}`'s `{1,2}`): each call
+ * with a tail, once per tail, in the paper's order, at most AHEAD_PROBE_MAX, each call a source the probe can set in a box
+ * (probeFit). A tail is marked inside its braces only where TeX answers that those marks move nothing and that the tail sets
+ * something (the call with it emptied is another box): a tail TeX never prints (hyperref's \texorpdfstring's PDF string, a
+ * key) gets no mark because TeX says so. With the unit's lead, as aheadSamples. Asked after the look-ahead pairs, numbered on
+ */
+export function tailSamples(units: readonly Unit[]): AheadSample[] {
+  const out = new Map<string, AheadSample>()
+  const front = frontMarks(units)
+  for (const u of sampleOrder(units)) {
+    const pieces = u.pieces ?? [],
+      lead = front(u) ? ROBUST_LEAD : ''
+    for (let k = 0; k < pieces.length; k++) {
+      if (out.size >= AHEAD_PROBE_MAX) return [...out.values()]
+      if (!tailPiece(pieces[k])) continue
+      const call = tailCall(pieces, k),
+        tail = (pieces[k] as PhPiece).src
+      if (!call || !probeFit(call.src)) continue
+      const key = tailKey(call.src, call.n, lead)
+      if (out.has(key)) continue
+      out.set(key, {
+        key,
+        src: call.src,
+        gap: '',
+        follows: '',
+        math: false,
+        lead,
+        ahead: true,
+        tail: { before: call.before, inner: tail.slice(1, -1), after: call.after },
+      })
     }
   }
   return [...out.values()]
@@ -529,7 +603,13 @@ export function aheadSection(samples: readonly AheadSample[]): string {
   const box = (j: number, n: string, body: string) =>
     `${probeRow('ahead-at', j, n)}\\global\\setbox\\axt@qbox\\box\\voidb@x\\gdef\\axt@qn{}\\axt@qreset${PROBE_LEVEL}\\setbox\\axt@qbox\\hbox{way ${body} \\unskip\\xdef\\axt@qn{\\the\\lastnodetype\\ifinner\\ifhmode/in\\fi\\fi}}\\axt@unwind\\xdef\\axt@q${n}{\\the\\wd\\axt@qbox/\\the\\ht\\axt@qbox/\\the\\dp\\axt@qbox/\\axt@qn}`
   const put = (d: number) => `\\xdef\\axt@qo{${d}}`
-  const tests = samples.map(({ src, gap, follows, math, lead }, j) => {
+  const tests = samples.map(({ src, gap, follows, math, lead, tail }, j) => {
+    // (a pair's tail argument (tailSamples): 0 where the call with marks inside the tail's braces is the call's own box and the
+    // call with the tail emptied is another (the tail sets something), else 2; an error in the marked or the emptied box, 2)
+    if (tail) {
+      const marked = `${tail.before}{${lead}\\axtpma{q${j}a}${tail.inner}${lead}\\axtpm{q${j}b}}${tail.after}`
+      return `\\begingroup${box(j, 'w', src)}${box(j, 'a', src)}${box(j, 'd', marked)}${box(j, 'g', `${tail.before}{}${tail.after}`)}\\endgroup\\ifx\\axt@qa\\axt@qd\\ifx\\axt@qa\\axt@qg${put(2)}\\else${put(0)}\\fi\\else${put(2)}\\fi${probeRow('ahead', j, '\\axt@qo')}\\gdef\\axt@qo{}\\noindent\\par`
+    }
     const open = `${lead}\\axtpma{q${j}a}`,
       close = `${lead}\\axtpm{q${j}b}`,
       next = `${lead}\\${math ? 'axtpmm' : 'axtpma'}{q${j}c}`
@@ -567,7 +647,14 @@ export function inkSamples(units: readonly Unit[]): string[] {
   for (const u of sampleOrder(units)) {
     const head = BIB(u) ? headEnd(u.pieces ?? [], 0) : 0
     u.pieces.forEach((p, k) => {
-      if (p.t !== 'ph' || classOf(p) !== 'macro' || backrefPiece(p) || symbolText(p.src) !== null || !boxable(p.src))
+      if (
+        p.t !== 'ph' ||
+        classOf(p) !== 'macro' ||
+        tailPiece(p) ||
+        backrefPiece(p) ||
+        symbolText(p.src) !== null ||
+        !boxable(p.src)
+      )
         return
       if (BIB(u) && k < head) leads.add(p.src)
       if (seen.has(p.src)) return
@@ -3007,6 +3094,8 @@ const BETWEEN_TEXTS = (p: Piece): boolean =>
  *  them takes the \protect, and is written to the list of figures as itself, 2608.23586). It gets no closing mark, and
  *  the piece right after it no mark at all, which its macro would see in that piece's place */
 const LOOKS_AHEAD = (p: PieceLike | null | undefined): boolean => {
+  // (a pair's tail argument is read as the pair's close is: what follows the call is read by its macro as before)
+  if (tailPiece(p)) return false
   const cls = classOf(p)
   // (the prefixes: xspace.sty's \xspace, latex.ltx's \protect, TeX's primitives \noexpand, \expandafter, \string, \global, \long,
   // \outer, \immediate and e-TeX's \unexpanded, \detokenize, \protected)
@@ -3298,6 +3387,14 @@ export function layoutMarking(
       if (p.t === 'open') verbatim.push(verbatim.at(-1) === true || VERBATIM_ARG.test(p.src ?? ''))
       else if (p.t === 'close') verbatim.pop()
       if (verbatim.at(-1) === true) return [piece]
+      // (a pair's tail argument (tailSamples): its marks inside its braces where TeX answered that they move nothing and that it
+      // sets something, `\\authorname{Ann Lee}{\\axtpma{p1.3a}1,2\\axtpm{p1.3b}}`; else it stands as the paper writes it)
+      if (tailPiece(p)) {
+        const call = own(u) && inside(k) ? tailCall(u.pieces, k) : null
+        if (!call || switches?.[tailKey(call.src, call.n, lead)] !== '0') return [piece]
+        const tail = (p as PhPiece).src
+        return [{ t: 'ph', src: `{${lead}\\axtpma{p${i}.${k}a}${tail.slice(1, -1)}${lead}\\axtpm{p${i}.${k}b}}` }]
+      }
       // (a colour piece: its colour written to the log right after it, inside its group, where its run is set: no node)
       if (colourPieceOf(p)) return [piece, { t: 'ph', src: `\\axtcolour{c${i}.${k}}` }]
       // (a placeholder right after a paper's macro that got its opening mark, past white space alone or none, has its marks where

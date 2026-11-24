@@ -86,6 +86,27 @@ export function glueBody(src: string, macros: ReadonlyMap<string, string>): stri
  *  hash, its marks and its JSON are as before) */
 export const statedGlue = (p: { t?: string } | null | undefined): string | null =>
   p?.t === 'ph' ? ((p as { glue?: string }).glue ?? null) : null
+/**
+ * The arguments of a call after the one a pair goes round (`from`, past its closing brace, to the call's end `to`): each a
+ * braced group, the next right after it, nothing else between (`\\authorname{Ann Lee}{1,2}`'s `{1,2}`), as [start, end]; null
+ * where anything else stands there (an optional argument, white space) or nothing does. Each is a piece of its own, a
+ * placeholder the reader states a tail (`tail`, not enumerable): whether TeX prints it, and whether marks inside its braces
+ * move nothing, is TeX's answer (marks/marks.ts tailSamples), never the reader's
+ */
+export function tailGroups(s: string, from: number, to: number): [number, number][] | null {
+  const out: [number, number][] = []
+  for (let k = from; k < to; ) {
+    if (s[k] !== '{') return null
+    const e = matchGroup(s, k)
+    if (e < 0 || e > to) return null
+    out.push([k, e])
+    k = e
+  }
+  return out.length ? out : null
+}
+/** whether a placeholder is a pair's tail argument, as the reader stated it where it made the piece (tailGroups) */
+export const tailPiece = (p: { t?: string } | null | undefined): boolean =>
+  p?.t === 'ph' && (p as { tail?: unknown }).tail === true
 /** whether a piece is a forced break of its unit's text, as the reader stated it where it made the piece (phPiece) */
 export const forcedBreak = (p: { t?: string } | null | undefined): boolean =>
   p?.t === 'ph' && (p as { brk?: unknown }).brk === true
@@ -3447,6 +3468,14 @@ class Builder<F extends WalkFile = WalkFile> {
     this.cur.end = end
     return true
   }
+  /** a pair's tail argument (tailGroups): a placeholder stated so (TAIL), its marks inside its braces or none */
+  tail(src: string, end: number) {
+    if (!this.cur) return
+    const p = phPiece(src)
+    Object.defineProperty(p, 'tail', { value: true })
+    this.cur.pieces.push(p)
+    this.cur.end = end
+  }
   /** (the unit's range holds the opening: a unit that ends with it, its close in the next unit, is written over it, which
    *  else stayed in the source after the unit's range and was set twice — a pgffor loop's `{{`, 2610.21377) */
   /** `identity`: the pair's command sets its argument and nothing else (identityPair), told to the wire on the piece (`sets`, 0:
@@ -5796,7 +5825,11 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
         }
         const id = b.open(s.slice(i, arg.start + 1), i, identityPair(macro, macro.prose))
         walk(s, arg.start + 1, arg.end - 1, b, ctx)
-        b.close(id, s.slice(arg.end - 1, call.end), call.end)
+        // (the arguments after the prose one, each a braced group right after the one before: each a piece of its own
+        // (tailGroups), which the marking marks inside its braces where TeX answers that marks there move nothing)
+        const tails = tailGroups(s, arg.end, call.end)
+        b.close(id, s.slice(arg.end - 1, tails ? arg.end : call.end), tails ? arg.end : call.end)
+        for (const [a, e] of tails ?? []) b.tail(s.slice(a, e), e)
         i = call.end
         goOn(macro, call, i)
         continue
