@@ -12,7 +12,7 @@ import { isMemoryError } from '@readarxiv/engine'
 import { NAME_ENGLISH, NAME_KEYS } from './names.mjs'
 import { boundedJson, checkKeys, checkPages, checkViews, COORD_MAX, countValues, inView, isInteger, isNumber, isObject, LayoutRefusal, told } from './json.mjs'
 import { OWNED, OWNED_HOW, ownedPages, STREAM_COLUMNS } from './stream.mjs'
-import { MARK_CLASSES, LAYOUT_CLASSES, classOf, FOLLOWERS, PUNCT, ASKED, PROBE_MAX, COMPLETE_PROBE_MAX, COMPLETE_SRC_MAX, AHEAD_PROBE_MAX, commandOf, INK_BUDGET, INK_TEXT_MAX, INK_ANY, PUNCT_WIDE, BP_PER_PT, readColours, MARK_NAME, COMPLETE_MAX, duplicatesIn, followsOf, headsOf } from '@readarxiv/engine/today/marks/marks.ts'
+import { MARK_CLASSES, LAYOUT_CLASSES, classOf, FOLLOWERS, PUNCT, ASKED, PROBE_MAX, COMPLETE_PROBE_MAX, COMPLETE_SRC_MAX, AHEAD_PROBE_MAX, PROBE_SRC_MAX, ROBUST_LEAD, commandOf, INK_BUDGET, INK_TEXT_MAX, INK_ANY, PUNCT_WIDE, BP_PER_PT, readColours, MARK_NAME, COMPLETE_MAX, duplicatesIn, followsOf, headsOf } from '@readarxiv/engine/today/marks/marks.ts'
 export { MARK_CLASSES, LAYOUT_CLASSES, INVISIBLE, backrefPiece, RULE, classOf, FOLLOWERS, PROBE_MAX, COMPLETE_PROBE_MAX, AHEAD_PROBE_MAX, aheadKey, commandOf, probeSamples, aheadSamples, probeRow, probeTex, readProbe, punctuationSection, aheadSection, INK_BUDGET, inkSamples, readInkAnswers, leadSamples, inkSection, markProbeTex, readInkProbe, INK_TEXT_MAX, INK_ANY, readInkTexts, readInkDecorated, leadStep, readInkApart, NAME_MACROS, nameSection, readNameProbe, skipSection, readSkipProbe, literalNames, readMarkProbe, POINTS_TEX, NAMES_TEX, CLASS_NAMES, classNamesTex, UNMARK_CS, NAME_MARK_FILE, withoutNameMarks, regionsTex, LAYOUT_TEX, refKeyOf, refKeysOf, refsTex, DVI_POINTS_TEX, CALL_TEX, DVI_LAYOUT_TEX, readColours, MARK_NAME, colourPieceOf, completeCall, headEnd, layoutMarking, COMPLETE_MAX, completeCalled, duplicatesIn, asSet, followsOf, headsOf } from '@readarxiv/engine/today/marks/marks.ts'
 
 /** a displayed formula's source: the wire's (mt.mjs), whose own stop it writes after the display's marker */
@@ -129,27 +129,33 @@ const CHARS_MAX = 65_536, CHAR_MAX = 32
 const SIZE_MAX = 200
 /** a piece's opening mark: the name its own ink is kept under */
 const OPENING = /^[pn]\d+\.\d+a$/
-/** a look-ahead pair's key as the marks file holds it (aheadKey): a paper's macro (a control sequence first), the white space
- *  after it (one space or none) and the placeholder it precedes, each source at most COMPLETE_SRC_MAX code units, neither
- *  holding `#` */
-const AHEAD_KEY = new RegExp(`^\\\\[^#]{1,${COMPLETE_SRC_MAX - 1}}# ?#[^#]{1,${COMPLETE_SRC_MAX}}$`, 's')
+/** a front unit's marks' lead as a key begins with it, where the unit's marks carry it (marks.ts ROBUST_LEAD) */
+const LEAD = `(?:${ROBUST_LEAD.replace(/\\/g, '\\\\')})?`
+/** a look-ahead pair's key as the marks file holds it (aheadKey): its unit's lead, a paper's macro (a control sequence first),
+ *  the white space after it (one space or none) and the placeholder it precedes, each source at most COMPLETE_SRC_MAX code
+ *  units, neither holding `#` */
+const AHEAD_KEY = new RegExp(`^${LEAD}\\\\[^#]{1,${COMPLETE_SRC_MAX - 1}}# ?#[^#]{1,${COMPLETE_SRC_MAX}}$`, 's')
+/** a pair's tail argument's key (tailKey): its unit's lead, the call (a control sequence first, at most PROBE_SRC_MAX code
+ *  units, no `#`) and the tail's place among the call's tails */
+const TAIL_KEY = new RegExp(`^${LEAD}\\\\[^#]{1,${PROBE_SRC_MAX - 1}}#tail\\d{1,3}#$`, 's')
 /** the paper's own switch as the marking takes it (readMarkProbe): null where the probe was not run (every mark as
  *  LAYOUT_TEX sets it), else at most PROBE_MAX commands of the asked classes and COMPLETE_PROBE_MAX complete macros, each a
  *  control word, its answer a code 0, 1, 2 or x (no answer) a follower (or 3 before a punctuation mark), and at most
- *  AHEAD_PROBE_MAX look-ahead pairs, each by
- *  its key (AHEAD_KEY), its answer one such code; else a refusal at `path` */
+ *  AHEAD_PROBE_MAX look-ahead pairs, each by its key (AHEAD_KEY), and as many pairs' tail arguments (TAIL_KEY), each answer one
+ *  such code; else a refusal at `path` */
 function checkSwitches(v, path) {
   if (v === null) return null
   if (!isObject(v)) throw new LayoutRefusal(path, 'not null or an object')
-  const keys = Object.keys(v), pairs = keys.filter(k => !/^\\[A-Za-z@]+$/.test(k)).length
-  if (keys.length - pairs > PROBE_MAX + COMPLETE_PROBE_MAX) throw new LayoutRefusal(path, `more than ${PROBE_MAX + COMPLETE_PROBE_MAX} commands`)
+  const keys = Object.keys(v), tails = keys.filter(k => TAIL_KEY.test(k)).length, pairs = keys.filter(k => !/^\\[A-Za-z@]+$/.test(k)).length - tails
+  if (keys.length - pairs - tails > PROBE_MAX + COMPLETE_PROBE_MAX) throw new LayoutRefusal(path, `more than ${PROBE_MAX + COMPLETE_PROBE_MAX} commands`)
   if (pairs > AHEAD_PROBE_MAX) throw new LayoutRefusal(path, `more than ${AHEAD_PROBE_MAX} look-ahead pairs`)
+  if (tails > AHEAD_PROBE_MAX) throw new LayoutRefusal(path, `more than ${AHEAD_PROBE_MAX} tail arguments`)
   for (const k of keys) {
     if (/^\\[A-Za-z@]+$/.test(k)) {
       if (k.length > 64) throw new LayoutRefusal(`${path}.${told(k)}`, 'not a control word')
       if (typeof v[k] !== 'string' || v[k].length !== FOLLOWERS.length || !/^[012x]+$/.test(v[k].slice(PUNCT.length)) || !/^[0123x]+$/.test(v[k].slice(0, PUNCT.length))) throw new LayoutRefusal(`${path}.${told(k)}`, `not ${FOLLOWERS.length} codes of 0, 1, 2 or x, or 3 before a punctuation mark`)
     } else {
-      if (!AHEAD_KEY.test(k)) throw new LayoutRefusal(`${path}.${told(k)}`, 'not a control word or a look-ahead pair')
+      if (!AHEAD_KEY.test(k) && !TAIL_KEY.test(k)) throw new LayoutRefusal(`${path}.${told(k)}`, 'not a control word, a look-ahead pair or a tail argument')
       if (typeof v[k] !== 'string' || !/^[012x]$/.test(v[k])) throw new LayoutRefusal(`${path}.${told(k)}`, 'not a code of 0, 1, 2 or x')
     }
   }
