@@ -42,7 +42,9 @@ describe("a pair's tail argument is a piece of its own", () => {
     expect(s.map((x) => x.src)).toEqual(['\\authorname{Cy Doe}{3}', '\\term{key word}{sec:ours}'])
     expect(probeSamples(paper().units).filter((x) => x.ahead)).toHaveLength(2)
     const tex = aheadSection(s)
-    expect(tex).toContain('\\authorname{Cy Doe}{\\axtpma{q0a}3\\axtpm{q0b}}')
+    // (the opening mark set on a box's empty list too, \axthpk's rule: the tail's braces open the list of the box its macro
+    // sets it in, `\textsuperscript{#2}`'s, where \axtpma's rule for the paragraph TeX resumes after a display gobbled it)
+    expect(tex).toContain('\\authorname{Cy Doe}{\\axthpk{q0a}3\\axtpm{q0b}}')
     expect(tex).toContain('\\authorname{Cy Doe}{}')
   })
   it('the marking: inside the braces where TeX answered 0; as the paper writes it where it answered 2', () => {
@@ -53,7 +55,7 @@ describe("a pair's tail argument is a piece of its own", () => {
       units: { pieces: { src?: string }[] }[]
     }
     const src = (i: number) => laid.units[i]!.pieces.map((x) => x.src ?? (x as { s?: string }).s ?? '').join('')
-    expect(src(0)).toMatch(/\\authorname\{Cy Doe\}\{\\axtpma\{p0\.\d+a\}3\\axtpm\{p0\.\d+b\}\}/)
+    expect(src(0)).toMatch(/\\authorname\{Cy Doe\}\{\\axthpk\{p0\.\d+a\}3\\axtpm\{p0\.\d+b\}\}/)
     expect(src(1)).toContain('\\term{key word}{sec:ours}')
   })
 })

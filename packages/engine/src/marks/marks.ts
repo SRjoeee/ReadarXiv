@@ -607,7 +607,10 @@ export function aheadSection(samples: readonly AheadSample[]): string {
     // (a pair's tail argument (tailSamples): 0 where the call with marks inside the tail's braces is the call's own box and the
     // call with the tail emptied is another (the tail sets something), else 2; an error in the marked or the emptied box, 2)
     if (tail) {
-      const marked = `${tail.before}{${lead}\\axtpma{q${j}a}${tail.inner}${lead}\\axtpm{q${j}b}}${tail.after}`
+      // (the opening mark \\axthpk's, set on the empty list of a box: the tail's braces open the list of whatever box its
+      // macro sets it in, as \\textsuperscript's, where \\axtpma's rule for the paragraph TeX resumes after a display, which
+      // is never a box's (\\ifinner), set nothing, and the answer was about a mark that was not there)
+      const marked = `${tail.before}{${lead}\\axthpk{q${j}a}${tail.inner}${lead}\\axtpm{q${j}b}}${tail.after}`
       return `\\begingroup${box(j, 'w', src)}${box(j, 'a', src)}${box(j, 'd', marked)}${box(j, 'g', `${tail.before}{}${tail.after}`)}\\endgroup\\ifx\\axt@qa\\axt@qd\\ifx\\axt@qa\\axt@qg${put(2)}\\else${put(0)}\\fi\\else${put(2)}\\fi${probeRow('ahead', j, '\\axt@qo')}\\gdef\\axt@qo{}\\noindent\\par`
     }
     const open = `${lead}\\axtpma{q${j}a}`,
@@ -3388,12 +3391,13 @@ export function layoutMarking(
       else if (p.t === 'close') verbatim.pop()
       if (verbatim.at(-1) === true) return [piece]
       // (a pair's tail argument (tailSamples): its marks inside its braces where TeX answered that they move nothing and that it
-      // sets something, `\\authorname{Ann Lee}{\\axtpma{p1.3a}1,2\\axtpm{p1.3b}}`; else it stands as the paper writes it)
+      // sets something, `\\authorname{Ann Lee}{\\axthpk{p1.3a}1,2\\axtpm{p1.3b}}`; else it stands as the paper writes it)
       if (tailPiece(p)) {
         const call = own(u) && inside(k) ? tailCall(u.pieces, k) : null
         if (!call || switches?.[tailKey(call.src, call.n, lead)] !== '0') return [piece]
         const tail = (p as PhPiece).src
-        return [{ t: 'ph', src: `{${lead}\\axtpma{p${i}.${k}a}${tail.slice(1, -1)}${lead}\\axtpm{p${i}.${k}b}}` }]
+        // (its opening mark \\axthpk's, as the probe asked: set on a box's empty list too)
+        return [{ t: 'ph', src: `{${lead}\\axthpk{p${i}.${k}a}${tail.slice(1, -1)}${lead}\\axtpm{p${i}.${k}b}}` }]
       }
       // (a colour piece: its colour written to the log right after it, inside its group, where its run is set: no node)
       if (colourPieceOf(p)) return [piece, { t: 'ph', src: `\\axtcolour{c${i}.${k}}` }]
