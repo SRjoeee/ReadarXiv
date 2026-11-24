@@ -48,7 +48,7 @@ describe("a pair's tail argument is a piece of its own", () => {
   it('the probe asks about each tail: the call, the call with marks inside the tail’s braces, the call with it emptied', () => {
     const s = tailSamples(paper().units)
     expect(s.map((x) => x.src)).toEqual(['\\authorname{Cy Doe}{3}', '\\term{key word}{sec:ours}'])
-    expect(probeSamples(paper().units).filter((x) => x.ahead && !x.box)).toHaveLength(2)
+    expect(probeSamples(paper().units).filter((x) => x.ahead)).toHaveLength(2)
     const tex = aheadSection(s)
     // (the opening mark set on a box's empty list too, \axthpk's rule: the tail's braces open the list of the box its macro
     // sets it in, `\textsuperscript{#2}`'s, where \axtpma's rule for the paragraph TeX resumes after a display gobbled it)

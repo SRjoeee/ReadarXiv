@@ -158,9 +158,6 @@ export interface SpanClass {
   colour?: number
   to?: { url: string } | { dest: string }
   style?: Style
-  /** TeX sets the group in one box, breaking no line inside it (marks.ts boxedPairs: its call alone in a paragraph of zero
-   *  width set on one line) */
-  box?: 1
 }
 /** an element's class as its source reads it (the adapter's classesOf: phClassProven, texToText2 and the symbol's drawing) */
 export interface PieceClass {

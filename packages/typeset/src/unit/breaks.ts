@@ -24,14 +24,14 @@ export type LayoutUnit = {
 type OpenFace = { role: 'serif' | 'sans' | 'mono'; bold?: 1 | undefined; slant?: 1 | 2 | undefined; size?: number }
 /** a piece of a row as the unit holds it (the translation's pieces in its order, `k` the source's; a
  *  group's open with the face TeX set it in, where its part states one, and `runin` where its part states the group a title set
- *  in the line, SpanAt.runin, and `box` where it states the group one TeX breaks no line inside, SpanAt.box); `par` a piece of the typesetter's own, never in a Row
+ *  in the line, SpanAt.runin); `par` a piece of the typesetter's own, never in a Row
  *  nor on a wire: a paragraph TeX opened at its first word (Placed.paras), cut into the row where a sentence start pairs with
  *  that word, else directly after the element the word stands after in the source (Placed.parasAfter) (paraPieces), `next`
  *  the line TeX opened it on; it sets nothing and stands in the translation's projection as a group's edge does, for none */
 export type V0Piece =
   | { t: 'text'; s: string; k?: number }
   | { t: 'ph'; src: string; k?: number }
-  | { t: 'open'; src?: string; id?: unknown; k?: number; face?: OpenFace; runin?: true; box?: true }
+  | { t: 'open'; src?: string; id?: unknown; k?: number; face?: OpenFace; runin?: true }
   | { t: 'close'; src?: string; id?: unknown; k?: number }
   | { t: 'nested'; src?: string; k?: number }
   | { t: 'par'; next: number; src?: undefined; k?: undefined }

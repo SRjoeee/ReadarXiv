@@ -200,13 +200,12 @@ describe('reading the marked original', () => {
     // a pair's tail argument's answer (marks.ts tailKey: the call, `#tail<n>#`), each code TeX gives, and a front unit's
     // look-ahead pair, its `\\protect` lead before a macro of COMPLETE_SRC_MAX code units; the look-ahead pairs and the tails
     // each up to AHEAD_PROBE_MAX (tailSamples is bounded on its own): a file of them read whole (#679's review)
-    const tails = { '\\authorname{Ann Lee}{1,2}#box#': '0', '\\protect\\textbf{two words}#box#': '2', '\\authorname{Ann Lee}{1,2}#tail0#': '0', '\\term{key word}{sec:ours}#tail0#': '1', '\\protect\\pp{a}{b}#tail1#': '2' }
+    const tails = { '\\authorname{Ann Lee}{1,2}#tail0#': '0', '\\term{key word}{sec:ours}#tail0#': '1', '\\protect\\pp{a}{b}#tail1#': '2' }
     const front = { [`\\protect\\${'m'.repeat(199)}##$x$`]: '2' }
     const many: Record<string, string> = {}
     for (let i = 0; i < AHEAD_PROBE_MAX; i++) {
       many[`\\pp${i}##\\cite{a}`] = '0'
       many[`\\pp{${i}}{b}#tail0#`] = '1'
-      many[`\\pp{${i} a}{b}#box#`] = '0'
     }
     for (const switches of [tails, front, many]) {
       const t = await layoutMarksOf(doc, '', { engine: 'pdflatex', switches })

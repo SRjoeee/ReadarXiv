@@ -347,9 +347,7 @@ export const LinkTo = z.union([z.object({ url: z.string() }), z.object({ dest: z
  *  paper's own, and then by what begins a sentence, its text ending with no closing mark), the engine's reading of its unit's
  *  source (bundle/run-in.ts), the same on every member of the unit: the typesetter sets the target script's separation between
  *  two sentences after it where the translation holds no mark there, the paper's own space there counting toward it
- *  (docs/PDF-READER.md §18.85); `box` a group TeX sets in one box, breaking no line inside it (its call alone in a paragraph of
- *  zero width set on one line, the engine's probe: an \\mbox, a paper's macro whose body is one): the typesetter breaks no line
- *  inside it, its spaces ties. Absent on any other group; a part made before states none, and its titles are
+ *  (docs/PDF-READER.md §18.85). Absent on any other group; a part made before states none, and its titles are
  *  laid as before */
 export const SpanAt = z.object({
   style: Style.optional(),
@@ -358,7 +356,6 @@ export const SpanAt = z.object({
   colour: int.optional(),
   to: LinkTo.optional(),
   runin: flag.optional(),
-  box: flag.optional(),
 })
 /** a member's label: its kind, its ink (on its own baseline: a raised mark's raised), its style and parts; `line` the index of
  *  its member's text line it stands on, by an element's rule (the line whose band its ink meets, the nearest by baseline: El.ink's

@@ -80,8 +80,6 @@ export type AheadSample = {
   /** a pair's tail argument's sample (tailSamples): the call as the paper writes it (`src`) is `before`, the tail's braces
    *  round `inner`, then `after` */
   tail?: { before: string; inner: string; after: string }
-  /** a pair's call TeX may set in one box (boxSamples): set in a paragraph of zero width, one line or more */
-  box?: true
 }
 /** a sample of the mark probe */
 export type ProbeSample = CommandSample | AheadSample
@@ -344,14 +342,7 @@ export function probeSamples(units: readonly Unit[], complete: CompleteGiven | n
       if (!fronts.has(key) && fronts.size < FRONT_PROBE_MAX)
         fronts.set(key, { command: key, src: p.src!, call: false, own: true, front: true })
     }
-  return [
-    ...seen.values(),
-    ...own.values(),
-    ...fronts.values(),
-    ...aheadSamples(units),
-    ...tailSamples(units),
-    ...boxSamples(units),
-  ]
+  return [...seen.values(), ...own.values(), ...fronts.values(), ...aheadSamples(units), ...tailSamples(units)]
 }
 /** the key of a front piece's answer in the probe's switches: its source as it stands, a key no command's name can be */
 export const frontKey = (src: string): string => `front ${src}`
@@ -474,48 +465,6 @@ export function tailSamples(units: readonly Unit[]): AheadSample[] {
         ahead: true,
         tail: { before: call.before, inner: tail.slice(1, -1), after: call.after },
       })
-    }
-  }
-  return [...out.values()]
-}
-/** the key of TeX's answer for a pair's call set in a paragraph of zero width (boxSamples): the marks' lead and the call */
-export const boxKey = (src: string, lead = ''): string => `${lead}${src}#box#`
-/** the call of the pair whose open is at `o` of a unit's pieces, as the paper writes it, from its open to its close and the
- *  tail arguments after it (tailCall's source): null where the piece is no command's open, a piece inside the pair is no text,
- *  placeholder or pair (a nested unit), or no text inside it holds white space, where alone a line can break */
-function boxCall(pieces: readonly Piece[], o: number): string | null {
-  const open = pieces[o]
-  if (open?.t !== 'open' || !/^\\[A-Za-z@]/.test(open.src ?? '')) return null
-  const c = pieces.findIndex((q, j) => j > o && q.t === 'close' && q.id === open.id)
-  if (c < 0) return null
-  let z = c
-  while (z + 1 < pieces.length && tailPiece(pieces[z + 1])) z++
-  const srcOf = (q: Piece): string | null =>
-    q.t === 'text' ? (q.src ?? q.s) : q.t === 'ph' || q.t === 'open' || q.t === 'close' ? (q.src ?? '') : null
-  const parts = pieces.slice(o, z + 1).map(srcOf)
-  if (parts.some((x) => x === null)) return null
-  if (!pieces.slice(o + 1, c).some((q) => q.t === 'text' && /\S\s+\S/.test(q.s))) return null
-  return parts.join('')
-}
-/**
- * The pairs' box samples (`box`): each call of a pair whose text holds white space (boxCall), once, in the paper's order, at
- * most AHEAD_PROBE_MAX, each a source the probe can set in a box (probeFit), with the unit's lead as aheadSamples. Whether TeX can
- * break a line inside a call is TeX's to say, not a list of box commands': the call set alone in a paragraph of zero width
- * (aheadSection), TeX's lines say it. Asked after the tails, numbered on
- */
-export function boxSamples(units: readonly Unit[]): AheadSample[] {
-  const out = new Map<string, AheadSample>()
-  const front = frontMarks(units)
-  for (const u of sampleOrder(units)) {
-    const pieces = u.pieces ?? [],
-      lead = front(u) ? ROBUST_LEAD : ''
-    for (let o = 0; o < pieces.length; o++) {
-      if (out.size >= AHEAD_PROBE_MAX) return [...out.values()]
-      const call = boxCall(pieces, o)
-      if (!call || !probeFit(call)) continue
-      const key = boxKey(call, lead)
-      if (!out.has(key))
-        out.set(key, { key, src: call, gap: '', follows: '', math: false, lead, ahead: true, box: true })
     }
   }
   return [...out.values()]
@@ -657,12 +606,7 @@ export function aheadSection(samples: readonly AheadSample[]): string {
   const box = (j: number, n: string, body: string) =>
     `${probeRow('ahead-at', j, n)}\\global\\setbox\\axt@qbox\\box\\voidb@x\\gdef\\axt@qn{}\\axt@qreset${PROBE_LEVEL}\\setbox\\axt@qbox\\hbox{way ${body} \\unskip\\xdef\\axt@qn{\\the\\lastnodetype\\ifinner\\ifhmode/in\\fi\\fi}}\\axt@unwind\\xdef\\axt@q${n}{\\the\\wd\\axt@qbox/\\the\\ht\\axt@qbox/\\the\\dp\\axt@qbox/\\axt@qn}`
   const put = (d: number) => `\\xdef\\axt@qo{${d}}`
-  const tests = samples.map(({ src, gap, follows, math, lead, tail, box: boxed }, j) => {
-    // (a pair's call TeX may set in one box (boxSamples): the call as its unit carries it, alone in a paragraph of zero width,
-    // every feasible break taken (\\tolerance\\@M, no first pass): 0 where TeX set it on one line (\\prevgraf 1: no break inside
-    // it, as in an \\hbox), else 2; an error in that box, 2 (readMarkProbe))
-    if (boxed)
-      return `\\begingroup${probeRow('ahead-at', j, 'v')}\\gdef\\axt@qn{}\\axt@qreset${PROBE_LEVEL}\\setbox\\axt@qbox\\vbox{\\hsize\\z@\\parindent\\z@\\leftskip\\z@\\rightskip\\z@\\parfillskip\\z@\\@plus1fil\\pretolerance\\m@ne\\tolerance\\@M\\emergencystretch\\z@\\hbadness\\@M\\hfuzz\\maxdimen\\leavevmode${lead}${src}\\par\\xdef\\axt@qn{\\the\\prevgraf}}\\axt@unwind\\endgroup\\ifnum0\\axt@qn=1 ${put(0)}\\else${put(2)}\\fi${probeRow('ahead', j, '\\axt@qo')}\\gdef\\axt@qo{}\\noindent\\par`
+  const tests = samples.map(({ src, gap, follows, math, lead, tail }, j) => {
     // (a pair's tail argument (tailSamples): 1 where the call with the tail emptied is the call's own box (TeX sets nothing
     // for the tail: a \\label's key, an empty group); else 0 where the call with marks inside the tail's braces is the call's own
     // box, 2 where it is another; an error in the marked or the emptied box, 2 (readMarkProbe))
@@ -1705,7 +1649,6 @@ export function probeFactsOf(
   decorated: [string, string][]
   ends: string[]
   tails: { unit: number; piece: string }[]
-  boxed: { unit: number; piece: string }[]
 } {
   const ink = inkSamples(units),
     leads = leadSamples(units, ink)
@@ -1714,7 +1657,6 @@ export function probeFactsOf(
     decorated: readInkDecorated(log, [...ink, ...leads], { quotes: true }),
     ends: readInkEnds(log, ink),
     tails: tailsSettingNothing(log, units),
-    boxed: boxedPairs(log, units),
   }
 }
 /**
@@ -1740,28 +1682,6 @@ export function tailsSettingNothing(
       if (!tailPiece(pieces[k])) continue
       const call = tailCall(pieces, k)
       if (call && said[tailKey(call.src, call.n, lead)] === '1') out.push({ unit: i, piece: String(k) })
-    }
-  })
-  return out
-}
-/**
- * The pairs TeX sets in one box, by unit index and their open piece's id: those whose box sample answered 0, the call alone in
- * a paragraph of zero width set on one line (aheadSection): TeX breaks no line inside it, as inside an \\hbox (`\\mbox`, a
- * paper's macro whose body is one). The instrument states each such group a box (SpanAt.box), and the lay breaks no line inside
- * it. An answer 2 (TeX broke it) or none states nothing
- */
-export function boxedPairs(log: string | null | undefined, units: readonly Unit[]): { unit: number; piece: string }[] {
-  const boxes = boxSamples(units)
-  if (!boxes.length) return []
-  const said = readMarkProbe(log, [...aheadSamples(units), ...tailSamples(units), ...boxes]),
-    front = frontMarks(units),
-    out: { unit: number; piece: string }[] = []
-  units.forEach((u, i) => {
-    const pieces = u?.pieces ?? [],
-      lead = front(u) ? ROBUST_LEAD : ''
-    for (let o = 0; o < pieces.length; o++) {
-      const call = boxCall(pieces, o)
-      if (call && said[boxKey(call, lead)] === '0') out.push({ unit: i, piece: String(o) })
     }
   })
   return out
@@ -2055,7 +1975,7 @@ export function readMarkProbe(log: string | null | undefined, samples: readonly 
         ? code
         : bad.has('w') || bad.has('a')
           ? 'x'
-          : bad.has('d') || bad.has('g') || bad.has('v')
+          : bad.has('d') || bad.has('g')
             ? '2'
             : code === '2'
               ? '2'
