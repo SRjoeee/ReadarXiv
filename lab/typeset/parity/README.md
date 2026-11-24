@@ -286,6 +286,11 @@ The gate judges by them where they and today's output differ.
    before (and the original's skip there past its pitch): the paragraph under it starts lower by what TeX's gap lacks, its
    first line off TeX's baseline. Its `anchor` difference within that (0.1 pt the drawing's rounding) is the ruling's
    (`nearer` "the ruling's"): never worse, and no fault of v2's; one lower than that is judged as any.
+   The same for a run-in title that fills TeX's line (2026-11-25, the coordinator's ruling, PDF-READER §18.11): the title is
+   the first line of the paragraph after it, one paragraph at one leading, and where the paragraph's first line is TeX's next
+   line under it (its own pitch), the paragraph starts lower by what TeX's gap lacks against the leading v2 laid it at (the
+   distance of its first two lines); that `anchor` difference within it (and 0.1 pt) is the ruling's (`verdict.mjs`
+   runinRuling, the title stated by the part's `runin` in the v2 file's facts).
 9. **The references' leading** (2026-11-10, the owner: "on the references' leading, go ahead as you recommend"): a paragraph
    that borrows room spreads into it (option (i)), each frame of a paragraph keeps TeX's share of its lines where that holds
    within its page's band, and the paragraphs that borrow vote in the page's target. Two `line-count` differences are the

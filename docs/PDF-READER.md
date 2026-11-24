@@ -3640,7 +3640,12 @@ text's own leading and pitch at each leading the pass tries, the text starting l
 widow line (`headOf`, `runin` carried from the part by `lay/adapt.ts`); where its own lines leave no room it stays as TeX
 set it. Only where the text's first line stands its own pitch under the title's last (to the hundredth a baseline is stated
 to, `ON_BASE`): a text TeX set further down (a list's, a theorem's or a heading's skip between) shows the title ended a
-paragraph of its own, and the gap stays TeX's (the display pairs' first try lowered three such units). A title that shares its line with its text (the common form) has its text's first line pinned on its row and is
+paragraph of its own, and the gap stays TeX's (the display pairs' first try lowered three such units). As under a widow line,
+those first lines leave TeX's baseline (by the spread pitch less TeX's: over the 90 display pairs 8 paragraphs, 3.0 to 5.8 pt
+lower), which the parity check's `anchor` measure read as worse than today's on 6 pages; the coordinator's ruling of
+2026-11-25 takes the widow line's reading (one paragraph, one leading is the closer reading; the spread itself is §18.49's):
+the difference within what TeX's gap lacks is the ruling's (`lab/typeset/parity/verdict.mjs` runinRuling, the README's
+ruling 8), and those 6 pages read no worse. A title that shares its line with its text (the common form) has its text's first line pinned on its row and is
 untouched. Over the line's stored chain of the 245 papers: 2,082 run-in titles, 37 of them (20 papers) alone on TeX's line
 over their text's first line, each a title of one line; the lay alone moves (no stored object, no version).
 
