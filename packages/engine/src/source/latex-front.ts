@@ -80,6 +80,8 @@ export function glueBody(src: string, macros: ReadonlyMap<string, string>): stri
     .replace(component, '')
     .replace(component, '')
     .trim()
+  // (glue as TeX appends it: its primitives \hskip and \kern, LaTeX's \hspace, and latex.ltx's \quad, \qquad, \enspace and
+  // \thinspace, each defined there as one \hskip or \kern of its width)
   return /^\\(?:hspace\*?|hskip|kern)(?![A-Za-z@])/.test(g) || /^\\(?:quad|qquad|enspace|thinspace)$/.test(g) ? g : null
 }
 /** the glue a placeholder sets, as the reader stated it where it made the piece (glueBody; not enumerable, so that the unit's
