@@ -27,7 +27,7 @@ const at = (y: number, x0 = 72, x1 = 300): Placed['lines'][number] => [1, 0, x0,
 /** a heading whose title fills TeX's line at 700 (its gap under it `gap`), the paragraph under it on TeX's next lines at a
  *  pitch of 12, nine of them, its translation `chars` characters long (six lines of 45: spread by the fill); a third paragraph
  *  under it, four lines, as long as its own */
-const page = (gap: NonNullable<Placed['room']>['gap'], chars = 260) => {
+const page = (gap: NonNullable<Placed['room']>['gap'], chars = 260, skip = 0) => {
   const P = 12
   const flow: Placed[] = [
     {
@@ -47,7 +47,7 @@ const page = (gap: NonNullable<Placed['room']>['gap'], chars = 260) => {
       lead: P,
       style: st,
       align: 'j',
-      lines: Array.from({ length: 9 }, (_, j) => at(700 - P * (j + 1))),
+      lines: Array.from({ length: 9 }, (_, j) => at(700 - skip - P * (j + 1))),
       room: { below: 5, next: P, gap: ['parskip', 0, 0] },
     },
     {
@@ -57,7 +57,7 @@ const page = (gap: NonNullable<Placed['room']>['gap'], chars = 260) => {
       lead: P,
       style: st,
       align: 'j',
-      lines: Array.from({ length: 4 }, (_, j) => at(700 - P * (j + 10), j === 0 ? 84 : 72)),
+      lines: Array.from({ length: 4 }, (_, j) => at(700 - skip - P * (j + 10), j === 0 ? 84 : 72)),
       room: { below: 200, next: 212 },
     },
   ]
@@ -86,5 +86,10 @@ describe('a run-in title alone on its line and its text: one TeX paragraph, one 
     // first line on TeX's baseline)
     const m = page(['afterskip', 0, 0])
     expect(m.first).toBe(688)
+  })
+  it('leaves the text where TeX set something between it and the title (a skip past its pitch): the title ended its own paragraph', () => {
+    // (a list's or a theorem's skip of 8 pt between: the text's first line 20 pt under the title, not TeX's next line)
+    const m = page(['runin', 10, 0], 260, 8)
+    expect(m.first).toBe(680)
   })
 })

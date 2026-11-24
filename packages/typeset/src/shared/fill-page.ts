@@ -13,6 +13,7 @@ import { settleLayout } from './settle.ts'
 import type { Token } from '../breaker/tokens.ts'
 import type { FitBlock, FitParams, FitState, Layout } from '../fit/types.ts'
 import type { EvenKnob } from '../types.ts'
+import { ON_BASE } from '../unit/blocks.ts'
 import type { Band } from '../unit/params.ts'
 import type { FillRules, FillShare } from './fill-leads.ts'
 import type { FillTarget, Voter } from './fill-target.ts'
@@ -408,8 +409,13 @@ function headOf(q: FillLaid, onPage: readonly { u: FillLaid; l: Layout; st: FitS
     let over: { y: number; block: FitBlock; L: number; pitched: FitBlock; s: number }
     const end = l.lines.at(-1)
     if (unitOf(u).runin === true && end && end.block === u.blocks.length - 1) {
-      // (a run-in title: its last line where it is drawn, the gap the unit's own leading and pitch, the paragraph's)
-      over = { y: end.baseline, block: u.blocks[end.block]!, L: lead, pitched: b, s: q.s }
+      // (a run-in title: its last line where it is drawn, the gap the unit's own leading and pitch, the paragraph's; its paragraph
+      // the unit's only where the unit's first line is the next line TeX set, its pitch under the title's last: more, and TeX set
+      // something between (a list's skip, a theorem's or a heading's: the title ended a paragraph of its own), which keeps TeX's
+      // gap as under a paragraph of one line)
+      const bt = u.blocks[end.block]!
+      if (bt.B.at(-1)! - b.B[0]! > (b.pitch0 ?? 1.2 * q.s) + ON_BASE) continue
+      over = { y: end.baseline, block: bt, L: lead, pitched: b, s: q.s }
     } else {
       const [third, before, last] = l.lines.slice(-3)
       if (!last || !before || !third || last.block !== u.blocks.length - 1) continue
