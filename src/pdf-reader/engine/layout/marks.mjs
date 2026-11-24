@@ -136,26 +136,28 @@ const LEAD = `(?:${ROBUST_LEAD.replace(/\\/g, '\\\\')})?`
  *  units, neither holding `#` */
 const AHEAD_KEY = new RegExp(`^${LEAD}\\\\[^#]{1,${COMPLETE_SRC_MAX - 1}}# ?#[^#]{1,${COMPLETE_SRC_MAX}}$`, 's')
 /** a pair's tail argument's key (tailKey): its unit's lead, the call (a control sequence first, at most PROBE_SRC_MAX code
- *  units, no `#`) and the tail's place among the call's tails */
+ *  units, no `#`) and the tail's place among the call's tails; and a pair's box key (boxKey), the call and `#box#` */
 const TAIL_KEY = new RegExp(`^${LEAD}\\\\[^#]{1,${PROBE_SRC_MAX - 1}}#tail\\d{1,3}#$`, 's')
+const BOX_KEY = new RegExp(`^${LEAD}\\\\[^#]{1,${PROBE_SRC_MAX - 1}}#box#$`, 's')
 /** the paper's own switch as the marking takes it (readMarkProbe): null where the probe was not run (every mark as
  *  LAYOUT_TEX sets it), else at most PROBE_MAX commands of the asked classes and COMPLETE_PROBE_MAX complete macros, each a
  *  control word, its answer a code 0, 1, 2 or x (no answer) a follower (or 3 before a punctuation mark), and at most
- *  AHEAD_PROBE_MAX look-ahead pairs, each by its key (AHEAD_KEY), and as many pairs' tail arguments (TAIL_KEY), each answer one
+ *  AHEAD_PROBE_MAX look-ahead pairs, each by its key (AHEAD_KEY), as many pairs' tail arguments (TAIL_KEY) and as many box calls (BOX_KEY), each answer one
  *  such code; else a refusal at `path` */
 function checkSwitches(v, path) {
   if (v === null) return null
   if (!isObject(v)) throw new LayoutRefusal(path, 'not null or an object')
-  const keys = Object.keys(v), tails = keys.filter(k => TAIL_KEY.test(k)).length, pairs = keys.filter(k => !/^\\[A-Za-z@]+$/.test(k)).length - tails
-  if (keys.length - pairs - tails > PROBE_MAX + COMPLETE_PROBE_MAX) throw new LayoutRefusal(path, `more than ${PROBE_MAX + COMPLETE_PROBE_MAX} commands`)
+  const keys = Object.keys(v), tails = keys.filter(k => TAIL_KEY.test(k)).length, boxes = keys.filter(k => BOX_KEY.test(k)).length, pairs = keys.filter(k => !/^\\[A-Za-z@]+$/.test(k)).length - tails - boxes
+  if (keys.length - pairs - tails - boxes > PROBE_MAX + COMPLETE_PROBE_MAX) throw new LayoutRefusal(path, `more than ${PROBE_MAX + COMPLETE_PROBE_MAX} commands`)
   if (pairs > AHEAD_PROBE_MAX) throw new LayoutRefusal(path, `more than ${AHEAD_PROBE_MAX} look-ahead pairs`)
   if (tails > AHEAD_PROBE_MAX) throw new LayoutRefusal(path, `more than ${AHEAD_PROBE_MAX} tail arguments`)
+  if (boxes > AHEAD_PROBE_MAX) throw new LayoutRefusal(path, `more than ${AHEAD_PROBE_MAX} box calls`)
   for (const k of keys) {
     if (/^\\[A-Za-z@]+$/.test(k)) {
       if (k.length > 64) throw new LayoutRefusal(`${path}.${told(k)}`, 'not a control word')
       if (typeof v[k] !== 'string' || v[k].length !== FOLLOWERS.length || !/^[012x]+$/.test(v[k].slice(PUNCT.length)) || !/^[0123x]+$/.test(v[k].slice(0, PUNCT.length))) throw new LayoutRefusal(`${path}.${told(k)}`, `not ${FOLLOWERS.length} codes of 0, 1, 2 or x, or 3 before a punctuation mark`)
     } else {
-      if (!AHEAD_KEY.test(k) && !TAIL_KEY.test(k)) throw new LayoutRefusal(`${path}.${told(k)}`, 'not a control word, a look-ahead pair or a tail argument')
+      if (!AHEAD_KEY.test(k) && !TAIL_KEY.test(k) && !BOX_KEY.test(k)) throw new LayoutRefusal(`${path}.${told(k)}`, 'not a control word, a look-ahead pair, a tail argument or a box call')
       if (typeof v[k] !== 'string' || !/^[012x]$/.test(v[k])) throw new LayoutRefusal(`${path}.${told(k)}`, 'not a code of 0, 1, 2 or x')
     }
   }

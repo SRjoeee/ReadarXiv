@@ -113,7 +113,8 @@ export function rowPieces(m: Placed, content: readonly OutPiece[]): V0Piece[] {
         const face = st ? { face: { role: st.role, bold: st.bold, slant: st.slant, size: st.size } } : {}
         // (a title its source sets in the line with no mark after it: SpanAt.runin, tokens.ts sets the separation after it)
         const runin = spans.get(p.id)?.runin ? { runin: true as const } : {}
-        out.push({ t: 'open', src: srcOfSpan(spans.get(p.id)), id, k: id, ...face, ...runin })
+        const box = spans.get(p.id)?.box ? { box: true as const } : {}
+        out.push({ t: 'open', src: srcOfSpan(spans.get(p.id)), id, k: id, ...face, ...runin, ...box })
         walk(p.content)
         out.push({ t: 'close', src: '}', id })
       }

@@ -10164,6 +10164,17 @@ the empty list of a box (`\ifinner`): the tail's braces open the list of whateve
 element had no opening point and no ink. With the names shown, 2611.18114v1's author line draws each name with its superscript
 and TeX's gaps. Tests: `packages/engine/tests/tail-args.test.ts`.
 
+**G: a group TeX sets in one box is laid unbroken.** With the names shown, the re-laid author line broke "Adeen / Flinker"
+where TeX, setting each name in `\mbox{#1\textsuperscript{#2}}`, breaks nowhere: TeX cannot break a line inside an `\hbox`.
+Which calls TeX sets so is TeX's to say, not a list of box commands' (a `\parbox` or a `minipage` is a box TeX breaks lines
+inside): the look-ahead probe sets each pair's call whose text holds white space, as its unit carries it, alone in a paragraph
+of zero width with every feasible break taken (`marks.ts` `boxSamples`, key `boxKey`); one line (`\prevgraf` 1) answers 0. The
+instrument states each such group a box (`SpanAt.box`, an optional flag, no format move: a part made before states none and is
+laid as before; `marks.ts` `boxedPairs`, read from the probe's log beside the ink probe's facts), and the lay's breaker glues
+every token after the group's first to the one before and makes its spaces ties (`breaker/tokens.ts`). Today's maker reads the
+box answers' keys (`layout/marks.mjs` `BOX_KEY`). Tests: `packages/engine/tests/box-pairs.test.ts`,
+`packages/typeset/tests/unit/box-group.test.ts`.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server

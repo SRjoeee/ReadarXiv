@@ -593,9 +593,15 @@ export function tokens(i: TokensInput): Tokens {
   let runinOwn = 0
   /** infinite glue before the unit's first token (fillOn), set on that token once the list is made */
   let fillLead: Fill | undefined
+  /** the token count where the outermost group TeX set in one box opened (SpanAt.box), and its id; null outside one */
+  let boxFrom: number | null = null,
+    boxId: unknown = null
   const push = (t: Token) => {
     const prev = tokens.at(-1)
     if (noBreakNext && !t.space) t.glue = true
+    // (inside a group TeX set in one box no line breaks: each token after its first is glued to the one before, as TeX cannot
+    // break inside an \hbox)
+    if (boxFrom !== null && tokens.length > boxFrom && !t.space) t.glue = true
     noBreakNext = false
     afterHead = false
     if (prev && !prev.space && !t.space) {
@@ -641,7 +647,14 @@ export function tokens(i: TokensInput): Tokens {
       if (/^\s+$/.test(chunk)) {
         if (tokens.length && !lastIsSpace() && !tokens.at(-1)!.leadEnd && !tokens.at(-1)!.kernEnd) {
           const face = plainOf(faceOf(st, 'latin'), chunk)
-          tokens.push({ space: true, st, face, w100: 0, ...(afterHead ? { keep: true as const } : {}) })
+          tokens.push({
+            space: true,
+            st,
+            face,
+            w100: 0,
+            ...(afterHead ? { keep: true as const } : {}),
+            ...(boxFrom !== null && tokens.length > boxFrom ? { tie: true as const } : {}),
+          })
           if (/[^ \t\n\f\r]/.test(chunk)) hardSpaces.add(tokens.at(-1)!)
         }
         afterHead = false
@@ -950,6 +963,10 @@ export function tokens(i: TokensInput): Tokens {
     }
     if (p.t === 'open') {
       if (p.runin && spaceless && opensSentence()) runinId = p.id
+      if (p.box && boxFrom === null) {
+        boxFrom = tokens.length
+        boxId = p.id
+      }
       const next = openStyle(p, style(), designs)
       const link = LINK_OPEN.test(p.src as string) && p.id !== undefined ? { link: p.id } : {}
       // (its size where the part states one, whatever its command: its share of the member's size, as TeX set its own glyphs, so
@@ -963,6 +980,10 @@ export function tokens(i: TokensInput): Tokens {
       return
     }
     if (p.t === 'close') {
+      if (boxFrom !== null && p.id === boxId) {
+        boxFrom = null
+        boxId = null
+      }
       if (stack.length > 1) stack.pop()
       if (mstack.length > 1) mstack.pop()
       if (headId !== null && p.id === headId) afterHead = true

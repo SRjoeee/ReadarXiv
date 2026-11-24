@@ -2350,6 +2350,13 @@ export async function instrumentOf({
     }
     const spans = spansOf(u.pieces, colours.get(i) ?? null),
       passed = passedOf(u.pieces)
+    // (each group TeX sets in one box, by its call's answer: probeFactsOf's `boxed`, marks.ts boxedPairs)
+    for (const b of probe?.boxed ?? []) {
+      if (b.unit !== i) continue
+      const at = spans.find(([id]) => id === b.piece)
+      if (at) at[1] = { ...at[1], box: 1 }
+      else spans.push([b.piece, { box: 1 }])
+    }
     classesBy[i] = new Map(classes)
     out.push({
       id,
