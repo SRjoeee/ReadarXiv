@@ -71,6 +71,17 @@ describe('a paper macro that stores its argument and sets it at its own call', (
     const paper = paperOf(deferred('\\gdef\\showkicker{\\par\\textbf{\\our@kicker}\\par}'))
     expect(paper.units.filter((u) => u.held && u.front).map(shape)).toEqual(['para: A kicker of our own words'])
   })
+  // (#679's review: the definition's body blanked whole, braces too, leaves `\\gdef\\our@kicker    \\textbf{…}`, a definition
+  // skeleton whose next group reads as its body, so a prose read right after it was taken for another use and the call made
+  // one placeholder. Over the lab's 245 papers no paper's call moves by keeping the braces: left for later, this test kept as
+  // the expected failure until it is built)
+  it.fails('a prose read right after the definition that stores the name is a prose read at the call', () => {
+    const paper = paperOf(deferred('\\textbf{\\our@kicker}'))
+    expect(paper.units.filter((u) => u.held && u.front).map(shape)).toEqual([])
+    expect(paper.units.map(shape).filter((s) => s.startsWith('para'))[0]).toBe(
+      'para: [\\kicker{]A kicker of our own words[}]\nOur own first paragraph, long enough to be a unit of its own.',
+    )
+  })
   it('the other side: a \\let of the stored name is not a read at the call', () => {
     const paper = paperOf(deferred('\\global\\let\\showkicker\\our@kicker'))
     expect(paper.units.filter((u) => u.held && u.front).map(shape)).toEqual(['para: A kicker of our own words'])
