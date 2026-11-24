@@ -46,6 +46,8 @@ export interface Member {
   readonly els: ReadonlyMap<string, readonly number[]>
   /** A's boxes ([page, index]) by role */
   readonly textBoxes: readonly [number, number][]
+  /** the label's boxes on A: what TeX painted in the label's range (an included graphic before its number), one ink with it */
+  readonly labelBoxes?: readonly [number, number][]
   readonly elBoxes: ReadonlyMap<string, readonly [number, number][]>
   /** each element box's partner on B ([page index, index]), by piece id, in elBoxes' order: where TeX shipped it in B's stream */
   readonly elBoxesB: ReadonlyMap<string, readonly [number, number][]>

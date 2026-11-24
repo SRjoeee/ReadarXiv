@@ -309,7 +309,7 @@ export function ownOf(
     kind0: 'u' | 'l' | 'p' | 'q' | 'n',
   ) => {
     const kind = kind0 === 'q' ? 'p' : kind0,
-      images = kind0 === 'p'
+      images = kind0 === 'p' || kind0 === 'l'
     for (const [p, i] of list.glyphs) {
       const cur = gOwn[p - 1]![i]!
       if (
@@ -546,6 +546,21 @@ export function ownOf(
       if (caption || (i >= from && G.bottom < line.top && G.top > line.bottom)) lead.glyphs.push([p, i])
     }
     let qq = q - 1
+    // (one included graphic is one ink: the boxes TeX painted in the head's range, between a point the walk stops at and the
+    // start (or the head's next point), in the start's region and on its line as a glyph of the head is, no one's yet, go with
+    // the glyphs that range gives: a placeholder's or the label's. 2611.18114v1's affiliation line opens with
+    // `\\textsuperscript{1}\\afficon{logo_microsoft}`: its logo's paths were no one's, left where TeX set them while the head's "1"
+    // moved with the translation)
+    let upBox = S.box
+    const boxesFrom = (b0: number): Place[] => {
+      const out: Place[] = []
+      for (let b = Math.max(0, b0); b < upBox; b++) {
+        if (R.box[b] !== r || bOwn[p - 1]![b] !== null) continue
+        const B = pg.boxes
+        if (caption || (B[4 * b + 1]! < line.top && B[4 * b + 3]! > line.bottom)) out.push([p, b])
+      }
+      return out
+    }
     // (the placeholders the walk passed over, each its unit and the glyphs between its points: not yet claimed, this pass
     // running before the placeholders')
     const passed: { unit: number; from: number; to: number }[] = []
@@ -564,8 +579,10 @@ export function ownOf(
       // (a paper's macro at the unit's head, its point \\axthpk's (marks/marks.ts layoutMarking): the glyphs between it and the
       // start, or the next such point, are that piece's ink, and the label is what stands before it)
       if (headOpen(X.name, id)) {
-        if (lead.glyphs.length) claim({ glyphs: lead.glyphs.reverse() }, `u${id}.p`, 'p')
+        const bx = boxesFrom(X.box)
+        if (lead.glyphs.length || bx.length) claim({ glyphs: lead.glyphs.reverse(), boxes: bx }, `u${id}.p`, 'p')
         lead.glyphs = []
+        upBox = X.box
         continue
       }
       const c = CLOSING.exec(X.name),
@@ -583,6 +600,8 @@ export function ownOf(
     if (qq < 0 && !caption) for (; g >= 0; g--) glyphAt(g)
     if (caption && !called) continue
     if (!lead.glyphs.length) continue
+    // (the label's boxes: from where the walk stopped)
+    const stopBox = qq >= 0 ? pg.points[qq]!.box : 0
     // a unit that opens with a placeholder of no mark of its own (a paper's macro first in it: \\bert, \\aidehuman): TeX set
     // that placeholder's ink before the start mark, after the label if the unit has one. On a unit's first line nothing but its
     // label and that ink stands between the unit before it and its start (a cell aside: an unmarked number cell may), so the
@@ -646,7 +665,7 @@ export function ownOf(
           k = j
           break
         }
-      if (k) claim({ glyphs: lead.glyphs.slice(0, k) }, `u${id}.l`, 'l')
+      if (k) claim({ glyphs: lead.glyphs.slice(0, k), boxes: boxesFrom(stopBox) }, `u${id}.l`, 'l')
       // (past the label, the glyphs that set the unit's leading text symbols, in their order from the first, are its text's: an
       // affiliation's `\\{kahe, …\\}`, 1512.03385v1 u321, whose "{" stood under its drawing in its placeholders' group)
       for (const x of headSymbolsOf(units[id])) {
@@ -659,7 +678,7 @@ export function ownOf(
       if (k < lead.glyphs.length) claim({ glyphs: lead.glyphs.slice(k) }, `u${id}.p`, 'p')
       continue
     }
-    claim(lead, `u${id}.l`, 'l')
+    claim({ glyphs: lead.glyphs, boxes: boxesFrom(stopBox) }, `u${id}.l`, 'l')
   }
 
   // ---- a cell's lead macro: a cell that opens with a placeholder of no mark of its own (\\CompletionTokenCap{}, \\#,
