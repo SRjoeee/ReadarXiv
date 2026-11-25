@@ -66,7 +66,8 @@ interface GroupStyle {
   }
   text: number[]
   /** each size declaration's run (sizeSwitch) whose own text's glyphs share one size (facts.ts oneSize): the declaration's
-   *  element id and that size, which the caller states where it is not the member's (El.size) */
+   *  element id and that size, which the caller states on it (El.size), the member's size too: a declaration back to it after
+   *  another is drawn so */
   sizes: [id: string, size: number][]
 }
 /** what a group style or a face switch sets of a face: its weight (bold, medium), its slant (italic, upright); a face change a
@@ -406,16 +407,21 @@ export function groupStyleOf(
   // ---- the unit's own text, its letters in no group (a face's or a fill's switch's run at its top level its own) and in no
   // size declaration's run: its base size's glyphs, the size TeX's paragraph begins at (a title set at the class's \huge, its
   // subtitle after `\large`: the title's). Where every such letter is in a declaration's run (one that opens the unit), the
-  // letters in no group, the run's
+  // letters of the run its first letter in no group stands in: the run TeX's paragraph begins in
   const inGroup: boolean[] = []
   for (let s = 0; s < S; s++) inGroup[s] = s > 0 && (!!span[s] || (inGroup[parent[s] as number] as boolean))
   const text = new Set<number>()
   const unsized = new Set<number>()
+  const first = new Set<number>()
+  let firstRun: number | undefined
   for (let k = 0; k < pairs.length; k += 2) {
     if (inGroup[scopeOf[pairs[k] as number] as number]) continue
     const q = gOf[pairs[k + 1] as number] as number
+    const z = sizeOf[pairs[k] as number] as number
     text.add(q)
-    if ((sizeOf[pairs[k] as number] as number) < 0) unsized.add(q)
+    if (z < 0) unsized.add(q)
+    firstRun ??= z
+    if (z === firstRun) first.add(q)
   }
   // ---- each declaration's run: its own text's glyphs (its letters in no group opened inside it), else all of its letters', at
   // the one size they share (none of several: oneSize)
@@ -479,7 +485,7 @@ export function groupStyleOf(
       several,
       apart: faceApart,
     },
-    text: [...(unsized.size ? unsized : text)].sort((x, y) => x - y),
+    text: [...(unsized.size ? unsized : first.size ? first : text)].sort((x, y) => x - y),
     sizes,
   }
 }

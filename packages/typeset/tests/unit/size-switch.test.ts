@@ -71,6 +71,21 @@ describe('a size declaration at a unit’s top level is drawn at its stated size
     const s = sizes(unit(11.9552))
     expect(Math.round((s.subtitle / s.title) * 1000) / 1000).toBe(Math.round((11.9552 / 20.6625) * 1000) / 1000)
   })
+  it('a declaration back to the member’s size after another draws what follows it at the member’s size', () => {
+    // (`\\small A Title\\[4pt] \\huge a subtitle`, read at the class's \\huge: both declarations stated, the second the member's)
+    const m = unit(20.6625)
+    m.els = [
+      ['0', { kind: 'zero', cmd: 'small', bare: 1, ink: [], size: 8.9664 }],
+      ...(m.els ?? []).slice(0, 1),
+      ['3', { kind: 'zero', cmd: 'huge', bare: 1, ink: [], size: 20.6625 }],
+    ]
+    const r: Row = { id, ok: true, by: 'test', content: [{ t: 'el', id: '0' }, ...content] }
+    const laid = layPage(part(m), { get: (k) => (k === id ? r : undefined), done: true }, rulesFor('de'), metrics)
+      .members[0]!
+    const runs = laid.lines.flatMap(([, , , items]) => items.flatMap((it) => ('src' in it ? [] : [it])))
+    const at = (word: string) => runs.find((it) => it.s.includes(word))!.size
+    expect(Math.round((at('Short') / at('subtitle')) * 1000) / 1000).toBe(Math.round((8.9664 / 20.6625) * 1000) / 1000)
+  })
   it('a declaration the part states no size for leaves the run at the member’s size, as a part made before is laid', () => {
     const s = sizes(unit(undefined))
     expect(s.subtitle).toBe(s.title)

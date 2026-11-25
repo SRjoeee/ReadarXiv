@@ -65,6 +65,17 @@ describe('a size declaration at a unit’s top level, no group around it', () =>
     const content = [el('\\large'), t(` ${SUBTITLE}`)]
     expect(baseSize(content, set(SUBTITLE, 11.9552))).toBe(11.9552)
   })
+  it('a title in a declaration’s run, a subtitle in another’s: the base is the run TeX’s paragraph begins in, both stated', () => {
+    const LARGE = el('\\LARGE')
+    const large = el('\\large')
+    const content = [LARGE, t(` ${TITLE}`), el('\\\\[2.5mm]', 'break'), t('\n'), large, t(` ${SUBTITLE}`)]
+    const glyphs = [...set(TITLE, 17.2154), ...set(SUBTITLE, 11.9552)]
+    expect(baseSize(content, glyphs)).toBe(17.2154)
+    expect(read(content, glyphs).sizes).toEqual([
+      [LARGE.id, 17.2154],
+      [large.id, 11.9552],
+    ])
+  })
   it('the same words in a `{\\large …}` group: the group is its own scope (stated apart), the base the title’s', () => {
     const content = [t(TITLE), el('\\\\[4pt]', 'break'), t('\n'), group('{', [el('\\large'), t(` ${SUBTITLE}`)])]
     const glyphs = [...set(TITLE, 20.6625), ...set(SUBTITLE, 11.9552)]
