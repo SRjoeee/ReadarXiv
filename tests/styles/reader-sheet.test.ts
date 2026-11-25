@@ -91,19 +91,15 @@ describe('the reader\'s style sheet (the interface review, 2026-09-26)', () => {
     expect(row?.body).toMatch(/cursor:\s*pointer/)
   })
 
-  it('gives a contents fold a 24 × 24 target, grown away from its link, its 18 px drawing unchanged (#299, Part 6\'s interface review; WCAG 2.5.8)', () => {
+  it('gives a contents entry a target of at least 24 px tall, its link the whole entry: a title line of 18 px and 4 px above and below (§6.3; WCAG 2.5.8)', () => {
     const px = (v: string) => Number.parseFloat(v)
-    const fold = all.find(r => r.selector === '.fold')?.body ?? ''
-    const size = ['width', 'height'].map(p => px(new RegExp(`(?:^|;)\\s*${p}:\\s*([\\d.]+)px`).exec(fold)?.[1] ?? 'NaN'))
-    expect(size).toEqual([18, 18])
-    expect(fold).toMatch(/position:\s*relative/)
-    const grown = all.find(r => r.selector === '.fold::before')?.body ?? ''
-    // inset: top right bottom left, as the shorthand reads
-    const [top = 0, right = 0, bottom = 0, left = 0] = (/inset:\s*([^;]+)/.exec(grown)?.[1] ?? '').trim().split(/\s+/).map(v => 0 - px(v))
-    expect(grown).toMatch(/content:\s*""/)
-    expect([size[0]! + left + right, size[1]! + top + bottom]).toEqual([24, 24])
-    // nothing toward the link that follows it: the row's 2 px gap stays a gap
-    expect(right).toBe(0)
+    const link = all.find(r => r.selector === '.toc-list a')?.body ?? ''
+    const title = all.find(r => r.selector === '.toc-list .t')?.body ?? ''
+    const pad = px(/padding:\s*([\d.]+)px/.exec(link)?.[1] ?? 'NaN')
+    const line = px(/line-height:\s*([\d.]+)px/.exec(title)?.[1] ?? 'NaN')
+    expect([pad, line]).toEqual([4, 18])
+    expect(2 * pad + line).toBeGreaterThanOrEqual(24)
+    expect(all.some(r => /\.fold\b/.test(r.selector))).toBe(false)
   })
 
   it('presses nothing in by a scale under reduced motion: each press that scales has its rule there, as the toolbar\'s and the card\'s (#299, Part 6; §4.2: a motion is a fade or nothing)', () => {

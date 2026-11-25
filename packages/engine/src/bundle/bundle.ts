@@ -13,6 +13,7 @@ import {
   chunkDigests,
   type El,
   type Head,
+  headNumberOf,
   ORIGINAL_CHUNK,
   type Part,
   type Piece,
@@ -293,6 +294,26 @@ function unitWindows(units: Unit[]): Unit[][] {
   return out
 }
 
+/**
+ * The head's outline: each located heading member as [ord, its first line's page, its unit], and each one's printed number
+ * where its label states one (format's headNumberOf: a label of kind `head`, its number or a counter alone): what the reader's
+ * contents read at open (packages/reader session/contents.ts), the parts of its far pages unread
+ */
+export function outlineOf(members: readonly Member[]): {
+  outline: [number, number, string][]
+  numbers: [number, string][]
+} {
+  const outline: [number, number, string][] = []
+  const numbers: [number, string][] = []
+  for (const mem of members) {
+    if (mem.kind !== 'heading' || !mem.located || !mem.lines[0]) continue
+    outline.push([mem.ord, mem.lines[0][0], mem.id])
+    const n = headNumberOf(mem.labelAt)
+    if (n) numbers.push([mem.ord, n.slice(0, 32)])
+  }
+  return { outline, numbers }
+}
+
 export function* bundle(input: BundleInput): Generator<BundleObject> {
   const { ins, located, addOn, original, paper } = input
   const members = located.members
@@ -557,9 +578,7 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
     yield { kind: 'addon', bytes: addOn.bytes, digest }
     for (const [pg, x] of addOn.pages) if (!x.ok) refused.push([pg, 'page'])
   }
-  const outline: [number, number, string][] = []
-  for (const mem of members)
-    if (mem.kind === 'heading' && mem.located && mem.lines[0]) outline.push([mem.ord, mem.lines[0][0], mem.id])
+  const { outline, numbers } = outlineOf(members)
   const head: Head = {
     format: 1,
     paper,
@@ -575,6 +594,7 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
     parts: partDigests,
     ...(refused.length ? { refused: refused.sort((x, y) => x[0] - y[0]) } : {}),
     ...(outline.length ? { outline } : {}),
+    ...(numbers.length ? { numbers } : {}),
     ...(input.recovered?.length ? { recovered: input.recovered } : {}),
     ...(input.ins.made.reduced ? { reduced: true as const } : {}),
   }

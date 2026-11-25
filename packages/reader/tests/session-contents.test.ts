@@ -1,7 +1,7 @@
 // The contents and the heading being read, as today's (R engine/view/contents.mjs, outline.ts; PDF-READER §6.3, §11.8): the
 // paper's headings, the title left out, three levels ranked among the depths it uses; each at its member's first line once a
-// part places it, else the head's outline's page, else the original's outline's; titled by its row once taken; the heading read
-// the last at or above the reading line.
+// part places it, else the head's outline's page, else the original's outline's; titled by its row once taken; numbered by its
+// label.
 import type { Part, Placed, Row, Unit } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
 import { membersOnPage } from '../src/compose/turn.ts'
@@ -41,10 +41,10 @@ describe('the contents', () => {
   it('lists the headings, the title and those with no depth left out, three levels ranked among the depths used', () => {
     const c = createContents(UNITS, HEAD)
     expect(c.entries()).toEqual([
-      { id: 0, title: '1 Introduction', original: '1 Introduction', level: 1, page: 1 },
-      { id: 1, title: '1.1 Setup', original: '1.1 Setup', level: 2, page: null },
-      { id: 2, title: '2 Method', original: '2 Method', level: 1, page: 2 },
-      { id: 3, title: '2.1.1 Deep', original: '2.1.1 Deep', level: 3, page: null },
+      { id: 0, title: '1 Introduction', original: '1 Introduction', level: 1, page: 1, number: null },
+      { id: 1, title: '1.1 Setup', original: '1.1 Setup', level: 2, page: null, number: null },
+      { id: 2, title: '2 Method', original: '2 Method', level: 1, page: 2, number: null },
+      { id: 3, title: '2.1.1 Deep', original: '2.1.1 Deep', level: 3, page: null, number: null },
     ])
     // (a paper whose headings have no depth: flat, the front matter's left out)
     const flat = listedOf(UNITS.map(({ depth: _d, ...u }) => u as Unit))
@@ -64,6 +64,45 @@ describe('the contents', () => {
     expect(c.firstRect(0)).toEqual([1, 72, 698, 300, 712])
     expect(c.place([placed(3, [1, 0, 0, 0, 0, 0, 0, 0, 0, 0])])).toBe(false)
     expect(c.pageOf(0)).toBe(1)
+  })
+  it('numbers every heading at once by the numbers its head states, a part read after it changing none', () => {
+    const c = createContents(UNITS, { ...HEAD, numbers: [[9, '2']] })
+    expect(c.entries().map((e) => e.number)).toEqual([null, null, '2', null])
+    const line = [2, 0, 72, 300, 700, 712, 698, 72, 300, 0]
+    const label = {
+      kind: 'head',
+      ink: [2, 72, 698, 80, 712, 700],
+      style: { font: 0, size: 10 },
+      num: ['7', [2, 72, 698, 78, 712, 700]],
+    }
+    c.place([{ ...placed(9, line), label } as unknown as Placed])
+    expect(c.entries()[2]?.number).toBe('2')
+  })
+  it('numbers a heading by its label as its part states it: the number TeX set, its punctuation aside; none where TeX set none', () => {
+    const c = createContents(UNITS, HEAD)
+    const line = [2, 0, 72, 300, 700, 712, 698, 72, 300, 0]
+    const label = (num?: string, kind = 'head') => ({
+      kind,
+      ink: [2, 72, 698, 80, 712, 700],
+      style: { font: 0, size: 10 },
+      ...(num === undefined ? {} : { num: [num, [2, 72, 698, 78, 712, 700]] }),
+      punct: ['.', [2, 78, 698, 80, 712, 700]],
+    })
+    // (a member with no label yet, then one stating it: the entry gains its number, told as moved)
+    expect(c.place([placed(9, line)])).toBe(true)
+    expect(c.entries()[2]?.number).toBeNull()
+    expect(c.place([{ ...placed(9, line), label: label('2') } as unknown as Placed])).toBe(true)
+    expect(c.entries()[2]?.number).toBe('2')
+    // (the first a part states stays; a label of another kind, or one with no number, numbers nothing)
+    expect(c.place([{ ...placed(9, line), label: label('7') } as unknown as Placed])).toBe(false)
+    expect(c.entries()[2]?.number).toBe('2')
+    expect(c.place([{ ...placed(3, line), label: label('1', 'float') } as unknown as Placed])).toBe(true)
+    expect(c.place([{ ...placed(3, line), label: label() } as unknown as Placed])).toBe(false)
+    expect(c.entries()[0]?.number).toBeNull()
+    // (a counter alone, which the label's reading states as its name: IEEEtran's "IV.")
+    const roman = { ...label(), name: ['IV', [2, 72, 698, 78, 712, 700]] }
+    expect(c.place([{ ...placed(3, line), label: roman } as unknown as Placed])).toBe(true)
+    expect(c.entries()[0]?.number).toBe('IV')
   })
   it('titles a heading by its row once taken, the source again where its row is no translation or is let go', () => {
     const c = createContents(UNITS, HEAD)
@@ -156,19 +195,6 @@ describe('the contents', () => {
     }
     expect(await c.outline(doc)).toBe(true)
     expect(c.entries().map((e) => e.page)).toEqual([1, 2, 2, 4])
-  })
-  it('the heading being read: the last at or above the reading line of the pane read, null before the first', () => {
-    const c = createContents(UNITS, HEAD)
-    c.place([placed(3, [1, 0, 72, 300, 700, 712, 698, 72, 300, 0])])
-    // (the Introduction's top a fifth down page 1)
-    const topOf = () => 0.2
-    expect(c.headingAt(1, 0.1, topOf)).toBeNull()
-    expect(c.headingAt(1, 0.3, topOf)).toBe(0)
-    // (a heading with a page and no line placed is at its page's top: Method on page 2)
-    expect(c.headingAt(2, 0, topOf)).toBe(2)
-    expect(c.headingAt(5, 0.5, topOf)).toBe(2)
-    // (a top that cannot be told counts as read)
-    expect(c.headingAt(1, 0.1, () => null)).toBe(0)
   })
 })
 

@@ -1,22 +1,34 @@
-// The contents and the heading being read (docs/PDF-READER.md §6.3, §11.8):
+// The contents (docs/PDF-READER.md §6.3):
 // the paper's headings as its units name them (kind `heading`, their `depth` the sectioning command's), the title left out, a
 // tree of three levels at most ranked among the depths the paper uses (an article's sections are 1, a thesis's chapters 1 and
 // its sections 2); a heading with no depth (a \paragraph) is not in the contents once any has one. Each is at its member's first
 // line once a part places it, else at the page the head's outline gives it (the located headings, by member), else at the page
 // the original's own outline gives a heading of its title (matched in order), else at none; titled by its row once taken, else by
-// its source; in either, each element as its copy text (the part's), never its TeX source. The heading read is the last of them
-// at or above the reading line of the pane read. Pure: the reader tells it what comes and asks it what to show.
-import type { El, Head, OutPiece, Piece, Placed, Row, Unit } from '@readarxiv/format'
+// its source; in either, each element as its copy text (the part's), never its TeX source; numbered by its label as the part that
+// places it states it (none until then, none where TeX set none). Pure: the reader tells it what comes and asks it what to
+// show. No heading is told as the one being read: the contents mark none (§6.3).
+import {
+  type El,
+  type Head,
+  headNumberOf,
+  type OutPiece,
+  type Piece,
+  type Placed,
+  type Row,
+  type Unit,
+} from '@readarxiv/format'
 
 /** a contents entry: `id` its place in the contents (stable for a layer), `title` its row's text once taken else `original`, the
  *  source's, each element in both as its copy text (copyTextOf); `level` 1 to 3; `page` the page it is on, null where none is
- *  known */
+ *  known; `number` the heading's number as its part states it (its member's label, Label.num: "3.1", "IV", "A"), null where
+ *  TeX set none (a starred section) or no part read yet states it */
 export interface OutlineEntry {
   id: number
   title: string
   original: string
   level: 1 | 2 | 3
   page: number | null
+  number: string | null
 }
 /** a rectangle on a page: [page, x0, y0, x1, y1] (PDF units, y up) */
 export type Rect = [number, number, number, number, number]
@@ -113,12 +125,6 @@ export interface Contents {
   firstRect(id: number): Rect | null
   /** the page the contents give an entry: its first rectangle's, else the head's outline's, else the original's outline's */
   pageOf(id: number): number | null
-  /**
-   * The heading being read at a place: page `page`, `at` how far down it the reading line is (a share of its height), and
-   * `topOf(rect)` how far down its page a rectangle's top is (null where it cannot be told): the last entry at or above it (one
-   * with a page and no rectangle is at its page's top); null before the first
-   */
-  headingAt(page: number, at: number | null, topOf: (r: Rect) => number | null): number | null
 }
 /** what of PDF.js's document the original's outline is read through */
 export interface OutlineDoc {
@@ -128,7 +134,7 @@ export interface OutlineDoc {
 }
 
 /** the contents of a layer's paper, from its units (in their objects' order) and its head */
-export function createContents(units: readonly Unit[], head: Pick<Head, 'outline'>): Contents {
+export function createContents(units: readonly Unit[], head: Pick<Head, 'outline' | 'numbers'>): Contents {
   const at = new Map<string, [number, number][]>()
   for (const [ord, page, id] of head.outline ?? []) (at.get(id) ?? at.set(id, []).get(id))?.push([ord, page])
   for (const l of at.values()) l.sort((a, b) => a[0] - b[0])
@@ -148,6 +154,13 @@ export function createContents(units: readonly Unit[], head: Pick<Head, 'outline
   /** each entry's first rectangle once a part places it; the pages the original's outline gives; by unit, the rows taken, its
    *  elements' kinds and the copy texts its members' parts state (Placed.els) */
   const first = new Map<number, Rect>()
+  /** each entry's number: the head's, by its member's ord, at once; else the first part that places it states its label's (a
+   *  head made before it stated numbers) */
+  const numbers = new Map<number, string>()
+  for (const [ord, n] of head.numbers ?? []) {
+    const h = byOrd.get(ord)
+    if (h && n.trim()) numbers.set(h.id, n.trim())
+  }
   const outlined = new Map<number, number>()
   const rowOf = new Map<string, readonly OutPiece[]>()
   const kinds = new Map<string, Map<string, string>>()
@@ -174,6 +187,7 @@ export function createContents(units: readonly Unit[], head: Pick<Head, 'outline
         original: sourceTitle(h.unit),
         level: (h.depth === undefined ? 1 : depths.indexOf(h.depth) + 1) as 1 | 2 | 3,
         page: pageOf(h.id),
+        number: numbers.get(h.id) ?? null,
       })),
     place(members) {
       let moved = false
@@ -184,6 +198,12 @@ export function createContents(units: readonly Unit[], head: Pick<Head, 'outline
         if (!first.has(h.id) && l) {
           // (a line: page, column, x0, x1, baseline, top, bottom, …)
           first.set(h.id, [l[0], l[2], l[6], l[3], l[5]])
+          moved = true
+        }
+        // (its number, the label TeX set before its title as the part reads it: a heading's, kind `head`; the first a part states)
+        const n = headNumberOf(m.label) ?? undefined
+        if (n && !numbers.has(h.id)) {
+          numbers.set(h.id, n)
           moved = true
         }
         // (its elements' copy texts, the first a part states for each: a title that gains one is told as moved)
@@ -253,19 +273,5 @@ export function createContents(units: readonly Unit[], head: Pick<Head, 'outline
     },
     firstRect: (id) => first.get(id) ?? null,
     pageOf,
-    headingAt(page, at, topOf) {
-      let id: number | null = null
-      for (const h of headings) {
-        const r = first.get(h.id) ?? null
-        const p = pageOf(h.id)
-        if (!p) continue
-        if (p < page) id = h.id
-        else if (p === page) {
-          const top = r ? topOf(r) : null
-          if (at === null || top === null || top <= at) id = h.id
-        }
-      }
-      return id
-    },
   }
 }

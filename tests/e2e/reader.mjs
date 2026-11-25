@@ -1362,7 +1362,7 @@ try {
     await page.evaluate(() => window.__reader.controller.zoomTo('page-width'))
     await page.waitForTimeout(800)
 
-    // the contents: the index's headings, their pages from the parts, their titles from the rows; the heading read on a scroll
+    // the contents: the index's headings, their pages from the parts, their titles from the rows; none marked on a scroll
     const st = await page.evaluate(() => window.__reader.controller.getState())
     const located = st.outline.filter(e => e.page)
     check('the contents: the paper\'s headings, located by the parts, titled by the rows', st.outline.length >= 5 && located.length === st.outline.length && st.outline.every(e => /\[echo\]/.test(e.title) && e.original && !/\[echo\]/.test(e.original)), JSON.stringify(st.outline.slice(0, 3)))
@@ -1371,9 +1371,9 @@ try {
     await page.mouse.wheel(0, 6000)
     await page.waitForFunction(() => window.__reader.view.probe().motion === null, null, { timeout: 5000 }).catch(() => undefined)
     await page.waitForTimeout(900)
-    const deep = await page.evaluate(() => window.__reader.controller.getState().currentHeading)
+    const marked = await page.evaluate(() => document.querySelectorAll('#axt-contents [aria-current], #axt-contents [aria-selected]').length)
     const lvl = await probe()
-    check('the heading read follows the scroll: further down, a later heading of the contents', deep !== null && st.outline.findIndex(e => e.id === deep) > 0, `${deep}`)
+    check('the contents follow no scroll: no entry marked as the one being read (the maintainer, 2026-11-26)', marked === 0, `${marked} marked`)
     check('on the layer the pair stands level at rest (levelError within 24 px)', Math.abs(lvl.levelError ?? 999) <= 24, `levelError ${lvl.levelError}`)
     // the window: through the paper and back, the right holds the layer near the view alone (§3.2), what it let go released
     const R1 = await page.locator('#right').boundingBox()

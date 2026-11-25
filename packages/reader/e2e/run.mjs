@@ -15,7 +15,7 @@
 //   its first widened by 2 pt), i8-reverse (the reading's items reversed before the judge), digest-unheld
 //   (the storage check's range reader never given the head's digests)
 import { createHash } from 'node:crypto'
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { deflateSync, inflateSync } from 'node:zlib'
@@ -873,7 +873,11 @@ const elsewhere = await startServer({
 })
 
 const pw = await import('playwright')
-const browser = await pw[browserName].launch({ args: browserName === 'chromium' ? [RESOLVER_WALL] : [] })
+// (AXT_HEADED=1: the browser shown, to watch a check run or hold a page open: AXT_HOLD)
+const browser = await pw[browserName].launch({
+  headless: !process.env.AXT_HEADED,
+  args: browserName === 'chromium' ? [RESOLVER_WALL] : [],
+})
 const violations = []
 const LINK = (() => {
   const m = /^(\d+),(\d+)$/.exec(process.env.AXT_LINK ?? '')
@@ -2186,6 +2190,195 @@ await check(
       `the source's object asked: ${asked.filter((p) => p.includes('/fx/'))}`,
     )
     return { entries: n, shown: again.shown, counted: opened.total }
+  },
+)
+/** the contents panel as drawn: its width, where the document starts, the entries marked; each entry's level, number, its
+ *  number's and title's left edges, the translation's lines, the original's, how many characters of the title's size its
+ *  measure holds; and whether the list scrolls sideways */
+const contentsDrawn = (page) =>
+  page.evaluate(() => {
+    const list = document.querySelector('#axt-contents .toc-list')
+    const box = (el) => (el ? el.getBoundingClientRect() : null)
+    return {
+      sideways: list.scrollWidth - list.clientWidth,
+      panel: document.getElementById('axt-contents').getBoundingClientRect().width,
+      docLeft: document.querySelector('.doc').getBoundingClientRect().left,
+      marked: document.querySelectorAll('#axt-contents [aria-current], #axt-contents [aria-selected]').length,
+      entries: [...list.querySelectorAll('li')].map((li) => {
+        const n = li.querySelector('.n'),
+          t = li.querySelector('.t'),
+          o = li.querySelector('.o')
+        const lh = Number.parseFloat(getComputedStyle(t).lineHeight)
+        return {
+          level: Number(li.dataset.level),
+          number: n?.textContent ?? null,
+          nLeft: n?.textContent ? box(n).left : null,
+          aLeft: box(li.querySelector('a')).left,
+          tLeft: box(t).left,
+          tLines: Math.round(box(t).height / lh),
+          oLines: o ? Math.round(box(o).height / Number.parseFloat(getComputedStyle(o).lineHeight)) : 0,
+          oCut: o ? o.scrollWidth > o.clientWidth : false,
+          links: li.querySelectorAll('a').length,
+          measure: box(t).width / Number.parseFloat(getComputedStyle(t).fontSize),
+          texts: [n?.textContent, t.textContent, o?.textContent].filter(Boolean),
+        }
+      }),
+    }
+  })
+await check(
+  "contents: every heading one link of its number, its translation (two lines at most) and its original (one line); each level 12 px in from its parent, its titles on one edge, a heading of no number among them; none marked, a jump included; 240 px beside the document, over it in a window under 720 px and closed by a jump there; no sideways scroll (§6.3, the maintainer's reference of 2026-11-25 and his word of 2026-11-26)",
+  async () => {
+    // (AXT_LAB_FIXTURES' papers too, in Chinese; AXT_SHOTS: each drawn light, a row hovered, dark and at 320 px, and the panel's
+    // markup, into .shots;
+    // AXT_HOLD with AXT_HEADED: the last left open until its window is closed)
+    const papers = [['s1-columns', 'de'], ...checkedNames.filter((n) => fixtures[n].face).map((n) => [n, 'zh'])]
+    const out = {}
+    if (process.env.AXT_SHOTS) mkdirSync(join(HERE, '.shots'), { recursive: true })
+    for (const [name, target] of papers) {
+      const { page, context, errors } = await chromeLaid(name, { ui: 'zh-CN', target })
+      await waitFor(page, () => window.__c.reader.state().rows.s === 'complete', null, 30_000).catch(() => undefined)
+      await page.locator('button[aria-controls="axt-contents"]').click()
+      // (a heading gone to by a press on its row: nothing stays marked)
+      const rowsOf = page.locator('#axt-contents a')
+      const n = await rowsOf.count()
+      await rowsOf.nth(Math.min(n - 1, 3)).click()
+      await page.mouse.move(900, 600)
+      await page.waitForTimeout(600)
+      const drawn = await contentsDrawn(page)
+      const name1 = await rowsOf.nth(Math.min(n - 1, 1)).ariaSnapshot()
+      const shot = async (tag) => {
+        if (!process.env.AXT_SHOTS) return
+        const b = await page.locator('#axt-contents').boundingBox()
+        await page.screenshot({
+          path: join(HERE, '.shots', `contents-${name}-${tag}.png`),
+          clip: { x: 0, y: 0, width: b.x + b.width + 24, height: b.y + b.height },
+        })
+      }
+      await shot('light')
+      // (and its markup and entries, which a page of its own draws with the reader's sheet beside other widths and designs)
+      if (process.env.AXT_SHOTS) {
+        const { writeFileSync } = await import('node:fs')
+        writeFileSync(
+          join(HERE, '.shots', `contents-${name}.html`),
+          await page.evaluate(() => document.getElementById('axt-contents').outerHTML),
+        )
+        writeFileSync(
+          join(HERE, '.shots', `contents-${name}.json`),
+          JSON.stringify(await page.evaluate(() => window.__c.reader.state().view.outline)),
+        )
+      }
+      await rowsOf.nth(Math.min(n - 1, 2)).hover()
+      await page.waitForTimeout(150)
+      await shot('hover')
+      await page.mouse.move(900, 600)
+      await page.evaluate(() => window.__c.controller.setPrefs({ theme: 'dark', dim: false }))
+      await page.waitForTimeout(300)
+      await shot('dark')
+      await page.evaluate(() => window.__c.controller.setPrefs({ theme: 'light' }))
+      await page.setViewportSize({ width: 320, height: 640 })
+      await page.waitForTimeout(400)
+      const narrow = await contentsDrawn(page)
+      if (process.env.AXT_SHOTS) await page.screenshot({ path: join(HERE, '.shots', `contents-${name}-320.png`) })
+      // (laid over the document there, the contents close on a jump)
+      await rowsOf.first().click()
+      await page.waitForTimeout(300)
+      const closedOnJump = await page.evaluate(() => !document.documentElement.hasAttribute('data-axt-contents'))
+      // (the focus then: on the heading's page where the side read holds a target for it, else on the contents button; and
+      // Escape, the contents opened again, closes them with the focus on their button)
+      await page.waitForTimeout(600)
+      const focusOf = () =>
+        page.evaluate(() => {
+          const f = document.activeElement
+          return f?.closest('.doc')
+            ? 'page'
+            : f?.matches('button[aria-controls="axt-contents"]')
+              ? 'button'
+              : (f?.tagName ?? null)
+        })
+      const jumpFocus = await focusOf()
+      await page.locator('button[aria-controls="axt-contents"]').click()
+      await rowsOf.nth(1).focus()
+      await page.keyboard.press('Escape')
+      await page.waitForTimeout(300)
+      const escaped = [
+        await page.evaluate(() => document.documentElement.hasAttribute('data-axt-contents')),
+        await focusOf(),
+      ]
+      // (the translation read alone, its laid pages a focus target: a jump takes the focus to the heading's page)
+      await page.evaluate(() => window.__c.controller.setDisplay('translation'))
+      await page.waitForTimeout(400)
+      await page.locator('button[aria-controls="axt-contents"]').click()
+      await rowsOf.nth(Math.min(n - 1, 4)).press('Enter')
+      await page.waitForTimeout(1200)
+      const pageFocus = await focusOf()
+      await page.evaluate(() => window.__c.controller.setDisplay('bilingual'))
+      if (process.env.AXT_HOLD && process.env.AXT_HEADED && name === papers.at(-1)[0]) {
+        await page.setViewportSize({ width: 1400, height: 900 })
+        console.log(`holding ${name} open: close its window to go on`)
+        await page.waitForEvent('close', { timeout: 0 })
+      }
+      await context.close()
+      assert(!errors.length, `${name}: ${errors.join('; ')}`)
+      const es = drawn.entries
+      const near = (a, b) => a !== null && b !== null && Math.abs(a - b) < 0.75
+      // (each level's titles on one edge; each entry 12 px in from its parent)
+      for (const lv of [1, 2, 3]) {
+        const at = es.filter((e) => e.level === lv)
+        assert(
+          at.every((e) => near(e.tLeft, at[0].tLeft)),
+          `${name}: level ${lv}'s titles on ${[...new Set(at.map((e) => e.tLeft))]}`,
+        )
+      }
+      for (const [k, e] of es.entries()) {
+        const parent = es.slice(0, k).findLast((x) => x.level < e.level)
+        if (parent)
+          assert(
+            near(e.aLeft, parent.aLeft + 12 * (e.level - parent.level)),
+            `${name}: entry ${k} at ${e.aLeft}, its parent at ${parent.aLeft}`,
+          )
+      }
+      assert(
+        es.every((e) => e.links === 1 && e.tLines <= 2 && e.oLines <= 1),
+        `${name}: ${JSON.stringify(es.filter((e) => e.links !== 1 || e.tLines > 2 || e.oLines > 1))}`,
+      )
+      assert(drawn.marked === 0 && narrow.marked === 0, `${name}: ${drawn.marked} entries marked after a jump`)
+      assert(
+        drawn.panel === 240 && drawn.docLeft === 240,
+        `${name}: the contents ${drawn.panel} px, the document from ${drawn.docLeft}`,
+      )
+      assert(
+        narrow.panel === 240 && narrow.docLeft === 0 && closedOnJump,
+        `${name}: at 320 px the contents ${narrow.panel} px, the document from ${narrow.docLeft}, closed on a jump: ${closedOnJump}`,
+      )
+      assert(
+        ['page', 'button'].includes(jumpFocus),
+        `${name}: after a jump over the document the focus is on ${jumpFocus}`,
+      )
+      assert(escaped[0] === false && escaped[1] === 'button', `${name}: Escape leaves the contents ${escaped}`)
+      assert(pageFocus === 'page', `${name}: after a jump in the translation alone the focus is on ${pageFocus}`)
+      assert(
+        drawn.sideways <= 0 && narrow.sideways <= 0,
+        `${name}: the list scrolls sideways by ${drawn.sideways} / ${narrow.sideways} px`,
+      )
+      // (the link's name: its number, the translation, then the original)
+      const e1 = es[Math.min(n - 1, 1)]
+      const linkName = /- link "([^"]*)"/.exec(name1)?.[1] ?? null
+      assert(
+        e1.texts.length >= 2 && linkName === e1.texts.join(' '),
+        `${name}: the link's name ${linkName}, its entry's words ${JSON.stringify(e1.texts)}`,
+      )
+      const chars = (lv) => es.filter((e) => e.level === lv).map((e) => Math.round(e.measure * 10) / 10)[0] ?? null
+      out[name] = {
+        entries: es.length,
+        numbered: es.filter((e) => e.number).length,
+        twoLines: es.filter((e) => e.tLines === 2).length,
+        cut: es.filter((e) => e.oCut).length,
+        chars: [chars(1), chars(2), chars(3)],
+        jumpFocus,
+        name: name1.trim(),
+      }
+    }
+    return out
   },
 )
 await check(

@@ -24,7 +24,7 @@ import { CATALOGUE_WORDS, type Words } from './compose/words.ts'
 import { createPanes, type Display, type Panes, type Side, type Zoom } from './panes/panes.ts'
 import { type Kit, loadKit, type PdfBuild } from './pdfjs/kit.ts'
 import { follow, objectStore, open, Refused, segOf } from './session/client.ts'
-import { type Contents, createContents, type OutlineEntry, type Rect } from './session/contents.ts'
+import { type Contents, createContents, type OutlineEntry } from './session/contents.ts'
 import {
   againOf,
   backoff,
@@ -103,8 +103,10 @@ export type Command =
   | { do: 'pinch'; side: Side; factor: number; at: [number, number] }
   | { do: 'page'; side: Side; page: number }
   | { do: 'unit'; id: number }
-  /** a contents entry (its `id`) gone to on both sides, a line of room above its heading; else its page */
-  | { do: 'heading'; id: number }
+  /** a contents entry (its `id`) gone to on both sides, a line of room above its heading; else its page. `focus`: the focus
+   *  given to its page on the side read where that side holds a target for it (panes focusPage), the host's own place for it
+   *  kept where it holds none */
+  | { do: 'heading'; id: number; focus?: boolean }
   | { do: 'lead'; side: Side }
   | { do: 'narrow'; on: boolean }
   | { do: 'retry' }
@@ -164,10 +166,8 @@ export interface ReaderState {
     zoom: Zoom | null
     narrow: boolean
     sides: Record<Side, { page: number; pages: number }>
-    /** the contents: the paper's headings, their levels, pages and titles (translated once their rows are in) */
+    /** the contents: the paper's headings, their levels, pages, numbers and titles (translated once their rows are in) */
     outline: readonly OutlineEntry[]
-    /** the contents entry being read: the last heading at or above the reading line of the pane read; null before the first */
-    heading: number | null
   }
   /** our server's document followed, its stream lost while the browser is online and asked again, nothing heard since (the
    *  website says "reconnecting") */
@@ -331,12 +331,8 @@ export function openReader(
     panes.on('sync', (e) => {
       syncAvailable = e.available
     })
-    // (the heading being read follows the scroll of either pane; the rows made here, the reading place)
-    panes.on('scrolled', () => headingSoon())
-    panes.on('page', () => {
-      headingSoon()
-      nearSoon()
-    })
+    // (the rows made here, the reading place)
+    panes.on('page', () => nearSoon())
     return k
   })
   const openExternal = (url: string) => {
@@ -449,13 +445,11 @@ export function openReader(
     }
     return unitsHeld.units
   }
-  // ---- the contents and the heading being read: told at the head's units and after each change, once a frame
+  // ---- the contents: told at the head's units and after each change, once a frame
   let contents: Contents | null = null,
     contentsOf = ''
   let outline: readonly OutlineEntry[] = []
-  let heading: number | null = null
-  let outlineFrame = 0,
-    headingFrame = 0
+  let outlineFrame = 0
   function outlineSoon() {
     if (outlineFrame || closed || !contents) return
     outlineFrame = clock.frame(() => {
@@ -463,7 +457,6 @@ export function openReader(
       if (!contents) return
       outline = contents.entries()
       tellSoon()
-      headingSoon()
     })
   }
   /** the side the reader reads: the one shown (the translation's in its own display, or where the bilingual display shows it
@@ -473,25 +466,6 @@ export function openReader(
     (displayOf(rt.state) === 'bilingual' && root.hasAttribute('data-axt-narrow'))
       ? 'right'
       : 'left'
-  /** how far down its page a rectangle's top is, as a share of the page's height on the side read */
-  const topOf = (r: Rect): number | null => {
-    const side = sideRead()
-    const box = panes?.boxOf(side, r[0], [r[1], r[2], r[3], r[4]]),
-      h = panes?.pageElement(side, r[0])?.offsetHeight
-    return box && h ? box.top / h : null
-  }
-  function headingSoon() {
-    if (headingFrame || closed || !contents) return
-    headingFrame = clock.frame(() => {
-      headingFrame = 0
-      if (!contents || !panes) return
-      const at = panes.reading()
-      const id = at ? contents.headingAt(at.page, at.at, topOf) : null
-      if (id === heading) return
-      heading = id
-      tellSoon()
-    })
-  }
   /** the contents of a head made once its units are in (those it names, `units`), the original's own outline matched for the
    *  headings it does not place */
   function contentsFor(h: Head, units: readonly ObjectAt[]) {
@@ -515,7 +489,7 @@ export function openReader(
   }
   /** a contents entry gone to: its first rectangle where a part places it (the part of its page read where it is not yet), a
    *  line of room above it on the side read, the other following; else the page the contents give it */
-  async function goToHeading(id: number) {
+  async function goToHeading(id: number, focus = false) {
     const c = contents
     if (!c || !panes) return
     let r = c.firstRect(id)
@@ -527,6 +501,8 @@ export function openReader(
     if (closed || !panes) return
     if (r) panes.goToRect(r)
     else if (page) panes.goToPage(sideRead(), page)
+    const at = r?.[0] ?? page
+    if (focus && at) panes.focusPage(sideRead(), at)
   }
   // ---- the rows made here under way, and the reading place they are asked by
   let making: { units: readonly Unit[]; signal: AbortSignal; asked: Set<string>; run(want: Unit[]): void } | null = null
@@ -1225,7 +1201,6 @@ export function openReader(
           right: { page: p?.pageOf('right') ?? 0, pages: p?.right.pages ?? 0 },
         },
         outline,
-        heading,
       },
       reconnecting: wait.reconnecting,
       network: wait.network,
@@ -1279,7 +1254,7 @@ export function openReader(
       else if (c.do === 'unit') {
         const l = composer?.member(c.id)?.lines[0]
         if (l) p.goToRect([l[0], l[2], l[6], l[3], l[5]])
-      } else if (c.do === 'heading') void goToHeading(c.id)
+      } else if (c.do === 'heading') void goToHeading(c.id, c.focus)
     },
     probe() {
       const s = rt.state

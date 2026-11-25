@@ -1,73 +1,76 @@
-// The contents (the reader's design, §6.3): the paper's headings as a folding tree, one 28 px row each, the translated
-// title truncating, the original in its tooltip, the page at the end. The section being read — the last heading above
-// the reading line, as the session places it — is marked and its branch opened as the reading moves; the rest folds as
-// the reader leaves it
-import { ChevronRight } from 'lucide'
-import { useEffect, useMemo, useState } from 'react'
-import { R, Icon, useTip } from '@readarxiv/ui'
+// The contents (the reader's design, §6.3): the paper's headings, every level shown, each entry its number in a column of its
+// own, the translated title (two lines at most) and the original under it (one line), hierarchy by indentation alone: each
+// level 12 px in from its parent, its number column as wide as its widest number, so that its titles share one edge. A row
+// jumps both sides to its heading and stays unmarked: no entry is marked as the one being read: a press jumps, nothing stays
+// selected (§6.3)
+import type { CSSProperties } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
+import { R, useTip } from '@readarxiv/ui'
 import type { OutlineEntry, ReaderController } from './model.ts'
 import { useParts } from './parts.tsx'
-import { TippedButton } from './TippedButton.tsx'
 import { useReader } from './use-reader.ts'
 
-export function Outline({ controller, open }: { controller: ReaderController; open: boolean }) {
+export function Outline({
+  controller,
+  open,
+  onGone,
+}: {
+  controller: ReaderController
+  open: boolean
+  /** a row gone to: whether the contents closed for it (laid over the document), the focus then the page's where the reader
+   *  holds a target for it, else the contents button's (App.tsx) */
+  onGone?: () => boolean
+}) {
   const { languages } = useParts()
-  const {
-    outline: entries,
-    currentHeading,
-    lang,
-  } = useReader(controller, (s) => ({
+  const { outline: entries, lang } = useReader(controller, (s) => ({
     outline: s.outline,
-    currentHeading: s.currentHeading,
     lang: s.prefs ? languages.tag(s.prefs.target) : undefined,
   }))
-  const parents = useMemo(
-    () =>
-      entries.map((e, k) => {
-        for (let p = k - 1; p >= 0; p--) if (entries[p]!.level < e.level) return p
-        return -1
-      }),
-    [entries],
-  )
-  const hasKids = (k: number) => parents.includes(k)
-  // the section being read is the session's to say, by the reading line: a heading at a page's foot, gone to, is read
-  // though PDF.js counts the next page as the one shown
-  const current = entries.findIndex((e) => e.id === currentHeading)
-  const [expanded, setExpanded] = useState<Set<number>>(() => new Set())
-  // the section being read has its branch opened; what the reader folded elsewhere stays folded
-  useEffect(() => {
-    if (current < 0) return
-    setExpanded((old) => {
-      const next = new Set(old)
-      for (let p = parents[current]!; p >= 0; p = parents[p]!) next.add(p)
-      return next.size === old.size ? old : next
-    })
-  }, [current, parents])
-  const shownRow = (k: number): boolean => parents[k]! < 0 || (expanded.has(parents[k]!) && shownRow(parents[k]!))
+  // each level's number column: as wide as its widest number as drawn (measured once the entries or the faces change), so
+  // that the level's titles start on one edge; none where no entry of the level has a number
+  const list = useRef<HTMLUListElement>(null)
+  const [widths, setWidths] = useState<readonly number[]>([0, 0, 0])
+  /** what the columns are measured from: each entry's level and number */
+  const numbers = entries.map((e) => `${e.level}${e.number ?? ''}`).join(' ')
+  useLayoutEffect(() => {
+    const measure = () => {
+      if (!numbers) return setWidths((was) => (was.some(Boolean) ? [0, 0, 0] : was))
+      const w = [0, 0, 0]
+      for (const n of list.current?.querySelectorAll<HTMLElement>('[data-level] > a > .n > span') ?? []) {
+        const level = Number(n.closest<HTMLElement>('[data-level]')?.dataset.level) || 1
+        w[level - 1] = Math.max(w[level - 1]!, Math.ceil(n.getBoundingClientRect().width))
+      }
+      setWidths((was) => (was.every((x, k) => x === w[k]) ? was : w))
+    }
+    measure()
+    let live = true
+    void document.fonts?.ready.then(() => live && measure())
+    return () => {
+      live = false
+    }
+  }, [numbers])
+  const numbered = [1, 2, 3].map((l) => entries.some((e) => e.level === l && e.number))
   return (
     // closed, inert, not hidden: out of the tab order and the accessibility tree, still displayed, so that the style
     // sheet slides it (a hidden sidebar is display: none, which no transition leaves)
     <aside id="axt-contents" className="chrome toc" aria-label={R.contents} inert={!open}>
       <div className="toc-h">{R.contents}</div>
-      <ul className="toc-list">
-        {entries.map((e, k) => (
+      <ul
+        ref={list}
+        className="toc-list"
+        style={Object.fromEntries(widths.map((w, k) => [`--n${k + 1}`, `${w}px`])) as CSSProperties}
+      >
+        {entries.map((e) => (
           <Row
             key={e.id}
             entry={e}
             lang={lang}
-            hidden={!shownRow(k)}
-            current={k === current}
-            folds={hasKids(k)}
-            expanded={expanded.has(k)}
-            onFold={() =>
-              setExpanded((old) => {
-                const next = new Set(old)
-                if (next.has(k)) next.delete(k)
-                else next.add(k)
-                return next
-              })
-            }
-            onGo={() => controller.goToHeading(e.id)}
+            numbered={numbered[e.level - 1]!}
+            onGo={() => {
+              const closed = onGone?.() ?? false
+              if (closed) controller.goToHeading(e.id, { focus: true })
+              else controller.goToHeading(e.id)
+            }}
           />
         ))}
       </ul>
@@ -78,54 +81,47 @@ export function Outline({ controller, open }: { controller: ReaderController; op
 function Row({
   entry,
   lang,
-  hidden,
-  current,
-  folds,
-  expanded,
-  onFold,
+  numbered,
   onGo,
 }: {
   entry: OutlineEntry
   lang: string | undefined
-  hidden: boolean
-  current: boolean
-  folds: boolean
-  expanded: boolean
-  onFold: () => void
+  numbered: boolean
   onGo: () => void
 }) {
+  // the original whole in the tooltip, its line being cut at the sidebar's edge
   const { props, tip } = useTip(entry.original, undefined, { side: 'right' })
+  const translated = entry.title !== entry.original
   return (
-    <li data-entry={entry.id} data-level={entry.level} hidden={hidden}>
-      <div className="entry" aria-current={current || undefined}>
-        {/* named by the section, with what a press does in its tooltip (P3-M11); its title in the language it is in */}
-        <TippedButton
-          label={entry.title}
-          tip={expanded ? R.fold.collapse : R.fold.expand}
-          side="right"
-          className={`fold${folds ? '' : ' leaf'}`}
-          aria-expanded={folds ? expanded : undefined}
-          tabIndex={folds ? 0 : -1}
-          aria-hidden={folds ? undefined : 'true'}
-          onClick={onFold}
-        >
-          <Icon node={ChevronRight} size={12} />
-        </TippedButton>
-        <a
-          href={`#h${entry.id}`}
-          onClick={(e) => {
-            e.preventDefault()
-            onGo()
-          }}
-          {...props}
-        >
-          <span className="t" lang={entry.title === entry.original ? 'en' : lang}>
+    <li data-entry={entry.id} data-level={entry.level}>
+      {/* one link the row: named by what it shows, in order, the number, the translation and the original, each title in the
+          language it is in (WCAG 2.5.3, 3.1.2) */}
+      <a
+        href={`#h${entry.id}`}
+        onClick={(e) => {
+          e.preventDefault()
+          onGo()
+        }}
+        {...props}
+      >
+        {numbered && (
+          <span className="n">
+            <span>{entry.number}</span>
+          </span>
+        )}
+        <span className="tt">
+          {/* a heading not yet translated: its original in the translation's place, in the paper's language, once */}
+          <span className="t" lang={translated ? lang : 'en'}>
             {entry.title}
           </span>
-          {entry.page != null && <span className="p">{entry.page}</span>}
-        </a>
-        {tip}
-      </div>
+          {translated && (
+            <span className="o" lang="en">
+              {entry.original}
+            </span>
+          )}
+        </span>
+      </a>
+      {tip}
     </li>
   )
 }

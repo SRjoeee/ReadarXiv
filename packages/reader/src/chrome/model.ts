@@ -42,13 +42,16 @@ export const LASTING: ReadonlySet<Unavailable> = new Set<Unavailable>(
 export const GOES_ON: ReadonlySet<Unavailable> = new Set<Unavailable>([...GOES_ON_STOPS].map((why) => LAYER_WHY[why]))
 /** the sync as the chrome names it to a session: together, or off */
 type SyncMode = 'same' | 'off'
-/** a heading of the contents: its id (its unit's), its title (translated where its row is in), the original's, its level, its page */
+/** a heading of the contents: its id (its unit's), its title (translated where its row is in), the original's, its level, its page,
+ *  its number as its part states it (null: none set, or none read yet; absent from a session that states none: the extension's
+ *  older session numbers no entry) */
 export interface OutlineEntry {
   id: number
   title: string
   original: string
   level: 1 | 2 | 3
   page: number | null
+  number?: string | null
 }
 /** a host's passing words in the capsule's place (the website's share menu's "copied", its word for a crash with something on
  *  screen): its own words and sign, shown for `ms` (TOAST_MS by default) */
@@ -72,8 +75,6 @@ export type SessionEvent =
   | { type: 'refused' }
   /** the contents: the paper's headings */
   | { type: 'outline'; entries: OutlineEntry[] }
-  /** the heading being read: the last one above the reading line on the pane read */
-  | { type: 'heading'; id: number | null }
   /** the paper's id and its title for the toolbar, '' until known or when there is none */
   | { type: 'paper'; id: string; title: string }
   /** the panes scroll together, as the reader applies it; `available`: whether they can (both sides' pages laid out), none
@@ -221,8 +222,6 @@ export interface ReaderState {
   narrow: boolean
   /** the contents (outline.ts) */
   outline: OutlineEntry[]
-  /** the heading being read: the last one above the reading line on the side read; null before the first */
-  currentHeading: number | null
   /** the zoom last chosen from the menu; null after a step or a pinch */
   zoom: 'page-width' | 'page-fit' | 'page-actual' | number | null
   /** the sides scroll together, as the reader applies it — not the stored setting, which a refused write or an address may not match */
@@ -273,7 +272,6 @@ export const INITIAL: ReaderState = {
   sync: true,
   syncAvailable: true,
   outline: [],
-  currentHeading: null,
   zoom: 'page-width',
   toast: null,
   chose: false,
@@ -294,7 +292,8 @@ export interface Session {
   /** arXiv's own PDF of the paper opened by the browser, in a tab of its own: the browser streams it and saves it. Never read
    *  through the reader (the whole file, for every reader, in case one asks to save it) */
   openOriginal(): void
-  goToUnit(id: number): void
+  /** a contents entry gone to; `focus`: its page given the focus where the reader holds a target for it */
+  goToUnit(id: number, o?: { focus?: boolean }): void
   lead(which: Side): void
   retry(): void
   setNarrow(on: boolean): void
@@ -382,8 +381,6 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
     // the session tells of unreadable settings before the refusal that follows from them: that one is the notice's
     case 'refused':
       return state.settingsUnreadable ? state : { ...state, refusals: state.refusals + 1 }
-    case 'heading':
-      return event.id === state.currentHeading ? state : { ...state, currentHeading: event.id }
     case 'outline':
       return { ...state, outline: event.entries }
     case 'paper':
@@ -605,8 +602,9 @@ export interface ReaderController {
   setNarrow(on: boolean): void
   /** a side made the leading one, as a press in its pane makes it (a press on its scroll indicator) */
   lead(side: Side): void
-  /** both sides shown taken to a heading from the contents */
-  goToHeading(id: number): void
+  /** both sides shown taken to a heading from the contents; `focus`: the focus taken to its page where the reader holds a
+   *  target for it (the contents laid over the document, closed by the jump) */
+  goToHeading(id: number, o?: { focus?: boolean }): void
   /** a side's PDF saved as a file, named by the paper (fileName) */
   download(which: 'translation' | 'original'): Promise<void>
   /** a host's passing words in the capsule's place, over whatever it shows, for their time; words said again start their time
@@ -725,7 +723,7 @@ export function createController({
     },
     goToPage: (side, page) => later((s) => s.goToPage(side, page)),
     setPrefs: (patch) => later((s) => s.setPrefs(patch)),
-    goToHeading: (id) => later((s) => s.goToUnit(id)),
+    goToHeading: (id, o) => later((s) => s.goToUnit(id, o)),
     lead: (side) => later((s) => s.lead(side)),
     // a session that could not open is retried as the page first was: loaded again (PDF-READER §11.3)
     retry: () =>
