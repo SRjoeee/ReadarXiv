@@ -587,10 +587,8 @@ export function ownOf(
       const out: Place[] = []
       const B = pg.boxes,
         F = pg.forms
-      // (each test reads every other line: counted, none past the bound)
-      const clear = (y0: number, y1: number) =>
-        (work += otherLines().length) <= OWN_WORK && !others!.some(([lo, hi]) => y0 < hi && y1 > lo)
-      const onLine = (y0: number, y1: number) => caption || (y0 < line.top && y1 > line.bottom && clear(y0, y1))
+      const onLine = (y0: number, y1: number) =>
+        caption || (y0 < line.top && y1 > line.bottom && !otherLines().some(([lo, hi]) => y0 < hi && y1 > lo))
       const inRange = (b: number) =>
         b >= b0 && b < upBox && R.box[b] === r && bOwn[p - 1]![b] === null && (caption || B[4 * b + 2]! <= startX1)
       // (a path that meets a painted path standing past the start is one drawing with it, a frame's side, not the head's: a
@@ -608,7 +606,9 @@ export function ownOf(
         return false
       }
       for (let b = Math.max(0, b0); b < upBox; b++) {
-        if (++work > OWN_WORK) break
+        // (a box read, and its or its placement's one test against the other lines read once: counted before it is made)
+        work += 1 + (others?.length ?? 0)
+        if (work > OWN_WORK) break
         const f = F?.[b] ?? 0
         if (!f) {
           if (inRange(b) && onLine(B[4 * b + 1]!, B[4 * b + 3]!) && (caption || !framed(b))) out.push([p, b])
