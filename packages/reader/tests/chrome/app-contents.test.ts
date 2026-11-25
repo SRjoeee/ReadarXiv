@@ -163,6 +163,25 @@ describe('the contents laid over the document (a window under 720 px, §6.3)', (
     ]).toEqual([false, true, [[3, { focus: true }]]])
     await m.unmount()
   })
+  it('the focus moved into the document they cover closes them, so that what holds it is in view (#681 review)', async () => {
+    overlay(true)
+    const { controller } = fakeController({
+      outline: [{ id: 3, title: 'Methode', original: 'Method', level: 1, page: 2, number: '2' }],
+    })
+    const m = await mountElement(app(controller))
+    const toggle = m.container.querySelector<HTMLButtonElement>('button[aria-controls="axt-contents"]')!
+    await act(async () => toggle.click())
+    const inDoc = document.createElement('button')
+    m.container.querySelector('main.doc')!.append(inDoc)
+    await act(async () => inDoc.focus())
+    expect([document.documentElement.hasAttribute('data-axt-contents'), document.activeElement === inDoc]).toEqual([
+      false,
+      true,
+    ])
+    inDoc.remove()
+    await m.unmount()
+  })
+
   it('Escape closes them wherever the focus is, their button included, but not while a menu of the page is open (#681 review)', async () => {
     overlay(true)
     const { controller } = fakeController({

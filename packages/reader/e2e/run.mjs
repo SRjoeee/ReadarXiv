@@ -2220,6 +2220,7 @@ const contentsDrawn = (page) =>
           oCut: o ? o.scrollWidth > o.clientWidth : false,
           links: li.querySelectorAll('a').length,
           measure: box(t).width / Number.parseFloat(getComputedStyle(t).fontSize),
+          texts: [n?.textContent, t.textContent, o?.textContent].filter(Boolean),
         }
       }),
     }
@@ -2361,7 +2362,11 @@ await check(
       )
       // (the link's name: its number, the translation, then the original)
       const e1 = es[Math.min(n - 1, 1)]
-      assert(name1.includes(e1.number ?? ''), `${name}: the link's name ${name1}`)
+      const linkName = /- link "([^"]*)"/.exec(name1)?.[1] ?? null
+      assert(
+        e1.texts.length >= 2 && linkName === e1.texts.join(' '),
+        `${name}: the link's name ${linkName}, its entry's words ${JSON.stringify(e1.texts)}`,
+      )
       const chars = (lv) => es.filter((e) => e.level === lv).map((e) => Math.round(e.measure * 10) / 10)[0] ?? null
       out[name] = {
         entries: es.length,

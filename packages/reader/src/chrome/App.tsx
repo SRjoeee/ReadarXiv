@@ -106,16 +106,24 @@ function Page({ controller }: { controller: ReaderController }) {
     setContents(false)
     document.querySelector<HTMLElement>('button[aria-controls="axt-contents"]')?.focus()
   }
-  // (laid over the document, they close on Escape wherever the focus is, their button's or the page's included; a menu open
-  // over the page takes its own Escape)
+  // (laid over the document, they close on Escape wherever the focus is, their button's or the page's included, a menu open
+  // over the page taking its own Escape; and as the focus moves into the document they cover, by Tab or a press, so that
+  // what holds it is in view)
   useEffect(() => {
     if (!contents) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || e.defaultPrevented || !overlaid() || menuOpen()) return
       closeContents()
     }
+    const onFocus = (e: FocusEvent) => {
+      if (overlaid() && e.target instanceof Node && doc.current?.contains(e.target)) setContents(false)
+    }
     document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
+    document.addEventListener('focusin', onFocus)
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.removeEventListener('focusin', onFocus)
+    }
   })
   const swapped = state.swapped
   useEffect(() => {
