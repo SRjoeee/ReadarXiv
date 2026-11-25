@@ -569,6 +569,7 @@ export function ownOf(
       others = []
       let x0 = Infinity,
         x1 = -Infinity
+      work += to - S.glyph + pg.glyphs.length
       for (let i = S.glyph; i < to; i++) {
         const G = pg.glyphs[i]!
         if (gOwn[p - 1]![i] === `u${id}` && meetsLine(G)) {
@@ -576,7 +577,6 @@ export function ownOf(
           x1 = Math.max(x1, G.x1)
         }
       }
-      work += pg.glyphs.length
       pg.glyphs.forEach((G, i) => {
         if (R.glyph[i] === r && !meetsLine(G) && G.x0 < x1 && G.x1 > x0) others!.push([G.bottom, G.top])
       })
@@ -588,7 +588,11 @@ export function ownOf(
       const B = pg.boxes,
         F = pg.forms
       const onLine = (y0: number, y1: number) =>
-        caption || (y0 < line.top && y1 > line.bottom && !otherLines().some(([lo, hi]) => y0 < hi && y1 > lo))
+        caption ||
+        (y0 < line.top &&
+          y1 > line.bottom &&
+          (work += otherLines().length) <= OWN_WORK &&
+          !others!.some(([lo, hi]) => y0 < hi && y1 > lo))
       const inRange = (b: number) =>
         b >= b0 && b < upBox && R.box[b] === r && bOwn[p - 1]![b] === null && (caption || B[4 * b + 2]! <= startX1)
       // (a path that meets a painted path standing past the start is one drawing with it, a frame's side, not the head's: a
@@ -606,7 +610,7 @@ export function ownOf(
         return false
       }
       for (let b = Math.max(0, b0); b < upBox; b++) {
-        if (work > OWN_WORK) break
+        if (++work > OWN_WORK) break
         const f = F?.[b] ?? 0
         if (!f) {
           if (inRange(b) && onLine(B[4 * b + 1]!, B[4 * b + 3]!) && (caption || !framed(b))) out.push([p, b])
@@ -1137,6 +1141,8 @@ export function ownOf(
       gap(before, G[0]!)
     )
   }
+  /** the released labels' groups: their boxes given back in one pass over the pages' boxes after the check */
+  const released = new Set<string>()
   for (const [id, u] of unitOf) {
     if (u.unhidden) continue
     // (a unit the marks name and the units do not: no source to spell it against, so the original's)
@@ -1189,12 +1195,8 @@ export function ownOf(
         for (const [p, i] of lead) gOwn[p - 1]![i] = null
         // (and every box the label's claim took, the one-ink law's: left in a group no crop draws, it was erased with the
         // unit and drawn by no one)
-        const l = `u${id}.l`
-        for (const p of u.pages) {
-          const B = bOwn[p - 1]!
-          for (let b = 0; b < B.length; b++) if (B[b] === l) B[b] = null
-        }
-        u.groups.delete(l)
+        released.add(`u${id}.l`)
+        u.groups.delete(`u${id}.l`)
         u.labelKept = true
       }
     }
@@ -1209,6 +1211,7 @@ export function ownOf(
     }
     if (u.labelKept) labelKept++
   }
+  if (released.size) for (const B of bOwn) for (let b = 0; b < B.length; b++) if (released.has(B[b]!)) B[b] = null
   /** a unit with an end mark alone (a title) whose range, read from the point before it, opens with ink TeX set before it on
    *  lines of its own (amsart's date before its title, a journal's header): where the range's last glyphs spell its source
    *  exactly and every glyph before them stands on no line of theirs, those glyphs are left the page's (no group) and the

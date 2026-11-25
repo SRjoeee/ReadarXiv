@@ -12009,9 +12009,12 @@ staging). LAYOUT stays 16: the layout file does not change; the base PDF's bytes
   placeholder over that ink): `marks`, each listed in the record's
   `own.leaks` (14 cells on the pack: 1810.04805v2's model names, 1512.03385v1's `\#` columns). The ownership visits at most `OWN_WORK`
   20 million glyphs and boxes (real ranges cost the ink once), over every loop (text, labels, placeholders, names); past it a
-  unit is `marks`. A head's box scan (the boxes TeX set in the head, each tested for a frame against every box of its page)
-  counts as it goes and stops where it passes the bound: that unit is `marks` and no box the scan inspected in part is claimed
-  (`own.ts` `boxesFrom`; `packages/engine/tests/own-head-box-budget.test.ts`).
+  unit is `marks`. A head's box scan counts every read and comparison as it goes (each box of its range; each box's frame test
+  against every box of its page; each box's or placement's test against the other lines of its column, and the reading of
+  those lines) and stops where it passes the bound: that unit is `marks` and no box the scan inspected in part is claimed
+  (`own.ts` `boxesFrom`; `packages/engine/tests/own-head-box-budget.test.ts`). A released label's boxes are given back in one
+  pass over the pages' boxes after the label check, and one included graphic's owner is read in two passes over each page's
+  boxes (`oneInk`): each linear in the paper's boxes, once.
 - **The spell check** (what makes "a unit that cannot be delimited shows the original" exact): a unit's `u` glyphs must spell
   its source text, letters and digits alone (`stream.mjs spellOf`: NFKD, marks, TeX's spacing accents U+02C6, U+02C7, U+02D8
   to U+02DD and case dropped, a dotless `ı` and `ȷ` as their letters, and a letter Unicode does not decompose as its base
