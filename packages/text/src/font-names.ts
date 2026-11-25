@@ -62,13 +62,13 @@ const SANS_NAME =
 // libertinetb: libertine.map's LinLibertineTB), TeX's font names of TeX Live's maps (cm, lm and ec before bx: cm.map's cmbx5,
 // cfr-lm's lmbx8ttl5, cm-super's ecbx0500; sfbx and sfsx, cm-super's; cmssbx, cmmib and cmbsy, cm.map's; ptmb and phvb, the
 // Fontname scheme's Adobe Times and Helvetica bold: ptmb8z, phvb8z))
+const BOLD_NAME =
+  /bold|black|heavy|semibold|demibold|demi\b|-medi(?:ital)?$|-medi\b|^(cm|lm|ec)bx|^cmb\d|^sfbx|^sfsx|^cmssbx|^cmmib|^cmbsy|-bd\b|^ptmb|^phvb|^linlibertinet?b|linlibertinetbi?$|libertinetb|-bol$|extrabold|ultrabold|-sb$/i
 // (and Demi as a word of a PostScript name, its capital opening it and no lowercase letter after it, whatever follows: a design
 // size or a width, lm.map's LMRomanDemi10-Regular and LMSansDemiCond10-Regular, the semibold their Type 1 programs' own /Weight
 // states "Demi"; the PDF's FontDescriptor states no /FontWeight for them (pdfTeX writes none), and their programs' /Weight is
 // no field the page's reading is handed, so the name is what tells it)
 const DEMI_WORD = /Demi(?![a-z])/
-const BOLD_NAME =
-  /bold|black|heavy|semibold|demibold|demi\b|-medi(?:ital)?$|-medi\b|^(cm|lm|ec)bx|^cmb\d|^sfbx|^sfsx|^cmssbx|^cmmib|^cmbsy|-bd\b|^ptmb|^phvb|^linlibertinet?b|linlibertinetbi?$|libertinetb|-bol$|extrabold|ultrabold|-sb$/i
 // (italic by its names: variants of the Fontname scheme's variant.map (italic, kursiv, oblique, and URW's ital: Ital),
 // PostScript names (slant: AlgolRevived-Slanted; linlibertineti, linlibertinetbi and linbiolinumti: libertine.map's
 // LinLibertineTI, LinLibertineTBI, LinBiolinumTI), TeX's font names of TeX Live's maps (cmti, cmsl, cmbxti, cmbxsl, cmssi,

@@ -10215,7 +10215,7 @@ font-names.ts). Drawn in the target's bold, the catalogue's one weight above the
 
 **Not covered.** A declaration whose run TeX set at several sizes (states none, drawn at the base); a declaration inside an
 element (its crop); a unit TeX set turned (its group reading runs in its frame, after the facts that state `El.size`); the
-translator's own words (2609.40181v2's reply opens the subtitle with "，": laid as the reply says, as the translated TeX would set
+translator's own words (2609.40181v2's reply opens the subtitle with a full-width comma: laid as the reply says, as the translated TeX would set
 it).
 
 ## 19. The engine's contract
