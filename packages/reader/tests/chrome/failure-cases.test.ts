@@ -187,7 +187,6 @@ function visit(store: Store, beats: Beat[], refusals: Refusal[] = [], hold = fal
         narrow: false,
         sides: { left: { page: 1, pages: 4 }, right: { page: 1, pages: 4 } },
         outline: [],
-        heading: null,
       },
       ...linkSaid(s, (r.s === 'arriving' || run.asking) && view.waits),
       faces: null,

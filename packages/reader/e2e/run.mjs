@@ -2192,40 +2192,43 @@ await check(
     return { entries: n, shown: again.shown, counted: opened.total }
   },
 )
-/** the contents panel as drawn: each entry's level, number, titles, their boxes (the number's left, the title's left, the
- *  translation's lines, the original's), the link's name as the accessibility tree reads it, and whether the list scrolls
- *  sideways */
+/** the contents panel as drawn: its width, where the document starts, the entries marked; each entry's level, number, its
+ *  number's and title's left edges, the translation's lines, the original's, how many characters of the title's size its
+ *  measure holds; and whether the list scrolls sideways */
 const contentsDrawn = (page) =>
   page.evaluate(() => {
     const list = document.querySelector('#axt-contents .toc-list')
     const box = (el) => (el ? el.getBoundingClientRect() : null)
     return {
       sideways: list.scrollWidth - list.clientWidth,
-      width: list.getBoundingClientRect().width,
+      panel: document.getElementById('axt-contents').getBoundingClientRect().width,
+      docLeft: document.querySelector('.doc').getBoundingClientRect().left,
+      marked: document.querySelectorAll('#axt-contents [aria-current], #axt-contents [aria-selected]').length,
       entries: [...list.querySelectorAll('li')].map((li) => {
         const n = li.querySelector('.n'),
           t = li.querySelector('.t'),
           o = li.querySelector('.o')
-        const lh = t ? Number.parseFloat(getComputedStyle(t).lineHeight) : 0
+        const lh = Number.parseFloat(getComputedStyle(t).lineHeight)
         return {
           level: Number(li.dataset.level),
           number: n?.textContent ?? null,
-          nLeft: n && n.textContent ? box(n).left : null,
+          nLeft: n?.textContent ? box(n).left : null,
           tLeft: box(t).left,
           tLines: Math.round(box(t).height / lh),
           oLines: o ? Math.round(box(o).height / Number.parseFloat(getComputedStyle(o).lineHeight)) : 0,
           oCut: o ? o.scrollWidth > o.clientWidth : false,
           links: li.querySelectorAll('a').length,
-          current: li.querySelector('a')?.getAttribute('aria-current') ?? null,
+          measure: box(t).width / Number.parseFloat(getComputedStyle(t).fontSize),
         }
       }),
     }
   })
 await check(
-  "contents: every heading one link of its number, its translation (two lines at most) and its original (one line); a level's numbers under its parent's titles, its titles on one edge, a heading of no number among them; the section read marked; no sideways scroll at 320 px (§6.3, the maintainer's reference of 2026-11-25)",
+  "contents: every heading one link of its number, its translation (two lines at most) and its original (one line); a level's numbers under its parent's titles, its titles on one edge, a heading of no number among them; none marked, a jump included; 288 px beside the document, over it in a window under 768 px and closed by a jump there; no sideways scroll (§6.3, the maintainer's reference of 2026-11-25 and his word of 2026-11-26)",
   async () => {
-    // (AXT_LAB_FIXTURES' papers too, in Chinese; AXT_SHOTS: each drawn light, dark and at 320 px, into .shots; AXT_HOLD with
-    // AXT_HEADED: the last left open until its window is closed)
+    // (AXT_LAB_FIXTURES' papers too, in Chinese; AXT_SHOTS: each drawn light, a row hovered, dark and at 320 px, and the panel's
+    // markup, into .shots;
+    // AXT_HOLD with AXT_HEADED: the last left open until its window is closed)
     const papers = [['s1-columns', 'de'], ...checkedNames.filter((n) => fixtures[n].face).map((n) => [n, 'zh'])]
     const out = {}
     if (process.env.AXT_SHOTS) mkdirSync(join(HERE, '.shots'), { recursive: true })
@@ -2233,16 +2236,14 @@ await check(
       const { page, context, errors } = await chromeLaid(name, { ui: 'zh-CN', target })
       await waitFor(page, () => window.__c.reader.state().rows.s === 'complete', null, 30_000).catch(() => undefined)
       await page.locator('button[aria-controls="axt-contents"]').click()
-      // (every part read, as the reading reaches each page: the numbers the parts state, the mark on the last heading gone to)
-      const ids = await page.evaluate(() => window.__c.reader.state().view.outline.map((e) => e.id))
-      const mark = ids[Math.min(ids.length - 1, 3)]
-      await page.evaluate((id) => window.__c.reader.do({ do: 'heading', id }), mark)
+      // (a heading gone to by a press on its row: nothing stays marked)
+      const rowsOf = page.locator('#axt-contents a')
+      const n = await rowsOf.count()
+      await rowsOf.nth(Math.min(n - 1, 3)).click()
+      await page.mouse.move(900, 600)
       await page.waitForTimeout(600)
       const drawn = await contentsDrawn(page)
-      const name1 = await page
-        .locator('#axt-contents a')
-        .nth(Math.min(ids.length - 1, 1))
-        .ariaSnapshot()
+      const name1 = await rowsOf.nth(Math.min(n - 1, 1)).ariaSnapshot()
       const shot = async (tag) => {
         if (!process.env.AXT_SHOTS) return
         const b = await page.locator('#axt-contents').boundingBox()
@@ -2252,6 +2253,16 @@ await check(
         })
       }
       await shot('light')
+      // (and its markup, which a page of its own draws with the reader's sheet beside other widths)
+      if (process.env.AXT_SHOTS)
+        (await import('node:fs')).writeFileSync(
+          join(HERE, '.shots', `contents-${name}.html`),
+          await page.evaluate(() => document.getElementById('axt-contents').outerHTML),
+        )
+      await rowsOf.nth(Math.min(n - 1, 2)).hover()
+      await page.waitForTimeout(150)
+      await shot('hover')
+      await page.mouse.move(900, 600)
       await page.evaluate(() => window.__c.controller.setPrefs({ theme: 'dark', dim: false }))
       await page.waitForTimeout(300)
       await shot('dark')
@@ -2260,6 +2271,10 @@ await check(
       await page.waitForTimeout(400)
       const narrow = await contentsDrawn(page)
       if (process.env.AXT_SHOTS) await page.screenshot({ path: join(HERE, '.shots', `contents-${name}-320.png`) })
+      // (laid over the document there, the contents close on a jump)
+      await rowsOf.first().click()
+      await page.waitForTimeout(300)
+      const closedOnJump = await page.evaluate(() => !document.documentElement.hasAttribute('data-axt-contents'))
       if (process.env.AXT_HOLD && process.env.AXT_HEADED && name === papers.at(-1)[0]) {
         await page.setViewportSize({ width: 1400, height: 900 })
         console.log(`holding ${name} open: close its window to go on`)
@@ -2289,24 +2304,29 @@ await check(
         es.every((e) => e.links === 1 && e.tLines <= 2 && e.oLines <= 1),
         `${name}: ${JSON.stringify(es.filter((e) => e.links !== 1 || e.tLines > 2 || e.oLines > 1))}`,
       )
-      // (one entry marked, the section the reading line is in: the heading gone to or the one the line reads past it)
+      assert(drawn.marked === 0 && narrow.marked === 0, `${name}: ${drawn.marked} entries marked after a jump`)
       assert(
-        es.filter((e) => e.current === 'location').length === 1,
-        `${name}: marked ${JSON.stringify(es.map((e) => e.current))}`,
+        drawn.panel === 288 && drawn.docLeft === 288,
+        `${name}: the contents ${drawn.panel} px, the document from ${drawn.docLeft}`,
+      )
+      assert(
+        narrow.panel === 272 && narrow.docLeft === 0 && closedOnJump,
+        `${name}: at 320 px the contents ${narrow.panel} px, the document from ${narrow.docLeft}, closed on a jump: ${closedOnJump}`,
       )
       assert(
         drawn.sideways <= 0 && narrow.sideways <= 0,
         `${name}: the list scrolls sideways by ${drawn.sideways} / ${narrow.sideways} px`,
       )
       // (the link's name: its number, the translation, then the original)
-      const e1 = es[Math.min(ids.length - 1, 1)]
+      const e1 = es[Math.min(n - 1, 1)]
       assert(name1.includes(e1.number ?? ''), `${name}: the link's name ${name1}`)
+      const chars = (lv) => es.filter((e) => e.level === lv).map((e) => Math.round(e.measure * 10) / 10)[0] ?? null
       out[name] = {
         entries: es.length,
         numbered: es.filter((e) => e.number).length,
         twoLines: es.filter((e) => e.tLines === 2).length,
         cut: es.filter((e) => e.oCut).length,
-        width: drawn.width,
+        chars: [chars(1), chars(2), chars(3)],
         name: name1.trim(),
       }
     }

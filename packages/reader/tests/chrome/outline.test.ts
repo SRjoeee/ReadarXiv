@@ -25,11 +25,10 @@ const outline = [
   { id: 12, title: '致谢', original: 'Acknowledgements', level: 1 as const, page: 6, number: null },
 ]
 const rows = (c: HTMLElement) => [...c.querySelectorAll<HTMLElement>('[data-entry]')]
-const current = (c: HTMLElement) => c.querySelector<HTMLElement>('a[aria-current="location"]')
 
 describe("the contents (the reader's design, §6.3)", () => {
   it('lists every heading, every level, each one link: its number, the translation, the original under it; no fold, no page', async () => {
-    const fake = fakeController({ outline, currentHeading: 9 })
+    const fake = fakeController({ outline })
     const { container } = await mountElement(createElement(Outline, { controller: fake.controller, open: true }))
     expect(
       rows(container).map((r) => [
@@ -62,17 +61,6 @@ describe("the contents (the reader's design, §6.3)", () => {
     expect(container.querySelectorAll('.n').length).toBe(0)
   })
 
-  it('marks the section being read, the mark following the reading as the session places it', async () => {
-    const fake = fakeController({ outline, currentHeading: 9 })
-    const { container } = await mountElement(createElement(Outline, { controller: fake.controller, open: true }))
-    expect(current(container)!.textContent).toContain('细节')
-    expect(container.querySelectorAll('[aria-current]').length).toBe(1)
-    await act(async () => fake.set({ currentHeading: 2 }))
-    expect(current(container)!.textContent).toContain('引言')
-    await act(async () => fake.set({ currentHeading: null }))
-    expect(current(container)).toBeNull()
-  })
-
   it('closed, the sidebar is inert, not hidden: the style sheet slides it out of view (§7, the final review)', async () => {
     const fake = fakeController({ outline })
     const { container } = await mountElement(createElement(Outline, { controller: fake.controller, open: false }))
@@ -80,11 +68,12 @@ describe("the contents (the reader's design, §6.3)", () => {
     expect([aside.hasAttribute('hidden'), aside.inert]).toEqual([false, true])
   })
 
-  it('a row jumps to its heading', async () => {
-    const fake = fakeController({ outline, currentHeading: 2 })
+  it('a row jumps to its heading, and no row is marked: not the one gone to, not the one read (the maintainer, 2026-11-26)', async () => {
+    const fake = fakeController({ outline })
     const { container } = await mountElement(createElement(Outline, { controller: fake.controller, open: true }))
     container.querySelector<HTMLElement>('[data-entry="12"] a')!.click()
     expect(fake.controller.goToHeading).toHaveBeenCalledWith(12)
+    expect(container.querySelectorAll('[aria-current], [aria-selected]').length).toBe(0)
   })
 
   it('the original whole in a tooltip beside the row, hidden from assistive technology (the name holds it)', async () => {

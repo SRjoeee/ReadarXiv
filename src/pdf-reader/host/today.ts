@@ -58,6 +58,9 @@ export function todayOpen(o: { params: URLSearchParams; reading: ConfigReading |
           host.emit({ type: 'prefs', prefs: prefsOf(e.config) })
           return
         }
+        // (the heading being read: the chrome's contents mark none since 2026-11-26, its own word for it gone; today's session
+        // still tells it, for its own contents)
+        if (e.type === 'heading') return
         // every other event is the chrome's own vocabulary, as the types hold it (no cast: a word the chrome stops knowing fails the
         // build; the chain's error kinds the same, src/ui/strings.ts holds the two equal; tests/pdf-reader/today-vocabulary.test.ts
         // folds each through the chrome)

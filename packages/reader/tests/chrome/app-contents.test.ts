@@ -1,6 +1,6 @@
 // The reader's page (the chrome's App.tsx): the document area slides with the contents sidebar when the
 // reader opens or closes it, and never as the page mounts — under StrictMode too, whose second run of a layout effect
-// spent a first-run guard and slid the area 236 px in on every development build (Part 7's final review)
+// spent a first-run guard and slid the area its width in on every development build (Part 7's final review)
 import { StrictMode, act, createElement } from 'react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { LOCALES, setLocale } from '@readarxiv/ui'
@@ -107,6 +107,8 @@ describe('an address with no paper: what the keyboard reaches (Codex on #329)', 
 
 describe("the contents' slide (the reader's design, §5)", () => {
   it('under StrictMode, nothing slides as the page mounts; each press of the contents slides the document area once', async () => {
+    // (the contents beside the document: they move it by their width, reader.css --push)
+    document.documentElement.style.setProperty('--push', '288px')
     const { controller } = fakeController()
     const m = await mountElement(createElement(StrictMode, null, app(controller)))
     expect(animate).not.toHaveBeenCalled()
@@ -120,6 +122,20 @@ describe("the contents' slide (the reader's design, §5)", () => {
     })
     expect([animate.mock.calls.length, document.documentElement.hasAttribute('data-axt-contents')]).toEqual([2, false])
     await m.unmount()
+    document.documentElement.style.removeProperty('--push')
+  })
+
+  it('laid over the document (a window under 768 px, --push 0): the area does not slide, it does not move', async () => {
+    document.documentElement.style.setProperty('--push', '0px')
+    const { controller } = fakeController()
+    const m = await mountElement(app(controller))
+    const toggle = m.container.querySelector<HTMLButtonElement>('button[aria-controls="axt-contents"]')!
+    await act(async () => {
+      toggle.click()
+    })
+    expect([animate.mock.calls.length, document.documentElement.hasAttribute('data-axt-contents')]).toEqual([0, true])
+    await m.unmount()
+    document.documentElement.style.removeProperty('--push')
   })
 })
 

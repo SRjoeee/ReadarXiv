@@ -1,12 +1,12 @@
-// The contents and the heading being read (docs/PDF-READER.md §6.3, §11.8):
+// The contents (docs/PDF-READER.md §6.3):
 // the paper's headings as its units name them (kind `heading`, their `depth` the sectioning command's), the title left out, a
 // tree of three levels at most ranked among the depths the paper uses (an article's sections are 1, a thesis's chapters 1 and
 // its sections 2); a heading with no depth (a \paragraph) is not in the contents once any has one. Each is at its member's first
 // line once a part places it, else at the page the head's outline gives it (the located headings, by member), else at the page
 // the original's own outline gives a heading of its title (matched in order), else at none; titled by its row once taken, else by
 // its source; in either, each element as its copy text (the part's), never its TeX source; numbered by its label as the part that
-// places it states it (none until then, none where TeX set none). The heading read is the last of them
-// at or above the reading line of the pane read. Pure: the reader tells it what comes and asks it what to show.
+// places it states it (none until then, none where TeX set none). Pure: the reader tells it what comes and asks it what to
+// show. No heading is told as the one being read: the contents mark none (the maintainer, 2026-11-26).
 import type { El, Head, OutPiece, Piece, Placed, Row, Unit } from '@readarxiv/format'
 
 /** a contents entry: `id` its place in the contents (stable for a layer), `title` its row's text once taken else `original`, the
@@ -116,12 +116,6 @@ export interface Contents {
   firstRect(id: number): Rect | null
   /** the page the contents give an entry: its first rectangle's, else the head's outline's, else the original's outline's */
   pageOf(id: number): number | null
-  /**
-   * The heading being read at a place: page `page`, `at` how far down it the reading line is (a share of its height), and
-   * `topOf(rect)` how far down its page a rectangle's top is (null where it cannot be told): the last entry at or above it (one
-   * with a page and no rectangle is at its page's top); null before the first
-   */
-  headingAt(page: number, at: number | null, topOf: (r: Rect) => number | null): number | null
 }
 /** what of PDF.js's document the original's outline is read through */
 export interface OutlineDoc {
@@ -265,19 +259,5 @@ export function createContents(units: readonly Unit[], head: Pick<Head, 'outline
     },
     firstRect: (id) => first.get(id) ?? null,
     pageOf,
-    headingAt(page, at, topOf) {
-      let id: number | null = null
-      for (const h of headings) {
-        const r = first.get(h.id) ?? null
-        const p = pageOf(h.id)
-        if (!p) continue
-        if (p < page) id = h.id
-        else if (p === page) {
-          const top = r ? topOf(r) : null
-          if (at === null || top === null || top <= at) id = h.id
-        }
-      }
-      return id
-    },
   }
 }

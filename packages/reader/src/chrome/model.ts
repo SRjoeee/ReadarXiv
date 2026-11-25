@@ -75,8 +75,6 @@ export type SessionEvent =
   | { type: 'refused' }
   /** the contents: the paper's headings */
   | { type: 'outline'; entries: OutlineEntry[] }
-  /** the heading being read: the last one above the reading line on the pane read */
-  | { type: 'heading'; id: number | null }
   /** the paper's id and its title for the toolbar, '' until known or when there is none */
   | { type: 'paper'; id: string; title: string }
   /** the panes scroll together, as the reader applies it; `available`: whether they can (both sides' pages laid out), none
@@ -224,8 +222,6 @@ export interface ReaderState {
   narrow: boolean
   /** the contents (outline.ts) */
   outline: OutlineEntry[]
-  /** the heading being read: the last one above the reading line on the side read; null before the first */
-  currentHeading: number | null
   /** the zoom last chosen from the menu; null after a step or a pinch */
   zoom: 'page-width' | 'page-fit' | 'page-actual' | number | null
   /** the sides scroll together, as the reader applies it — not the stored setting, which a refused write or an address may not match */
@@ -276,7 +272,6 @@ export const INITIAL: ReaderState = {
   sync: true,
   syncAvailable: true,
   outline: [],
-  currentHeading: null,
   zoom: 'page-width',
   toast: null,
   chose: false,
@@ -385,8 +380,6 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
     // the session tells of unreadable settings before the refusal that follows from them: that one is the notice's
     case 'refused':
       return state.settingsUnreadable ? state : { ...state, refusals: state.refusals + 1 }
-    case 'heading':
-      return event.id === state.currentHeading ? state : { ...state, currentHeading: event.id }
     case 'outline':
       return { ...state, outline: event.entries }
     case 'paper':

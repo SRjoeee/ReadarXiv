@@ -1,7 +1,7 @@
 // The contents (the reader's design, §6.3): the paper's headings, every level shown, each entry its number in a column of its
 // own, the translated title (two lines at most) and the original under it (one line), hierarchy by indentation alone: a
-// level's number column starts under its parent's title. The section being read — the last heading above the reading line,
-// as the session places it — is marked, the mark following the reading
+// level's number column starts under its parent's title. A row jumps both sides to its heading and stays unmarked: no entry is
+// marked as the one being read (the maintainer, 2026-11-26: a press jumps, nothing stays selected)
 import type { CSSProperties } from 'react'
 import { useMemo } from 'react'
 import { R, useTip } from '@readarxiv/ui'
@@ -12,15 +12,19 @@ import { useReader } from './use-reader.ts'
 /** a level's number column where none of its entries has a number and a deeper level follows: one step of indentation */
 const STEP = '14px'
 
-export function Outline({ controller, open }: { controller: ReaderController; open: boolean }) {
+export function Outline({
+  controller,
+  open,
+  onGone,
+}: {
+  controller: ReaderController
+  open: boolean
+  /** a row gone to (the host's: the contents close where they lay over the document) */
+  onGone?: () => void
+}) {
   const { languages } = useParts()
-  const {
-    outline: entries,
-    currentHeading,
-    lang,
-  } = useReader(controller, (s) => ({
+  const { outline: entries, lang } = useReader(controller, (s) => ({
     outline: s.outline,
-    currentHeading: s.currentHeading,
     lang: s.prefs ? languages.tag(s.prefs.target) : undefined,
   }))
   // the three number columns, then the titles': a level's column as wide as its widest number (the browser's measure, every
@@ -33,23 +37,22 @@ export function Outline({ controller, open }: { controller: ReaderController; op
   }, [entries])
   const deepest = entries.reduce((d, e) => Math.max(d, e.level), 0)
   const tracks = numbered.map((n, k) => (n ? 'auto' : k + 1 < deepest ? STEP : '0px'))
-  // the section being read is the session's to say, by the reading line: a heading at a page's foot, gone to, is read
-  // though PDF.js counts the next page as the one shown
-  const current = entries.findIndex((e) => e.id === currentHeading)
   return (
     // closed, inert, not hidden: out of the tab order and the accessibility tree, still displayed, so that the style
     // sheet slides it (a hidden sidebar is display: none, which no transition leaves)
     <aside id="axt-contents" className="chrome toc" aria-label={R.contents} inert={!open}>
       <div className="toc-h">{R.contents}</div>
       <ul className="toc-list" style={{ gridTemplateColumns: `${tracks.join(' ')} minmax(0, 1fr)` } as CSSProperties}>
-        {entries.map((e, k) => (
+        {entries.map((e) => (
           <Row
             key={e.id}
             entry={e}
             lang={lang}
             numbered={numbered[e.level - 1]!}
-            current={k === current}
-            onGo={() => controller.goToHeading(e.id)}
+            onGo={() => {
+              controller.goToHeading(e.id)
+              onGone?.()
+            }}
           />
         ))}
       </ul>
@@ -61,13 +64,11 @@ function Row({
   entry,
   lang,
   numbered,
-  current,
   onGo,
 }: {
   entry: OutlineEntry
   lang: string | undefined
   numbered: boolean
-  current: boolean
   onGo: () => void
 }) {
   // the original whole in the tooltip, its line being cut at the sidebar's edge
@@ -79,7 +80,6 @@ function Row({
           language it is in (WCAG 2.5.3, 3.1.2) */}
       <a
         href={`#h${entry.id}`}
-        aria-current={current ? 'location' : undefined}
         onClick={(e) => {
           e.preventDefault()
           onGo()

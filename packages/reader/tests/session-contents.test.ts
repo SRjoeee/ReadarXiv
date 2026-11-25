@@ -1,7 +1,7 @@
 // The contents and the heading being read, as today's (R engine/view/contents.mjs, outline.ts; PDF-READER §6.3, §11.8): the
 // paper's headings, the title left out, three levels ranked among the depths it uses; each at its member's first line once a
-// part places it, else the head's outline's page, else the original's outline's; titled by its row once taken; the heading read
-// the last at or above the reading line.
+// part places it, else the head's outline's page, else the original's outline's; titled by its row once taken; numbered by its
+// label.
 import type { Part, Placed, Row, Unit } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
 import { membersOnPage } from '../src/compose/turn.ts'
@@ -178,19 +178,6 @@ describe('the contents', () => {
     }
     expect(await c.outline(doc)).toBe(true)
     expect(c.entries().map((e) => e.page)).toEqual([1, 2, 2, 4])
-  })
-  it('the heading being read: the last at or above the reading line of the pane read, null before the first', () => {
-    const c = createContents(UNITS, HEAD)
-    c.place([placed(3, [1, 0, 72, 300, 700, 712, 698, 72, 300, 0])])
-    // (the Introduction's top a fifth down page 1)
-    const topOf = () => 0.2
-    expect(c.headingAt(1, 0.1, topOf)).toBeNull()
-    expect(c.headingAt(1, 0.3, topOf)).toBe(0)
-    // (a heading with a page and no line placed is at its page's top: Method on page 2)
-    expect(c.headingAt(2, 0, topOf)).toBe(2)
-    expect(c.headingAt(5, 0.5, topOf)).toBe(2)
-    // (a top that cannot be told counts as read)
-    expect(c.headingAt(1, 0.1, () => null)).toBe(0)
   })
 })
 

@@ -13,8 +13,9 @@ import { plain } from '../../packages/reader/src/chrome/capsule-words'
 import type { ReaderState } from '../../packages/reader/src/chrome/model'
 import { capsuleOf, cardOf, lineOf, spokenOf } from '../../packages/reader/src/chrome/status'
 
-/** today's events but its settings, which host/today.ts turns into the chrome's `prefs` */
-type Told = Exclude<SessionEvent, { type: 'settings' }>
+/** today's events but its settings, which host/today.ts turns into the chrome's `prefs`, and the heading being read, which it
+ *  does not tell (the chrome's contents mark none since 2026-11-26) */
+type Told = Exclude<SessionEvent, { type: 'settings' } | { type: 'heading' }>
 // (the types' own check: every event today's session tells is one of the chrome's)
 const told = (e: Told): ChromeEvent => e
 const fold = (es: Told[]): ReaderState => es.map(told).reduce(reduce, { ...INITIAL, display: 'bilingual' })
@@ -41,7 +42,6 @@ const EVENTS: Record<Told['type'], Told[]> = {
   notice: [opened, page, { type: 'notice', why: 'unreadable' }],
   refused: [opened, page, { type: 'refused' }],
   outline: [opened, page, { type: 'outline', entries: [] }],
-  heading: [opened, page, { type: 'heading', id: null }],
   paper: [opened, page, { type: 'paper', id: '2600.00001', title: 'T' }],
   sync: [opened, page, { type: 'sync', on: true }],
   display: [opened, page, { type: 'display', mode: 'translation' }],

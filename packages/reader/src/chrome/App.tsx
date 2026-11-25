@@ -84,7 +84,9 @@ function Page({ controller }: { controller: ReaderController }) {
     if (drawn.current === contents) return
     drawn.current = contents
     if (matchMedia('(prefers-reduced-motion: reduce)').matches) return
-    const side = Number.parseFloat(getComputedStyle(root).getPropertyValue('--side')) || 0
+    // (how far the contents move the area: none where they lay over it, a narrow window's, reader.css --push)
+    const side = Number.parseFloat(getComputedStyle(root).getPropertyValue('--push')) || 0
+    if (!side) return
     doc.current?.animate([{ translate: `${contents ? -side : side}px 0` }, { translate: '0 0' }], {
       duration: 200,
       easing: 'cubic-bezier(0.2, 0, 0, 1)',
@@ -101,7 +103,14 @@ function Page({ controller }: { controller: ReaderController }) {
   return (
     <>
       <Toolbar controller={controller} contents={contents} onContents={() => setContents((open) => !open)} />
-      <Outline controller={controller} open={contents} />
+      <Outline
+        controller={controller}
+        open={contents}
+        // (laid over the document, a narrow window's, the contents close on a jump: the heading gone to is under them)
+        onGone={() => {
+          if (matchMedia('(width < 768px)').matches) setContents(false)
+        }}
+      />
       {/* the page's main landmark, beside the toolbar's banner and the contents' complementary region, so that a screen
           reader reaches each; its layout is the class's */}
       <main className="doc" ref={doc}>
