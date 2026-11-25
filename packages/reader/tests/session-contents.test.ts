@@ -41,10 +41,10 @@ describe('the contents', () => {
   it('lists the headings, the title and those with no depth left out, three levels ranked among the depths used', () => {
     const c = createContents(UNITS, HEAD)
     expect(c.entries()).toEqual([
-      { id: 0, title: '1 Introduction', original: '1 Introduction', level: 1, page: 1 },
-      { id: 1, title: '1.1 Setup', original: '1.1 Setup', level: 2, page: null },
-      { id: 2, title: '2 Method', original: '2 Method', level: 1, page: 2 },
-      { id: 3, title: '2.1.1 Deep', original: '2.1.1 Deep', level: 3, page: null },
+      { id: 0, title: '1 Introduction', original: '1 Introduction', level: 1, page: 1, number: null },
+      { id: 1, title: '1.1 Setup', original: '1.1 Setup', level: 2, page: null, number: null },
+      { id: 2, title: '2 Method', original: '2 Method', level: 1, page: 2, number: null },
+      { id: 3, title: '2.1.1 Deep', original: '2.1.1 Deep', level: 3, page: null, number: null },
     ])
     // (a paper whose headings have no depth: flat, the front matter's left out)
     const flat = listedOf(UNITS.map(({ depth: _d, ...u }) => u as Unit))
@@ -64,6 +64,28 @@ describe('the contents', () => {
     expect(c.firstRect(0)).toEqual([1, 72, 698, 300, 712])
     expect(c.place([placed(3, [1, 0, 0, 0, 0, 0, 0, 0, 0, 0])])).toBe(false)
     expect(c.pageOf(0)).toBe(1)
+  })
+  it('numbers a heading by its label as its part states it: the number TeX set, its punctuation aside; none where TeX set none', () => {
+    const c = createContents(UNITS, HEAD)
+    const line = [2, 0, 72, 300, 700, 712, 698, 72, 300, 0]
+    const label = (num?: string, kind = 'head') => ({
+      kind,
+      ink: [2, 72, 698, 80, 712, 700],
+      style: { font: 0, size: 10 },
+      ...(num === undefined ? {} : { num: [num, [2, 72, 698, 78, 712, 700]] }),
+      punct: ['.', [2, 78, 698, 80, 712, 700]],
+    })
+    // (a member with no label yet, then one stating it: the entry gains its number, told as moved)
+    expect(c.place([placed(9, line)])).toBe(true)
+    expect(c.entries()[2]?.number).toBeNull()
+    expect(c.place([{ ...placed(9, line), label: label('2') } as unknown as Placed])).toBe(true)
+    expect(c.entries()[2]?.number).toBe('2')
+    // (the first a part states stays; a label of another kind, or one with no number, numbers nothing)
+    expect(c.place([{ ...placed(9, line), label: label('7') } as unknown as Placed])).toBe(false)
+    expect(c.entries()[2]?.number).toBe('2')
+    expect(c.place([{ ...placed(3, line), label: label('1', 'float') } as unknown as Placed])).toBe(true)
+    expect(c.place([{ ...placed(3, line), label: label() } as unknown as Placed])).toBe(false)
+    expect(c.entries()[0]?.number).toBeNull()
   })
   it('titles a heading by its row once taken, the source again where its row is no translation or is let go', () => {
     const c = createContents(UNITS, HEAD)

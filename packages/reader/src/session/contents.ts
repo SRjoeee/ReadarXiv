@@ -4,19 +4,22 @@
 // its sections 2); a heading with no depth (a \paragraph) is not in the contents once any has one. Each is at its member's first
 // line once a part places it, else at the page the head's outline gives it (the located headings, by member), else at the page
 // the original's own outline gives a heading of its title (matched in order), else at none; titled by its row once taken, else by
-// its source; in either, each element as its copy text (the part's), never its TeX source. The heading read is the last of them
+// its source; in either, each element as its copy text (the part's), never its TeX source; numbered by its label as the part that
+// places it states it (none until then, none where TeX set none). The heading read is the last of them
 // at or above the reading line of the pane read. Pure: the reader tells it what comes and asks it what to show.
 import type { El, Head, OutPiece, Piece, Placed, Row, Unit } from '@readarxiv/format'
 
 /** a contents entry: `id` its place in the contents (stable for a layer), `title` its row's text once taken else `original`, the
  *  source's, each element in both as its copy text (copyTextOf); `level` 1 to 3; `page` the page it is on, null where none is
- *  known */
+ *  known; `number` the heading's number as its part states it (its member's label, Label.num: "3.1", "IV", "A"), null where
+ *  TeX set none (a starred section) or no part read yet states it */
 export interface OutlineEntry {
   id: number
   title: string
   original: string
   level: 1 | 2 | 3
   page: number | null
+  number: string | null
 }
 /** a rectangle on a page: [page, x0, y0, x1, y1] (PDF units, y up) */
 export type Rect = [number, number, number, number, number]
@@ -148,6 +151,8 @@ export function createContents(units: readonly Unit[], head: Pick<Head, 'outline
   /** each entry's first rectangle once a part places it; the pages the original's outline gives; by unit, the rows taken, its
    *  elements' kinds and the copy texts its members' parts state (Placed.els) */
   const first = new Map<number, Rect>()
+  /** each entry's number, as the first part that places it states its label's */
+  const numbers = new Map<number, string>()
   const outlined = new Map<number, number>()
   const rowOf = new Map<string, readonly OutPiece[]>()
   const kinds = new Map<string, Map<string, string>>()
@@ -174,6 +179,7 @@ export function createContents(units: readonly Unit[], head: Pick<Head, 'outline
         original: sourceTitle(h.unit),
         level: (h.depth === undefined ? 1 : depths.indexOf(h.depth) + 1) as 1 | 2 | 3,
         page: pageOf(h.id),
+        number: numbers.get(h.id) ?? null,
       })),
     place(members) {
       let moved = false
@@ -184,6 +190,12 @@ export function createContents(units: readonly Unit[], head: Pick<Head, 'outline
         if (!first.has(h.id) && l) {
           // (a line: page, column, x0, x1, baseline, top, bottom, …)
           first.set(h.id, [l[0], l[2], l[6], l[3], l[5]])
+          moved = true
+        }
+        // (its number, the label TeX set before its title as the part reads it: a heading's, kind `head`; the first a part states)
+        const n = m.label?.kind === 'head' ? m.label.num?.[0].trim() : undefined
+        if (n && !numbers.has(h.id)) {
+          numbers.set(h.id, n)
           moved = true
         }
         // (its elements' copy texts, the first a part states for each: a title that gains one is told as moved)

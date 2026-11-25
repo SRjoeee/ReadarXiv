@@ -149,26 +149,27 @@ html[data-axt-dim] .axt-hl-layer { mix-blend-mode: screen; }
   .toc { position: fixed; z-index: 15; inset: var(--bar) auto 0 0; width: var(--side); display: flex; flex-direction: column; background: var(--chrome); box-shadow: 0.5px 0 0 var(--chrome-line); translate: -100% 0; visibility: hidden; transition: translate 200ms var(--ease), visibility 0s linear 200ms; }
   html[data-axt-contents] .toc { translate: 0 0; visibility: visible; transition: translate 200ms var(--ease), visibility 0s; }
   .toc-h { display: flex; align-items: center; height: 36px; padding: 0 12px 0 14px; flex: none; color: var(--ink-2); font-size: 11.5px; font-weight: 600; }
-  .toc-list { flex: 1; margin: 0; padding: 0 6px 16px; overflow: auto; list-style: none; overscroll-behavior: contain; scrollbar-width: thin; }
-  .toc-list li[hidden] { display: none; }
-  .entry { display: flex; align-items: center; gap: 2px; height: 28px; padding-inline: 0 8px; border-radius: 6px; }
-  .entry[aria-current="true"] { background: var(--fill); }
-  @media (hover: hover) { .entry:hover { background: var(--fill); } }
-  /* the link is the row from top to bottom: the row is lit as a whole, and pressed as a whole */
-  .entry a { display: flex; flex: 1; min-width: 0; align-items: baseline; gap: 8px; padding-block: 5px; color: inherit; text-decoration: none; }
-  .entry .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; font-weight: 500; }
-  .entry[aria-current="true"] .t { font-weight: 600; }
-  .entry .p { flex: none; color: var(--ink-2); font-size: 11px; font-variant-numeric: tabular-nums; }
-  [data-level="2"] > .entry { padding-inline-start: 14px; }
-  [data-level="3"] > .entry { padding-inline-start: 28px; }
-  :is([data-level="2"], [data-level="3"]) .t { font-size: 12px; font-weight: 400; color: var(--ink-2); }
-  .fold { position: relative; display: inline-flex; flex: none; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 4px; color: var(--ink-3); }
-  /* its target 24 × 24 (WCAG 2.5.8), its drawing 18: grown up, down and away from its link, never toward it (#299).
-     A leaf's is hidden with it */
-  .fold::before { content: ""; position: absolute; inset: -3px 0 -3px -6px; }
-  .fold svg { transition: rotate 150ms ease-out; }
-  .fold[aria-expanded="true"] svg { rotate: 90deg; }
-  .fold.leaf { visibility: hidden; }
+  /* the list a grid of four columns, a level's number column each (Outline.tsx sets them: as wide as the level's widest
+     number) and the titles'; each entry spans it on a subgrid, its link from its own level's column, so that a level's numbers
+     start under its parent's titles and its titles on one edge, a heading with no number (a starred section) among them */
+  .toc-list { flex: 1; display: grid; align-content: start; row-gap: 2px; margin: 0; padding: 4px 14px 16px; overflow: auto; list-style: none; overscroll-behavior: contain; scrollbar-width: thin; }
+  .toc-list li { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; }
+  /* the link is the entry from its number to the sidebar's edge: lit as a whole, pressed as a whole; its fill reaches 8 px past
+     its column on each side (the margin the padding gives back: the columns, the numbers and the header's words on one edge) */
+  .toc-list a { display: grid; grid-template-columns: subgrid; align-items: baseline; margin-inline: -8px; padding: 7px 8px; border-radius: 6px; color: var(--ink); text-decoration: none; }
+  [data-level="1"] > a { grid-column: 1 / -1; }
+  [data-level="2"] > a { grid-column: 2 / -1; }
+  [data-level="3"] > a { grid-column: 3 / -1; }
+  .toc-list a[aria-current="location"] { background: var(--fill); }
+  @media (hover: hover) { .toc-list a:hover { background: var(--fill); } }
+  .toc-list .n { padding-inline-end: 8px; color: var(--ink-2); font-size: 13px; line-height: 1.5; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .toc-list .tt { display: flex; flex-direction: column; gap: 1px; min-width: 0; grid-column: 1 / -1; }
+  .toc-list .n + .tt { grid-column: 2 / -1; }
+  /* the translation two lines at most, the original one: each cut with an ellipsis, the original whole in the tooltip and
+     both in the link's name */
+  .toc-list .t { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+  .toc-list .o { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); font-size: 11.5px; line-height: 1.4; }
+  .toc-list a[aria-current="location"] :is(.t, .n) { font-weight: 600; color: var(--ink); }
   /* a pane's page pill (§6.4): its bottom centre, 16 px up; shown while the pane scrolls, hovered or focused */
   .pill { position: absolute; z-index: 5; inset-block-end: 16px; inset-inline-start: 50%; translate: -50% 0; display: flex; align-items: center; height: 30px; padding: 0 3px; border-radius: 999px;
     background: var(--float-bg); backdrop-filter: blur(16px) saturate(1.5); box-shadow: var(--float-shadow); color: var(--ink-2); font-size: 12px; font-variant-numeric: tabular-nums;
@@ -298,14 +299,12 @@ html[data-axt-dim] .axt-hl-layer { mix-blend-mode: screen; }
   @keyframes capsule-out { to { opacity: 0; } }
 }
 /* the rest of the chrome's movements, each a fade or nothing when the reader asks for less motion (§4.2): the contents
-   slide in at once, the capsule does not travel with them, the link's arrow does not nudge, the disclosure does not turn,
-   the switch's knob and the indicator's thumb do not glide or widen, the card's button and the capsule's chip are not
+   slide in at once, the capsule does not travel with them, the link's arrow does not nudge, the switch's knob and the indicator's thumb do not glide or widen, the card's button and the capsule's chip are not
    pressed in */
 @media (prefers-reduced-motion: reduce) {
   .toc, html[data-axt-contents] .toc { transition: visibility 0s; }
   .capsule-slot { transition: none; }
   .arxiv-id svg { translate: none; transition: opacity 150ms; }
-  .fold svg { transition: none; }
   .indicator i { transition: background-color 150ms; }
   .card button, .card button:active, .card a, .card a:active, .capsule .chip, .capsule .chip:active { transition: none; scale: 1; }
 }

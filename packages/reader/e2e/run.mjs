@@ -15,7 +15,7 @@
 //   its first widened by 2 pt), i8-reverse (the reading's items reversed before the judge), digest-unheld
 //   (the storage check's range reader never given the head's digests)
 import { createHash } from 'node:crypto'
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { deflateSync, inflateSync } from 'node:zlib'
@@ -873,7 +873,11 @@ const elsewhere = await startServer({
 })
 
 const pw = await import('playwright')
-const browser = await pw[browserName].launch({ args: browserName === 'chromium' ? [RESOLVER_WALL] : [] })
+// (AXT_HEADED=1: the browser shown, to watch a check run or hold a page open: AXT_HOLD)
+const browser = await pw[browserName].launch({
+  headless: !process.env.AXT_HEADED,
+  args: browserName === 'chromium' ? [RESOLVER_WALL] : [],
+})
 const violations = []
 const LINK = (() => {
   const m = /^(\d+),(\d+)$/.exec(process.env.AXT_LINK ?? '')
@@ -2186,6 +2190,127 @@ await check(
       `the source's object asked: ${asked.filter((p) => p.includes('/fx/'))}`,
     )
     return { entries: n, shown: again.shown, counted: opened.total }
+  },
+)
+/** the contents panel as drawn: each entry's level, number, titles, their boxes (the number's left, the title's left, the
+ *  translation's lines, the original's), the link's name as the accessibility tree reads it, and whether the list scrolls
+ *  sideways */
+const contentsDrawn = (page) =>
+  page.evaluate(() => {
+    const list = document.querySelector('#axt-contents .toc-list')
+    const box = (el) => (el ? el.getBoundingClientRect() : null)
+    return {
+      sideways: list.scrollWidth - list.clientWidth,
+      width: list.getBoundingClientRect().width,
+      entries: [...list.querySelectorAll('li')].map((li) => {
+        const n = li.querySelector('.n'),
+          t = li.querySelector('.t'),
+          o = li.querySelector('.o')
+        const lh = t ? Number.parseFloat(getComputedStyle(t).lineHeight) : 0
+        return {
+          level: Number(li.dataset.level),
+          number: n?.textContent ?? null,
+          nLeft: n && n.textContent ? box(n).left : null,
+          tLeft: box(t).left,
+          tLines: Math.round(box(t).height / lh),
+          oLines: o ? Math.round(box(o).height / Number.parseFloat(getComputedStyle(o).lineHeight)) : 0,
+          oCut: o ? o.scrollWidth > o.clientWidth : false,
+          links: li.querySelectorAll('a').length,
+          current: li.querySelector('a')?.getAttribute('aria-current') ?? null,
+        }
+      }),
+    }
+  })
+await check(
+  "contents: every heading one link of its number, its translation (two lines at most) and its original (one line); a level's numbers under its parent's titles, its titles on one edge, a heading of no number among them; the section read marked; no sideways scroll at 320 px (§6.3, the maintainer's reference of 2026-11-25)",
+  async () => {
+    // (AXT_LAB_FIXTURES' papers too, in Chinese; AXT_SHOTS: each drawn light, dark and at 320 px, into .shots; AXT_HOLD with
+    // AXT_HEADED: the last left open until its window is closed)
+    const papers = [['s1-columns', 'de'], ...checkedNames.filter((n) => fixtures[n].face).map((n) => [n, 'zh'])]
+    const out = {}
+    if (process.env.AXT_SHOTS) mkdirSync(join(HERE, '.shots'), { recursive: true })
+    for (const [name, target] of papers) {
+      const { page, context, errors } = await chromeLaid(name, { ui: 'zh-CN', target })
+      await waitFor(page, () => window.__c.reader.state().rows.s === 'complete', null, 30_000).catch(() => undefined)
+      await page.locator('button[aria-controls="axt-contents"]').click()
+      // (every part read, as the reading reaches each page: the numbers the parts state, the mark on the last heading gone to)
+      const ids = await page.evaluate(() => window.__c.reader.state().view.outline.map((e) => e.id))
+      const mark = ids[Math.min(ids.length - 1, 3)]
+      await page.evaluate((id) => window.__c.reader.do({ do: 'heading', id }), mark)
+      await page.waitForTimeout(600)
+      const drawn = await contentsDrawn(page)
+      const name1 = await page
+        .locator('#axt-contents a')
+        .nth(Math.min(ids.length - 1, 1))
+        .ariaSnapshot()
+      const shot = async (tag) => {
+        if (!process.env.AXT_SHOTS) return
+        const b = await page.locator('#axt-contents').boundingBox()
+        await page.screenshot({
+          path: join(HERE, '.shots', `contents-${name}-${tag}.png`),
+          clip: { x: 0, y: 0, width: b.x + b.width + 24, height: b.y + b.height },
+        })
+      }
+      await shot('light')
+      await page.evaluate(() => window.__c.controller.setPrefs({ theme: 'dark', dim: false }))
+      await page.waitForTimeout(300)
+      await shot('dark')
+      await page.evaluate(() => window.__c.controller.setPrefs({ theme: 'light' }))
+      await page.setViewportSize({ width: 320, height: 640 })
+      await page.waitForTimeout(400)
+      const narrow = await contentsDrawn(page)
+      if (process.env.AXT_SHOTS) await page.screenshot({ path: join(HERE, '.shots', `contents-${name}-320.png`) })
+      if (process.env.AXT_HOLD && process.env.AXT_HEADED && name === papers.at(-1)[0]) {
+        await page.setViewportSize({ width: 1400, height: 900 })
+        console.log(`holding ${name} open: close its window to go on`)
+        await page.waitForEvent('close', { timeout: 0 })
+      }
+      await context.close()
+      assert(!errors.length, `${name}: ${errors.join('; ')}`)
+      const es = drawn.entries
+      const near = (a, b) => a !== null && b !== null && Math.abs(a - b) < 0.75
+      // (each level's titles on one edge; each entry's number, where it has one, under its parent's title)
+      for (const lv of [1, 2, 3]) {
+        const at = es.filter((e) => e.level === lv)
+        assert(
+          at.every((e) => near(e.tLeft, at[0].tLeft)),
+          `${name}: level ${lv}'s titles on ${[...new Set(at.map((e) => e.tLeft))]}`,
+        )
+      }
+      for (const [k, e] of es.entries()) {
+        const parent = es.slice(0, k).findLast((x) => x.level < e.level)
+        if (parent && e.nLeft !== null)
+          assert(
+            near(e.nLeft, parent.tLeft),
+            `${name}: entry ${k}'s number at ${e.nLeft}, its parent's title at ${parent.tLeft}`,
+          )
+      }
+      assert(
+        es.every((e) => e.links === 1 && e.tLines <= 2 && e.oLines <= 1),
+        `${name}: ${JSON.stringify(es.filter((e) => e.links !== 1 || e.tLines > 2 || e.oLines > 1))}`,
+      )
+      // (one entry marked, the section the reading line is in: the heading gone to or the one the line reads past it)
+      assert(
+        es.filter((e) => e.current === 'location').length === 1,
+        `${name}: marked ${JSON.stringify(es.map((e) => e.current))}`,
+      )
+      assert(
+        drawn.sideways <= 0 && narrow.sideways <= 0,
+        `${name}: the list scrolls sideways by ${drawn.sideways} / ${narrow.sideways} px`,
+      )
+      // (the link's name: its number, the translation, then the original)
+      const e1 = es[Math.min(ids.length - 1, 1)]
+      assert(name1.includes(e1.number ?? ''), `${name}: the link's name ${name1}`)
+      out[name] = {
+        entries: es.length,
+        numbered: es.filter((e) => e.number).length,
+        twoLines: es.filter((e) => e.tLines === 2).length,
+        cut: es.filter((e) => e.oCut).length,
+        width: drawn.width,
+        name: name1.trim(),
+      }
+    }
+    return out
   },
 )
 await check(

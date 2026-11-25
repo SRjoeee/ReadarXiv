@@ -42,13 +42,16 @@ export const LASTING: ReadonlySet<Unavailable> = new Set<Unavailable>(
 export const GOES_ON: ReadonlySet<Unavailable> = new Set<Unavailable>([...GOES_ON_STOPS].map((why) => LAYER_WHY[why]))
 /** the sync as the chrome names it to a session: together, or off */
 type SyncMode = 'same' | 'off'
-/** a heading of the contents: its id (its unit's), its title (translated where its row is in), the original's, its level, its page */
+/** a heading of the contents: its id (its unit's), its title (translated where its row is in), the original's, its level, its page,
+ *  its number as its part states it (null: none set, or none read yet; absent from a session that states none, the extension's
+ *  today session, whose entries are numbered nowhere) */
 export interface OutlineEntry {
   id: number
   title: string
   original: string
   level: 1 | 2 | 3
   page: number | null
+  number?: string | null
 }
 /** a host's passing words in the capsule's place (the website's share menu's "copied", its word for a crash with something on
  *  screen): its own words and sign, shown for `ms` (TOAST_MS by default) */

@@ -480,7 +480,7 @@ describe('reduce: the settings and what the reader holds', () => {
   })
 
   it('holds the contents', () => {
-    const entries = [{ id: 2, title: '引言', original: 'Introduction', level: 1 as const, page: 1 }]
+    const entries = [{ id: 2, title: '引言', original: 'Introduction', level: 1 as const, page: 1, number: '1' }]
     expect(fold([{ type: 'outline', entries }]).outline).toEqual(entries)
   })
 
