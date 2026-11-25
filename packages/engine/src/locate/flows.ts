@@ -84,6 +84,25 @@ export function flowsAndTies(w: Work): void {
     return Number.isFinite(x) ? x : a[3]
   }
   const sepOf = (lead: Member, b: Line) => r2(b[2] - inkEnd(lead, lead.lines.at(-1)!))
+  // (a member's end on its line for the order of two members on it: where TeX's advance ends, the start of the next item TeX
+  // set, not where its ink ends. After each glyph of its last line TeX's position is where the next glyph it set on that line
+  // starts (A's stream: the page's next glyph, its baseline inside the line's band), its advance's end (`x1`) at most: a box
+  // narrower than what it holds, a kern back, sets the next item before that end; the last glyph on the line ends at its
+  // advance. \maketitle's \thanks mark in an \rlap after a name, the comma after it set at the mark's start (2609.40181v2 p1,
+  // 2608.30730v1 p1): the name's member ends where the comma begins, its mark's ink past it moves nothing, and the members after
+  // it on the line are its line's, in the stream's order (the reorders below read the same end) and in the flows'. A member of
+  // another column on the same baseline starts before the end of every glyph of the leader's but its last: kept apart, as before)
+  const { pageA } = w.ix
+  const advanceEnd = (lead: Member, a: Line) => {
+    let x = Number.NEGATIVE_INFINITY
+    for (const g of lead.lineGlyphs.at(-1) ?? []) {
+      const d = gA(g)
+      if (!isInk(d)) continue
+      const h = g + 1 < pageA.length && pageA[g + 1] === pageA[g] ? gA(g + 1) : null
+      x = Math.max(x, h && h.y >= a[6] && h.y <= a[5] ? Math.min(h.x0, d.x1) : d.x1)
+    }
+    return Number.isFinite(x) ? x : a[3]
+  }
   const joinOf = (lead: Member, b: Line, size: number): [number] | [number, 1] => {
     const sep = sepOf(lead, b)
     return keptOn(lead.lines.at(-1)!, b, size) ? [sep, 1] : [sep]
@@ -122,7 +141,7 @@ export function flowsAndTies(w: Work): void {
     const lead = o === undefined ? undefined : members[o]
     const a = lead?.lines.at(-1),
       l = x.lines[0]
-    if (!lead || !a || !l || a[0] !== l[0] || a[1] !== l[1] || l[2] < a[3] - 0.5) continue
+    if (!lead || !a || !l || a[0] !== l[0] || a[1] !== l[1] || l[2] < advanceEnd(lead, a) - 0.5) continue
     if (Math.abs(a[4] - l[4]) >= 0.5 * Math.min(lead.style.size, x.style.size)) continue
     ;(standsAfter.get(lead.ord) ?? standsAfter.set(lead.ord, []).get(lead.ord)!).push(x.ord)
     standing.add(x.ord)
@@ -160,7 +179,7 @@ export function flowsAndTies(w: Work): void {
       continue
     const a = lead.lines.at(-1),
       l = x.lines[0]
-    if (!a || !l || a[0] !== l[0] || l[2] < a[3] - 0.5) continue
+    if (!a || !l || a[0] !== l[0] || l[2] < advanceEnd(lead, a) - 0.5) continue
     if (a[1] !== l[1] && bracketBetween(lead.bLast, x.bFirst)) continue
     if (Math.abs(a[4] - l[4]) >= 0.5 * Math.min(lead.style.size, x.style.size)) continue
     ;(standsAfter.get(lead.ord) ?? standsAfter.set(lead.ord, []).get(lead.ord)!).push(x.ord)
@@ -229,7 +248,7 @@ export function flowsAndTies(w: Work): void {
         (prev.kind === 'heading' && sameColumn(a[1], b[1])) ||
         (prev.bLast >= 0 && mem.bFirst >= 0 && !bracketBetween(prev.bLast, mem.bFirst))) &&
       Math.abs(a[4] - b[4]) < 0.5 * Math.min(prev.style.size, mem.style.size) &&
-      b[2] >= a[3] - 0.5 &&
+      b[2] >= advanceEnd(prev, a) - 0.5 &&
       sepOf(prev, b) <= SHARED_SEP * (b[10] ?? mem.style.size) &&
       !ownBox(prev) &&
       !ownBox(mem) &&
