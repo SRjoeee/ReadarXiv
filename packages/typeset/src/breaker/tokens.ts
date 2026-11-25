@@ -985,11 +985,17 @@ export function tokens(i: TokensInput): Tokens {
       }
       // (a declaration the part states a size for: what follows it, to its group's end, at that size's share of the member's,
       // as a group at its own size is (TStyle.rel, absolute); none stated, the size around it. A part made before states none)
+      // (a stated size the member's to the page's hundredth, as El.size is stated, is the member's: no share, as a run with none)
       const declared = i.statedBase === false ? undefined : resolved.declSizes?.get(k),
         of = resolved.orig?.size
       if (declared! > 0 && of! > 0) {
-        stack[stack.length - 1] = { ...style(), rel: declared! / of! }
-        if (mstack.length) mstack[mstack.length - 1] = { ...mstyle(), rel: declared! / of! }
+        const at = (s: TStyle): TStyle => {
+          const { rel: _rel, ...rest } = s
+          void _rel
+          return Math.round(declared! * 100) === Math.round(of! * 100) ? rest : { ...rest, rel: declared! / of! }
+        }
+        stack[stack.length - 1] = at(style())
+        if (mstack.length) mstack[mstack.length - 1] = at(mstyle())
       }
       const sw = applyCmd(p.src, style(), designs)
       if (sw && /^\\[A-Za-z]+$/.test(p.src)) {
