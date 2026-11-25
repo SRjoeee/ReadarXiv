@@ -80,6 +80,8 @@ export type OwnPage = {
   glyphs: readonly OwnGlyph[]
   boxes: readonly number[]
   paths: readonly (number | undefined)[]
+  /** each box's placed form (pageInk's `boxForms`: the form XObject painted that painted it, 0 for the page's own), where read */
+  forms?: readonly number[]
   points: readonly InkPoint[]
   boxAt?: ArrayLike<number>
   view?: View
@@ -307,7 +309,7 @@ export function ownOf(
     kind0: 'u' | 'l' | 'p' | 'q' | 'n',
   ) => {
     const kind = kind0 === 'q' ? 'p' : kind0,
-      images = kind0 === 'p'
+      images = kind0 === 'p' || kind0 === 'l'
     for (const [p, i] of list.glyphs) {
       const cur = gOwn[p - 1]![i]!
       if (
@@ -507,7 +509,7 @@ export function ownOf(
   // form but a word, and what stands before the point is the author's before, its trail (locate). Walked back to the end mark
   // before, ICML's marks after a name would be the next name's label, 2611.03953v2's "12" before "Jiacheng Lu")
   const stated = new Set<number>()
-  for (const [id, { s }] of textOf) {
+  labels: for (const [id, { s }] of textOf) {
     // (a table cell, its start mark `t<id>s`, carries no label: what stands before it on its line is another cell's, a number an
     // unmarked cell's)
     if (!s || units?.[id]?.kind === 'cell' || pt(s).name.startsWith('t')) continue
@@ -544,6 +546,94 @@ export function ownOf(
       if (caption || (i >= from && G.bottom < line.top && G.top > line.bottom)) lead.glyphs.push([p, i])
     }
     let qq = q - 1
+    // (one included graphic is one ink: the boxes TeX painted in the head's range, between a point the walk stops at and the
+    // start (or the head's next point), in the start's region and on its line as a glyph of the head is, no one's yet, go with
+    // the glyphs that range gives: a placeholder's or the label's. 2611.18114v1's affiliation line opens with
+    // `\\textsuperscript{1}\\afficon{logo_microsoft}`: its logo's paths were no one's, left where TeX set them while the head's "1"
+    // moved with the translation). What TeX set in the head stands before the start on its line: a box ends where the start
+    // glyph does at the latest (a frame painted round a theorem before its heading, 2501.14787v1, encloses the line and is no
+    // ink of its label), and a placed form is taken only with its whole placement, one ink: each of its boxes in the range,
+    // no one's, ending before the start, the placement meeting the line (a logo's bar under the baseline with its crown above;
+    // 2610.30875v1 p5: a figure set beside a paragraph, one of its paths meeting the paragraph's first line, read as the
+    // paragraph's label and the rest of it no one's: the wrap refused the page). And it meets no other line of its column:
+    // TeX's lines of one vertical list never meet (its interline glue), so a box that reaches another is set in no line (a
+    // theorem environment's rule down its statement's side, painted before its head: 2608.29181v2's "Lemma 2.1."). Another
+    // line: a glyph of the start's region that does not meet the start's line (a script raised on that line meets it) and
+    // stands across within the start line's extent (the unit's glyphs on it: a glyph of the other column is none)
+    let upBox = S.box
+    const startX1 = pg.glyphs[S.glyph]!.x1
+    let others: [number, number][] | null = null
+    const meetsLine = (G: OwnGlyph) => G.bottom < line.top && G.top > line.bottom
+    const otherLines = (): [number, number][] => {
+      if (others) return others
+      others = []
+      let x0 = Infinity,
+        x1 = -Infinity
+      work += to - S.glyph + pg.glyphs.length
+      for (let i = S.glyph; i < to; i++) {
+        const G = pg.glyphs[i]!
+        if (gOwn[p - 1]![i] === `u${id}` && meetsLine(G)) {
+          x0 = Math.min(x0, G.x0)
+          x1 = Math.max(x1, G.x1)
+        }
+      }
+      pg.glyphs.forEach((G, i) => {
+        if (R.glyph[i] === r && !meetsLine(G) && G.x0 < x1 && G.x1 > x0) others!.push([G.bottom, G.top])
+      })
+      return others
+    }
+    // (the scan counts toward OWN_WORK and stops where it passes it: null, the unit `marks` as any past the bound, nothing claimed)
+    const boxesFrom = (b0: number): Place[] | null => {
+      const out: Place[] = []
+      const B = pg.boxes,
+        F = pg.forms
+      const onLine = (y0: number, y1: number) =>
+        caption || (y0 < line.top && y1 > line.bottom && !otherLines().some(([lo, hi]) => y0 < hi && y1 > lo))
+      const inRange = (b: number) =>
+        b >= b0 && b < upBox && R.box[b] === r && bOwn[p - 1]![b] === null && (caption || B[4 * b + 2]! <= startX1)
+      // (a path that meets a painted path standing past the start is one drawing with it, a frame's side, not the head's: a
+      // frame round a statement of one line reaches no other line. A path that holds it whole is behind it, a background)
+      const framed = (b: number) => {
+        work += B.length / 4
+        if (work > OWN_WORK) return true
+        const [x0, y0, x1, y1] = [B[4 * b]!, B[4 * b + 1]!, B[4 * b + 2]!, B[4 * b + 3]!]
+        for (let c = 0; c < B.length / 4; c++) {
+          if (c === b || !((pg.paths[c] ?? -1) >= 0) || !(B[4 * c + 2]! > startX1)) continue
+          const [u0, v0, u1, v1] = [B[4 * c]!, B[4 * c + 1]!, B[4 * c + 2]!, B[4 * c + 3]!]
+          if (u0 <= x1 && u1 >= x0 && v0 <= y1 && v1 >= y0 && !(u0 <= x0 && v0 <= y0 && u1 >= x1 && v1 >= y1))
+            return true
+        }
+        return false
+      }
+      for (let b = Math.max(0, b0); b < upBox; b++) {
+        // (a box read, and its or its placement's one test against the other lines read once: counted before it is made)
+        work += 1 + (others?.length ?? 0)
+        if (work > OWN_WORK) break
+        const f = F?.[b] ?? 0
+        if (!f) {
+          if (inRange(b) && onLine(B[4 * b + 1]!, B[4 * b + 3]!) && (caption || !framed(b))) out.push([p, b])
+          continue
+        }
+        // (a placement's boxes stand together in the stream, its one `Do`)
+        let a = b
+        while (a > 0 && F![a - 1] === f) a--
+        let z = b
+        while (z + 1 < F!.length && F![z + 1] === f) z++
+        work += z - a + 1
+        let whole = true,
+          y0 = Infinity,
+          y1 = -Infinity
+        for (let j = a; j <= z && whole; j++) {
+          whole = inRange(j)
+          y0 = Math.min(y0, B[4 * j + 1]!)
+          y1 = Math.max(y1, B[4 * j + 3]!)
+        }
+        if (whole && onLine(y0, y1)) for (let j = a; j <= z; j++) out.push([p, j])
+        b = z
+      }
+      if (work > OWN_WORK) unit(id).unhidden ??= 'marks'
+      return work > OWN_WORK ? null : out
+    }
     // (the placeholders the walk passed over, each its unit and the glyphs between its points: not yet claimed, this pass
     // running before the placeholders')
     const passed: { unit: number; from: number; to: number }[] = []
@@ -562,8 +652,11 @@ export function ownOf(
       // (a paper's macro at the unit's head, its point \\axthpk's (marks/marks.ts layoutMarking): the glyphs between it and the
       // start, or the next such point, are that piece's ink, and the label is what stands before it)
       if (headOpen(X.name, id)) {
-        if (lead.glyphs.length) claim({ glyphs: lead.glyphs.reverse() }, `u${id}.p`, 'p')
+        const bx = boxesFrom(X.box)
+        if (bx === null) continue labels
+        if (lead.glyphs.length || bx.length) claim({ glyphs: lead.glyphs.reverse(), boxes: bx }, `u${id}.p`, 'p')
         lead.glyphs = []
+        upBox = X.box
         continue
       }
       const c = CLOSING.exec(X.name),
@@ -581,6 +674,8 @@ export function ownOf(
     if (qq < 0 && !caption) for (; g >= 0; g--) glyphAt(g)
     if (caption && !called) continue
     if (!lead.glyphs.length) continue
+    // (the label's boxes: from where the walk stopped)
+    const stopBox = qq >= 0 ? pg.points[qq]!.box : 0
     // a unit that opens with a placeholder of no mark of its own (a paper's macro first in it: \\bert, \\aidehuman): TeX set
     // that placeholder's ink before the start mark, after the label if the unit has one. On a unit's first line nothing but its
     // label and that ink stands between the unit before it and its start (a cell aside: an unmarked number cell may), so the
@@ -644,7 +739,9 @@ export function ownOf(
           k = j
           break
         }
-      if (k) claim({ glyphs: lead.glyphs.slice(0, k) }, `u${id}.l`, 'l')
+      const lb = k ? boxesFrom(stopBox) : []
+      if (lb === null) continue
+      if (k) claim({ glyphs: lead.glyphs.slice(0, k), boxes: lb }, `u${id}.l`, 'l')
       // (past the label, the glyphs that set the unit's leading text symbols, in their order from the first, are its text's: an
       // affiliation's `\\{kahe, …\\}`, 1512.03385v1 u321, whose "{" stood under its drawing in its placeholders' group)
       for (const x of headSymbolsOf(units[id])) {
@@ -657,7 +754,9 @@ export function ownOf(
       if (k < lead.glyphs.length) claim({ glyphs: lead.glyphs.slice(k) }, `u${id}.p`, 'p')
       continue
     }
-    claim(lead, `u${id}.l`, 'l')
+    const bx = boxesFrom(stopBox)
+    if (bx === null) continue
+    claim({ glyphs: lead.glyphs, boxes: bx }, `u${id}.l`, 'l')
   }
 
   // ---- a cell's lead macro: a cell that opens with a placeholder of no mark of its own (\\CompletionTokenCap{}, \\#,
@@ -1040,6 +1139,8 @@ export function ownOf(
       gap(before, G[0]!)
     )
   }
+  /** the released labels' groups: their boxes given back in one pass over the pages' boxes after the check */
+  const released = new Set<string>()
   for (const [id, u] of unitOf) {
     if (u.unhidden) continue
     // (a unit the marks name and the units do not: no source to spell it against, so the original's)
@@ -1090,6 +1191,9 @@ export function ownOf(
           continue
         }
         for (const [p, i] of lead) gOwn[p - 1]![i] = null
+        // (and every box the label's claim took, the one-ink law's: left in a group no crop draws, it was erased with the
+        // unit and drawn by no one)
+        released.add(`u${id}.l`)
         u.groups.delete(`u${id}.l`)
         u.labelKept = true
       }
@@ -1105,6 +1209,7 @@ export function ownOf(
     }
     if (u.labelKept) labelKept++
   }
+  if (released.size) for (const B of bOwn) for (let b = 0; b < B.length; b++) if (released.has(B[b]!)) B[b] = null
   /** a unit with an end mark alone (a title) whose range, read from the point before it, opens with ink TeX set before it on
    *  lines of its own (amsart's date before its title, a journal's header): where the range's last glyphs spell its source
    *  exactly and every glyph before them stands on no line of theirs, those glyphs are left the page's (no group) and the
@@ -1347,6 +1452,7 @@ export function ownOf(
     if (k && stream.every((g, q) => O[g] === null && g === first - stream.length + q))
       for (const g of before) O[g] = `${group}.l`
   }
+  oneInk(pages, bOwn)
   return {
     glyphs: gOwn,
     boxes: bOwn,
@@ -1502,11 +1608,39 @@ function turnedListsOf(
 }
 
 /**
+ * One included graphic is one ink: every box a placed form paints (pageInk's `boxForms`, the form XObject's outermost `Do`, one
+ * number each time it is painted: a form reused is each placement) is owned whole by the one piece TeX set it in. A `Do` stands
+ * at one place in the stream, so the claims by points give its boxes one owner; what a reading of a part of it leaves (a box no
+ * claim took) is that owner's too. Where its boxes hold two owners the placement is left as the claims made it (the wrap refuses
+ * a form partly owned). 2611.18114v1's \\afficon logos in its affiliations: a logo's bar under the line's baseline was read as
+ * the text's rule and its crown as no one's, and the page was refused
+ */
+function oneInk(pages: readonly OwnPage[], bOwn: (string | null)[][]) {
+  pages.forEach((pg, i) => {
+    const forms = pg.forms
+    if (!forms?.length) return
+    const owner = new Map<number, string | null | undefined>() // placement -> its one owner, undefined none yet, null two
+    for (let b = 0; b < forms.length; b++) {
+      const f = forms[b] ?? 0,
+        g = bOwn[i]![b] ?? null
+      if (!f || g === null) continue
+      const o = owner.get(f)
+      if (o === undefined) owner.set(f, g)
+      else if (o !== g) owner.set(f, null)
+    }
+    for (let b = 0; b < forms.length; b++) {
+      const o = owner.get(forms[b] ?? 0)
+      if (o && ((pg.paths[b] ?? -1) >= 0 || pg.paths[b] === IMAGE_BOX)) bOwn[i]![b] = o
+    }
+  })
+}
+/**
  * The painted rules of `boxes` ([page, index] of `pages`' boxes) that stand on a line of `glyphs` ([page, index]): a unit's
  * text's (ownOf), and an ink unit's (locate/ink-units.ts claimInk; 1512.03385v1's Table 1 caption, whose three OT1 \_ rules
  * would stay under its translation). A rule: a painted box no thicker than RULE_EM of its line's size and at least twice as
  * long as thick, its middle within half a size of the line's baseline, across within the line's glyphs' extent and half a
- * size past either end, and no part of a frame: no other thin box of `boxes` that is no such rule meets it within its own
+ * size past either end, painted by no placed form (one included graphic is one ink: oneInk), and no part of a frame: no other
+ * thin box of `boxes` that is no such rule meets it within its own
  * thickness (amsthm's \openbox, a \fbox: their upright sides; kept whole the page's; a box behind the text, thick both ways, is
  * none). A line: the glyphs on one baseline of a page (a placeholder between them, its runs one line). The work is counted as
  * it is done (each glyph and box read, each line and box compared): past `max` the reading stops, `over`, with no rule (a PDF's
@@ -1514,14 +1648,20 @@ function turnedListsOf(
  * { rules, work, over }
  */
 export function lineRulesOf(
-  pages: readonly { glyphs: readonly OwnGlyph[]; boxes: readonly number[]; paths: readonly (number | undefined)[] }[],
+  pages: readonly {
+    glyphs: readonly OwnGlyph[]
+    boxes: readonly number[]
+    paths: readonly (number | undefined)[]
+    forms?: readonly number[]
+  }[],
   glyphs: readonly Place[],
   boxes: readonly Place[],
   max = Infinity,
 ): { rules: Place[]; work: number; over: boolean } {
   let work = boxes.length
   const over = () => ({ rules: [], work, over: true })
-  const painted = boxes.filter(([p, b]) => (pages[p - 1]!.paths[b] ?? -1) >= 0)
+  // (a path a placed form paints is that form's ink, one included graphic's, never a rule of a line: own.ts oneInk)
+  const painted = boxes.filter(([p, b]) => (pages[p - 1]!.paths[b] ?? -1) >= 0 && !(pages[p - 1]!.forms?.[b] ?? 0))
   if (!painted.length) return { rules: [], work, over: work > max }
   const lines: LineRun[] = []
   let last: LineRun | null = null

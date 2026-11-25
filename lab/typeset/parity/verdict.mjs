@@ -1525,6 +1525,7 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   budgetPastRoom(out, new Set(out.pastRoom.today), new Set(out.pastRoom.v2))
   urlJoinRuling(out, { v2, n, orig })
   headRuling(out, { v2, n, facts, orig })
+  runinRuling(out, { v2, n, facts, orig })
   leadRuling(out, { v2, n, facts, orig })
   markSpaceRuling(out, { v2, n, orig })
   recount(out)
@@ -1596,6 +1597,52 @@ function headRuling(p, { v2, n, facts, orig }) {
     d.nearer = 'ruling'
     d.ruling =
       "the owner's ruling of 2026-11-09 (as recommended): a paragraph's leading is the whole paragraph's, and where the paragraph over it cannot end higher (its last line alone at its column's top), the paragraph under it starts lower by what the gap lacks"
+    const f = p.faults.anchor
+    const k = f?.v2Says.findIndex((x) => x.startsWith(`${name}:`)) ?? -1
+    if (k >= 0) {
+      f.v2Says.splice(k, 1)
+      f.v2--
+    }
+  }
+}
+
+/**
+ * A paragraph whose first line v2 sets lower than TeX's under a run-in title that fills TeX's line (README's ruling 8, the
+ * coordinator's of 2026-11-25 on 2611.20688v1-zh p8, PDF-READER §18.11 "A run-in title is the first line of its paragraph"):
+ * the title (its part states `runin`, \@sect's own test) is the first line of the paragraph after it, one paragraph at one
+ * leading, so the gap under the title's line follows the leading v2 laid the paragraph at (the distance between its first two
+ * lines on the page); where the paragraph's first line is TeX's next line under the title (its own pitch under it), the
+ * paragraph starts lower by what TeX's gap lacks. Its `anchor` difference within that (and 0.1 pt, the drawing's rounding) is
+ * the ruling's, as the widow line's (headRuling); one past it, or under a title TeX set more than a pitch over it, is judged as any
+ */
+function runinRuling(p, { v2, n, facts, orig }) {
+  const across = (a, b) => Math.min(a[3], b[3]) > Math.max(a[2], b[2])
+  for (const d of p.diffs) {
+    if (!d.worse || d.flag !== 'anchor' || !d.unit) continue
+    const name = d.unit
+    const o = orig.get(name.split(' ')[0])
+    const q = o?.part !== null && o?.part !== undefined ? facts.get(o.part) : null
+    const q0 = q?.lines.find((l) => l[0] === n)
+    if (!q || !q0 || q.lines[0] !== q0) continue
+    // (the line TeX set over its first in its column: a run-in title's last line, its own pitch over it)
+    let over = null
+    for (const m of facts.values())
+      for (const l of m.lines)
+        if (m !== q && l[0] === n && across(l, q0) && l[4] > q0[4] + 0.05 && (!over || l[4] < over.l[4])) over = { m, l }
+    if (!over?.m.runin || over.m.lines.at(-1) !== over.l) continue
+    const p0 = q.pitch ?? (q.lines[1] && q.lines[1][0] === n ? q0[4] - q.lines[1][4] : null)
+    const gap = over.l[4] - q0[4]
+    if (!(p0 > 0) || gap > p0 + 0.05) continue
+    // (v2's lay of the paragraph: its first two lines on the page, the leading it set them at)
+    const laid = (v2.pages[n]?.members ?? []).filter((m) => m.ord === q.ord).flatMap((m) => m.lines.map((l) => l[0]))
+    if (laid.length < 2) continue
+    const lacks = laid[0] - laid[1] - gap
+    const drop = -Number(/baseline (-?[\d.]+)/.exec(d.v2?.value ?? '')?.[1])
+    if (!(drop > 0) || drop > lacks + 0.1) continue
+    d.worse = false
+    d.nearer = 'ruling'
+    d.ruling =
+      "the coordinator's ruling of 2026-11-25 (PDF-READER §18.11): a run-in title is the first line of its paragraph, one paragraph at one leading; where the title fills TeX's line the paragraph under it starts lower by what TeX's gap lacks, as under a widow line"
     const f = p.faults.anchor
     const k = f?.v2Says.findIndex((x) => x.startsWith(`${name}:`)) ?? -1
     if (k >= 0) {

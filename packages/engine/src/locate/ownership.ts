@@ -16,7 +16,16 @@ const HELD = -2
 /** a member's nine lists (work.ts Member): A's glyphs by role, its boxes, its turned glyphs by role */
 export type Ink = Pick<
   Member,
-  'text' | 'label' | 'els' | 'textBoxes' | 'elBoxes' | 'elBoxesB' | 'turned' | 'turnedEls' | 'turnedLabel'
+  | 'text'
+  | 'label'
+  | 'els'
+  | 'textBoxes'
+  | 'labelBoxes'
+  | 'elBoxes'
+  | 'elBoxesB'
+  | 'turned'
+  | 'turnedEls'
+  | 'turnedLabel'
 >
 
 /** the nine lists as this module writes them: Member's are read-only everywhere else, and this is the one cast. The lists
@@ -26,6 +35,7 @@ interface Lists {
   label: number[]
   els: Map<string, number[]>
   textBoxes: [number, number][]
+  labelBoxes?: [number, number][]
   elBoxes: Map<string, [number, number][]>
   elBoxesB: Map<string, [number, number][]>
   turned: [number, number][]
@@ -143,6 +153,10 @@ export function ownershipOf(of: { size: number; aToB: ArrayLike<number>; unitB: 
     }
     for (const [id, l] of ink.els ?? []) append(to.els, id, l, claim)
     for (const x of ink.textBoxes ?? []) to.textBoxes.push(x)
+    if (ink.labelBoxes?.length) {
+      to.labelBoxes ??= []
+      for (const x of ink.labelBoxes) to.labelBoxes.push(x)
+    }
     for (const [id, l] of ink.elBoxes ?? []) append(to.elBoxes, id, l)
     for (const [id, l] of ink.elBoxesB ?? []) append(to.elBoxesB, id, l)
     for (const x of ink.turned ?? []) to.turned.push(x)
@@ -323,6 +337,8 @@ export function groupsOf(
       }
     }
     for (const [ap, ai] of mem.textBoxes) groups[ap - 1]!.boxes[ai] = `${mem.ord}.${ap}.t`
+    // (the label's boxes with its glyphs: one ink, hidden and drawn back as its crop)
+    for (const [ap, ai] of mem.labelBoxes ?? []) groups[ap - 1]!.boxes[ai] = `${mem.ord}.${ap}.l`
     for (const [id, l] of mem.elBoxes) {
       if ((pieces.get(id) as { kind?: string } | undefined)?.kind === 'display' || keptEl.has(id)) continue
       for (const [ap, ai] of l) {

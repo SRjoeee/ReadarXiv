@@ -58,6 +58,8 @@ interface ReadOptions<X> {
   options?: Record<string, unknown>
   /** pageInk's `turned` (the figures' reading) */
   turned?: boolean
+  /** pageInk's `forms`: each box's placed form (the ownership's one ink) */
+  forms?: boolean
   /** with `turned`: every painted path's lines kept (pageInk's `shapesAll`): arXiv's page, whose figures its own points do not tell */
   shapesAll?: boolean
   /** a reader of each page's operator list, each piece read by it before pageInk reads it (the wrap's alignment facts) */
@@ -161,6 +163,7 @@ export async function readPdf<X = never>(
       const reader = inkReader(pdfjs.OPS, page.commonObjs, {
         rotate: page.rotate ?? 0,
         indices: true,
+        forms: o.forms ?? false,
         turned: o.turned ?? false,
         shapesAll: o.shapesAll ?? false,
         shapes: o.shapes ?? true,

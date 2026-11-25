@@ -108,6 +108,9 @@ export type PageInk = {
   breaks?: InkPoint[]
   regions: InkRegion[]
   paths?: number[]
+  /** with `indices` and `forms`: each box's placed form, the number of the form XObject painted on the page (its outermost `Do`, one each
+   *  time it is painted) that painted it, 0 for the page's own: what one included graphic paints (own/own.ts, one ink) */
+  boxForms?: number[]
   shows?: number
   turned?: TurnedGlyph[]
   shapes?: Map<number, Shape>
@@ -127,6 +130,8 @@ export type InkReader = OpsReader<PageInk> & { asks(): string[] }
 export interface PageInkOptions {
   rotate: number
   indices?: boolean
+  /** with `indices`: each box's placed form (`boxForms`) */
+  forms?: boolean
   /** a glyph's outline box by outlineKey, [] for none drawn (readOutlines') */
   outlines?: ReadonlyMap<string, Box4 | []> | null
   /** the outline boxes this reading meets are added to it, by outlineKey */
@@ -246,6 +251,8 @@ interface InkState {
   fill: number
   form: number
   formId: number
+  /** the outermost form painted now (its number, formId's), 0 on the page itself */
+  topForm: number
   ca: number
   CA: number
   ga: number
@@ -410,6 +417,7 @@ const fresh = (): InkState => ({
   fill: 0,
   form: 0,
   formId: 0,
+  topForm: 0,
   ca: 1,
   CA: 1,
   ga: 1,
@@ -1075,6 +1083,7 @@ export function inkReader(
   {
     rotate,
     indices = false,
+    forms = false,
     outlines: given = null,
     collect = null,
     glyphsMax = Infinity,
@@ -1097,7 +1106,7 @@ export function inkReader(
       points: [],
       boxAt: [],
       regions: [],
-      ...(indices ? { paths: [], shows: 0 } : {}),
+      ...(indices ? { paths: [], ...(forms ? { boxForms: [] } : {}), shows: 0 } : {}),
       ...(turned
         ? { turned: [], shapes: new Map(), pictures: [], figures: new Map(), unseen: new Set(), cut: new Map() }
         : {}),
@@ -1117,6 +1126,7 @@ export function inkReader(
     points: InkPoint[] = [],
     boxAt: number[] = [],
     paths: number[] = [],
+    boxForms: number[] = [],
     paras: InkPoint[] = [],
     paraEnds: (InkPoint & { point: number; para: number })[] = [],
     fronts: InkPoint[] = [],
@@ -1360,7 +1370,10 @@ export function inkReader(
       else if (c[0] !== x0 || c[1] !== y0 || c[2] !== x1 || c[3] !== y1) cut.set(boxes.length / 4, c)
     }
     boxes.push(x0, y0, x1, y1)
-    if (indices) paths.push(path)
+    if (indices) {
+      paths.push(path)
+      if (forms) boxForms.push(s.topForm)
+    }
   }
   const addBox = (m: Matrix, x0: number, y0: number, x1: number, y1: number, path = -1, alpha = 1): void => {
     if (!known()) return
@@ -2068,6 +2081,7 @@ export function inkReader(
           push()
           s.form++
           s.formId = ++formSeq
+          if (s.form === 1) s.topForm = s.formId
           if (a[0]) s.ctm = mul(s.ctm, matrixOf(a[0]))
           const bb = fourOf(a[1])
           if (bb) {
@@ -2280,7 +2294,10 @@ export function inkReader(
       for (let o = 0; o < tiles.length; o += 4) {
         if (Number.isNaN(tiles[o])) continue
         boxes.push(tiles[o]!, tiles[o + 1]!, tiles[o + 2]!, tiles[o + 3]!)
-        if (indices) paths.push(MERGED)
+        if (indices) {
+          paths.push(MERGED)
+          if (forms) boxForms.push(0)
+        }
       }
     }
     answer = {
@@ -2293,7 +2310,7 @@ export function inkReader(
       fronts,
       ...(breaks.length ? { breaks } : {}),
       regions: regionsOfPoints(regionPoints, glyphs.length),
-      ...(indices ? { paths, shows: showAt + 1 } : {}),
+      ...(indices ? { paths, ...(forms ? { boxForms } : {}), shows: showAt + 1 } : {}),
       ...(turned ? { turned: turnedOut, shapes, pictures, figures: figureBoxes, unseen, cut } : {}),
       capped: listed > OPS_CAP || over || deep || many,
       timedOut: late,
