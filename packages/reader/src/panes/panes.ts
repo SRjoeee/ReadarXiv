@@ -138,6 +138,9 @@ export interface Panes {
   /** the first rectangle [page, x0, y0, x1, y1] of a heading on the pane read, gone to with a line of room above it */
   goToRect(r: [number, number, number, number, number]): void
   lead(side: Side): void
+  /** the focus given to page `n` of a side, where the side holds a target for it (the laid side's page, as a link followed by
+   *  keyboard gives it: the stack's focus); false where it holds none (the original's PDF.js viewer) */
+  focusPage(side: Side, n: number): boolean
   /** a destination inside the paper (a name, or an explicit one) followed on the right; the focus there where by keyboard */
   follow(dest: string | unknown[], how?: { keyboard?: boolean }): Promise<void>
   /** where the reader is reading: the page at the reading line of the pane read and how far down it */
@@ -1459,6 +1462,11 @@ export function createPanes(o: PanesOptions): Panes {
     zoomBy,
     pinch,
     goToPage,
+    focusPage(side, n) {
+      if (disposed || side !== 'right' || n < 1 || n > right.pages) return false
+      right.focus(n)
+      return true
+    },
     goToRect(r) {
       if (disposed) return
       settle()

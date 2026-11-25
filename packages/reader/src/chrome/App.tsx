@@ -84,12 +84,47 @@ function Page({ controller }: { controller: ReaderController }) {
     if (drawn.current === contents) return
     drawn.current = contents
     if (matchMedia('(prefers-reduced-motion: reduce)').matches) return
-    const side = Number.parseFloat(getComputedStyle(root).getPropertyValue('--side')) || 0
+    // (how far the contents move the area: none where they lay over it, a narrow window's, reader.css --push)
+    const side = Number.parseFloat(getComputedStyle(root).getPropertyValue('--push')) || 0
+    if (!side) return
     doc.current?.animate([{ translate: `${contents ? -side : side}px 0` }, { translate: '0 0' }], {
       duration: 200,
       easing: 'cubic-bezier(0.2, 0, 0, 1)',
     })
   }, [contents])
+  /** a menu or popover of the page open (its Escape its own) */
+  const menuOpen = () => {
+    try {
+      return !!document.querySelector('.pop[data-open], .pop:popover-open')
+    } catch {
+      return !!document.querySelector('.pop[data-open]')
+    }
+  }
+  /** the contents laid over the document (a window under 720 px, reader.css --push) */
+  const overlaid = () => matchMedia('(width < 720px)').matches
+  const closeContents = () => {
+    setContents(false)
+    document.querySelector<HTMLElement>('button[aria-controls="axt-contents"]')?.focus()
+  }
+  // (laid over the document, they close on Escape wherever the focus is, their button's or the page's included, a menu open
+  // over the page taking its own Escape; and as the focus moves into the document they cover, by Tab or a press, so that
+  // what holds it is in view)
+  useEffect(() => {
+    if (!contents) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented || !overlaid() || menuOpen()) return
+      closeContents()
+    }
+    const onFocus = (e: FocusEvent) => {
+      if (overlaid() && e.target instanceof Node && doc.current?.contains(e.target)) setContents(false)
+    }
+    document.addEventListener('keydown', onKey)
+    document.addEventListener('focusin', onFocus)
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.removeEventListener('focusin', onFocus)
+    }
+  })
   const swapped = state.swapped
   useEffect(() => {
     document.documentElement.toggleAttribute('data-axt-swapped', swapped)
@@ -101,7 +136,18 @@ function Page({ controller }: { controller: ReaderController }) {
   return (
     <>
       <Toolbar controller={controller} contents={contents} onContents={() => setContents((open) => !open)} />
-      <Outline controller={controller} open={contents} />
+      <Outline
+        controller={controller}
+        open={contents}
+        // (laid over the document, a narrow window's, the contents close on a jump, the heading gone to being under them; the
+        // focus goes back to their button, which the reader moves on to the heading's page where it holds a target for it:
+        // never left on a row made inert)
+        onGone={() => {
+          if (!overlaid()) return false
+          closeContents()
+          return true
+        }}
+      />
       {/* the page's main landmark, beside the toolbar's banner and the contents' complementary region, so that a screen
           reader reaches each; its layout is the class's */}
       <main className="doc" ref={doc}>

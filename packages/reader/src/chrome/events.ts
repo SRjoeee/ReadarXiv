@@ -103,7 +103,6 @@ export function eventsOf(prev: ReaderState | null, next: ReaderState): SessionEv
     if (!a || a.page !== b.page || a.pages !== b.pages) out.push({ type: 'page', side, page: b.page, pages: b.pages })
   }
   if (!p || p.view.outline !== v.outline) out.push({ type: 'outline', entries: v.outline.map((e) => ({ ...e })) })
-  if (!p || p.view.heading !== v.heading) out.push({ type: 'heading', id: v.heading })
   const l = next.layer,
     pl = p?.layer
   // (the prepare's stage, our server's record's own, as the share of the prepare the progress line stands at: status.ts)

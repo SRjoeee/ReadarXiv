@@ -29,7 +29,6 @@ const base: ReaderState = {
     narrow: false,
     sides: { left: { page: 1, pages: 0 }, right: { page: 1, pages: 0 } },
     outline: [],
-    heading: null,
   },
   reconnecting: false,
   network: false,

@@ -104,15 +104,13 @@ export async function layerChecks(t) {
     if (span) await page.mouse.move(span.x, span.y)
     const lit = span ? await page.waitForFunction(() => window.__reader.probe().lit !== null, null, { timeout: 5_000 }).then(() => true, () => false) : false
     check('the pointer over a laid paragraph lights its unit (the reader\'s highlight, its both panes the package\'s e2e)', lit, JSON.stringify({ span, lit: (await probe(page)).lit }))
-    // the heading read follows the scroll: further down the paper, a later heading of the contents
-    const top = (await readerState(page)).currentHeading
+    // the contents mark no entry as the one being read, however far the paper is scrolled (the maintainer, 2026-11-26)
     const L = await page.locator(LEFT).boundingBox()
     await page.mouse.move(L.x + L.width / 2, L.y + L.height / 2)
     await page.mouse.wheel(0, 6000)
     await sleep(1500)
-    const deep = (await readerState(page)).currentHeading
-    const at = id => outline.findIndex(e => e.id === id)
-    check('the heading read follows the scroll: further down, a later heading of the contents', deep !== null && at(deep) > Math.max(0, at(top)), `${top} (${at(top)}), then ${deep} (${at(deep)}) of ${outline.length}`)
+    const marked = await page.evaluate(() => document.querySelectorAll('#axt-contents [aria-current], #axt-contents [aria-selected]').length)
+    check('the contents follow no scroll: no entry marked as the one being read', marked === 0 && outline.length > 0, `${marked} marked of ${outline.length}`)
     await page.screenshot({ path: `${SHOTS}/reader-v2-laid.png` })
     await page.close()
   }

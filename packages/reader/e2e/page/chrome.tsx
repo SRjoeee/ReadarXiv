@@ -210,7 +210,7 @@ const c = {
           setPrefs: set,
           pdfBytes: async () => null,
           openOriginal: () => reader.do({ do: 'original' }),
-          goToUnit: (id) => reader.do({ do: 'heading', id }),
+          goToUnit: (id, o) => reader.do({ do: 'heading', id, ...(o?.focus ? { focus: true } : {}) }),
           lead: (side) => reader.do({ do: 'lead', side }),
           retry: () => reader.do({ do: 'retry' }),
           setNarrow: (on) => reader.do({ do: 'narrow', on }),
