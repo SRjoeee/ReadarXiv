@@ -1,16 +1,14 @@
 // The contents (the reader's design, §6.3): the paper's headings, every level shown, each entry its number in a column of its
-// own, the translated title (two lines at most) and the original under it (one line), hierarchy by indentation alone: a
-// level's number column starts under its parent's title. A row jumps both sides to its heading and stays unmarked: no entry is
-// marked as the one being read: a press jumps, nothing stays selected (§6.3)
+// own, the translated title (two lines at most) and the original under it (one line), hierarchy by indentation alone: each
+// level 12 px in from its parent, its number column as wide as its widest number, so that its titles share one edge. A row
+// jumps both sides to its heading and stays unmarked: no entry is marked as the one being read: a press jumps, nothing stays
+// selected (§6.3)
 import type { CSSProperties } from 'react'
-import { useMemo } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { R, useTip } from '@readarxiv/ui'
 import type { OutlineEntry, ReaderController } from './model.ts'
 import { useParts } from './parts.tsx'
 import { useReader } from './use-reader.ts'
-
-/** a level's number column where none of its entries has a number and a deeper level follows: one step of indentation */
-const STEP = '14px'
 
 export function Outline({
   controller,
@@ -31,16 +29,27 @@ export function Outline({
     outline: s.outline,
     lang: s.prefs ? languages.tag(s.prefs.target) : undefined,
   }))
-  // the three number columns, then the titles': a level's column as wide as its widest number (the browser's measure, every
-  // row's number of the level in it: the list a grid, each entry on its subgrid), so that its titles start on one edge and the
-  // level under it starts there. A level no entry of which has a number keeps the step a deeper level is indented by
-  const numbered = useMemo(() => {
-    const has = [false, false, false]
-    for (const e of entries) if (e.number) has[e.level - 1] = true
-    return has
+  // each level's number column: as wide as its widest number as drawn (measured once the entries or the faces change), so
+  // that the level's titles start on one edge; none where no entry of the level has a number
+  const list = useRef<HTMLUListElement>(null)
+  const [widths, setWidths] = useState<readonly number[]>([0, 0, 0])
+  useLayoutEffect(() => {
+    const measure = () => {
+      const w = [0, 0, 0]
+      for (const n of list.current?.querySelectorAll<HTMLElement>('[data-level] > a > .n > span') ?? []) {
+        const level = Number(n.closest<HTMLElement>('[data-level]')?.dataset.level) || 1
+        w[level - 1] = Math.max(w[level - 1]!, Math.ceil(n.getBoundingClientRect().width))
+      }
+      setWidths((was) => (was.every((x, k) => x === w[k]) ? was : w))
+    }
+    measure()
+    let live = true
+    void document.fonts?.ready.then(() => live && measure())
+    return () => {
+      live = false
+    }
   }, [entries])
-  const deepest = entries.reduce((d, e) => Math.max(d, e.level), 0)
-  const tracks = numbered.map((n, k) => (n ? 'auto' : k + 1 < deepest ? STEP : '0px'))
+  const numbered = [1, 2, 3].map((l) => entries.some((e) => e.level === l && e.number))
   return (
     // closed, inert, not hidden: out of the tab order and the accessibility tree, still displayed, so that the style
     // sheet slides it (a hidden sidebar is display: none, which no transition leaves)
@@ -57,7 +66,11 @@ export function Outline({
       }}
     >
       <div className="toc-h">{R.contents}</div>
-      <ul className="toc-list" style={{ gridTemplateColumns: `${tracks.join(' ')} minmax(0, 1fr)` } as CSSProperties}>
+      <ul
+        ref={list}
+        className="toc-list"
+        style={Object.fromEntries(widths.map((w, k) => [`--n${k + 1}`, `${w}px`])) as CSSProperties}
+      >
         {entries.map((e) => (
           <Row
             key={e.id}
@@ -102,7 +115,11 @@ function Row({
         }}
         {...props}
       >
-        {numbered && <span className="n">{entry.number}</span>}
+        {numbered && (
+          <span className="n">
+            <span>{entry.number}</span>
+          </span>
+        )}
         <span className="tt">
           {/* a heading not yet translated: its original in the translation's place, in the paper's language, once */}
           <span className="t" lang={translated ? lang : 'en'}>

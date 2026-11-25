@@ -51,13 +51,14 @@ describe("the contents (the reader's design, §6.3)", () => {
     expect(rows(container)[2]!.querySelector('a')!.textContent).toBe(`2.1${outline[2]!.title}Setup`)
   })
 
-  it('each level a number column as wide as its widest number; a level with none keeps a step where a deeper level follows', async () => {
+  it('each level a number column of its own, measured from its numbers as drawn; none where a level has no number', async () => {
+    // (happy-dom lays nothing out: every column measures 0, stated on the list as the levels' widths)
     const fake = fakeController({ outline })
     const { container } = await mountElement(createElement(Outline, { controller: fake.controller, open: true }))
-    const tracks = () => container.querySelector<HTMLElement>('.toc-list')!.style.gridTemplateColumns
-    expect(tracks()).toBe('auto auto auto minmax(0, 1fr)')
+    const list = () => container.querySelector<HTMLElement>('.toc-list')!
+    expect([1, 2, 3].map((l) => list().style.getPropertyValue(`--n${l}`))).toEqual(['0px', '0px', '0px'])
+    expect(container.querySelectorAll('.n > span').length).toBe(5)
     await act(async () => fake.set({ outline: outline.map((e) => ({ ...e, number: null })) }))
-    expect(tracks()).toBe('14px 14px 0px minmax(0, 1fr)')
     expect(container.querySelectorAll('.n').length).toBe(0)
   })
 

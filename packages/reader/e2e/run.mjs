@@ -2213,6 +2213,7 @@ const contentsDrawn = (page) =>
           level: Number(li.dataset.level),
           number: n?.textContent ?? null,
           nLeft: n?.textContent ? box(n).left : null,
+          aLeft: box(li.querySelector('a')).left,
           tLeft: box(t).left,
           tLines: Math.round(box(t).height / lh),
           oLines: o ? Math.round(box(o).height / Number.parseFloat(getComputedStyle(o).lineHeight)) : 0,
@@ -2224,7 +2225,7 @@ const contentsDrawn = (page) =>
     }
   })
 await check(
-  "contents: every heading one link of its number, its translation (two lines at most) and its original (one line); a level's numbers under its parent's titles, its titles on one edge, a heading of no number among them; none marked, a jump included; 240 px beside the document, over it in a window under 720 px and closed by a jump there; no sideways scroll (§6.3, the maintainer's reference of 2026-11-25 and his word of 2026-11-26)",
+  "contents: every heading one link of its number, its translation (two lines at most) and its original (one line); each level 12 px in from its parent, its titles on one edge, a heading of no number among them; none marked, a jump included; 240 px beside the document, over it in a window under 720 px and closed by a jump there; no sideways scroll (§6.3, the maintainer's reference of 2026-11-25 and his word of 2026-11-26)",
   async () => {
     // (AXT_LAB_FIXTURES' papers too, in Chinese; AXT_SHOTS: each drawn light, a row hovered, dark and at 320 px, and the panel's
     // markup, into .shots;
@@ -2319,7 +2320,7 @@ await check(
       assert(!errors.length, `${name}: ${errors.join('; ')}`)
       const es = drawn.entries
       const near = (a, b) => a !== null && b !== null && Math.abs(a - b) < 0.75
-      // (each level's titles on one edge; each entry's number, where it has one, under its parent's title)
+      // (each level's titles on one edge; each entry 12 px in from its parent)
       for (const lv of [1, 2, 3]) {
         const at = es.filter((e) => e.level === lv)
         assert(
@@ -2329,10 +2330,10 @@ await check(
       }
       for (const [k, e] of es.entries()) {
         const parent = es.slice(0, k).findLast((x) => x.level < e.level)
-        if (parent && e.nLeft !== null)
+        if (parent)
           assert(
-            near(e.nLeft, parent.tLeft),
-            `${name}: entry ${k}'s number at ${e.nLeft}, its parent's title at ${parent.tLeft}`,
+            near(e.aLeft, parent.aLeft + 12 * (e.level - parent.level)),
+            `${name}: entry ${k} at ${e.aLeft}, its parent at ${parent.aLeft}`,
           )
       }
       assert(
