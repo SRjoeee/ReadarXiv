@@ -12,11 +12,11 @@
 /* the reader's own layout (§5); every colour, shadow, the font and the ease come from tokens.css */
 :root {
   --bar: 44px;
-  /* the contents' width (§6.3): the measure a third level's Chinese title needs at 13 px, 13 to 14 characters (178 px), past
-     its three number columns (about 82 px in a paper of "3.2.1") and the list's 14 px each side; 288, eighteen steps of the
-     reader's 16 px. `--push`: how far it moves the document area, its width where the window leaves the document 480 px
-     beside it, none where it lays over the document (below 768 px) */
-  --side: 288px;
+  /* the contents' width (§6.3): fifteen steps of the reader's 16 px, the maintainer's reference's panel (about 230 px, 2026-11-26):
+     a third level's Chinese title holds about 10 characters of 13 px past its three number columns (about 82 px in a paper
+     of "3.2.1") and the list's 14 px each side, a first level's about 15. `--push`: how far it moves the document area, its
+     width where the window leaves the document 480 px beside it, none where it lays over the document (below 720 px) */
+  --side: 240px;
   --push: var(--side);
   /* the capsule's motion (§6.6), improve-animations' strong curves: the words
      entering and leaving, the box closing, and the box opening on a softer ease-in-out that does not rush its middle.
@@ -69,9 +69,10 @@ header.bar {
    changes a toggle) */
 .doc { position: fixed; inset: var(--bar) 0 0 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 8px; }
 html[data-axt-contents] .doc { left: var(--push); }
-/* a window under 768 px: the contents lay over the document, which keeps its width (pushed, it would be under 480 px, a
-   letter page at its width under 0.8 of its size), leaving 48 px of it in view to the right; a jump closes them (App.tsx) */
-@media (width < 768px) {
+/* a window under 720 px (the contents' 240 and 480): the contents lay over the document, which keeps its width (pushed, it
+   would be under 480 px, a letter page at its width under 0.8 of its size), leaving 48 px of it in view to the right; a jump
+   closes them (App.tsx) */
+@media (width < 720px) {
   :root { --push: 0px; }
 }
 .pane { position: relative; min-width: 0; overflow: hidden; timeline-scope: --pane-y; }
@@ -158,7 +159,7 @@ html[data-axt-dim] .axt-hl-layer { mix-blend-mode: screen; }
   /* the contents (§6.3): `toc`, since Tailwind's `contents` is display: contents */
   .toc { position: fixed; z-index: 15; inset: var(--bar) auto 0 0; width: min(var(--side), 100vw - 48px); display: flex; flex-direction: column; background: var(--chrome); box-shadow: 0.5px 0 0 var(--chrome-line); translate: -100% 0; visibility: hidden; transition: translate 200ms var(--ease), visibility 0s linear 200ms; }
   html[data-axt-contents] .toc { translate: 0 0; visibility: visible; transition: translate 200ms var(--ease), visibility 0s; }
-  @media (width < 768px) { html[data-axt-contents] .toc { box-shadow: var(--pop-shadow); } }
+  @media (width < 720px) { html[data-axt-contents] .toc { box-shadow: var(--pop-shadow); } }
   .toc-h { display: flex; align-items: center; height: 36px; padding: 0 12px 0 14px; flex: none; color: var(--ink-2); font-size: 11.5px; font-weight: 600; }
   /* the list a grid of four columns, a level's number column each (Outline.tsx sets them: as wide as the level's widest
      number) and the titles'; each entry spans it on a subgrid, its link from its own level's column, so that a level's numbers
@@ -178,6 +179,8 @@ html[data-axt-dim] .axt-hl-layer { mix-blend-mode: screen; }
   /* the translation two lines at most, the original one: each cut with an ellipsis, the original whole in the tooltip and
      both in the link's name */
   .toc-list .t { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+  /* a first level's translation at the reader's semibold, as the reference sets it: the sections stand out from their parts */
+  [data-level="1"] .t { font-weight: 600; }
   .toc-list .o { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); font-size: 11.5px; line-height: 1.4; }
   /* a pane's page pill (§6.4): its bottom centre, 16 px up; shown while the pane scrolls, hovered or focused */
   .pill { position: absolute; z-index: 5; inset-block-end: 16px; inset-inline-start: 50%; translate: -50% 0; display: flex; align-items: center; height: 30px; padding: 0 3px; border-radius: 999px;

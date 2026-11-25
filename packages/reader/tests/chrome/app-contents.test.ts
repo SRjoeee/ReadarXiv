@@ -108,7 +108,7 @@ describe('an address with no paper: what the keyboard reaches (Codex on #329)', 
 describe("the contents' slide (the reader's design, §5)", () => {
   it('under StrictMode, nothing slides as the page mounts; each press of the contents slides the document area once', async () => {
     // (the contents beside the document: they move it by their width, reader.css --push)
-    document.documentElement.style.setProperty('--push', '288px')
+    document.documentElement.style.setProperty('--push', '240px')
     const { controller } = fakeController()
     const m = await mountElement(createElement(StrictMode, null, app(controller)))
     expect(animate).not.toHaveBeenCalled()
@@ -125,7 +125,7 @@ describe("the contents' slide (the reader's design, §5)", () => {
     document.documentElement.style.removeProperty('--push')
   })
 
-  it('laid over the document (a window under 768 px, --push 0): the area does not slide, it does not move', async () => {
+  it('laid over the document (a window under 720 px, --push 0): the area does not slide, it does not move', async () => {
     document.documentElement.style.setProperty('--push', '0px')
     const { controller } = fakeController()
     const m = await mountElement(app(controller))

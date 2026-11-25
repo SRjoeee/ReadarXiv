@@ -2224,7 +2224,7 @@ const contentsDrawn = (page) =>
     }
   })
 await check(
-  "contents: every heading one link of its number, its translation (two lines at most) and its original (one line); a level's numbers under its parent's titles, its titles on one edge, a heading of no number among them; none marked, a jump included; 288 px beside the document, over it in a window under 768 px and closed by a jump there; no sideways scroll (§6.3, the maintainer's reference of 2026-11-25 and his word of 2026-11-26)",
+  "contents: every heading one link of its number, its translation (two lines at most) and its original (one line); a level's numbers under its parent's titles, its titles on one edge, a heading of no number among them; none marked, a jump included; 240 px beside the document, over it in a window under 720 px and closed by a jump there; no sideways scroll (§6.3, the maintainer's reference of 2026-11-25 and his word of 2026-11-26)",
   async () => {
     // (AXT_LAB_FIXTURES' papers too, in Chinese; AXT_SHOTS: each drawn light, a row hovered, dark and at 320 px, and the panel's
     // markup, into .shots;
@@ -2306,11 +2306,11 @@ await check(
       )
       assert(drawn.marked === 0 && narrow.marked === 0, `${name}: ${drawn.marked} entries marked after a jump`)
       assert(
-        drawn.panel === 288 && drawn.docLeft === 288,
+        drawn.panel === 240 && drawn.docLeft === 240,
         `${name}: the contents ${drawn.panel} px, the document from ${drawn.docLeft}`,
       )
       assert(
-        narrow.panel === 272 && narrow.docLeft === 0 && closedOnJump,
+        narrow.panel === 240 && narrow.docLeft === 0 && closedOnJump,
         `${name}: at 320 px the contents ${narrow.panel} px, the document from ${narrow.docLeft}, closed on a jump: ${closedOnJump}`,
       )
       assert(

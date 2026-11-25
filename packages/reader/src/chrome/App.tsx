@@ -108,7 +108,7 @@ function Page({ controller }: { controller: ReaderController }) {
         open={contents}
         // (laid over the document, a narrow window's, the contents close on a jump: the heading gone to is under them)
         onGone={() => {
-          if (matchMedia('(width < 768px)').matches) setContents(false)
+          if (matchMedia('(width < 720px)').matches) setContents(false)
         }}
       />
       {/* the page's main landmark, beside the toolbar's banner and the contents' complementary region, so that a screen
