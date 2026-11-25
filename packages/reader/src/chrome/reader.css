@@ -13,7 +13,7 @@
 :root {
   --bar: 44px;
   /* the contents' width (§6.3): fifteen steps of the reader's 16 px, the maintainer's reference's panel (about 230 px, 2026-11-26):
-     a third level's Chinese title holds about 10 characters of 13 px past its three number columns (about 82 px in a paper
+     a third level's Chinese title holds about 11 characters of 12 px past its three number columns (about 78 px in a paper
      of "3.2.1") and the list's 14 px each side, a first level's about 15. `--push`: how far it moves the document area, its
      width where the window leaves the document 480 px beside it, none where it lays over the document (below 720 px) */
   --side: 240px;
@@ -164,24 +164,28 @@ html[data-axt-dim] .axt-hl-layer { mix-blend-mode: screen; }
   /* the list a grid of four columns, a level's number column each (Outline.tsx sets them: as wide as the level's widest
      number) and the titles'; each entry spans it on a subgrid, its link from its own level's column, so that a level's numbers
      start under its parent's titles and its titles on one edge, a heading with no number (a starred section) among them */
-  .toc-list { flex: 1; display: grid; align-content: start; row-gap: 2px; margin: 0; padding: 4px 14px 16px; overflow: auto; list-style: none; overscroll-behavior: contain; scrollbar-width: thin; }
+  .toc-list { flex: 1; display: grid; align-content: start; row-gap: 4px; margin: 0; padding: 4px 14px 16px; overflow: auto; list-style: none; overscroll-behavior: contain; scrollbar-width: thin; }
   .toc-list li { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; }
   /* the link is the entry from its number to the sidebar's edge: lit as a whole, pressed as a whole; its fill reaches 8 px past
      its column on each side (the margin the padding gives back: the columns, the numbers and the header's words on one edge) */
-  .toc-list a { display: grid; grid-template-columns: subgrid; align-items: baseline; margin-inline: -8px; padding: 7px 8px; border-radius: 6px; color: var(--ink); text-decoration: none; }
+  .toc-list a { display: grid; grid-template-columns: subgrid; align-items: baseline; margin-inline: -8px; padding: 4px 8px; border-radius: 6px; color: var(--ink); text-decoration: none; }
   [data-level="1"] > a { grid-column: 1 / -1; }
   [data-level="2"] > a { grid-column: 2 / -1; }
   [data-level="3"] > a { grid-column: 3 / -1; }
   @media (hover: hover) { .toc-list a:hover { background: var(--fill); } }
-  .toc-list .n { padding-inline-end: 8px; color: var(--ink-2); font-size: 13px; line-height: 1.5; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .toc-list .tt { display: flex; flex-direction: column; gap: 1px; min-width: 0; grid-column: 1 / -1; }
+  /* the sizes of the contents before (a first level 12.5 px, the rest 12 px) on the reader's scale, the lines on the 4 px grid:
+     a title's 18 px, an original's 16 px; each entry 4 px above and below its words and 4 px from the next */
+  .toc-list .n { padding-inline-end: 8px; color: var(--ink-2); font-size: 12px; line-height: 18px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .toc-list .tt { display: flex; flex-direction: column; min-width: 0; grid-column: 1 / -1; }
   .toc-list .n + .tt { grid-column: 2 / -1; }
   /* the translation two lines at most, the original one: each cut with an ellipsis, the original whole in the tooltip and
      both in the link's name */
-  .toc-list .t { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
-  /* a first level's translation at the reader's semibold, as the reference sets it: the sections stand out from their parts */
+  .toc-list .t { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; font-size: 12px; line-height: 18px; overflow-wrap: anywhere; }
+  /* a first level's number and translation at 12.5 px, its translation at the reader's semibold, as the reference sets it: the
+     sections stand out from their parts */
+  [data-level="1"] :is(.n, .t) { font-size: 12.5px; }
   [data-level="1"] .t { font-weight: 600; }
-  .toc-list .o { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); font-size: 11.5px; line-height: 1.4; }
+  .toc-list .o { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); font-size: 11px; line-height: 16px; }
   /* a pane's page pill (§6.4): its bottom centre, 16 px up; shown while the pane scrolls, hovered or focused */
   .pill { position: absolute; z-index: 5; inset-block-end: 16px; inset-inline-start: 50%; translate: -50% 0; display: flex; align-items: center; height: 30px; padding: 0 3px; border-radius: 999px;
     background: var(--float-bg); backdrop-filter: blur(16px) saturate(1.5); box-shadow: var(--float-shadow); color: var(--ink-2); font-size: 12px; font-variant-numeric: tabular-nums;
