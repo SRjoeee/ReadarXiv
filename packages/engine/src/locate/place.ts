@@ -356,6 +356,7 @@ export function place(
     label: [] as number[],
     els: new Map<string, number[]>(),
     textBoxes: [] as [number, number][],
+    labelBoxes: [] as [number, number][],
     elBoxes: new Map<string, [number, number][]>(),
     elBoxesB: new Map<string, [number, number][]>(),
     turned: turnedA,
@@ -382,7 +383,8 @@ export function place(
       const lb = ink.elBoxesB.get(id)
       if (lb) lb.push([p, x])
       else ink.elBoxesB.set(id, [[p, x]])
-    } else ink.textBoxes.push([ap, ai])
+    } else if (role === ROLE.label) ink.labelBoxes.push([ap, ai])
+    else ink.textBoxes.push([ap, ai])
   }
   claims.take(mem, ink)
   // where it stands on A against B

@@ -137,8 +137,10 @@ describe('completeCall: a call that holds every argument its macro takes', () =>
 describe('the mark probe asks about the complete macros\' calls, apart from the asked classes\' commands', () => {
   it('each complete macro once, by its first call that holds its arguments, after the citations and references', () => {
     const u = unit([ph('\\cls'), text(' a '), ph('\\cls{x}'), text(' b '), ph('\\cite{a}'), text(' c '), ph('\\cls{y}'), ph('\\other{z}')])
-    expect(probeSamples([u], [['cls', 1]])).toEqual([{ command: '\\cite', src: '\\cite{a}', call: false }, { command: '\\cls', src: '\\cls{x}', call: false, own: true }])
-    expect(probeSamples([u])).toEqual([{ command: '\\cite', src: '\\cite{a}', call: false }])
+    // (and the pair of \\cls{y} and the paper's macro right after it: a placeholder after a paper's macro is asked of the look-ahead
+    // probe whatever its class, PDF-READER §18.115)
+    expect(probeSamples([u], [['cls', 1]])).toEqual([{ command: '\\cite', src: '\\cite{a}', call: false }, { command: '\\cls', src: '\\cls{x}', call: false, own: true }, { key: '\\cls{y}##\\other{z}', src: '\\cls{y}', gap: '', follows: '\\other{z}', math: false, lead: '', ahead: true }])
+    expect(probeSamples([u])).toEqual([{ command: '\\cite', src: '\\cite{a}', call: false }, { key: '\\cls{y}##\\other{z}', src: '\\cls{y}', gap: '', follows: '\\other{z}', math: false, lead: '', ahead: true }])
     // (a call too long for the probe is asked about by none: the marking takes it to look ahead)
     expect(probeSamples([unit([ph(`\\cls{${'x'.repeat(200)}}`)])], [['cls', 1]])).toEqual([])
   })
@@ -246,7 +248,7 @@ describe('a complete macro glued to the placeholder after it (2610.21098\'s \\Ha
     const samples = probeSamples([u], [['share', 0]])
     // (and last its call before the citation, a look-ahead pair: a call TeX answered for has its marks by its own answer, but a
     // reader of the probe's log with no complete macros takes the pairs as numbered all the same)
-    expect(samples).toEqual([{ command: '\\cite', src: '\\cite{a}', call: false }, { command: '\\share', src: '\\share{}', call: false, own: true, glued: '\\%' }, { key: '\\share{}##\\cite{a}', src: '\\share{}', gap: '', follows: '\\cite{a}', math: false, ahead: true }])
+    expect(samples).toEqual([{ command: '\\cite', src: '\\cite{a}', call: false }, { command: '\\share', src: '\\share{}', call: false, own: true, glued: '\\%' }, { key: '\\share{}##\\cite{a}', src: '\\share{}', gap: '', follows: '\\cite{a}', math: false, lead: '', ahead: true }])
     const tex = markProbeTex(samples)
     expect(tex).toContain('way \\share{}\\% \\unskip')
     expect(tex).toContain('way \\share{}{}\\% \\unskip')
@@ -327,15 +329,17 @@ describe('a paper\'s macro that looks ahead, before a placeholder (2609.20976\'s
   // space, a footnote's call, which \\xspace sees as no other token; and a macro of an argument right against a citation)
   const nested = { t: 'nested', pre: '\\footnote{', post: '}' } as unknown as Piece
   const u = unit([text('with '), ph('\\snr'), text(' '), ph('$\\geq 50$'), text(' and '), ph('\\lgnrm'), text(' '), ph('\\footnote{\\url{https://x.org}}'), text(', and '), ph('\\name{x}'), ph('\\cite{a}'), text(' by '), ph('\\snr'), text('\n'), ph('$\\geq 50$'), text('.')])
-  it('aheadSamples: each pair of a paper\'s macro and the placeholder after it, past white space alone or none, once; none past text, a blank line or a tie, nor of a text symbol, a macro, a display or a nested note after it', () => {
+  it('aheadSamples: each pair of a paper\'s macro and the placeholder after it, past white space alone or none, once; none past text, a blank line or a tie, nor of a text symbol, a display or a nested note after it', () => {
     expect(aheadSamples([u])).toEqual([
-      { key: '\\snr# #$\\geq 50$', src: '\\snr', gap: ' ', follows: '$\\geq 50$', math: true, ahead: true },
-      { key: '\\lgnrm# #\\footnote{\\url{https://x.org}}', src: '\\lgnrm', gap: ' ', follows: '\\footnote{\\url{https://x.org}}', math: false, ahead: true },
-      { key: '\\name{x}##\\cite{a}', src: '\\name{x}', gap: '', follows: '\\cite{a}', math: false, ahead: true },
+      { key: '\\snr# #$\\geq 50$', src: '\\snr', gap: ' ', follows: '$\\geq 50$', math: true, lead: '', ahead: true },
+      { key: '\\lgnrm# #\\footnote{\\url{https://x.org}}', src: '\\lgnrm', gap: ' ', follows: '\\footnote{\\url{https://x.org}}', math: false, lead: '', ahead: true },
+      { key: '\\name{x}##\\cite{a}', src: '\\name{x}', gap: '', follows: '\\cite{a}', math: false, lead: '', ahead: true },
     ])
     expect(aheadKey('\\snr', ' ', '$x$')).toBe('\\snr# #$x$')
-    const none = unit([ph('\\snr'), text(' is '), ph('$x$'), ph('\\snr'), text('\n\n'), ph('$x$'), ph('\\snr'), ph('~'), ph('$x$'), ph('\\S'), ph('\\ref{b}'), ph('\\snr'), ph('\\lgnrm'), ph('\\snr'), ph('\\[x\\]'), ph('\\snr'), nested, ph('\\snr'), ph('$x%y$'), ph('\\snr'), ph('\\protect'), ph('\\cite{a}')])
+    const none = unit([ph('\\snr'), text(' is '), ph('$x$'), ph('\\snr'), text('\n\n'), ph('$x$'), ph('\\snr'), ph('~'), ph('$x$'), ph('\\S'), ph('\\ref{b}'), ph('\\snr'), ph('\\[x\\]'), ph('\\snr'), nested, ph('\\snr'), ph('$x%y$'), ph('\\snr'), ph('\\protect'), ph('\\cite{a}')])
     expect(aheadSamples([none])).toEqual([])
+    // (a paper's macro after a paper's macro: asked, its key the body's, and a front unit's as the unit carries its marks: one-ink.test.ts)
+    expect(aheadSamples([unit([text('a '), ph('\\snr'), ph('\\lgnrm'), text(' b')])]).map((s) => s.key)).toEqual(['\\snr##\\lgnrm'])
     // (at most AHEAD_PROBE_MAX, in the paper's order)
     const many = unit(Array.from({ length: AHEAD_PROBE_MAX + 2 }, (_, i) => [ph('\\snr'), text(' '), ph(`$${i}$`), text(' and ')]).flat())
     expect(aheadSamples([many]).map(s => s.follows)).toEqual(Array.from({ length: AHEAD_PROBE_MAX }, (_, i) => `$${i}$`))
@@ -499,7 +503,8 @@ describe('a sample that leaves TeX\'s state broken (2010.11929v2\'s \\tikz\\fill
     const punct = ['LAYOUT-PROBE 1 punct-at 0 7 a', nullfont('w'), 'LAYOUT-PROBE 1 punct 0 00000000'].join('\n')
     expect(readMarkProbe(punct, samples)['\\cite']).toBe('0000000x')
     const ahead = ['LAYOUT-PROBE 1 ahead-at 0 w', nullfont('w'), 'LAYOUT-PROBE 1 ahead 0 0', 'LAYOUT-PROBE 1 ahead-at 1 d', nullfont('w'), 'LAYOUT-PROBE 1 ahead 1 0'].join('\n')
-    expect(Object.entries(readMarkProbe(ahead, samples)).filter(([k]) => k.includes('#'))).toEqual([['\\snr# #$\\geq 50$', 'x'], ['\\name{x}##\\cite{a}', '2']])
+    // (the pairs in the unit's order: \\tikz before \\fill first, a placeholder after a paper's macro asked whatever its class)
+    expect(Object.entries(readMarkProbe(ahead, samples)).filter(([k]) => k.includes('#'))).toEqual([['\\tikz##\\fill', 'x'], ['\\snr# #$\\geq 50$', '2']])
   })
 })
 

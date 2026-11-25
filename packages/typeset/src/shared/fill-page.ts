@@ -13,6 +13,7 @@ import { settleLayout } from './settle.ts'
 import type { Token } from '../breaker/tokens.ts'
 import type { FitBlock, FitParams, FitState, Layout } from '../fit/types.ts'
 import type { EvenKnob } from '../types.ts'
+import { ON_BASE } from '../unit/blocks.ts'
 import type { Band } from '../unit/params.ts'
 import type { FillRules, FillShare } from './fill-leads.ts'
 import type { FillTarget, Voter } from './fill-target.ts'
@@ -330,21 +331,23 @@ export function fillPage(
       .map((p) => ({ u: p, l: p.layout as Layout, st: p.layout.state })),
   ]
   for (const f of filled) {
-    const head = headOf(f.p, onPage)
-    if (!(head > 0)) continue
     const of = framesOf(f.p.blocks),
       alone = !of.some((g) => g > 0)
+    const L0 = alone ? f.st.lead : (f.st.leads?.[0] ?? f.st.lead),
+      floor = Math.max(1, P.leadFloor ?? 1)
+    // (the head at a leading L: under a paragraph's widow, its own leading's, fixed; under a run-in title, the unit's own L)
+    const laidLines = f.l.lines.length
+    const headAt = (L: number) => headOf(f.p, onPage, L, laidLines)
+    if (!(headAt(L0) > 0)) continue
     const withLead = (L: number): FitState =>
       alone
-        ? { ...f.st, head, borrow: 0, lead: L }
+        ? { ...f.st, head: headAt(L), borrow: 0, lead: L }
         : {
             ...f.st,
-            head,
+            head: headAt(L),
             borrow: 0,
             leads: f.p.blocks.map((_, bi) => (of[bi] === 0 ? L : (f.st.leads?.[bi] as number))),
           }
-    const L0 = alone ? f.st.lead : (f.st.leads?.[0] ?? f.st.lead),
-      floor = Math.max(1, P.leadFloor ?? 1)
     const K = Math.ceil((L0 - floor) / 0.01 - 1e-9),
       L = (k: number) => (k >= K ? floor : r3(L0 - k * 0.01))
     // (within its own lines: a layout whose first line left the unit's first block, a block of one line its head set under its
@@ -387,9 +390,19 @@ export function fillPage(
  * (footFloorAt: no room to give in a frame of one line), so the unit under it starts lower by the deficit: that leading's
  * pitch and the original's own skip there past its pitch (capped at a pitch, as footFloorAt reads it) less TeX's gap. 0
  * where nothing is asked: a first line a unit shares a row with (`startY`, its first line pinned: P.halfLead.head false), a
- * run but a unit's first, another line TeX set between, no such paragraph over it
+ * run but a unit's first, another line TeX set between, no such paragraph over it.
+ * A run-in title over it (`runin`, Room.gap's: \@sect's own test) is no paragraph of its own: TeX set it in the first line of
+ * the unit's own paragraph, one \baselineskip for all its lines, and where the title filled TeX's line the unit's text begins
+ * on TeX's next one. The gap under the title's last line then follows the unit's own leading (the paragraph's) and its
+ * pitch, as the paragraph's own lines do: the head at each leading `lead` the pass tries (docs/PDF-READER.md §18.11: one
+ * TeX paragraph, one leading; 2611.20688v1-zh p8)
  */
-function headOf(q: FillLaid, onPage: readonly { u: FillLaid; l: Layout; st: FitState }[]): number {
+function headOf(
+  q: FillLaid,
+  onPage: readonly { u: FillLaid; l: Layout; st: FitState }[],
+  lead: number,
+  lines: number,
+): number {
   const b = q.blocks[0]
   if (!b || (q.P.blockBase ?? 0) !== 0 || !q.P.halfLead?.head || b.startY !== undefined || b.onLead) return 0
   const unitOf = (x: FillLaid) => x.parent ?? x
@@ -398,29 +411,45 @@ function headOf(q: FillLaid, onPage: readonly { u: FillLaid; l: Layout; st: FitS
   for (const { u, l, st } of onPage) {
     if (unitOf(u) === unitOf(q) || !u.P.halfLead) continue
     if (u.parent && u.run !== (u.parent.runs?.length ?? 0) - 1) continue
-    const [third, before, last] = l.lines.slice(-3)
-    if (!last || !before || !third || last.block !== u.blocks.length - 1) continue
-    const bl = u.blocks[last.block]!,
-      bp = u.blocks[before.block]!
-    // (its last line alone on the one line TeX set in its last frame, a frame of its own)
-    if (bl.B.length !== 1 || Math.abs(last.baseline - bl.B[0]!) > 0.05) continue
-    if (bp.page === bl.page && across(bp, bl)) continue
-    // (two lines at least in the frame before: the paragraph's leading there)
-    if (!(third.page === before.page && across(third, before) && third.baseline > before.baseline)) continue
+    // (the line over the unit's first one, its block, the leading the gap under it follows, the block whose pitch it reads)
+    let over: { y: number; block: FitBlock; L: number; pitched: FitBlock; s: number }
+    const end = l.lines.at(-1)
+    // (the unit laid in two lines at least: a paragraph of one line has no leading, and the gap over it stays TeX's)
+    if (unitOf(u).runin === true && lines > 1 && end && end.block === u.blocks.length - 1) {
+      // (a run-in title: its last line where it is drawn, the gap the unit's own leading and pitch, the paragraph's; its paragraph
+      // the unit's only where the unit's first line is the next line TeX set, its pitch under the title's last: more, and TeX set
+      // something between (a list's skip, a theorem's or a heading's: the title ended a paragraph of its own), which keeps TeX's
+      // gap as under a paragraph of one line)
+      const bt = u.blocks[end.block]!
+      if (bt.B.at(-1)! - b.B[0]! > (b.pitch0 ?? 1.2 * q.s) + ON_BASE) continue
+      over = { y: end.baseline, block: bt, L: lead, pitched: b, s: q.s }
+    } else {
+      const [third, before, last] = l.lines.slice(-3)
+      if (!last || !before || !third || last.block !== u.blocks.length - 1) continue
+      const bl = u.blocks[last.block]!,
+        bp = u.blocks[before.block]!
+      // (its last line alone on the one line TeX set in its last frame, a frame of its own)
+      if (bl.B.length !== 1 || Math.abs(last.baseline - bl.B[0]!) > 0.05) continue
+      if (bp.page === bl.page && across(bp, bl)) continue
+      // (two lines at least in the frame before: the paragraph's leading there)
+      if (!(third.page === before.page && across(third, before) && third.baseline > before.baseline)) continue
+      over = { y: bl.B[0]!, block: bl, L: st.leads?.[before.block] ?? st.lead, pitched: bp, s: u.s }
+    }
+    const { y, block: bl } = over
     // (the unit's first line the next line TeX set under it in its column: no line of another unit's between)
-    if (bl.page !== b.page || !across(bl, b) || !(bl.B[0]! > b.B[0]!)) continue
+    if (bl.page !== b.page || !across(bl, b) || !(y > b.B[0]!)) continue
     const between = onPage.some(
       (o) =>
         o.u !== u &&
         unitOf(o.u) !== unitOf(q) &&
         o.u.blocks.some(
-          (c) => c.page === b.page && across(c, b) && c.B.some((y) => y < bl.B[0]! - 0.05 && y > b.B[0]! + 0.05),
+          (c) => c.page === b.page && across(c, b) && c.B.some((z) => z < y - 0.05 && z > b.B[0]! + 0.05),
         ),
     )
     if (between) continue
-    const L = st.leads?.[before.block] ?? st.lead,
-      p0 = bp.pitch0 ?? 1.2 * u.s,
-      gap = bl.B[0]! - b.B[0]!
+    const L = over.L,
+      p0 = over.pitched.pitch0 ?? 1.2 * over.s,
+      gap = y - b.B[0]!
     const lacks = L * p0 + Math.min(Math.max(0, gap - p0), p0) - gap
     return lacks > 0.05 ? Math.round(lacks * 100) / 100 : 0
   }

@@ -435,7 +435,8 @@ export const Room = z.object({
   // `textfloatsep` over a bottom float); in a float, over its caption `abovecaptionskip`, under it `belowcaptionskip`; over the
   // footnotes `footins` (\skip\footins), between two `footnotesep` (TeX's strut at a note's top: no shrink). Absent where TeX's
   // class of the gap is not stated or not known: what follows is no unit's text, ink no unit owns stands between, the class makes
-  // its headings without \@startsection, a part made before. Nothing reads it to lay a page yet (the display design's 2d, F40)
+  // its headings without \@startsection, a part made before. The lay reads `runin` alone (a run-in title is the first line of
+  // the paragraph after it: the page fill's head pass, docs/PDF-READER.md §18.11); the rest is the display design's 2d, F40
   gap: z
     .tuple([
       z.enum([

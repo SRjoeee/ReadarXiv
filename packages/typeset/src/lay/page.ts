@@ -374,6 +374,7 @@ function layPageOnce(
               fillable: !!R.adaptiveFill,
               held: floatMember(m.kind),
               pages: m.pages,
+              ...(m.runin ? { runin: true } : {}),
             }) as PassUnit)
           : undefined
       lays.set(m.ord, { m, unit, state: got.lay.state, slots: got.slots })
