@@ -85,11 +85,13 @@ export function flowsAndTies(w: Work): void {
   }
   const sepOf = (lead: Member, b: Line) => r2(b[2] - inkEnd(lead, lead.lines.at(-1)!))
   // (a member's end on its line for the order of two members on it: where TeX's advance ends, the start of the next item TeX
-  // set, not where its ink ends. Each of its last line's glyphs moves TeX's position to its advance's end (its origin and
-  // width, `x1`), unless the next glyph TeX set (A's stream: the page's next glyph) starts inside that advance: a box narrower
-  // than what it holds or a kern back, and the position after it is that start. \maketitle's \thanks mark in an \rlap after a
-  // name, the comma after it set under it (2609.40181v2 p1, 2608.30730v1 p1): the name's member ends where the comma begins,
-  // its mark's ink past it moves nothing, and the members after it on the line are its line's)
+  // set, not where its ink ends. After each glyph of its last line TeX's position is where the next glyph it set on that line
+  // starts (A's stream: the page's next glyph, its baseline inside the line's band), its advance's end (`x1`) at most: a box
+  // narrower than what it holds, a kern back, sets the next item before that end; the last glyph on the line ends at its
+  // advance. \maketitle's \thanks mark in an \rlap after a name, the comma after it set at the mark's start (2609.40181v2 p1,
+  // 2608.30730v1 p1): the name's member ends where the comma begins, its mark's ink past it moves nothing, and the members after
+  // it on the line are its line's. A member of another column on the same baseline starts before the end of every glyph of
+  // the leader's but its last: kept apart, as before)
   const { pageA } = w.ix
   const advanceEnd = (lead: Member, a: Line) => {
     let x = Number.NEGATIVE_INFINITY
@@ -97,7 +99,7 @@ export function flowsAndTies(w: Work): void {
       const d = gA(g)
       if (!isInk(d)) continue
       const h = g + 1 < pageA.length && pageA[g + 1] === pageA[g] ? gA(g + 1) : null
-      x = Math.max(x, h && h.x0 >= d.x0 && h.x0 < d.x1 ? h.x0 : d.x1)
+      x = Math.max(x, h && h.y >= a[6] && h.y <= a[5] ? Math.min(h.x0, d.x1) : d.x1)
     }
     return Number.isFinite(x) ? x : a[3]
   }

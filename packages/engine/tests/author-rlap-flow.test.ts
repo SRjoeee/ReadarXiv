@@ -74,6 +74,10 @@ describe('two units of one line of names, a \\thanks mark between them', () => {
     const { flow, first, rest } = lineOf((end) => end)
     expect(flow).toEqual([first, rest])
   })
+  it('one flow where the comma’s origin reads a ten-thousandth of a point before the mark’s (two fonts’ matrices, one place)', () => {
+    const { flow, first, rest } = lineOf((end) => end - 0.0004)
+    expect(flow).toEqual([first, rest])
+  })
   it('one flow where the mark takes its own width, the comma after it (the other side of the order test)', () => {
     const { flow, first, rest } = lineOf((end) => end + 0.6 * 7)
     expect(flow).toEqual([first, rest])
