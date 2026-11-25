@@ -39,9 +39,10 @@
 // record says `none`.
 //   pnpm exec tsx lab/pdf/spikes/layer-fixtures.mjs [--only=<paper>[:<target>],…] [--targets=<t>,…] [--fresh] [--list]
 //       [--of=<fixtures folder>] [--engine=<worktree>] [--offline] [--layouts-only]
-// --layouts-only makes an output's layout file and base page (layout.json, base.pdf, base.json) and nothing else: the
-// translation it holds (units.json, record.json) is left as it is, a pack's frozen one kept over a maker that moves the
-// layout and not the units the record names (a unit numbered past the record's, a bibliography's entry, has no row there).
+// --layouts-only makes an output's layout file and base page (layout.json, base.pdf, base.json) and sends nothing: the
+// translation it holds (units.json, record.json), a pack's frozen one, is kept, put in the new cut's order by each unit's
+// source hash where the maker cuts the units anew and the record holds a row of every one (a unit left out, the rest
+// renumbered), else left as it is (a unit the record has no row of, a bibliography's entry, has none there).
 // With no option, Task 12's 21 outputs (OUTPUTS below, with the table-heavy, footnote-heavy and XeLaTeX papers found by
 // their rules). --only names the outputs to make: <id>v<n>:<target>, or <id>:<target> for a paper whose version the list
 // knows; a paper named without a target is made into each of --targets. --targets alone makes every paper of the list
@@ -632,7 +633,36 @@ for (const [id, target] of asked) {
       const made = layout.base.source === 'ours' ? { source: 'ours', head: layout.base.head } : layout.base
       write(join(out, 'base.json'), `${JSON.stringify(baseRecordOfMade({ made, layout: layout.base.source === 'ours' ? (layout.text ? Buffer.from(layout.text) : null) : kept, image: COMPILE_IMAGE, texts: layout.base.source === 'ours' ? layout.texts ?? null : null, inkless: layout.base.source === 'ours' ? layout.inkless ?? null : null }), null, 1)}\n`)
     }
-    if (LAYOUTS_ONLY) { console.log(`ok   ${id}:${target} the layout file and base page alone (--layouts-only)`); continue }
+    if (LAYOUTS_ONLY) {
+      // (the frozen translation is of the units by their sources, as the product's rows are keyed by the unit's hash, never by its
+      // place: where the maker cuts the paper's units into another order or leaves one out, the record is put in the new cut's
+      // order by each unit's source hash, nothing sent; a unit of the new cut the record holds no row of leaves it as it was)
+      const rf = join(out, 'record.json'), uf = join(out, 'units.json')
+      if (existsSync(rf) && existsSync(uf)) {
+        const had = JSON.parse(readFileSync(rf, 'utf8'))
+        // (a record holds the rows of the cut's first units, by their places: a unit past them, a bibliography's entry, has none)
+        const rows = had.units ?? []
+        if (!rows.every((u, i) => u.hash === hashes[i])) {
+          const byHash = new Map(rows.map(u => [u.hash, u]))
+          let k = 0
+          while (k < hashes.length && byHash.has(hashes[k])) k++
+          const lost = rows.filter(u => hashes.includes(u.hash) && hashes.indexOf(u.hash) >= k).length
+          if (lost) console.log(`kept ${id}:${target}: ${lost} of its record's ${rows.length} rows stand past the cut's first unit it has no row of: left as it was`)
+          else {
+            const record = { ...had, units: hashes.slice(0, k).map(h => byHash.get(h)) }
+            const meta = JSON.parse(readFileSync(uf, 'utf8'))
+            const { units, unread } = await layerUnits(paper, record)
+            const states = {}
+            for (const u of record.units) states[u.state] = (states[u.state] ?? 0) + 1
+            write(rf, JSON.stringify(record))
+            write(uf, JSON.stringify({ ...meta, engine: engineCommit, pipeline: PIPELINE_VERSION, layout: LAYOUT, states, unread, units }))
+            console.log(`rekeyed ${id}:${target}: its record's ${rows.length} rows to the cut's first ${k} units by their sources' hashes`)
+          }
+        }
+      }
+      console.log(`ok   ${id}:${target} the layout file and base page alone (--layouts-only)`)
+      continue
+    }
     // the translation: the record made before, where it is of this cut of the units; else staging's; else Microsoft's
     const recordFile = join(out, 'record.json'), unitsFile = join(out, 'units.json')
     let record = null, from = null, source = null

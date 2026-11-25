@@ -53,7 +53,7 @@ import {
 } from '../marks/marks.ts'
 import { ownOf } from '../own/own.ts'
 import { READ_ALONE, regionsOf, WANT } from '../own/stream.ts'
-import { BACKREF_LIST, forcedBreak, lastTexLog, startOf } from '../source/latex-front.ts'
+import { BACKREF_LIST, forcedBreak, lastTexLog, startOf, statedGlue } from '../source/latex-front.ts'
 import { bundleUnitsOf } from './units.ts'
 import { phClass, texToText } from './layer1.ts'
 import { textPieceOf } from '../source/text-piece.ts'
@@ -114,6 +114,7 @@ type BPage = {
   cut?: PageInk['cut']
   boxes: number[]
   paths: number[]
+  forms?: number[]
   points: InkPoint[]
   paras?: InkPoint[]
   paraEnds?: PageInk['paraEnds']
@@ -885,9 +886,11 @@ function sourceFactsOf(
   first: Map<string, string>,
   colours: ReadonlyMap<number, number> | null,
   brk: boolean,
+  glue: string | null = null,
 ): Partial<PieceClass> {
   const x: Partial<PieceClass> = {}
-  const g = glueOf(src)
+  // (its glue: its source's, or the glue the reader stated its macro's body sets, glueBody)
+  const g = glueOf(src) ?? (glue === null ? null : glueOf(glue))
   if (g)
     x.glue =
       g.em !== undefined
@@ -1031,7 +1034,7 @@ export function classesOf(
     // (the text TeX set for it where the document uses it, every glyph stated as itself: the loop's first pass's ask)
     const said = (c.cls === 'macro' || c.cls === 'umacro') && told ? (told.get(p.src) ?? told.get(src)) : undefined
     if (typeof said === 'string' && /\S/.test(said)) x.told = said
-    Object.assign(x, sourceFactsOf(src, k, first, colours, statedBreak(p)))
+    Object.assign(x, sourceFactsOf(src, k, first, colours, statedBreak(p), statedGlue(p)))
     // (a piece that sets a URL \urldef stored: the \url piece's class and copy, a text piece, a URL)
     if (shown.has(k)) {
       const u = unicodeOf(pieces[shown.get(k)!]!.src),
@@ -2237,6 +2240,7 @@ export async function instrumentOf({
   const read = await readPdf(pdfjs, finalPdf, {
     options: documentOptions,
     turned: true,
+    forms: true,
     rawGlyphs: false,
     shapes: false,
   })
@@ -2268,6 +2272,7 @@ export async function instrumentOf({
       cut: raw.cut,
       boxes: raw.boxes,
       paths: raw.paths!,
+      ...(raw.boxForms ? { forms: raw.boxForms } : {}),
       points: raw.points.map(lower),
       paras: raw.paras ?? [],
       paraEnds: raw.paraEnds ?? [],
@@ -2536,8 +2541,14 @@ export async function instrumentOf({
   const places = placesOf(pages, units.length)
   // (the pieces TeX sets no ink for (inklessPieces), and those TeX's points prove set nothing of their own (boundedEmpty): their
   // span stated empty, by unit index and piece id)
+  // (and the pairs' tail arguments TeX's tail samples answered set nothing: probeFactsOf's `tails`, marks.ts tailsSettingNothing)
   const empty = inklessPieces(units, { classes: classesBy, inkless })
   const stated = new Set(empty.map((x) => `${x.unit}|${x.piece}`))
+  for (const x of probe?.tails ?? [])
+    if (!stated.has(`${x.unit}|${x.piece}`)) {
+      empty.push(x)
+      stated.add(`${x.unit}|${x.piece}`)
+    }
   for (const x of boundedEmpty(pages, units, { glyphs, boxes })) if (!stated.has(`${x.unit}|${x.piece}`)) empty.push(x)
   // (the pieces TeX set before their unit's start point (outsidePieces): whatever they set is no text of the unit's)
   const outside = outsidePieces(pages, units, { glyphs })

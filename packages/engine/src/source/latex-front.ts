@@ -62,6 +62,53 @@ export function phPiece(src: string, brk = BREAK_SOURCE.test(src)): PhPiece {
   if (brk) Object.defineProperty(p, 'brk', { value: true })
   return p
 }
+/**
+ * The glue a call of a paper's macro of no argument sets where the macro's body is glue alone (te_preprint.sty's
+ * `\\newcommand{\\authorsep}{\\hskip 1.15em \\@plus .4em\\relax}`): that body as TeX reads it, its stretch and shrink (`\\@plus`,
+ * `\\@minus`, `plus`, `minus`) and a trailing `\\relax` left out, so that the instrument states the glue's natural width
+ * (El.glue) as it does for `\\hskip` written in place; null for any other source or body
+ */
+export function glueBody(src: string, macros: ReadonlyMap<string, string>): string | null {
+  const m = /^\\([A-Za-z@]+)(?:\{\})?$/.exec(src)
+  const body = m ? macros.get(m[1]!) : undefined
+  if (body === undefined) return null
+  // (its shrink, then its stretch: TeX reads `plus` before `minus`, each its own trailing component, `\\@minus` a control word
+  // that a run of no backslash cannot reach past)
+  const component = /\s*(?:\\@(?:plus|minus)|(?<![A-Za-z@])(?:plus|minus))(?![A-Za-z@])[^\\]*$/
+  const g = body
+    .replace(/\\relax\s*$/, '')
+    .replace(component, '')
+    .replace(component, '')
+    .trim()
+  // (glue as TeX appends it: its primitives \hskip and \kern, LaTeX's \hspace, and latex.ltx's \quad, \qquad, \enspace and
+  // \thinspace, each defined there as one \hskip or \kern of its width)
+  return /^\\(?:hspace\*?|hskip|kern)(?![A-Za-z@])/.test(g) || /^\\(?:quad|qquad|enspace|thinspace)$/.test(g) ? g : null
+}
+/** the glue a placeholder sets, as the reader stated it where it made the piece (glueBody; not enumerable, so that the unit's
+ *  hash, its marks and its JSON are as before) */
+export const statedGlue = (p: { t?: string } | null | undefined): string | null =>
+  p?.t === 'ph' ? ((p as { glue?: string }).glue ?? null) : null
+/**
+ * The arguments of a call after the one a pair goes round (`from`, past its closing brace, to the call's end `to`): each a
+ * braced group, the next right after it, nothing else between (`\\authorname{Ann Lee}{1,2}`'s `{1,2}`), as [start, end]; null
+ * where anything else stands there (an optional argument, white space) or nothing does. Each is a piece of its own, a
+ * placeholder the reader states a tail (`tail`, not enumerable): whether TeX prints it, and whether marks inside its braces
+ * move nothing, is TeX's answer (marks/marks.ts tailSamples), never the reader's
+ */
+export function tailGroups(s: string, from: number, to: number): [number, number][] | null {
+  const out: [number, number][] = []
+  for (let k = from; k < to; ) {
+    if (s[k] !== '{') return null
+    const e = matchGroup(s, k)
+    if (e < 0 || e > to) return null
+    out.push([k, e])
+    k = e
+  }
+  return out.length ? out : null
+}
+/** whether a placeholder is a pair's tail argument, as the reader stated it where it made the piece (tailGroups) */
+export const tailPiece = (p: { t?: string } | null | undefined): boolean =>
+  p?.t === 'ph' && (p as { tail?: unknown }).tail === true
 /** whether a piece is a forced break of its unit's text, as the reader stated it where it made the piece (phPiece) */
 export const forcedBreak = (p: { t?: string } | null | undefined): boolean =>
   p?.t === 'ph' && (p as { brk?: unknown }).brk === true
@@ -2339,6 +2386,7 @@ function paperMacros(files: readonly { file: string; text: string }[], scan: Par
         ...(then ? { then } : {}),
       })
     }
+  resolveStoredAtCall(out, files)
   resolveKeeps(out)
   resolveParEnds(
     out,
@@ -2537,6 +2585,101 @@ function callArgsOf(s: string, i: number, h: Macro) {
     k = e0
   }
   return out
+}
+/**
+ * A body with what its expansion does not set where it stands blanked (white space of the same length). With no names: each
+ * definition's body, which TeX stores unexpanded (\\def, \\gdef, \\newcommand) or expands into a macro and does not typeset
+ * (\\edef, \\xdef): the expansion runs none of it. With the stored names: a stored name's meaning a \\let copies (`\\let\\a\\b`,
+ * `\\let\\a=\\b`), which sets nothing where it stands (a \\let of another macro is walked: the copy may run, as `\\let\\do\\plain`
+ * then `\\do`). A read of a stored name in either is no read at the call: TeX sets the text where the defined macro runs
+ * (resolveStoredAtCall)
+ */
+function deferredOut(body: string, DEF: RegExp, names: ReadonlySet<string> | null): string {
+  let out = body
+  const blank = (from: number, to: number) => {
+    out = out.slice(0, from) + ' '.repeat(to - from) + out.slice(to)
+  }
+  if (!names)
+    for (const d of body.matchAll(DEF)) {
+      const at = d.index + d[0].length,
+        e = matchGroup(body, at)
+      if (e > 0) blank(at, e)
+    }
+  for (const l of body.matchAll(/\\let\s*\\[A-Za-z@]+\s*=?\s*\\([A-Za-z@]+)(?![A-Za-z@])/g)) {
+    if (!names?.has(l[1]!)) continue
+    const from = l.index + l[0].length - l[1]!.length
+    blank(from, l.index + l[0].length)
+  }
+  return out
+}
+/** the definers whose next control sequence is the name they define, not a read of it (storedReadsOf) */
+const DEFINES_NEXT =
+  /\\(?:[gex]?def|let|futurelet|(?:re)?newcommand\*?|providecommand\*?|DeclareRobustCommand\*?)\s*\{?\s*$/
+/**
+ * A stored prose parameter set AT THE CALL (paperMacros' `stores`, read again here): a macro whose body stores its prose
+ * parameter in a definition (`\\def\\x@keys{#1}`) hands that text elsewhere, as LaTeX's \\author keeps its argument for \\maketitle,
+ * only where nothing the call itself expands reads the stored name. TeX expands the call's body and, in turn, every macro of the
+ * paper that body names, and the one after it names (2611.18114's \\citep: `\\unskip\\def\\wsp@keys{#1}\\futurelet\\wsp@next
+ * \\wsp@citecheck`, \\wsp@citecheck choosing \\wsp@citeplain or \\wsp@citeover, each setting `\\wsp@citep{\\wsp@keys}`): where any of
+ * them reads the stored name, the text is set right where the call stands, and the call is no front matter command. Read as one,
+ * each citation cut its paragraph in two, its keys a unit TeX never prints, and the marked original's next marks stood between
+ * the call and the period its \\futurelet takes (a line moved). There the parameter's use is the stored name's use where it is
+ * read (each read, the name standing for the parameter, through paramUse): prose only where every read is prose; a key handed to
+ * a citation, a width, anything else, is none, and the call one placeholder, as the same macro storing its keys one call deeper
+ * is read. The walk visits each of the paper's definitions once: what bounds it is the set of the paper's own macros (TeX's
+ * expansion of the call reaches nothing else of the paper's), not a depth; a command the paper does not define is TeX's or a
+ * package's, and what it does with the text is that command's argument's role, read at the call as paramUse reads it.
+ */
+function resolveStoredAtCall(macros: Map<string, Macro>, files: readonly { text: string }[]) {
+  const DEF =
+    /\\(?:[gex]?def\s*\\([A-Za-z@]+)\s*(?:#\d\s*)*|(?:re)?newcommand\*?\s*(?:\{\s*\\([A-Za-z@]+)\s*\}|\\([A-Za-z@]+))\s*(?:\[\d\]\s*)?)(?=\{)/g
+  for (const m of macros.values()) {
+    if (!m.stores || m.prose === undefined) continue
+    // (the names the prose parameter is stored in, by the definitions in the body that hold it)
+    const names = new Set<string>()
+    for (const d of m.def.matchAll(DEF)) {
+      const at = d.index + d[0].length,
+        e = matchGroup(m.def, at)
+      if (e > 0 && new RegExp(`#${m.prose}(?!\\d)`).test(m.def.slice(at, e))) names.add((d[1] ?? d[2] ?? d[3])!)
+    }
+    if (!names.size) continue
+    // (the call's own expansion: its body, then each of the paper's macros it names, once each)
+    const seen = new Set<string>(),
+      queue: string[] = [m.def]
+    let read = false,
+      prose = true
+    while (queue.length) {
+      const walked = deferredOut(queue.shift()!, DEF, null),
+        body = deferredOut(walked, DEF, names)
+      for (const name of names) {
+        const re = new RegExp(`\\\\${name}(?![A-Za-z@])`, 'g')
+        let marked = '',
+          last = 0,
+          here = false
+        for (const r of body.matchAll(re)) {
+          if (DEFINES_NEXT.test(body.slice(Math.max(0, r.index - 40), r.index))) continue
+          marked += `${body.slice(last, r.index)}#0`
+          last = r.index + r[0].length
+          here = true
+        }
+        if (!here) continue
+        read = true
+        marked += body.slice(last)
+        const use = throughBoxes(paramUse(marked, 0, marked.length))
+        if (!use.text.has(0) || use.other.has(0)) prose = false
+      }
+      // (the macros the expansion runs: none whose body it only defines, nor the name a definition defines)
+      for (const c of walked.matchAll(/\\([A-Za-z@]+)/g)) {
+        if (seen.has(c[1]!) || names.has(c[1]!)) continue
+        if (DEFINES_NEXT.test(walked.slice(Math.max(0, c.index - 40), c.index))) continue
+        seen.add(c[1]!)
+        queue.push(...bodiesOf(files, c[1]!))
+      }
+    }
+    if (!read) continue
+    delete m.stores
+    if (!prose) m.prose = undefined
+  }
 }
 /**
  * Each of the paper's macros' kept parameters (`keeps`: parameter -> the macro it is kept in), as their definitions state them:
@@ -3349,10 +3492,20 @@ class Builder<F extends WalkFile = WalkFile> {
     if (!this.cur) this.cur = { file: this.file, kind: this.kind ?? 'para', start, end, pieces: [] }
     const p = brk ? phPiece(src, true) : phPiece(src)
     if (closes !== undefined) Object.defineProperty(p, 'closes', { value: closes })
+    const glue = glueBody(src, this.macros)
+    if (glue !== null) Object.defineProperty(p, 'glue', { value: glue })
     if (display) this.displays.add(p)
     this.cur.pieces.push(p)
     this.cur.end = end
     return true
+  }
+  /** a pair's tail argument (tailGroups): a placeholder stated so (TAIL), its marks inside its braces or none */
+  tail(src: string, end: number) {
+    if (!this.cur) return
+    const p = phPiece(src)
+    Object.defineProperty(p, 'tail', { value: true })
+    this.cur.pieces.push(p)
+    this.cur.end = end
   }
   /** (the unit's range holds the opening: a unit that ends with it, its close in the next unit, is written over it, which
    *  else stayed in the source after the unit's range and was set twice — a pgffor loop's `{{`, 2610.21377) */
@@ -5703,7 +5856,11 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
         }
         const id = b.open(s.slice(i, arg.start + 1), i, identityPair(macro, macro.prose))
         walk(s, arg.start + 1, arg.end - 1, b, ctx)
-        b.close(id, s.slice(arg.end - 1, call.end), call.end)
+        // (the arguments after the prose one, each a braced group right after the one before: each a piece of its own
+        // (tailGroups), which the marking marks inside its braces where TeX answers that marks there move nothing)
+        const tails = tailGroups(s, arg.end, call.end)
+        b.close(id, s.slice(arg.end - 1, tails ? arg.end : call.end), tails ? arg.end : call.end)
+        for (const [a, e] of tails ?? []) b.tail(s.slice(a, e), e)
         i = call.end
         goOn(macro, call, i)
         continue

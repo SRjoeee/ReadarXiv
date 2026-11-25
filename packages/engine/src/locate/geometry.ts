@@ -659,8 +659,18 @@ export function lineGeometry(w: Work, owned: Owned): void {
     }
     // its label: the class's mark before it
     if (mem.label.length) {
-      const L = cutLines(mem.label, atA)[0]
+      const L0 = cutLines(mem.label, atA)[0]
       const lg = mem.label.map(gA)
+      // (its boxes on its line, one ink with its glyphs: the extent of both, the crop the reader draws)
+      const L = L0 && { ...L0 }
+      if (L)
+        for (const b of boxesOf_(mem.labelBoxes ?? []))
+          if (b.page === L.page) {
+            L.x0 = Math.min(L.x0, b.x0)
+            L.x1 = Math.max(L.x1, b.x1)
+            L.bottom = Math.min(L.bottom, b.y0)
+            L.top = Math.max(L.top, b.y1)
+          }
       if (L) {
         // (the line of its own it stands on, by an element's rule: a footnote's mark raised over the row it shares with the note
         // before stands on that row, its first line)

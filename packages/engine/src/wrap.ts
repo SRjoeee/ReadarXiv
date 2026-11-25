@@ -73,6 +73,10 @@ export interface WrapPlan {
   textOf?(group: string): string
   /** the figure groups its shows hold, read once (figureGroupsOf) */
   figureGroups?: Set<string>
+  /** the paths (the reading's numbers, alignOf's) the page's reading gives a box: a path it gives none paints nothing anyone
+   *  sees (wholly outside the clip in force or its form's box, ink.ts pageInk) and holds no one's ink; absent, every path is read
+   *  as ink (paintedOf states it) */
+  painted?: Set<number>
 }
 export type WrapWhy = (typeof WRAP_WHYS)[number]
 export type WrapRefusal = { refused: WrapWhy; why: string }
@@ -317,6 +321,13 @@ export function planOf(
     images.clear()
   }
   return { shows, paths: rules, images, lost }
+}
+/** the paths (the reading's numbers) the page's reading gives a box (`paths`: pageInk's, each box's path's number or its kind):
+ *  WrapPlan's `painted` */
+export function paintedOf(paths: ArrayLike<number>): Set<number> {
+  const painted = new Set<number>()
+  for (let b = 0; b < paths.length; b++) if ((paths[b] as number) >= 0) painted.add(paths[b] as number)
+  return painted
 }
 
 /** a show's codes' groups: each code read (in ink) its own, a code not read (no ink of its own: invisible, or none) its
@@ -840,6 +851,12 @@ function wrapPage(
     }
     const d = formOf.get(top(e.cont))
     if (!d) continue
+    // (a path the reading gives no box paints nothing anyone sees: no one's ink, nothing the form's owner must share; a logo
+    // cut by \includegraphics' trim and clip paints every path of its file, its clip showing a few)
+    if (e.kind === 'paint' && plan.painted) {
+      const m = paintM.get(e)
+      if (m !== undefined && !plan.painted.has(m)) continue
+    }
     const set = inForm.get(d) ?? inForm.set(d, new Set()).get(d)!
     for (const g of gs) set.add(isFigure(g) ? null : g)
     if (gs.some(isFigure)) groupsOf.set(e, gs)

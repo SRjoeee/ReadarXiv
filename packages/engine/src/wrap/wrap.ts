@@ -6,7 +6,7 @@
 // new stream lexed again and its operators, ours taken out, A's; the section read back over A's bytes; the document's object
 // graph A's but for the catalog's optional content, the pages' contents and properties). The add-on is the section alone.
 import type { AlignFacts, PdfLib } from '../remove.ts'
-import { planOf, type Wrap, type WrapPage, type WrapPlan, wrapOf } from '../wrap.ts'
+import { paintedOf, planOf, type Wrap, type WrapPage, type WrapPlan, wrapOf } from '../wrap.ts'
 import type { Located } from '../locate/locate.ts'
 import type { ReadPage } from '../read.ts'
 
@@ -90,7 +90,7 @@ export async function wrap(
         plan.shows.set(n, row)
         row[pg.turnedNK[2 * k + 1] as number] = g
       })
-    plans.set(i + 1, { facts: pg.extra, ...plan, isFigure, textOf: textGroupOf })
+    plans.set(i + 1, { facts: pg.extra, ...plan, painted: paintedOf(pg.paths), isFigure, textOf: textGroupOf })
   })
   // (the section alone: A and it never composed, nor the whole hashed, which no step of the prepare reads)
   const made = await wrapOf(bytesA, plans, { ...deps, compose: false })
