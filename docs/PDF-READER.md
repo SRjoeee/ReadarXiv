@@ -309,20 +309,22 @@ the extension's reader passes none (its narrow window keeps §5's rule).
 - **Bilingual entries**, after the maintainer's reference of 2026-11-25 (「我们可以更新一下我们的目录设计，换成这种原文加译文的设计。我已经给了你一个参考样式，我们可以学习这个样式和结构去进行设计实现。」):
   a header 目录 (11.5 px, 600, ink-2), then the paper's own headings, **every level shown** (up to three), each entry its
   **number** in a column of its own, the **translated title** and the **original title** under it. Hierarchy by indentation
-  alone: a level's number column starts under its parent's titles. No page number, no fold, no row rule (「完全照参考图」).
+  alone, a little, enough to read the structure (2026-11-26: 「我们的目录页缩进缩太多了。这样占用的空间可以有点大，我们学习参考图中这种缩一点理解结构即可」):
+  each level 12 px in from its parent (three steps of the 4 px grid). No page number, no fold, no row rule (「完全照参考图」).
   It replaces stage 5's compact folding tree (one 28 px row, the original in a tooltip, after PDFSlick and alphaXiv).
 - **240 px wide**, fifteen steps of the reader's 16 px, about the reference's panel (「目录不用太宽，你可以看这个参考，然后安排一个合适的值就行」).
   **Sizes** on the reader's scale, those of the folding tree (「中文标题当前的这个版本太大了。你可以参考我们当前的原版目录中的状态，以及我提供参考图的状态。找一个适合我们设计系统的」):
   a first level's number and translation 12.5 px, its translation at 600; the other levels 12 px at 400; translations in ink,
   numbers in ink-2, tabular. Originals 11 px in ink-2: 5.87:1 on the chrome, 4.85:1 on the hover fill (light), 6.13 and 5.11
   (dark). Lines on the 4 px grid: a title's 18 px, an original's 16 px, 4 px above and below each entry's words and 4 px
-  between entries. On 1706.03762v7 a third level holds 11 Chinese characters a line, a first 15.7 (measured).
+  between entries. On 1706.03762v7 a third level holds 12.5 Chinese characters a line, a second 14.4, a first 15.7
+  (measured).
 - **The number** is the heading's own as its part states it (`Label.num` of its label of kind `head`: "3.1", "IV", "A"),
   never counted by the reader. The head states each outline entry's (`Head.numbers`, by its member's ord: PIPELINE 122), so
   that every heading is numbered at open, the parts of its far pages unread; under a head made before, a heading is numbered
   as its page's part is read. A heading TeX set no number for (a starred section, the references) has an empty column, its
-  titles on its level's edge. Each level's column is as wide as its widest number (the list a grid, each entry on a subgrid);
-  a level with no number keeps one 14 px step where a deeper level follows.
+  titles on its level's edge. Each level's column is as wide as its widest number as drawn (`Outline.tsx` measures it once
+  the entries or the faces change), so that a level's titles share one edge; a level with no number has no column.
 - **The translated title** wraps to two lines at most, then an ellipsis; **the original** one line, an ellipsis
   (「译文最多两行，原文一行」), whole in the tooltip to the right and in the link's name. A heading not yet translated shows its
   original once, in the translation's place, in the paper's `lang`; so does one whose translation is its original's text.
