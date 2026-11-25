@@ -90,8 +90,8 @@ export function flowsAndTies(w: Work): void {
   // narrower than what it holds, a kern back, sets the next item before that end; the last glyph on the line ends at its
   // advance. \maketitle's \thanks mark in an \rlap after a name, the comma after it set at the mark's start (2609.40181v2 p1,
   // 2608.30730v1 p1): the name's member ends where the comma begins, its mark's ink past it moves nothing, and the members after
-  // it on the line are its line's. A member of another column on the same baseline starts before the end of every glyph of
-  // the leader's but its last: kept apart, as before)
+  // it on the line are its line's, in the stream's order (the reorders below read the same end) and in the flows'. A member of
+  // another column on the same baseline starts before the end of every glyph of the leader's but its last: kept apart, as before)
   const { pageA } = w.ix
   const advanceEnd = (lead: Member, a: Line) => {
     let x = Number.NEGATIVE_INFINITY
@@ -141,7 +141,7 @@ export function flowsAndTies(w: Work): void {
     const lead = o === undefined ? undefined : members[o]
     const a = lead?.lines.at(-1),
       l = x.lines[0]
-    if (!lead || !a || !l || a[0] !== l[0] || a[1] !== l[1] || l[2] < a[3] - 0.5) continue
+    if (!lead || !a || !l || a[0] !== l[0] || a[1] !== l[1] || l[2] < advanceEnd(lead, a) - 0.5) continue
     if (Math.abs(a[4] - l[4]) >= 0.5 * Math.min(lead.style.size, x.style.size)) continue
     ;(standsAfter.get(lead.ord) ?? standsAfter.set(lead.ord, []).get(lead.ord)!).push(x.ord)
     standing.add(x.ord)
@@ -179,7 +179,7 @@ export function flowsAndTies(w: Work): void {
       continue
     const a = lead.lines.at(-1),
       l = x.lines[0]
-    if (!a || !l || a[0] !== l[0] || l[2] < a[3] - 0.5) continue
+    if (!a || !l || a[0] !== l[0] || l[2] < advanceEnd(lead, a) - 0.5) continue
     if (a[1] !== l[1] && bracketBetween(lead.bLast, x.bFirst)) continue
     if (Math.abs(a[4] - l[4]) >= 0.5 * Math.min(lead.style.size, x.style.size)) continue
     ;(standsAfter.get(lead.ord) ?? standsAfter.set(lead.ord, []).get(lead.ord)!).push(x.ord)

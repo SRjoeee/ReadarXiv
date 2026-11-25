@@ -83,3 +83,35 @@ describe('two units of one line of names, a \\thanks mark between them', () => {
     expect(flow).toEqual([first, rest])
   })
 })
+
+describe('the same line, its second unit numbered after a unit of the body (the stream puts it back after the first)', () => {
+  // (the front end numbers a unit it cut out of one after the units before it: the names line's rest is unit 2, a body
+  // paragraph unit 1. flows.ts reorders a member TeX set right after another's last glyph on that one's last row to stand
+  // after it; that test read the leader's end as its line's ink too, past the comma under the \rlap'd mark)
+  it('one flow, the name and the rest of its line', () => {
+    const end = 190 + FIRST.length * 6
+    const B = docOf([
+      {
+        lines: [
+          { text: FIRST, x: 190, y: 650 },
+          { text: '*', x: end, y: 653.6, size: 7 },
+          { text: REST, x: end, y: 650 },
+          { text: 'Words of a body paragraph', x: 72, y: 600 },
+        ],
+        points: [
+          ['0s', 0],
+          ['0e', FIRST.length],
+          ['2s', FIRST.length + 1],
+          ['2e', FIRST.length + 1 + REST.length],
+          ['1s', FIRST.length + 1 + REST.length],
+          ['1e', FIRST.length + 1 + REST.length + 'Words of a body paragraph'.length],
+        ],
+      },
+    ])
+    const units = [unitOf('author', FIRST), unitOf('para', 'Words of a body paragraph'), unitOf('author', REST)]
+    const L = locate(instrumentOf(B, units, [[0, -1, 2, 1]]), B, align(B, B))
+    const first = L.members.find((m) => m.unit === 0)!
+    const rest = L.members.find((m) => m.unit === 2)!
+    expect(L.flows.find((f) => f.includes(rest.ord))).toEqual([first.ord, rest.ord])
+  })
+})

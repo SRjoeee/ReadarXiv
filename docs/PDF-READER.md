@@ -10230,7 +10230,7 @@ translation is the shorter. The order test now reads the leader's end as TeX's a
 position is where the next glyph it set on that line starts (A's stream; its baseline inside the line's band), the glyph's
 advance's end (`x1`) at most, the last glyph on the line ending at its advance: a box narrower than what it holds, a kern back,
 sets the next item before that end (2608.30730v1's comma reads 0.0004 pt before the mark's origin: one place of TeX's, two
-fonts' matrices, so the law reads the next start, not a comparison with the mark's origin). The x test itself stays (it rightly keeps apart a member of
+fonts' matrices, so the law reads the next start, not a comparison with the mark's origin). The stream's reorders read the same end (a member TeX set right after another's last glyph on that one's last row stands after it among the members: 2608.30730v1's names line, its second unit numbered after the body's). The x test itself stays (it rightly keeps apart a member of
 another column on the same baseline: 3 pairs of the 245), and the separation the join states stays the ink's (S.rowStart lays
 the follower from the translation's ink end). The two members in one flow, TeX's one centred line is laid as one run
 (`lay/flow.ts` RowLine). Over the 245 it reaches 2608.30730v1 p1's names line.
