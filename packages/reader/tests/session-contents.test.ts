@@ -65,6 +65,19 @@ describe('the contents', () => {
     expect(c.place([placed(3, [1, 0, 0, 0, 0, 0, 0, 0, 0, 0])])).toBe(false)
     expect(c.pageOf(0)).toBe(1)
   })
+  it('numbers every heading at once by the numbers its head states, a part read after it changing none', () => {
+    const c = createContents(UNITS, { ...HEAD, numbers: [[9, '2']] })
+    expect(c.entries().map((e) => e.number)).toEqual([null, null, '2', null])
+    const line = [2, 0, 72, 300, 700, 712, 698, 72, 300, 0]
+    const label = {
+      kind: 'head',
+      ink: [2, 72, 698, 80, 712, 700],
+      style: { font: 0, size: 10 },
+      num: ['7', [2, 72, 698, 78, 712, 700]],
+    }
+    c.place([{ ...placed(9, line), label } as unknown as Placed])
+    expect(c.entries()[2]?.number).toBe('2')
+  })
   it('numbers a heading by its label as its part states it: the number TeX set, its punctuation aside; none where TeX set none', () => {
     const c = createContents(UNITS, HEAD)
     const line = [2, 0, 72, 300, 700, 712, 698, 72, 300, 0]

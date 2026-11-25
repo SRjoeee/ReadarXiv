@@ -669,6 +669,11 @@ export const Head = z.object({
   parts: z.array(Digest.nullable()),
   refused: z.array(z.tuple([page, PrepWhy])).optional(),
   outline: z.array(z.tuple([int, page, Id])).optional(),
+  // each outline entry's printed number, by its member's ord: its heading label's number as its part states it (Label.num, a
+  // label of kind `head`: "3.1", "IV", "A"), none where TeX set none. The contents number every heading from it at open, the
+  // parts of far pages unread (docs/PDF-READER.md §6.3). Absent (a head made before), a reader numbers a heading as its part is
+  // read; a reader of before strips it, so FORMAT stays
+  numbers: z.array(z.tuple([int, z.string().min(1).max(32)])).optional(),
   // what PDF.js recovered from inside its worker while the prepare read our final pass (B) and arXiv's PDF (A), each
   // [document, site, count, its first reason] (the engine's warnings.ts RECOVER_SITES): the page or the font read as PDF.js
   // answered it. None where nothing was (the corpus's every paper)

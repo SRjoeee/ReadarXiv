@@ -125,7 +125,7 @@ export interface OutlineDoc {
 }
 
 /** the contents of a layer's paper, from its units (in their objects' order) and its head */
-export function createContents(units: readonly Unit[], head: Pick<Head, 'outline'>): Contents {
+export function createContents(units: readonly Unit[], head: Pick<Head, 'outline' | 'numbers'>): Contents {
   const at = new Map<string, [number, number][]>()
   for (const [ord, page, id] of head.outline ?? []) (at.get(id) ?? at.set(id, []).get(id))?.push([ord, page])
   for (const l of at.values()) l.sort((a, b) => a[0] - b[0])
@@ -145,8 +145,13 @@ export function createContents(units: readonly Unit[], head: Pick<Head, 'outline
   /** each entry's first rectangle once a part places it; the pages the original's outline gives; by unit, the rows taken, its
    *  elements' kinds and the copy texts its members' parts state (Placed.els) */
   const first = new Map<number, Rect>()
-  /** each entry's number, as the first part that places it states its label's */
+  /** each entry's number: the head's, by its member's ord, at once; else the first part that places it states its label's (a
+   *  head made before it stated numbers) */
   const numbers = new Map<number, string>()
+  for (const [ord, n] of head.numbers ?? []) {
+    const h = byOrd.get(ord)
+    if (h && n.trim()) numbers.set(h.id, n.trim())
+  }
   const outlined = new Map<number, number>()
   const rowOf = new Map<string, readonly OutPiece[]>()
   const kinds = new Map<string, Map<string, string>>()
