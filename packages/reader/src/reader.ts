@@ -103,8 +103,10 @@ export type Command =
   | { do: 'pinch'; side: Side; factor: number; at: [number, number] }
   | { do: 'page'; side: Side; page: number }
   | { do: 'unit'; id: number }
-  /** a contents entry (its `id`) gone to on both sides, a line of room above its heading; else its page */
-  | { do: 'heading'; id: number }
+  /** a contents entry (its `id`) gone to on both sides, a line of room above its heading; else its page. `focus`: the focus
+   *  given to its page on the side read where that side holds a target for it (panes focusPage), the host's own place for it
+   *  kept where it holds none */
+  | { do: 'heading'; id: number; focus?: boolean }
   | { do: 'lead'; side: Side }
   | { do: 'narrow'; on: boolean }
   | { do: 'retry' }
@@ -487,7 +489,7 @@ export function openReader(
   }
   /** a contents entry gone to: its first rectangle where a part places it (the part of its page read where it is not yet), a
    *  line of room above it on the side read, the other following; else the page the contents give it */
-  async function goToHeading(id: number) {
+  async function goToHeading(id: number, focus = false) {
     const c = contents
     if (!c || !panes) return
     let r = c.firstRect(id)
@@ -499,6 +501,8 @@ export function openReader(
     if (closed || !panes) return
     if (r) panes.goToRect(r)
     else if (page) panes.goToPage(sideRead(), page)
+    const at = r?.[0] ?? page
+    if (focus && at) panes.focusPage(sideRead(), at)
   }
   // ---- the rows made here under way, and the reading place they are asked by
   let making: { units: readonly Unit[]; signal: AbortSignal; asked: Set<string>; run(want: Unit[]): void } | null = null
@@ -1250,7 +1254,7 @@ export function openReader(
       else if (c.do === 'unit') {
         const l = composer?.member(c.id)?.lines[0]
         if (l) p.goToRect([l[0], l[2], l[6], l[3], l[5]])
-      } else if (c.do === 'heading') void goToHeading(c.id)
+      } else if (c.do === 'heading') void goToHeading(c.id, c.focus)
     },
     probe() {
       const s = rt.state

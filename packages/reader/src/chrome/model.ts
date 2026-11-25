@@ -292,7 +292,8 @@ export interface Session {
   /** arXiv's own PDF of the paper opened by the browser, in a tab of its own: the browser streams it and saves it. Never read
    *  through the reader (the whole file, for every reader, in case one asks to save it) */
   openOriginal(): void
-  goToUnit(id: number): void
+  /** a contents entry gone to; `focus`: its page given the focus where the reader holds a target for it */
+  goToUnit(id: number, o?: { focus?: boolean }): void
   lead(which: Side): void
   retry(): void
   setNarrow(on: boolean): void
@@ -601,8 +602,9 @@ export interface ReaderController {
   setNarrow(on: boolean): void
   /** a side made the leading one, as a press in its pane makes it (a press on its scroll indicator) */
   lead(side: Side): void
-  /** both sides shown taken to a heading from the contents */
-  goToHeading(id: number): void
+  /** both sides shown taken to a heading from the contents; `focus`: the focus taken to its page where the reader holds a
+   *  target for it (the contents laid over the document, closed by the jump) */
+  goToHeading(id: number, o?: { focus?: boolean }): void
   /** a side's PDF saved as a file, named by the paper (fileName) */
   download(which: 'translation' | 'original'): Promise<void>
   /** a host's passing words in the capsule's place, over whatever it shows, for their time; words said again start their time
@@ -721,7 +723,7 @@ export function createController({
     },
     goToPage: (side, page) => later((s) => s.goToPage(side, page)),
     setPrefs: (patch) => later((s) => s.setPrefs(patch)),
-    goToHeading: (id) => later((s) => s.goToUnit(id)),
+    goToHeading: (id, o) => later((s) => s.goToUnit(id, o)),
     lead: (side) => later((s) => s.lead(side)),
     // a session that could not open is retried as the page first was: loaded again (PDF-READER §11.3)
     retry: () =>

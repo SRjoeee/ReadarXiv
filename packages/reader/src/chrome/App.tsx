@@ -92,6 +92,12 @@ function Page({ controller }: { controller: ReaderController }) {
       easing: 'cubic-bezier(0.2, 0, 0, 1)',
     })
   }, [contents])
+  /** the contents laid over the document (a window under 720 px, reader.css --push) */
+  const overlaid = () => matchMedia('(width < 720px)').matches
+  const closeContents = () => {
+    setContents(false)
+    document.querySelector<HTMLElement>('button[aria-controls="axt-contents"]')?.focus()
+  }
   const swapped = state.swapped
   useEffect(() => {
     document.documentElement.toggleAttribute('data-axt-swapped', swapped)
@@ -106,9 +112,16 @@ function Page({ controller }: { controller: ReaderController }) {
       <Outline
         controller={controller}
         open={contents}
-        // (laid over the document, a narrow window's, the contents close on a jump: the heading gone to is under them)
+        // (laid over the document, a narrow window's, the contents close on a jump, the heading gone to being under them, and on
+        // Escape; the focus goes back to their button, which the reader moves on to the heading's page where it holds a target
+        // for it: never left on a row made inert)
         onGone={() => {
-          if (matchMedia('(width < 720px)').matches) setContents(false)
+          if (!overlaid()) return false
+          closeContents()
+          return true
+        }}
+        onEscape={() => {
+          if (overlaid()) closeContents()
         }}
       />
       {/* the page's main landmark, beside the toolbar's banner and the contents' complementary region, so that a screen

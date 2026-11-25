@@ -139,6 +139,57 @@ describe("the contents' slide (the reader's design, §5)", () => {
   })
 })
 
+describe('the contents laid over the document (a window under 720 px, §6.3)', () => {
+  const overlay = (on: boolean) =>
+    vi.stubGlobal('matchMedia', (q: string) => ({
+      matches: q.includes('720px') ? on : false,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }))
+  afterEach(() => vi.unstubAllGlobals())
+  it('a jump closes them and gives the focus back to their button, the reader asked to take it on to the heading’s page', async () => {
+    overlay(true)
+    const { controller } = fakeController({
+      outline: [{ id: 3, title: 'Methode', original: 'Method', level: 1, page: 2, number: '2' }],
+    })
+    const m = await mountElement(app(controller))
+    const toggle = m.container.querySelector<HTMLButtonElement>('button[aria-controls="axt-contents"]')!
+    await act(async () => toggle.click())
+    await act(async () => m.container.querySelector<HTMLElement>('#axt-contents a')!.click())
+    expect([
+      document.documentElement.hasAttribute('data-axt-contents'),
+      document.activeElement === toggle,
+      controller.goToHeading.mock.calls,
+    ]).toEqual([false, true, [[3, { focus: true }]]])
+    await m.unmount()
+  })
+  it('Escape closes them, the focus back on their button; beside the document a jump and Escape leave them open', async () => {
+    overlay(true)
+    const { controller } = fakeController({
+      outline: [{ id: 3, title: 'Methode', original: 'Method', level: 1, page: 2, number: '2' }],
+    })
+    const m = await mountElement(app(controller))
+    const toggle = m.container.querySelector<HTMLButtonElement>('button[aria-controls="axt-contents"]')!
+    const row = () => m.container.querySelector<HTMLElement>('#axt-contents a')!
+    const pressEscape = () => row().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await act(async () => toggle.click())
+    await act(async () => pressEscape())
+    expect([document.documentElement.hasAttribute('data-axt-contents'), document.activeElement === toggle]).toEqual([
+      false,
+      true,
+    ])
+    overlay(false)
+    await act(async () => toggle.click())
+    await act(async () => pressEscape())
+    await act(async () => row().click())
+    expect([
+      document.documentElement.hasAttribute('data-axt-contents'),
+      controller.goToHeading.mock.calls.at(-1),
+    ]).toEqual([true, [3, undefined]])
+    await m.unmount()
+  })
+})
+
 describe("the tab's title", () => {
   it('names the paper once its title is known, and never goes back to the bare name when the title is gone for a moment', async () => {
     document.title = 'Read arXiv'

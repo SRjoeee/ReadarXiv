@@ -92,7 +92,7 @@ export function openSession(o: ChromeOpen): (chrome: SessionHost) => Promise<Ses
       pdfBytes: async () => null,
       // arXiv's own PDF, opened by the browser in a tab of its own: never read through the reader
       openOriginal: () => reader.do({ do: 'original' }),
-      goToUnit: (id) => reader.do({ do: 'heading', id }),
+      goToUnit: (id, o) => reader.do({ do: 'heading', id, ...(o?.focus ? { focus: true } : {}) }),
       lead: (side) => reader.do({ do: 'lead', side }),
       retry: () => reader.do({ do: 'retry' }),
       setNarrow: (on) => reader.do({ do: 'narrow', on }),

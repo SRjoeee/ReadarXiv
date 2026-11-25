@@ -2253,12 +2253,18 @@ await check(
         })
       }
       await shot('light')
-      // (and its markup, which a page of its own draws with the reader's sheet beside other widths)
-      if (process.env.AXT_SHOTS)
-        (await import('node:fs')).writeFileSync(
+      // (and its markup and entries, which a page of its own draws with the reader's sheet beside other widths and designs)
+      if (process.env.AXT_SHOTS) {
+        const { writeFileSync } = await import('node:fs')
+        writeFileSync(
           join(HERE, '.shots', `contents-${name}.html`),
           await page.evaluate(() => document.getElementById('axt-contents').outerHTML),
         )
+        writeFileSync(
+          join(HERE, '.shots', `contents-${name}.json`),
+          JSON.stringify(await page.evaluate(() => window.__c.reader.state().view.outline)),
+        )
+      }
       await rowsOf.nth(Math.min(n - 1, 2)).hover()
       await page.waitForTimeout(150)
       await shot('hover')
@@ -2275,6 +2281,35 @@ await check(
       await rowsOf.first().click()
       await page.waitForTimeout(300)
       const closedOnJump = await page.evaluate(() => !document.documentElement.hasAttribute('data-axt-contents'))
+      // (the focus then: on the heading's page where the side read holds a target for it, else on the contents button; and
+      // Escape, the contents opened again, closes them with the focus on their button)
+      await page.waitForTimeout(600)
+      const focusOf = () =>
+        page.evaluate(() => {
+          const f = document.activeElement
+          return f?.closest('.doc')
+            ? 'page'
+            : f?.matches('button[aria-controls="axt-contents"]')
+              ? 'button'
+              : (f?.tagName ?? null)
+        })
+      const jumpFocus = await focusOf()
+      await page.locator('button[aria-controls="axt-contents"]').click()
+      await rowsOf.nth(1).focus()
+      await page.keyboard.press('Escape')
+      await page.waitForTimeout(300)
+      const escaped = [
+        await page.evaluate(() => document.documentElement.hasAttribute('data-axt-contents')),
+        await focusOf(),
+      ]
+      // (the translation read alone, its laid pages a focus target: a jump takes the focus to the heading's page)
+      await page.evaluate(() => window.__c.controller.setDisplay('translation'))
+      await page.waitForTimeout(400)
+      await page.locator('button[aria-controls="axt-contents"]').click()
+      await rowsOf.nth(Math.min(n - 1, 4)).press('Enter')
+      await page.waitForTimeout(1200)
+      const pageFocus = await focusOf()
+      await page.evaluate(() => window.__c.controller.setDisplay('bilingual'))
       if (process.env.AXT_HOLD && process.env.AXT_HEADED && name === papers.at(-1)[0]) {
         await page.setViewportSize({ width: 1400, height: 900 })
         console.log(`holding ${name} open: close its window to go on`)
@@ -2314,6 +2349,12 @@ await check(
         `${name}: at 320 px the contents ${narrow.panel} px, the document from ${narrow.docLeft}, closed on a jump: ${closedOnJump}`,
       )
       assert(
+        ['page', 'button'].includes(jumpFocus),
+        `${name}: after a jump over the document the focus is on ${jumpFocus}`,
+      )
+      assert(escaped[0] === false && escaped[1] === 'button', `${name}: Escape leaves the contents ${escaped}`)
+      assert(pageFocus === 'page', `${name}: after a jump in the translation alone the focus is on ${pageFocus}`)
+      assert(
         drawn.sideways <= 0 && narrow.sideways <= 0,
         `${name}: the list scrolls sideways by ${drawn.sideways} / ${narrow.sideways} px`,
       )
@@ -2327,6 +2368,7 @@ await check(
         twoLines: es.filter((e) => e.tLines === 2).length,
         cut: es.filter((e) => e.oCut).length,
         chars: [chars(1), chars(2), chars(3)],
+        jumpFocus,
         name: name1.trim(),
       }
     }
