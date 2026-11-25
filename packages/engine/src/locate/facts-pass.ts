@@ -511,6 +511,10 @@ function readElements(fx: FactsIndex, r: MemberReading): void {
     const asText = (el.style !== undefined && !c?.mark) || (c?.cls === 'symbol' && !!c.sym && !c.sym[1])
     const one = asText && gs.length && mem.smallCaps?.get(id) === undefined ? oneSize(gs, true) : undefined
     if (one !== undefined && r2(one) !== r2(mem.style.size)) el.size = r2(one)
+    // (a size declaration's: the size its run's glyphs share, where it is not the member's, from which the typesetter draws what
+    // follows it, to the end of its group, as TeX sets it: a subtitle after `\large` in a title TeX set at the class's \huge)
+    const decl = mem.sizeDecls?.find(([d]) => d === id)?.[1]
+    if (decl !== undefined && !gs.length && r2(decl) !== r2(mem.style.size)) el.size = r2(decl)
     // (its own brackets: its first and last glyphs where they are a pair of them, "[" "]" around a citation's numbers:
     // the brackets a translation that brackets it takes)
     const pair = bracketsOf(gs)

@@ -164,6 +164,9 @@ type Reading = {
   orig?: { size?: number } | null
   openBreaks?: ReadonlyMap<number, number> | null
   referenced?: ReadonlySet<number> | null
+  /** each declaration's stated size by its piece (a bare element of no ink whose El.size the part states: `\large` at a unit's
+   *  top level), the size TeX set what follows it at, to the end of its group */
+  declSizes?: ReadonlyMap<number, number> | null
   tail?: readonly { ch: string; st?: TStyle | null }[] | null
   tailOwn?: readonly string[] | null
 }
@@ -979,6 +982,14 @@ export function tokens(i: TokensInput): Tokens {
         if (glue.fill) fillOn(glue.fill)
         else kernOn(glue)
         return
+      }
+      // (a declaration the part states a size for: what follows it, to its group's end, at that size's share of the member's,
+      // as a group at its own size is (TStyle.rel, absolute); none stated, the size around it. A part made before states none)
+      const declared = i.statedBase === false ? undefined : resolved.declSizes?.get(k),
+        of = resolved.orig?.size
+      if (declared! > 0 && of! > 0) {
+        stack[stack.length - 1] = { ...style(), rel: declared! / of! }
+        if (mstack.length) mstack[mstack.length - 1] = { ...mstyle(), rel: declared! / of! }
       }
       const sw = applyCmd(p.src, style(), designs)
       if (sw && /^\\[A-Za-z]+$/.test(p.src)) {

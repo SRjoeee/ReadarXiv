@@ -65,6 +65,9 @@ interface GroupStyle {
     apart: boolean
   }
   text: number[]
+  /** each size declaration's run (sizeSwitch) whose own text's glyphs share one size (facts.ts oneSize): the declaration's
+   *  element id and that size, which the caller states where it is not the member's (El.size) */
+  sizes: [id: string, size: number][]
 }
 /** what a group style or a face switch sets of a face: its weight (bold, medium), its slant (italic, upright); a face change a
  *  paper's macro was read to make names each (marks/faces.ts, `sans-bold`) */
@@ -103,6 +106,11 @@ const NO_FACE = new Set<string>(['other', 'link', 'colour', 'underline'] satisfi
 /** whether a group style (the group table's, or a paper's macro's read face) names a face */
 export const namesFace = (style: string): boolean => !NO_FACE.has(style)
 
+/** a size declaration: latex.ltx's size commands (\tiny … \Huge, \normalsize: each \@setfontsize, which ends in
+ *  \selectfont) and \selectfont itself, which sets the size a \fontsize before it asked for. Its run is the rest of the group
+ *  it stands in, set at the size its glyphs show (groupStyleOf `sizes`) */
+export const SIZE_DECLARATION =
+  /^(?:tiny|scriptsize|footnotesize|small|normalsize|large|Large|LARGE|huge|Huge|selectfont)$/
 /** whether a unit's content has a scope a fill or a face may be set in apart from its own: a group, or a switch */
 export function hasScopes(content: readonly Piece[], switches: (el: El) => boolean): boolean {
   return content.some((p) => p.t === 'span' || (p.t === 'el' && switches(p)))
@@ -126,6 +134,7 @@ export function groupStyleOf(
   switchStyle: (el: El) => string | undefined = () => undefined,
   symbolGlyphs: (el: El) => readonly StyleGlyph[] | undefined = () => undefined,
   spanCmd: (s: Span) => string | undefined = () => undefined,
+  sizeSwitch: (el: El) => boolean = () => false,
 ): GroupStyle {
   // ---- the scopes (0 the unit's own): each with the scope around it, the group it is (null: a switch's run, the unit), the
   // attribute a switch's run sets, and whether it sets the fill or the face by its definition (or stands inside one that does);
@@ -147,6 +156,12 @@ export function groupStyleOf(
   const scopeOfM: number[] = []
   const markM: boolean[] = []
   const symbols: [glyph: StyleGlyph, scope: number][] = []
+  // ---- the size declarations' runs (`\large` at a unit's top level, no group around it: the rest of the group it stands in,
+  // as TeX's declaration holds to its group's end), apart from the scopes above, which they set neither the fill nor the face
+  // of: each with its element, the scope it was declared in, and each letter's innermost run (-1 none)
+  const sizeEl: string[] = []
+  const sizeAt: number[] = []
+  const sizeOf: number[] = []
   const open = (
     cur: number,
     s: Span | null,
@@ -172,8 +187,9 @@ export function groupStyleOf(
     if (style === undefined || OLD_FONT_COMMANDS.test(cmd ?? '')) return { weight: true, slant: true, toggles }
     return { weight: SETS_WEIGHT.test(style), slant: SETS_SLANT.test(style) || toggles, toggles }
   }
-  const walk = (list: readonly Piece[], scope: number) => {
+  const walk = (list: readonly Piece[], scope: number, sizeScope: number) => {
     let cur = scope
+    let size = sizeScope
     for (const p of list) {
       if (p.t === 'span') {
         const names = namesFace(p.style)
@@ -190,7 +206,13 @@ export function groupStyleOf(
           names,
           names ? faceSets(p.style, opening) : kernel ? { ...kernel, toggles: false } : undefined,
         )
-        walk(p.content, s)
+        walk(p.content, s, size)
+        continue
+      }
+      if (p.t === 'el' && sizeSwitch(p)) {
+        sizeEl.push(p.id)
+        sizeAt.push(cur)
+        size = sizeEl.length - 1
         continue
       }
       if (p.t === 'el' && colourSwitch(p)) {
@@ -210,6 +232,7 @@ export function groupStyleOf(
         for (const c of fold(ch)) {
           P.push(c)
           scopeOf.push(cur)
+          sizeOf.push(size)
         }
         for (const c of foldMarks(ch)) {
           PM.push(c)
@@ -219,7 +242,7 @@ export function groupStyleOf(
       }
     }
   }
-  walk(content, 0)
+  walk(content, 0, -1)
   const S = parent.length
   // ---- the glyphs' letters, each with its glyph; matched in order
   const G: number[] = []
@@ -380,12 +403,36 @@ export function groupStyleOf(
   if (weight.letters !== undefined && slant.letters !== undefined) face.value[0] = `${weight.letters}|${slant.letters}`
   const marksFace =
     weight.marks !== undefined && slant.marks !== undefined ? `${weight.marks}|${slant.marks}` : undefined
-  // ---- the unit's own text, its letters in no group (a switch's run at its top level its own): its base size's glyphs
+  // ---- the unit's own text, its letters in no group (a face's or a fill's switch's run at its top level its own) and in no
+  // size declaration's run: its base size's glyphs, the size TeX's paragraph begins at (a title set at the class's \huge, its
+  // subtitle after `\large`: the title's). Where every such letter is in a declaration's run (one that opens the unit), the
+  // letters in no group, the run's
   const inGroup: boolean[] = []
   for (let s = 0; s < S; s++) inGroup[s] = s > 0 && (!!span[s] || (inGroup[parent[s] as number] as boolean))
   const text = new Set<number>()
-  for (let k = 0; k < pairs.length; k += 2)
-    if (!inGroup[scopeOf[pairs[k] as number] as number]) text.add(gOf[pairs[k + 1] as number] as number)
+  const unsized = new Set<number>()
+  for (let k = 0; k < pairs.length; k += 2) {
+    if (inGroup[scopeOf[pairs[k] as number] as number]) continue
+    const q = gOf[pairs[k + 1] as number] as number
+    text.add(q)
+    if ((sizeOf[pairs[k] as number] as number) < 0) unsized.add(q)
+  }
+  // ---- each declaration's run: its own text's glyphs (its letters in no group opened inside it), else all of its letters', at
+  // the one size they share (none of several: oneSize)
+  const groupOf = (s: number): number => (s <= 0 || span[s] ? s : groupOf(parent[s] as number))
+  const sizes: [string, number][] = []
+  for (let z = 0; z < sizeEl.length; z++) {
+    const own: StyleGlyph[] = []
+    const every: StyleGlyph[] = []
+    for (let k = 0; k < pairs.length; k += 2) {
+      if (sizeOf[pairs[k] as number] !== z) continue
+      const g = glyphs[gOf[pairs[k + 1] as number] as number] as StyleGlyph
+      every.push(g)
+      if (groupOf(scopeOf[pairs[k] as number] as number) === groupOf(sizeAt[z] as number)) own.push(g)
+    }
+    const one = oneSize(own.length ? own : every)
+    if (one !== undefined) sizes.push([sizeEl[z] as string, one])
+  }
   const faces: [string, Style][] = []
   const several: string[] = []
   let faceApart = false
@@ -432,7 +479,8 @@ export function groupStyleOf(
       several,
       apart: faceApart,
     },
-    text: [...text].sort((x, y) => x - y),
+    text: [...(unsized.size ? unsized : text)].sort((x, y) => x - y),
+    sizes,
   }
 }
 

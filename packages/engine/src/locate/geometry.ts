@@ -28,7 +28,7 @@ import {
   urlCopyOf,
 } from './facts.ts'
 import { frameOf, frameUnder, type PaintedFrame } from './frames.ts'
-import { groupStyleOf, hasScopes, namesFace } from './group-style.ts'
+import { groupStyleOf, hasScopes, namesFace, SIZE_DECLARATION } from './group-style.ts'
 import { groupStyleOf as commandStyleOf } from './ink.ts'
 import { type CutLine, cutLines, isInk, lineSize, r2 } from './lines.ts'
 import type { Owned } from './ownership.ts'
@@ -1169,7 +1169,12 @@ export function readGroupStyle(
     const c = classOf.get(el.id)
     return !!c?.bare && !!c.cmd && namesFace(commandStyleOf(`\\${c.cmd}`))
   }
-  if (!hasScopes(unit.content, (el) => colourSwitch(el) || faceSwitch(el))) return
+  // (a size declaration, `\large` with no group around it: its run read apart from the base size, its own size stated)
+  const sizeSwitch = (el: Extract<Piece, { t: 'el' }>) => {
+    const c = classOf.get(el.id)
+    return !!c?.bare && !!c.cmd && SIZE_DECLARATION.test(c.cmd)
+  }
+  if (!hasScopes(unit.content, (el) => colourSwitch(el) || faceSwitch(el) || sizeSwitch(el))) return
   const g = groupStyleOf(
     unit.content,
     glyphs,
@@ -1191,7 +1196,10 @@ export function readGroupStyle(
     },
     // (a bare group's command the instrument read off its leading declaration, SpanAt.cmd)
     (sp) => cmdOf.get(sp.id),
+    sizeSwitch,
   )
+  if (g.sizes.length) mem.sizeDecls = g.sizes
+  else delete mem.sizeDecls
   if (g.fill.groups.length) mem.spanFills = g.fill.groups
   if (g.fill.apart && g.fill.own !== undefined) {
     if (g.fill.own > 0) mem.style.fill = g.fill.own

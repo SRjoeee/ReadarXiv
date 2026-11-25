@@ -8,7 +8,7 @@
 import type { Piece } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
 import { type StyleGlyph, unitSize } from '../src/locate/facts.ts'
-import { groupStyleOf } from '../src/locate/group-style.ts'
+import { groupStyleOf, SIZE_DECLARATION } from '../src/locate/group-style.ts'
 
 const t = (s: string): Piece => ({ t: 'text', s })
 let n = 0
@@ -25,15 +25,23 @@ const BOLD = 'NimbusSanL-Bold'
 /** a text as TeX sets it: a glyph for each character that is no white space, in one font at one size */
 const set = (s: string, size: number): StyleGlyph[] =>
   [...s].filter((c) => !/\s/.test(c)).map((u) => ({ u, base: BOLD, size, fill: -1 }))
-/** the unit's base size: its own text's glyphs as groupStyleOf reads them, their size as unitSize reads it */
-const baseSize = (content: Piece[], glyphs: StyleGlyph[]) => {
-  const g = groupStyleOf(
+/** a size declaration as geometry.ts tells one: a bare command of latex.ltx's sizes */
+const sizeSwitch = (e: { src: string }) => SIZE_DECLARATION.test(e.src.slice(1))
+const read = (content: Piece[], glyphs: StyleGlyph[]) =>
+  groupStyleOf(
     content,
     glyphs,
     () => undefined,
     () => false,
     () => false,
+    () => undefined,
+    () => undefined,
+    () => undefined,
+    sizeSwitch,
   )
+/** the unit's base size: its own text's glyphs as groupStyleOf reads them, their size as unitSize reads it */
+const baseSize = (content: Piece[], glyphs: StyleGlyph[]) => {
+  const g = read(content, glyphs)
   return unitSize(g.text.map((q) => glyphs[q] as StyleGlyph))
 }
 const TITLE = 'A Short Title of Ours'
@@ -44,6 +52,14 @@ describe('a size declaration at a unit’s top level, no group around it', () =>
     const content = [t(TITLE), el('\\\\[4pt]', 'break'), t('\n'), el('\\large'), t(` ${SUBTITLE}`)]
     const glyphs = [...set(TITLE, 20.6625), ...set(SUBTITLE, 11.9552)]
     expect(baseSize(content, glyphs)).toBe(20.6625)
+    // (and the declaration states the size its run's glyphs share, from which the typesetter draws what follows it)
+    const large = content[3] as Piece & { t: 'el' }
+    expect(read(content, glyphs).sizes).toEqual([[large.id, 11.9552]])
+  })
+  it('a run whose glyphs stand at several sizes states none: a median of them is the size of none of its runs', () => {
+    const content = [t(TITLE), el('\\[4pt]', 'break'), t('\n'), el('\\large'), t(` ${SUBTITLE}`)]
+    const glyphs = [...set(TITLE, 20.6625), ...set(SUBTITLE.slice(0, 20), 11.9552), ...set(SUBTITLE.slice(20), 9.9626)]
+    expect(read(content, glyphs).sizes).toEqual([])
   })
   it('a declaration that opens the unit: all of its text in the run, the base the run’s size', () => {
     const content = [el('\\large'), t(` ${SUBTITLE}`)]
