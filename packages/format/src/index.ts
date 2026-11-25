@@ -57,6 +57,7 @@ export {
   Style,
   Tie,
   toggleKind,
+  headNumberOf,
   Unit,
   Units,
   Why,

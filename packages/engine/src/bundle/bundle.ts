@@ -13,6 +13,7 @@ import {
   chunkDigests,
   type El,
   type Head,
+  headNumberOf,
   ORIGINAL_CHUNK,
   type Part,
   type Piece,
@@ -295,7 +296,7 @@ function unitWindows(units: Unit[]): Unit[][] {
 
 /**
  * The head's outline: each located heading member as [ord, its first line's page, its unit], and each one's printed number
- * where its label states one (a label of kind `head`, its `num` as the part states it, its spaces trimmed): what the reader's
+ * where its label states one (format's headNumberOf: a label of kind `head`, its number or a counter alone): what the reader's
  * contents read at open (packages/reader session/contents.ts), the parts of its far pages unread
  */
 export function outlineOf(members: readonly Member[]): {
@@ -307,7 +308,7 @@ export function outlineOf(members: readonly Member[]): {
   for (const mem of members) {
     if (mem.kind !== 'heading' || !mem.located || !mem.lines[0]) continue
     outline.push([mem.ord, mem.lines[0][0], mem.id])
-    const n = mem.labelAt?.kind === 'head' ? mem.labelAt.num?.[0].trim() : undefined
+    const n = headNumberOf(mem.labelAt)
     if (n) numbers.push([mem.ord, n.slice(0, 32)])
   }
   return { outline, numbers }

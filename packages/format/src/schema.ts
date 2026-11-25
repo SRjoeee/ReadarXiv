@@ -382,6 +382,22 @@ export const Label = z.object({
   align: z.enum(['l', 'c', 'r']).optional(),
   unheld: int.positive().optional(),
 })
+/** a counter as LaTeX prints one alone (\Roman, \roman, \Alph, \alph): what a heading's label states as its name where no
+ *  word stands before it (IEEEtran's "IV.", an appendix's "A") */
+const PRINTED_COUNTER = /^(?:[IVXLCDM]+|[ivxlcdm]+|[A-Za-z])$/
+/**
+ * A heading's printed number, as its part states its label (docs/PDF-READER.md §6.3): a label of kind `head`, its number, else
+ * its name where that is a counter alone (the label's reading takes a Roman numeral or a letter for a number only after a word,
+ * "Appendix A"); none for a name that is a word ("Keywords") or a label of another kind. The one reading of it: the prepare's
+ * head (bundle outlineOf) and the reader's contents
+ */
+export function headNumberOf(label: Label | undefined): string | null {
+  if (label?.kind !== 'head') return null
+  const num = label.num?.[0].trim()
+  if (num) return num
+  const name = label.name?.[0].trim()
+  return name && PRINTED_COUNTER.test(name) ? name : null
+}
 /** the room about a placement: below its last line, to the next ink under it, beside its lines (a level figure text's: the free
  *  line along its run the figure reading gives it; a turned one's room is its run's, Placed.run), a cell's clear band; `under`
  *  a figure text's depth under its baseline of the nearest stroke under its text (S.figures: a translation that reaches it is

@@ -32,6 +32,7 @@ describe("the head's outline numbers", () => {
       member(14, 'heading', 4, label('head')),
       member(16, 'heading', 5, label('float', '2')),
       member(18, 'heading', 6, label('head', 'A'), false),
+      member(20, 'heading', 7, { ...label('head'), name: ['IV', [7, 72, 698, 80, 712, 700]] }),
     ])
     expect(outline.map(([ord, page]) => [ord, page])).toEqual([
       [2, 1],
@@ -39,10 +40,12 @@ describe("the head's outline numbers", () => {
       [12, 4],
       [14, 4],
       [16, 5],
+      [20, 7],
     ])
     expect(numbers).toEqual([
       [2, '1'],
       [9, '3.2.1'],
+      [20, 'IV'],
     ])
   })
   it('is optional in the head: a head of before reads, and a reader of before strips it', () => {

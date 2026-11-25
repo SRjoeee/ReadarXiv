@@ -99,6 +99,10 @@ describe('the contents', () => {
     expect(c.place([{ ...placed(3, line), label: label('1', 'float') } as unknown as Placed])).toBe(true)
     expect(c.place([{ ...placed(3, line), label: label() } as unknown as Placed])).toBe(false)
     expect(c.entries()[0]?.number).toBeNull()
+    // (a counter alone, which the label's reading states as its name: IEEEtran's "IV.")
+    const roman = { ...label(), name: ['IV', [2, 72, 698, 78, 712, 700]] }
+    expect(c.place([{ ...placed(3, line), label: roman } as unknown as Placed])).toBe(true)
+    expect(c.entries()[0]?.number).toBe('IV')
   })
   it('titles a heading by its row once taken, the source again where its row is no translation or is let go', () => {
     const c = createContents(UNITS, HEAD)

@@ -319,8 +319,9 @@ the extension's reader passes none (its narrow window keeps §5's rule).
   (dark). Lines on the 4 px grid: a title's 18 px, an original's 16 px, 4 px above and below each entry's words and 4 px
   between entries. On 1706.03762v7 a third level holds 12.5 Chinese characters a line, a second 14.4, a first 15.7
   (measured).
-- **The number** is the heading's own as its part states it (`Label.num` of its label of kind `head`: "3.1", "IV", "A"),
-  never counted by the reader. The head states each outline entry's (`Head.numbers`, by its member's ord: PIPELINE 122), so
+- **The number** is the heading's own as its part states it (format's `headNumberOf`: its label of kind `head`, its `num`:
+  "3.1", "Appendix A"'s "A"; else its name where that is a counter alone as LaTeX prints one, IEEEtran's "IV.", which the label's
+  reading states as a name: 457 headings of 57 papers of the release check's corpus), never counted by the reader. The head states each outline entry's (`Head.numbers`, by its member's ord: PIPELINE 122), so
   that every heading is numbered at open, the parts of its far pages unread; under a head made before, a heading is numbered
   as its page's part is read. A heading TeX set no number for (a starred section, the references) has an empty column, its
   titles on its level's edge. Each level's column is as wide as its widest number as drawn (`Outline.tsx` measures it once
@@ -3522,7 +3523,7 @@ the history of `pipeline/versions.mjs`, where they were kept until 2026-11-04 (t
   unit of text TeX never prints gone; 2608.18760v1 2, 2608.19431v1 6 and 2610.36184v1 24 outcomes, its page 1 no longer refused).
 - 122: lane toc-bilingual (on rebuild/v2 at 9f1045fe6, the owner's reference for the contents of 2026-11-25), a field added
   to the head, optional (FORMAT 1: a reader of before strips it): `numbers`, each outline entry's printed number by its member's
-  ord, its heading label's `num` as its part states it (bundle.ts outlineOf). Every head with a numbered heading changes;
+  ord, its heading label's number as its part states it (bundle.ts outlineOf, format's headNumberOf). Every head with a numbered heading changes;
   units, parts and rows do not. TRANSLATE_VERSION stays 11; LAYOUT stays 48.
 
 **`REMOVAL`** (how a drawn unit's ink is taken away):

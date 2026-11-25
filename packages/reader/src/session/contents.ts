@@ -7,7 +7,16 @@
 // its source; in either, each element as its copy text (the part's), never its TeX source; numbered by its label as the part that
 // places it states it (none until then, none where TeX set none). Pure: the reader tells it what comes and asks it what to
 // show. No heading is told as the one being read: the contents mark none (§6.3).
-import type { El, Head, OutPiece, Piece, Placed, Row, Unit } from '@readarxiv/format'
+import {
+  type El,
+  type Head,
+  headNumberOf,
+  type OutPiece,
+  type Piece,
+  type Placed,
+  type Row,
+  type Unit,
+} from '@readarxiv/format'
 
 /** a contents entry: `id` its place in the contents (stable for a layer), `title` its row's text once taken else `original`, the
  *  source's, each element in both as its copy text (copyTextOf); `level` 1 to 3; `page` the page it is on, null where none is
@@ -192,7 +201,7 @@ export function createContents(units: readonly Unit[], head: Pick<Head, 'outline
           moved = true
         }
         // (its number, the label TeX set before its title as the part reads it: a heading's, kind `head`; the first a part states)
-        const n = m.label?.kind === 'head' ? m.label.num?.[0].trim() : undefined
+        const n = headNumberOf(m.label) ?? undefined
         if (n && !numbers.has(h.id)) {
           numbers.set(h.id, n)
           moved = true
