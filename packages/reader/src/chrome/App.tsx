@@ -92,12 +92,31 @@ function Page({ controller }: { controller: ReaderController }) {
       easing: 'cubic-bezier(0.2, 0, 0, 1)',
     })
   }, [contents])
+  /** a menu or popover of the page open (its Escape its own) */
+  const menuOpen = () => {
+    try {
+      return !!document.querySelector('.pop[data-open], .pop:popover-open')
+    } catch {
+      return !!document.querySelector('.pop[data-open]')
+    }
+  }
   /** the contents laid over the document (a window under 720 px, reader.css --push) */
   const overlaid = () => matchMedia('(width < 720px)').matches
   const closeContents = () => {
     setContents(false)
     document.querySelector<HTMLElement>('button[aria-controls="axt-contents"]')?.focus()
   }
+  // (laid over the document, they close on Escape wherever the focus is, their button's or the page's included; a menu open
+  // over the page takes its own Escape)
+  useEffect(() => {
+    if (!contents) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented || !overlaid() || menuOpen()) return
+      closeContents()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  })
   const swapped = state.swapped
   useEffect(() => {
     document.documentElement.toggleAttribute('data-axt-swapped', swapped)
@@ -112,16 +131,13 @@ function Page({ controller }: { controller: ReaderController }) {
       <Outline
         controller={controller}
         open={contents}
-        // (laid over the document, a narrow window's, the contents close on a jump, the heading gone to being under them, and on
-        // Escape; the focus goes back to their button, which the reader moves on to the heading's page where it holds a target
-        // for it: never left on a row made inert)
+        // (laid over the document, a narrow window's, the contents close on a jump, the heading gone to being under them; the
+        // focus goes back to their button, which the reader moves on to the heading's page where it holds a target for it:
+        // never left on a row made inert)
         onGone={() => {
           if (!overlaid()) return false
           closeContents()
           return true
-        }}
-        onEscape={() => {
-          if (overlaid()) closeContents()
         }}
       />
       {/* the page's main landmark, beside the toolbar's banner and the contents' complementary region, so that a screen

@@ -163,6 +163,34 @@ describe('the contents laid over the document (a window under 720 px, §6.3)', (
     ]).toEqual([false, true, [[3, { focus: true }]]])
     await m.unmount()
   })
+  it('Escape closes them wherever the focus is, their button included, but not while a menu of the page is open (#681 review)', async () => {
+    overlay(true)
+    const { controller } = fakeController({
+      outline: [{ id: 3, title: 'Methode', original: 'Method', level: 1, page: 2, number: '2' }],
+    })
+    const m = await mountElement(app(controller))
+    const toggle = m.container.querySelector<HTMLButtonElement>('button[aria-controls="axt-contents"]')!
+    const escapeOn = (el: Element) => el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    // (opened by their button, the focus still on it)
+    await act(async () => toggle.click())
+    toggle.focus()
+    await act(async () => escapeOn(toggle))
+    expect([document.documentElement.hasAttribute('data-axt-contents'), document.activeElement === toggle]).toEqual([
+      false,
+      true,
+    ])
+    // (a menu open over the page: its Escape is the menu's)
+    await act(async () => toggle.click())
+    const menu = document.createElement('div')
+    menu.className = 'pop'
+    menu.setAttribute('data-open', '')
+    document.body.append(menu)
+    await act(async () => escapeOn(document.body))
+    expect(document.documentElement.hasAttribute('data-axt-contents')).toBe(true)
+    menu.remove()
+    await m.unmount()
+  })
+
   it('Escape closes them, the focus back on their button; beside the document a jump and Escape leave them open', async () => {
     overlay(true)
     const { controller } = fakeController({

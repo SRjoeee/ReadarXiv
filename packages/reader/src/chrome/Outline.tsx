@@ -14,15 +14,12 @@ export function Outline({
   controller,
   open,
   onGone,
-  onEscape,
 }: {
   controller: ReaderController
   open: boolean
   /** a row gone to: whether the contents closed for it (laid over the document), the focus then the page's where the reader
    *  holds a target for it, else the contents button's (App.tsx) */
   onGone?: () => boolean
-  /** Escape pressed in the contents */
-  onEscape?: () => void
 }) {
   const { languages } = useParts()
   const { outline: entries, lang } = useReader(controller, (s) => ({
@@ -56,18 +53,7 @@ export function Outline({
   return (
     // closed, inert, not hidden: out of the tab order and the accessibility tree, still displayed, so that the style
     // sheet slides it (a hidden sidebar is display: none, which no transition leaves)
-    <aside
-      id="axt-contents"
-      className="chrome toc"
-      aria-label={R.contents}
-      inert={!open}
-      onKeyDown={(e) => {
-        if (e.key === 'Escape' && onEscape) {
-          e.preventDefault()
-          onEscape()
-        }
-      }}
-    >
+    <aside id="axt-contents" className="chrome toc" aria-label={R.contents} inert={!open}>
       <div className="toc-h">{R.contents}</div>
       <ul
         ref={list}
