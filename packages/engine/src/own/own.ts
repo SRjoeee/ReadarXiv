@@ -509,7 +509,7 @@ export function ownOf(
   // form but a word, and what stands before the point is the author's before, its trail (locate). Walked back to the end mark
   // before, ICML's marks after a name would be the next name's label, 2611.03953v2's "12" before "Jiacheng Lu")
   const stated = new Set<number>()
-  for (const [id, { s }] of textOf) {
+  labels: for (const [id, { s }] of textOf) {
     // (a table cell, its start mark `t<id>s`, carries no label: what stands before it on its line is another cell's, a number an
     // unmarked cell's)
     if (!s || units?.[id]?.kind === 'cell' || pt(s).name.startsWith('t')) continue
@@ -582,7 +582,9 @@ export function ownOf(
       })
       return others
     }
-    const boxesFrom = (b0: number): Place[] => {
+    // (the scan counts toward OWN_WORK and stops where it passes it: null, the unit not owned, as any past the bound, and none
+    // of the boxes it inspected in part claimed)
+    const boxesFrom = (b0: number): Place[] | null => {
       const out: Place[] = []
       const B = pg.boxes,
         F = pg.forms
@@ -592,8 +594,9 @@ export function ownOf(
         b >= b0 && b < upBox && R.box[b] === r && bOwn[p - 1]![b] === null && (caption || B[4 * b + 2]! <= startX1)
       // (a path that meets a painted path standing past the start is one drawing with it, a frame's side, not the head's: a
       // frame round a statement of one line reaches no other line. A path that holds it whole is behind it, a background)
-      const framed = (b: number) => {
+      const framed = (b: number): boolean | null => {
         work += B.length / 4
+        if (work > OWN_WORK) return null
         const [x0, y0, x1, y1] = [B[4 * b]!, B[4 * b + 1]!, B[4 * b + 2]!, B[4 * b + 3]!]
         for (let c = 0; c < B.length / 4; c++) {
           if (c === b || !((pg.paths[c] ?? -1) >= 0) || !(B[4 * c + 2]! > startX1)) continue
@@ -604,9 +607,13 @@ export function ownOf(
         return false
       }
       for (let b = Math.max(0, b0); b < upBox; b++) {
+        if (work > OWN_WORK) return null
         const f = F?.[b] ?? 0
         if (!f) {
-          if (inRange(b) && onLine(B[4 * b + 1]!, B[4 * b + 3]!) && (caption || !framed(b))) out.push([p, b])
+          if (!inRange(b) || !onLine(B[4 * b + 1]!, B[4 * b + 3]!)) continue
+          const fr = caption ? false : framed(b)
+          if (fr === null) return null
+          if (!fr) out.push([p, b])
           continue
         }
         // (a placement's boxes stand together in the stream, its one `Do`)
@@ -626,7 +633,7 @@ export function ownOf(
         if (whole && onLine(y0, y1)) for (let j = a; j <= z; j++) out.push([p, j])
         b = z
       }
-      return out
+      return work > OWN_WORK ? null : out
     }
     // (the placeholders the walk passed over, each its unit and the glyphs between its points: not yet claimed, this pass
     // running before the placeholders')
@@ -647,6 +654,10 @@ export function ownOf(
       // start, or the next such point, are that piece's ink, and the label is what stands before it)
       if (headOpen(X.name, id)) {
         const bx = boxesFrom(X.box)
+        if (bx === null) {
+          unit(id).unhidden ??= 'marks'
+          continue labels
+        }
         if (lead.glyphs.length || bx.length) claim({ glyphs: lead.glyphs.reverse(), boxes: bx }, `u${id}.p`, 'p')
         lead.glyphs = []
         upBox = X.box
@@ -732,7 +743,14 @@ export function ownOf(
           k = j
           break
         }
-      if (k) claim({ glyphs: lead.glyphs.slice(0, k), boxes: boxesFrom(stopBox) }, `u${id}.l`, 'l')
+      if (k) {
+        const bx = boxesFrom(stopBox)
+        if (bx === null) {
+          unit(id).unhidden ??= 'marks'
+          continue
+        }
+        claim({ glyphs: lead.glyphs.slice(0, k), boxes: bx }, `u${id}.l`, 'l')
+      }
       // (past the label, the glyphs that set the unit's leading text symbols, in their order from the first, are its text's: an
       // affiliation's `\\{kahe, …\\}`, 1512.03385v1 u321, whose "{" stood under its drawing in its placeholders' group)
       for (const x of headSymbolsOf(units[id])) {
@@ -745,7 +763,12 @@ export function ownOf(
       if (k < lead.glyphs.length) claim({ glyphs: lead.glyphs.slice(k) }, `u${id}.p`, 'p')
       continue
     }
-    claim({ glyphs: lead.glyphs, boxes: boxesFrom(stopBox) }, `u${id}.l`, 'l')
+    const bx = boxesFrom(stopBox)
+    if (bx === null) {
+      unit(id).unhidden ??= 'marks'
+      continue
+    }
+    claim({ glyphs: lead.glyphs, boxes: bx }, `u${id}.l`, 'l')
   }
 
   // ---- a cell's lead macro: a cell that opens with a placeholder of no mark of its own (\\CompletionTokenCap{}, \\#,
