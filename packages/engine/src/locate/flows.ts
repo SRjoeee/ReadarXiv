@@ -84,6 +84,23 @@ export function flowsAndTies(w: Work): void {
     return Number.isFinite(x) ? x : a[3]
   }
   const sepOf = (lead: Member, b: Line) => r2(b[2] - inkEnd(lead, lead.lines.at(-1)!))
+  // (a member's end on its line for the order of two members on it: where TeX's advance ends, the start of the next item TeX
+  // set, not where its ink ends. Each of its last line's glyphs moves TeX's position to its advance's end (its origin and
+  // width, `x1`), unless the next glyph TeX set (A's stream: the page's next glyph) starts inside that advance: a box narrower
+  // than what it holds or a kern back, and the position after it is that start. \maketitle's \thanks mark in an \rlap after a
+  // name, the comma after it set under it (2609.40181v2 p1, 2608.30730v1 p1): the name's member ends where the comma begins,
+  // its mark's ink past it moves nothing, and the members after it on the line are its line's)
+  const { pageA } = w.ix
+  const advanceEnd = (lead: Member, a: Line) => {
+    let x = Number.NEGATIVE_INFINITY
+    for (const g of lead.lineGlyphs.at(-1) ?? []) {
+      const d = gA(g)
+      if (!isInk(d)) continue
+      const h = g + 1 < pageA.length && pageA[g + 1] === pageA[g] ? gA(g + 1) : null
+      x = Math.max(x, h && h.x0 >= d.x0 && h.x0 < d.x1 ? h.x0 : d.x1)
+    }
+    return Number.isFinite(x) ? x : a[3]
+  }
   const joinOf = (lead: Member, b: Line, size: number): [number] | [number, 1] => {
     const sep = sepOf(lead, b)
     return keptOn(lead.lines.at(-1)!, b, size) ? [sep, 1] : [sep]
@@ -229,7 +246,7 @@ export function flowsAndTies(w: Work): void {
         (prev.kind === 'heading' && sameColumn(a[1], b[1])) ||
         (prev.bLast >= 0 && mem.bFirst >= 0 && !bracketBetween(prev.bLast, mem.bFirst))) &&
       Math.abs(a[4] - b[4]) < 0.5 * Math.min(prev.style.size, mem.style.size) &&
-      b[2] >= a[3] - 0.5 &&
+      b[2] >= advanceEnd(prev, a) - 0.5 &&
       sepOf(prev, b) <= SHARED_SEP * (b[10] ?? mem.style.size) &&
       !ownBox(prev) &&
       !ownBox(mem) &&
