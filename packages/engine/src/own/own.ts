@@ -587,12 +587,10 @@ export function ownOf(
       const out: Place[] = []
       const B = pg.boxes,
         F = pg.forms
-      const onLine = (y0: number, y1: number) =>
-        caption ||
-        (y0 < line.top &&
-          y1 > line.bottom &&
-          (work += otherLines().length) <= OWN_WORK &&
-          !others!.some(([lo, hi]) => y0 < hi && y1 > lo))
+      // (each test reads every other line: counted, none past the bound)
+      const clear = (y0: number, y1: number) =>
+        (work += otherLines().length) <= OWN_WORK && !others!.some(([lo, hi]) => y0 < hi && y1 > lo)
+      const onLine = (y0: number, y1: number) => caption || (y0 < line.top && y1 > line.bottom && clear(y0, y1))
       const inRange = (b: number) =>
         b >= b0 && b < upBox && R.box[b] === r && bOwn[p - 1]![b] === null && (caption || B[4 * b + 2]! <= startX1)
       // (a path that meets a painted path standing past the start is one drawing with it, a frame's side, not the head's: a
