@@ -10185,8 +10185,9 @@ declaration (latex.ltx's `\tiny` … `\Huge`, `\normalsize`, and `\selectfont`, 
 `locate/group-style.ts` SIZE_DECLARATION) opens a run to the end of the group it stands in, as TeX's declaration holds, read
 apart from the face and fill scopes. The unit's base size is its text's outside every such run, the size TeX's paragraph begins
 at; where every letter is in one, the run its first letter stands in (`\LARGE Title\\ \large subtitle`: the title's). Each run
-whose own glyphs share one size states it on its element (`El.size`, `facts-pass.ts`), the member's size too, so that a
-declaration back to it after another is drawn so; a run at several sizes states none (a median is the size of none of its
+whose own glyphs share one size states it on its element (`El.size`, `facts-pass.ts`) in a member one of whose runs is at
+another size than the member's, the member's size too, so that a declaration back to it after another is drawn so (in a member
+whose every run is at its size, none: it draws the same); a run at several sizes states none (a median is the size of none of its
 runs, as for a group). The typesetter draws what follows a bare element of no ink whose
 `El.size` the part states at that size's share of the member's (`TStyle.rel`, `lay/read.ts` declSizes, `breaker/tokens.ts`),
 to its group's end; none stated, the size around it. An older typesetter reads `El.size` only on an element it draws as text,

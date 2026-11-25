@@ -66,8 +66,8 @@ interface GroupStyle {
   }
   text: number[]
   /** each size declaration's run (sizeSwitch) whose own text's glyphs share one size (facts.ts oneSize): the declaration's
-   *  element id and that size, which the caller states on it (El.size), the member's size too: a declaration back to it after
-   *  another is drawn so */
+   *  element id and that size, which the caller states on it (El.size) where one run is apart from the member's size, the
+   *  member's size too: a declaration back to it after another is drawn so */
   sizes: [id: string, size: number][]
 }
 /** what a group style or a face switch sets of a face: its weight (bold, medium), its slant (italic, upright); a face change a
