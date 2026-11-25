@@ -33,8 +33,11 @@ export function Outline({
   // that the level's titles start on one edge; none where no entry of the level has a number
   const list = useRef<HTMLUListElement>(null)
   const [widths, setWidths] = useState<readonly number[]>([0, 0, 0])
+  /** what the columns are measured from: each entry's level and number */
+  const numbers = entries.map((e) => `${e.level}${e.number ?? ''}`).join(' ')
   useLayoutEffect(() => {
     const measure = () => {
+      if (!numbers) return setWidths((was) => (was.some(Boolean) ? [0, 0, 0] : was))
       const w = [0, 0, 0]
       for (const n of list.current?.querySelectorAll<HTMLElement>('[data-level] > a > .n > span') ?? []) {
         const level = Number(n.closest<HTMLElement>('[data-level]')?.dataset.level) || 1
@@ -48,7 +51,7 @@ export function Outline({
     return () => {
       live = false
     }
-  }, [entries])
+  }, [numbers])
   const numbered = [1, 2, 3].map((l) => entries.some((e) => e.level === l && e.number))
   return (
     // closed, inert, not hidden: out of the tab order and the accessibility tree, still displayed, so that the style
