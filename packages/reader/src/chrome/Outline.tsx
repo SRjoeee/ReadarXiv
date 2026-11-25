@@ -1,7 +1,7 @@
 // The contents (the reader's design, §6.3): the paper's headings, every level shown, each entry its number in a column of its
 // own, the translated title (two lines at most) and the original under it (one line), hierarchy by indentation alone: a
 // level's number column starts under its parent's title. A row jumps both sides to its heading and stays unmarked: no entry is
-// marked as the one being read (the maintainer, 2026-11-26: a press jumps, nothing stays selected)
+// marked as the one being read: a press jumps, nothing stays selected (§6.3)
 import type { CSSProperties } from 'react'
 import { useMemo } from 'react'
 import { R, useTip } from '@readarxiv/ui'
@@ -66,7 +66,8 @@ export function Outline({
             numbered={numbered[e.level - 1]!}
             onGo={() => {
               const closed = onGone?.() ?? false
-              controller.goToHeading(e.id, closed ? { focus: true } : undefined)
+              if (closed) controller.goToHeading(e.id, { focus: true })
+              else controller.goToHeading(e.id)
             }}
           />
         ))}

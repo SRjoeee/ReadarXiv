@@ -12,7 +12,7 @@
 /* the reader's own layout (§5); every colour, shadow, the font and the ease come from tokens.css */
 :root {
   --bar: 44px;
-  /* the contents' width (§6.3): fifteen steps of the reader's 16 px, the maintainer's reference's panel (about 230 px, 2026-11-26):
+  /* the contents' width (§6.3): fifteen steps of the reader's 16 px, about the panel of the reference §6.3 follows (230 px):
      a third level's Chinese title holds about 11 characters of 12 px past its three number columns (about 78 px in a paper
      of "3.2.1") and the list's 14 px each side, a first level's about 15. `--push`: how far it moves the document area, its
      width where the window leaves the document 480 px beside it, none where it lays over the document (below 720 px) */
@@ -173,7 +173,7 @@ html[data-axt-dim] .axt-hl-layer { mix-blend-mode: screen; }
   [data-level="2"] > a { grid-column: 2 / -1; }
   [data-level="3"] > a { grid-column: 3 / -1; }
   @media (hover: hover) { .toc-list a:hover { background: var(--fill); } }
-  /* the sizes of the contents before (a first level 12.5 px, the rest 12 px) on the reader's scale, the lines on the 4 px grid:
+  /* the sizes on the reader's scale (a first level 12.5 px, the rest 12 px), the lines on the 4 px grid:
      a title's 18 px, an original's 16 px; each entry 4 px above and below its words and 4 px from the next */
   .toc-list .n { padding-inline-end: 8px; color: var(--ink-2); font-size: 12px; line-height: 18px; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .toc-list .tt { display: flex; flex-direction: column; min-width: 0; grid-column: 1 / -1; }

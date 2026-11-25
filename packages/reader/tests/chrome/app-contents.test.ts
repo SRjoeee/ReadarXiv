@@ -185,7 +185,7 @@ describe('the contents laid over the document (a window under 720 px, §6.3)', (
     expect([
       document.documentElement.hasAttribute('data-axt-contents'),
       controller.goToHeading.mock.calls.at(-1),
-    ]).toEqual([true, [3, undefined]])
+    ]).toEqual([true, [3]])
     await m.unmount()
   })
 })

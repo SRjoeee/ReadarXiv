@@ -6,7 +6,7 @@
 // the original's own outline gives a heading of its title (matched in order), else at none; titled by its row once taken, else by
 // its source; in either, each element as its copy text (the part's), never its TeX source; numbered by its label as the part that
 // places it states it (none until then, none where TeX set none). Pure: the reader tells it what comes and asks it what to
-// show. No heading is told as the one being read: the contents mark none (the maintainer, 2026-11-26).
+// show. No heading is told as the one being read: the contents mark none (§6.3).
 import type { El, Head, OutPiece, Piece, Placed, Row, Unit } from '@readarxiv/format'
 
 /** a contents entry: `id` its place in the contents (stable for a layer), `title` its row's text once taken else `original`, the

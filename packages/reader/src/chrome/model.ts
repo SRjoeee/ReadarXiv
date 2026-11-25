@@ -43,8 +43,8 @@ export const GOES_ON: ReadonlySet<Unavailable> = new Set<Unavailable>([...GOES_O
 /** the sync as the chrome names it to a session: together, or off */
 type SyncMode = 'same' | 'off'
 /** a heading of the contents: its id (its unit's), its title (translated where its row is in), the original's, its level, its page,
- *  its number as its part states it (null: none set, or none read yet; absent from a session that states none, the extension's
- *  today session, whose entries are numbered nowhere) */
+ *  its number as its part states it (null: none set, or none read yet; absent from a session that states none: the extension's
+ *  older session numbers no entry) */
 export interface OutlineEntry {
   id: number
   title: string
