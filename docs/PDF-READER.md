@@ -2210,8 +2210,8 @@ in the page, after the slices' decoding (0.13 to 0.24 s); each file arXiv's size
   places where the lay gives them, else the run measured through the character less its own width, so that a kerned pair stands
   as the reader draws it, #685; each run's end in the file equals its drawn width on the four papers, 0 pt off where the prefix
   rule was up to 0.75 pt), each crop the original's element ink (a form of the page's content with that
-  member's element and label groups alone, a form that holds one of them drawn as a copy baked the same way, below; clipped as
-  the reader cuts it) drawn where it stands in its line, between the words
+  member's element and label groups' ink alone, and of it only what meets the crop's own region, below; a form that holds one
+  of them drawn as a copy baked the same way; clipped as the reader cuts it) drawn where it stands in its line, between the words
   before and after it (so that text read in the stream's order reads a formula in its sentence), each link where the reader
   draws it; the catalog's default view lists our groups turned off, out of the ON list the add-on put them in, the paper's own
   default view kept as it set it (its base state, its groups on and off: a group the paper's own catalog lists is the paper's,
@@ -2266,12 +2266,51 @@ in the page, after the slices' decoding (0.13 to 0.24 s); each file arXiv's size
   Splash (Okular, pdftoppm) keeps a Type 3 glyph's drawing by its font and size, and the translated page draws the glyph first
   inside the original form, under the crop's group turned off: through the same font the crop got the blank back (38 of the
   245's crops, all on pages with Type 3 fonts; 2610.20030v1 p10: the crop drawn alone shows; after the original form, blank;
-  after that form drawn at another size, shown). Each crop is looked for in the file by the lane's check: its ink's mass at
+  after that form drawn at another size, shown). **A crop holds its own ink and nothing else** (the owner, 2026-11-26, the
+  side-by-side file of 2611.34872v1 in Preview against BabelDOC's: the text of ours selects in a mess).
+  A member's elements and its label share one group of the add-on's, so a crop cut by group alone held every formula of its
+  paragraph and its label, and each of its draws, clipped to one formula, still held all of their text: clipped out of sight,
+  still selected and copied where that draw stood (the margins, the other column, over the original half): 8,392 characters
+  with no ink under them on that paper's 8 translated halves in PDFKit, 2 to 4,627 a page. Each crop now has a form of its own
+  (`AXTC<page>_<ord>_<k>`), its member's ink cut by place (`bake.ts` `Within`): a character is where its advance stands on its
+  baseline (its origin to the next one's, as every text reader places it), and belongs to the crops its advance meets; a
+  glyph of no advance (`\not`'s slash, whose ink lies past its origin, wherever that origin stands: #690's review), and one
+  whose advance meets no crop of its member (a glyph wholly off its baseline, a prime), go to every crop its font's box (FontBBox: every glyph's ink, ISO 32000-1 §9.8.1) meets there, or to every crop where the
+  font gives none, so that no ink is lost; a show is cut code by code, the codes left out an advance in their place. A path, an
+  image or a form is the crop's where its box meets the crop's region (a rectangle's and a form's box by their four corners,
+  turned or sheared as they are drawn; a stroke's reach its half width times its miter limit, set by `w` and `M` or a graphics
+  state's `/LW` and `/ML`). The form is lean: a show none of whose codes is the crop's is written as nothing at all, nor its advance, and no
+  text state or line of the content's is written; before each show written, the content's own text state and line matrix are
+  written again exactly as they stand there (to a millionth, the way along the line a `TJ` number), a graphics state saved
+  and restored keeping whether they differ; a font a graphics state chooses (`gs` with `/Font`, written as it stands) is
+  never written over by the content's `Tf`, and a font's name is written only in the resources it was chosen in: the text
+  state a form inherits, baked or kept whole, is written by its caller before the form is drawn (#690's review). A path
+  object holding a graphics state operator between its construction and its painting (out of ISO 32000-1 §8.2's contract,
+  which allows the clip operators alone there) is bounded and written with its painting's CTM. The crops' forms of a page name one resources object of the page (its resources
+  inline were 371 of the 453 KB of the paper's crop forms). On 2611.34872v1's side-by-side file: 8,392 characters with no ink
+  under them to 9 (commas, hyphens, a bar and `\not`'s combining slash: a pixel of ink or none at 100 dpi; BabelDOC's file 0
+  to 9 a page); on the four pairs 12,065 to 1,292, the rest mostly the figures' own text (Not yet, below); the files 0.04 to 5 %
+  smaller, the export's time the same (2611.34872v1: 0.76 s in Node, before and after). Each crop is looked for in the file by the lane's check: its ink's mass at
   its place against its source's on arXiv's page, drawn by poppler's Splash and Cairo, PDF.js and CoreGraphics (100 dpi, the first 32 papers at
   200, each crop not found present weighed again at 200). Of the 99,115, one is absent in all four, laid past its page's
   right edge (2610.38516v1 p98, the lay's, not the export's), and none other in any; 4 to 10 a renderer are partial, a glyph
   of 1.3 to 2.4 pt whose antialiased fringe its box cuts (2609.19644v1's labels). The aliases: 179 fonts in 18 papers, 143 KB in
   all, 2.9 KB at the median of those papers, 55 KB at most (2609.19644v1, 38 fonts); the four pairs hold none.
+- **What a reader selects and copies.** A viewer draws a selection's line from the font's descriptor: its `Ascent` and
+  `Descent` (ISO 32000-1 §9.8.1, the height above and the depth below the baseline the glyphs reach). They are the face's
+  typographic ascender and descender, OS/2's `sTypoAscender` and `sTypoDescender`, the line its designer set: for a CJK face
+  its ideographic em box (Source Han's 880 and -120 of 1000, as its BASE table's ideographic baseline states it), a line 1 em
+  tall. They were hhea's, a platform's clipping extent (1151 and -286 there: 1.44 em), and each line's box overlapped the next
+  on every justified page. Every served face holds OS/2 (83 faces: an em for most; EB Garamond 1.305 em and Libertine 1.14 em,
+  their typographic values those of their hhea; bkai00mp 900 and -124 of 1024); a font with none would keep hhea's. On
+  2611.34872v1's side-by-side file, the selection's lines that overlap on a translated half went from 92 to 12,665 a page to 0
+  to 15 (BabelDOC's file of the paper: 2 to 20), the median line 10.3 pt tall to 11.6 at most. The spaces: every space the
+  laid text holds is written, a space glyph of the face the reader draws it in (a CJK face holds none, and the run's next
+  family's draws it, as the reader's own rule finds a glyph); no laid space was found missing in what PDFKit and poppler
+  copy from any line of the five papers measured, and the spaces they add are their own, at a gap no space stands in (a
+  justified CJK line's spacing, the room the lay sets between a CJK character and a Latin one): the file writes no character
+  the translation does not hold. The proof step (lab/pdf/README.md, "The PDF download's selection"): each page of a
+  side-by-side file selected whole in PDFKit and classed against its CoreGraphics drawing.
 - **The fonts** (`woff2.ts`, `brotli.ts`, `fonts.ts`, `cff.ts`, `ttf.ts`). Each served slice drawn is a Type0 font
   (Identity-H, a CIDFontType0 over its CFF, `/CIDFontType0C`, or a CIDFontType2 over a TrueType one, FontFile2, its CIDs its
   glyph ids) with a ToUnicode of exactly the glyphs drawn, so that selection, search and copy give the translation's characters.
@@ -2330,16 +2369,22 @@ in the page, after the slices' decoding (0.13 to 0.24 s); each file arXiv's size
 - **Not yet** (counted where it occurs): a file made with our server out of reach: it needs the original and the add-on read
   whole, and the machine's store keeps what the reader read, by ranges (`src/pdf-reader/host/stored-fetch.ts`): a whole copy
   only of an object a file was made of before, and none of arXiv's own address; the file fails, its retry offered. Ligatures
-  only at U+FB00 to U+FB04; a non-CID-keyed CFF under `/CIDFontType0C` (poppler warns, every renderer tried draws it).
+  only at U+FB00 to U+FB04; a non-CID-keyed CFF under `/CIDFontType0C` (poppler warns, every renderer tried draws it). A
+  figure's own text the add-on wrapped inside the figure's form stays in the file, hidden by the default view and read by
+  every viewer, under a translated figure text (the bake bakes a page's own content, above): most of what is left of the
+  characters with no ink under them on the four pairs (1706.03762v7's 299 of 301 on its three pages of attention figures). A show whose widths the walk
+  cannot read keeps its text, drawn invisibly, where a crop's form leaves it out too (its advance unknown).
 
 The rows: `packages/reader/tests/export/` (the subset on CFF fonts of our own, the WOFF2 path and its transformed TrueType,
 brotli by PDF.js, the bake and its walk over `openObjects`, the chain on a document of our own, read back by the object layer
 and PDF.js: its turned pages, its destination names; a face's small capitals, `smcp.test.ts`; the two whole reads,
-`run.test.ts`),
+`run.test.ts`; a crop's own ink alone, and what poppler reads of a paragraph of two formulas standing on ink in both files,
+`crop-own.test.ts`; the descriptor's typographic metrics, `fonts.test.ts`),
 `packages/reader/tests/chrome/model.test.ts` and `capsule-export.test.ts` (the controller's file, its share, cancel, failure
 and retry, the capsule), and in a real browser `pnpm e2e:reader` (`tests/e2e/reader-v2-export.mjs`: both files saved and read
 back, their faces served as WOFF2 and decoded on the export's own worker, each file starting one and ending it; one at a
-time, a cancel, a failure and its retry, the reading options' row in a narrow window). What only the lab's proofs reach: the
+time, a cancel, a failure and its retry, the reading options' row in a narrow window; every word poppler reads on both files'
+first page standing on ink and in its own half, the fixture's standard fonts given their widths, `lib/with-widths.mjs`). What only the lab's proofs reach: the
 served slices themselves (CFF-flavoured, 3,705 of 3,839; TrueType's glyf transform), on the four papers through the same
 module in Chromium with no global worker set.
 

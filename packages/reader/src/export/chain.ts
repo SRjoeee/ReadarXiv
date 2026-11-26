@@ -27,7 +27,7 @@ import {
 } from '@readarxiv/engine'
 import type { Item, Page } from '../compose/page.ts'
 import { cropsOf, faceScale } from '../compose/paint.ts'
-import { type BakedForm, type BakeStats, makeBaker, newBakeStats } from './bake.ts'
+import { type BakedForm, type BakeStats, type Box, makeBaker, newBakeStats, type Within } from './bake.ts'
 import { fontBodies, fontFileOf, type SfntFont } from './fonts.ts'
 
 /** how a run's characters are drawn: the slice font and glyph of a code point in a face (the reader's rule: the first family
@@ -95,6 +95,8 @@ export interface ExportStats {
   bake: BakeStats
   cropBake: BakeStats
   cropForms: number
+  /** crops drawn from the original page whole: their member's groups not held, or the page's walk refused */
+  cropsWhole: number
   /** Type 3 fonts a crop draws, each written again as a dictionary of its own, and those dictionaries' bytes */
   type3Aliases: number
   type3AliasBytes: number
@@ -341,6 +343,7 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
     bake: newBakeStats(),
     cropBake: newBakeStats(),
     cropForms: 0,
+    cropsWhole: 0,
     type3Aliases: 0,
     type3AliasBytes: 0,
     sectionBytes: 0,
@@ -378,12 +381,24 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
   const decoded = (s: PdfRawStream) => PL.decodePDFRawStream(s).decode()
   /** a page's ours(prop, res) over the groups `off` turns off (every other group of ours left on): a name read in the
    *  resources it is given (a form's own, where its content names it), else the page's */
+  /** each property name's group of ours by the resources it is read in, a page's at a time (every crop of a page reads them) */
+  let named: { i: number; by: Map<PdfObject | undefined, Map<string, string | undefined>> } = { i: -1, by: new Map() }
   const oursFor = (i: number, isOff: (name: string) => boolean) => {
     const pageProps = dictOf(dictOf(pages[i]!.inherited.Resources)?.get(N('Properties')))
+    if (named.i !== i) named = { i, by: new Map() }
+    const by = named.by
     return (prop: string, res: PdfObject | undefined): boolean | null => {
-      const props = res === undefined ? pageProps : dictOf(dictOf(res)?.get(N('Properties')))
-      const r = props?.get(N(prop))
-      const nm = r ? groupName.get(lit(r)) : undefined
+      let m = by.get(res)
+      if (!m) {
+        m = new Map()
+        by.set(res, m)
+      }
+      if (!m.has(prop)) {
+        const props = res === undefined ? pageProps : dictOf(dictOf(res)?.get(N('Properties')))
+        const r = props?.get(N(prop))
+        m.set(prop, r ? groupName.get(lit(r)) : undefined)
+      }
+      const nm = m.get(prop)
       return nm === undefined ? null : isOff(nm)
     }
   }
@@ -553,21 +568,44 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
     }
     return names
   }
-  const cropForm = async (i: number, ord: number): Promise<number> => {
-    const key = `${i}:${ord}`
+  /** the resources of a page's crop forms that draw no copy: the page's own (each Type 3 font through its own dictionary), one
+   *  object a page, which every crop of it names (a page's resources inline, its groups' properties among them, written once
+   *  for each of its crops were most of a paper's crop bytes: 371 of 453 KB on one of 8 pages) */
+  const cropResOf = new Map<number, string>()
+  const cropRes = (i: number): string => {
+    const had = cropResOf.get(i)
+    if (had) return had
+    const res = pages[i]!.inherited.Resources
+    let got: string
+    if (res instanceof PDFRef && !holdsType3(res)) got = lit(res)
+    else {
+      const r = take()
+      objs.push([
+        r,
+        objText(r, holdsType3(res) ? merged(res, new Set(), new Map(), type3Of) : res ? lit(res) : '<< >>'),
+      ])
+      got = `${r} 0 R`
+    }
+    cropResOf.set(i, got)
+    return got
+  }
+  const cropForm = async (i: number, ord: number, within: Within): Promise<number> => {
+    const key = `${i}:${ord}:${within.own.map((b) => b.map(f2).join(' ')).join(' ')}`
     const had = cropForms.get(key)
     if (had) return had
     const want = new Set([`axt:${ord}.${i + 1}.e`, `axt:${ord}.${i + 1}.l`])
-    // (the crop's own groups' ink alone: in the page's content, and in each form it draws whose content marks them, a figure's
-    // text the add-on wrapped inside its form)
+    // (the crop's own groups' ink alone, and of it what meets the crop's own region (bake.ts Within): in the page's content,
+    // and in each form it draws whose content marks them, a figure's text the add-on wrapped inside its form)
     const kept = [...want].some((g) => groupRef.has(g))
       ? baker.bakeCrop(
           i,
           oursFor(i, (nm) => !want.has(nm)),
           stats.cropBake,
+          within,
         )
       : null
     if (!kept) {
+      stats.cropsWhole++
       const f = await originalForm(i)
       cropForms.set(key, f)
       return f
@@ -582,7 +620,7 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
       n,
       objStream(
         n,
-        ` /Type /XObject /Subtype /Form /BBox [${box(i).map(f2).join(' ')}] /Resources ${copies.size || holdsType3(res) ? merged(res, new Set(), copies, type3Of) : res ? lit(res) : '<< >>'} /Filter /FlateDecode`,
+        ` /Type /XObject /Subtype /Form /BBox [${box(i).map(f2).join(' ')}] /Resources ${copies.size ? merged(res, new Set(), copies, type3Of) : cropRes(i)} /Filter /FlateDecode`,
         await deflate(kept.bytes),
       ),
     ])
@@ -666,6 +704,24 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
     return `<< /Type /Annot /Subtype /Link /Rect [${f2(b[0] + dx)} ${f2(b[1] + dy)} ${f2(b[2] + dx)} ${f2(b[3] + dy)}]${bd} ${target} >>`
   }
 
+  /** a crop drawn from its source scaled k and moved (tx, ty), clipped where it is drawn: the region of its source it shows
+   *  (`own`) is its clip taken back to its source page */
+  const placeCrop = (c: ReturnType<typeof cropsOf>[number]) => {
+    const k = (c.at[2] - c.at[0]) / (c.src[2] - c.src[0] || 1)
+    const tx = c.at[0] - k * c.src[0],
+      ty = c.at[1] - k * c.src[1]
+    const own = (c.clip ?? [c.at]).map((r): Box => [(r[0] - tx) / k, (r[1] - ty) / k, (r[2] - tx) / k, (r[3] - ty) / k])
+    return { k, tx, ty, own }
+  }
+  /** every crop's region of a member on its source page, over every laid page (`<from>:<ord>`): a member laid over two pages
+   *  draws crops of one source on both */
+  const allOf = new Map<string, Box[]>()
+  for (const p of o.pages.values())
+    for (const c of cropsOf(p, { x: o.px ?? 0.375, y: o.px ?? 0.375 })) {
+      const key = `${c.from}:${c.ord}`
+      allOf.set(key, [...(allOf.get(key) ?? []), ...placeCrop(c).own])
+    }
+
   /** a laid page's drawing: its runs as text, its crops as the original's ink, the fonts and forms it names */
   const drawing = async (page: Page): Promise<{ ops: string; xobj: Map<string, number>; fontsUsed: Set<string> }> => {
     const out: string[] = []
@@ -676,15 +732,15 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
     // order the lines hold them)
     const px = o.px ?? 0.375
     const crops = cropsOf(page, { x: px, y: px })
+    const placed = crops.map(placeCrop)
     let nextCrop = 0
-    const drawCrop = async (c: (typeof crops)[number]) => {
+    const drawCrop = async (j: number) => {
+      const c = crops[j]!
+      const { k, tx, ty, own } = placed[j]!
       stats.crops++
-      const fn = await cropForm(c.from - 1, c.ord)
-      const nm = `AXTC${c.from}_${c.ord}`
+      const fn = await cropForm(c.from - 1, c.ord, { own, all: allOf.get(`${c.from}:${c.ord}`)! })
+      const nm = `AXTC${c.from}_${c.ord}_${j}`
       xobj.set(nm, fn)
-      const k = (c.at[2] - c.at[0]) / (c.src[2] - c.src[0] || 1)
-      const tx = c.at[0] - k * c.src[0],
-        ty = c.at[1] - k * c.src[1]
       const clip = (c.clip ?? [c.at])
         .map((r) => `${f2(r[0])} ${f2(r[1])} ${f2(r[2] - r[0])} ${f2(r[3] - r[1])} re`)
         .join(' ')
@@ -695,8 +751,8 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
       for (const [y, x0, , items] of m.lines)
         for (const it of items as Item[]) {
           if ('src' in it) {
-            const c = crops[nextCrop++]
-            if (c) await drawCrop(c)
+            const j = nextCrop++
+            if (j < crops.length) await drawCrop(j)
             continue
           }
           stats.runs++
@@ -773,7 +829,7 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
         }
     }
     // (a crop the lines do not reach in their order, none expected: drawn after them)
-    for (; nextCrop < crops.length; nextCrop++) await drawCrop(crops[nextCrop]!)
+    for (; nextCrop < crops.length; nextCrop++) await drawCrop(nextCrop)
     return { ops: out.join('\n'), xobj, fontsUsed }
   }
 
