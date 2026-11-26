@@ -99,7 +99,9 @@ export interface Baker {
 
 type Piece = { bytes: Uint8Array; ops: LexOp[] }
 /** a page read once for every bake of it (the page's own, and each crop's source on it): its walk's refusal, or what the walk
- *  read: each container's shows and the forms it draws (by piece and operator end), the page's own pieces */
+ *  read: each container's shows and the forms it draws (by piece and operator end), the page's own pieces. `full`: its forms'
+ *  shows and the forms they draw kept, which its crops read; for the page read last alone (a figure's walk can hold megabytes
+ *  of operators), the others keep their page's own shows, which its bake reads (#688's review) */
 type Read =
   | { refused: true }
   | {
@@ -107,13 +109,16 @@ type Read =
       shows: Map<Container, Map<string, ShowEvent>>
       forms: Map<Container, Map<string, Container>>
       pieces: Piece[]
+      full: boolean
     }
 
 export function makeBaker(R: Walker): Baker {
   const read = new Map<number, Read>()
-  const readPage = (pageIndex: number): Read => {
+  let fullPage = -1
+  /** page `pageIndex` read (`full`: its forms too, a crop's source reads them: walked again where they were let go) */
+  const readPage = (pageIndex: number, full = false): Read => {
     const had = read.get(pageIndex)
-    if (had) return had
+    if (had && ('refused' in had || had.full || !full)) return had
     const w = R.walkPage(pageIndex)
     let got: Read
     if (w.problems.length) got = { refused: true }
@@ -136,7 +141,18 @@ export function makeBaker(R: Walker): Baker {
         const bytes = p.st ? R.decode(p.st) : new Uint8Array(0)
         return { bytes, ops: lex(bytes) as LexOp[] }
       })
-      got = { pc: w.pc, shows, forms, pieces }
+      got = { pc: w.pc, shows, forms, pieces, full: true }
+      // (the page read before keeps its own shows alone, its forms let go)
+      const before = read.get(fullPage)
+      if (fullPage !== pageIndex && before && !('refused' in before))
+        read.set(fullPage, {
+          pc: before.pc,
+          shows: new Map([[before.pc, before.shows.get(before.pc) ?? new Map<string, ShowEvent>()]]),
+          forms: new Map(),
+          pieces: before.pieces,
+          full: false,
+        })
+      fullPage = pageIndex
     }
     read.set(pageIndex, got)
     return got
@@ -208,6 +224,16 @@ export function makeBaker(R: Walker): Baker {
         if (SHOW.has(op)) {
           st.shows++
           const e = shows.get(`${pi}:${o.e}`)
+          // (a show that clips, render modes 4 to 7: its outlines still added to the clip, nothing painted, its mode back after
+          // it: a clip stays a clip; as an advance it was lost, #688's review)
+          const tr = e?.state.Tr ?? 0
+          if (tr >= 4) {
+            st.clipsKept++
+            out.push(enc('7 Tr\n'))
+            copy(o)
+            out.push(enc(`${tr} Tr\n`))
+            continue
+          }
           const items = op === 'TJ' ? ((o.args[0] as Operand[]) ?? []) : []
           const tx = e ? advanceOf(e, items) : null
           if (tx === null) {
@@ -301,7 +327,7 @@ export function makeBaker(R: Walker): Baker {
       return run(page, page.pc, page.pieces, ours, st, dropFree, null, { n: 0 }, () => false)
     },
     bakeCrop(pageIndex, ours, st) {
-      const page = readPage(pageIndex)
+      const page = readPage(pageIndex, true)
       if ('refused' in page) {
         st.refused++
         return null
