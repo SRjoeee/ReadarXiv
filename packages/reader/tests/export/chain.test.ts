@@ -40,6 +40,9 @@ const composed = () => {
   return { bytes: all, seam: a.length }
 }
 const FACE = '400 100px "axt-test"'
+/** the run's two characters (U+6587, U+5B57), each a glyph of the font of ours */
+const ONE = '\u6587'
+const TWO = '\u6587\u5b57'
 const font = readSfnt(
   'test',
   buildSfnt({
@@ -78,7 +81,7 @@ const laid = (s: string): Page => ({
   ],
 })
 
-async function made(form: 'translation' | 'side-by-side', s = '文') {
+async function made(form: 'translation' | 'side-by-side', s = ONE) {
   const c = composed()
   const r = await exportPdf({ composed: c.bytes, seam: c.seam, pages: new Map([[1, laid(s)]]), glyphs, PL: L, form })
   const file = new Uint8Array(r.parts.reduce((n, p) => n + p.length, 0))
@@ -111,9 +114,9 @@ describe('the translated PDF', () => {
   })
 
   it('reads as the translation: its characters as text, the English its group held gone, the English beside it kept', async () => {
-    const { file } = await made('translation', '文字')
+    const { file } = await made('translation', TWO)
     const t = await pdfjsText(file)
-    expect(t).toContain('文字')
+    expect(t).toContain(TWO)
     expect(t).not.toContain('Hello')
     expect(t).toContain('World')
   })
@@ -157,6 +160,6 @@ describe('the side-by-side PDF', () => {
     expect(annots?.toString()).toBeDefined()
     const t = await pdfjsText(file)
     expect(t).toContain('Hello')
-    expect(t).toContain('文')
+    expect(t).toContain(ONE)
   })
 })
