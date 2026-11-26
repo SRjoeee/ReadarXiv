@@ -2175,17 +2175,27 @@ in the page, after the slices' decoding (0.13 to 0.24 s); each file arXiv's size
   draws it; the catalog's default view lists our groups turned off, out of the ON list the add-on put them in, the paper's own
   default view kept as it set it (its base state, its groups on and off: a group the paper's own catalog lists is the paper's,
   whatever its name). The side by side: every page's dict written again under its number (every destination and outline entry
-  still points at it), twice as wide — its media box and its crop box written on it whatever it inherits, and its own bleed,
-  trim and art boxes —, a form of the original page's own content streams on the left with its own annotations, the
-  translated page as a form on the right with its links moved by the page's width; a page with nothing laid shows the original
-  on both sides. The left is arXiv's own drawing: the add-on writes some of arXiv's objects again under their numbers (a form
+  still points at it), twice as wide as it shows — its media box and its crop box written on it whatever it inherits, and its
+  own bleed, trim and art boxes —, a form of the original page's own content streams on the left with its own annotations, the
+  translated page as a form on the right with its links moved there; a page with nothing laid shows the original on both
+  sides. A page turned (`/Rotate`) keeps its turn, and its two copies are laid along the axis it shows across, the original
+  first: turned 90 degrees, the translation a page's height above the original (its user space's y shows across); turned 180
+  or 270, the original moved along that axis, its annotations copied with it (#685's review, 4704125905: 1409.0575v3's pages 19
+  to 21, the corpus's only turned pages, showed 842 by 1,191 with the copies stacked; they show 1,684 by 595, the same text of
+  the two copies 841.89 pt apart across on one line, each half's links on its half, and the left half pixel for pixel arXiv's
+  page drawn by poppler). The left is arXiv's own drawing: the add-on writes some of arXiv's objects again under their numbers (a form
   whose figure text it wraps in our groups: 1,062 forms in 146 of the corpus's 245 papers), so each object the left's drawing
   reaches that reaches one of those is arXiv's revision of it (an incremental update keeps every revision), copied under a
   number of ours. An object of the document written again keeps its generation. What the paper says that our section writes —
   a link's destination, its address — is written as a PDF string or name, its delimiters escaped, a number as a number and
-  anything else null, never as PDF syntax (16 of the 245 papers name a destination with a character a name escapes).
-- **The bake** (`bake.ts`), on the engine's walk (`openRemover`'s `walkPage`: each show's codes and text state as the remover
-  reads them). A group turned off in the default view hides its ink, and PDF.js and poppler still read its text: on
+  anything else null, never as PDF syntax (16 of the 245 papers name a destination with a character a name escapes). Its text
+  is written in the encoding a reader decodes back to it: PDFDocEncoding where every character has a byte there, else UTF-16BE
+  with its byte order mark (#685's review, 4704253033: written as Latin-1 or UTF-8, a CJK name and one with a character of
+  PDFDocEncoding's 0x80 to 0xA0 resolved nowhere or to another name; each resolves through PDF.js now. None of the 245
+  papers' 34,255 destination names is outside ASCII, whose bytes are as before).
+- **The bake** (`bake.ts`), on the engine's walk (`walkPage`: each show's codes and text state as the remover reads them),
+  read through the file's own `openObjects` view of the composed document (`openWalker`: each object parsed when asked,
+  nothing of the document loaded whole; the prepare's `openRemover` is the same walk over the object layer's whole load). A group turned off in the default view hides its ink, and PDF.js and poppler still read its text: on
   1706.03762v7-zh, 1,408 of 1,408 words of the units laid were read on the translated pages. Baked, a show in a group the page
   turns off becomes the advance it made (a `TJ` of one number at the text state of the moment), a painted path and an image go,
   a clip stays a clip, state stays (a group off hides painting, never state: ISO 32000-1 §8.11.3.1), our own marks go; 62 of the
@@ -2194,7 +2204,14 @@ in the page, after the slices' decoding (0.13 to 0.24 s); each file arXiv's size
   wrapped inside keeps its groups, which the default view turns off.
 - **The fonts** (`woff2.ts`, `brotli.ts`, `fonts.ts`, `cff.ts`, `ttf.ts`). Each served slice drawn is a Type0 font
   (Identity-H, a CIDFontType0 over its CFF, `/CIDFontType0C`, or a CIDFontType2 over a TrueType one, FontFile2, its CIDs its
-  glyph ids) with a ToUnicode of exactly the glyphs drawn, so that selection, search and copy give the translation's characters. A slice is WOFF2, whose tables are brotli: a browser's `DecompressionStream` has none
+  glyph ids) with a ToUnicode of exactly the glyphs drawn, so that selection, search and copy give the translation's characters.
+  A run the reader draws in a face's own small capitals (its class's `font-variant-caps` over the face's `smcp` feature) is
+  drawn with the glyphs that feature substitutes, read from the slice's GSUB (its single substitutions, lookup after lookup),
+  and placed as the reader measures it: cut where the face that holds a character turns from one with its own small capitals
+  to one with none, each piece measured alone in small capitals or in lower case (`partsOf`'s rule; #685's review,
+  4704125899). On the corpus's 15 such runs with text of their own (2608.00812v1, Domitian, its English laid as its row: no
+  rows of it are held), 744 letters were drawn in lower case and are drawn in small capitals, each glyph the one fontTools reads
+  through the slice's feature, each run's end 0.0001 em from the run the reader draws (6.6 em at worst before). A slice is WOFF2, whose tables are brotli: a browser's `DecompressionStream` has none
   (Chromium 153), and PDF.js (6.3.289, both hosts' pin) decodes PDF's `/BrotliDecode`, so the slices' streams are the embedded
   files of a document of ours read back through PDF.js's public API: no decoder shipped. The CFF is subset (`subsetCff`): every
   glyph not drawn and every subroutine no kept glyph reaches made empty, glyph ids and CIDs kept (the text's codes need no
@@ -2222,17 +2239,18 @@ in the page, after the slices' decoding (0.13 to 0.24 s); each file arXiv's size
   this module alone (`scripts/check-boundary.mjs` `PACKAGE_WITHIN`).
 - **Memory**: one translated file of the 46 MB paper (2608.16117v1) in Chromium 153 with V8's heap capped at 256 MB
   (`--js-flags=--max-old-space-size=256`, a phone's heap stood in; the browser's own process tree sampled): made, its JS heap
-  at most 158 MB, its renderer's resident memory at most 450 MB.
-- **Not yet** (counted where it occurs): a paper this machine keeps, opened with our server out of reach: its file needs the
-  original and the add-on read whole, which the machine holds only where a file was made of it before (else the file fails, its
-  retry offered); small capitals (smcp) not substituted (a face's own by its GSUB feature, asked by 20 units in 2 of the 245
-  papers: their lower-case Latin letters would be drawn in lower case), ligatures only at U+FB00 to U+FB04; a page turned
-  (`/Rotate`, 3 pages of 1 of the 245, all 90) set side by side in its upright frame, its two copies stacked; a non-CID-keyed
-  CFF under `/CIDFontType0C` (poppler warns, every renderer tried draws it). The small capitals and the turned page land in
-  the PR after #685, before the download reaches any release.
+  at most 122 MB (158 MB while the walk loaded the document whole: `openWalker`, round 3), its renderer's resident memory at
+  most 457 MB (457 before: the composed document's and the file's bytes, which the walk does not hold, are most of it). Both
+  files of each of the four papers, heap uncapped: the JS heap's peak 88 to 166 MB (97 to 249 before).
+- **Not yet** (counted where it occurs): a file made with our server out of reach: it needs the original and the add-on read
+  whole, and the machine's store keeps what the reader read, by ranges (`src/pdf-reader/host/stored-fetch.ts`): a whole copy
+  only of an object a file was made of before, and none of arXiv's own address; the file fails, its retry offered. Ligatures
+  only at U+FB00 to U+FB04; a non-CID-keyed CFF under `/CIDFontType0C` (poppler warns, every renderer tried draws it).
 
 The rows: `packages/reader/tests/export/` (the subset on CFF fonts of our own, the WOFF2 path and its transformed TrueType,
-brotli by PDF.js, the bake, the chain on a document of our own, read back by the object layer and PDF.js),
+brotli by PDF.js, the bake and its walk over `openObjects`, the chain on a document of our own, read back by the object layer
+and PDF.js: its turned pages, its destination names; a face's small capitals, `smcp.test.ts`; the two whole reads,
+`run.test.ts`),
 `packages/reader/tests/chrome/model.test.ts` and `capsule-export.test.ts` (the controller's file, its share, cancel, failure
 and retry, the capsule), and in a real browser `pnpm e2e:reader` (`tests/e2e/reader-v2-export.mjs`: both files saved and read
 back, one at a time, a cancel, a failure and its retry, the reading options' row in a narrow window).
