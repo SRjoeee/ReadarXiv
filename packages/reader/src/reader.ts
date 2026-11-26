@@ -498,10 +498,13 @@ export function openReader(
     )
   }
   /** a contents entry gone to: its first rectangle where a part places it (the part of its page read where it is not yet), a
-   *  line of room above it on the side read, the other following; else the page the contents give it */
+   *  line of room above it on the side read, the other following; else the page the contents give it. The focus, where asked,
+   *  given to its page only while it is where the jump found it: a control the reader moved it to while the part was read
+   *  keeps it */
   async function goToHeading(id: number, focus = false) {
     const c = contents
     if (!c || !panes) return
+    const holder = root.ownerDocument.activeElement
     let r = c.firstRect(id)
     const page = c.pageOf(id)
     if (!r && page) {
@@ -512,7 +515,7 @@ export function openReader(
     if (r) panes.goToRect(r)
     else if (page) panes.goToPage(sideRead(), page)
     const at = r?.[0] ?? page
-    if (focus && at) panes.focusPage(sideRead(), at)
+    if (focus && at && root.ownerDocument.activeElement === holder) panes.focusPage(sideRead(), at)
   }
   // ---- the rows made here under way, and the reading place they are asked by
   let making: { units: readonly Unit[]; signal: AbortSignal; asked: Set<string>; run(want: Unit[]): void } | null = null
