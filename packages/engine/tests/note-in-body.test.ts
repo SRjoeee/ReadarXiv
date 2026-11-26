@@ -159,3 +159,54 @@ describe("a display before a note TeX ships into its own body region, the text a
     expect(display({ note: 2, closes: false })).toBe('open, the text after it not found')
   })
 })
+
+// The same class of TeX's stream around a piece with both its points: an inline formula TeX moved whole to the next column,
+// its opening point left at the column's end, where the class then shipped the column's notes inside the body before the
+// formula and its closing point. The piece's ink was everything its region held between its two points, the note's label
+// and text with it: the note's text owned by the formula's element, the note a unit of no text ('unwrapped', English).
+/** unit 1: text, an inline formula, the text after it; unit 2 the note TeX ships between the formula's two points */
+const INLINE = unit('para', [
+  { t: 'text', s: 'We have ' },
+  { t: 'ph', src: '$H=K$' },
+  { t: 'text', s: ' where it holds.' },
+])
+/** the body as B ships it: the paragraph's line, the formula's opening point at the column's end, the note's label and the
+ *  note (`closes`: its end mark there), then at the next column's head the formula and its closing point, the text after it */
+const CLOSED = (o: { closes?: boolean; notes?: number }): Item[] => [
+  { at: 'bs1' },
+  { at: '1s' },
+  'Wehave',
+  { at: 'p1.1a' },
+  '\f3',
+  { at: '2s' },
+  'Anoteofours.',
+  ...(o.closes === false ? [] : [{ at: '2e' }]),
+  ...(o.notes === 2 ? ['\n4', { at: '3s' }, 'Another.', { at: '3e' }] : []),
+  '\nH=K',
+  { at: 'p1.1b' },
+  'whereitholds.',
+  { at: '1e' },
+  { at: 'be1' },
+]
+function closed(o: Parameters<typeof CLOSED>[0]): string | null {
+  const units = [unit('para', []), INLINE, NOTE, NOTE]
+  const pages = pagesOf(CLOSED(o))
+  const follows = followsOf(units as never, new Set(pages.flatMap((pg) => pg.points.map((p) => p.name))))
+  const e = ownedOf(pages, { follows, erasure: true }).get('p1.1a')
+  if (!e) return null
+  return e.how < OWNED ? e.glyphs.map(([p, g]) => pages[p - 1]!.glyphs.u[g]).join('') : (OWNED_HOW[e.how] as string)
+}
+
+describe("a piece with both its points, a note TeX shipped whole between them: the note is not the piece's ink", () => {
+  it("the formula owns its own glyphs, the note's label and text left out", () => {
+    expect(closed({})).toBe('H=K')
+  })
+
+  it('two notes shipped one after the other: both left out, each with its label', () => {
+    expect(closed({ notes: 2 })).toBe('H=K')
+  })
+
+  it("the other side: the note's end mark not between the points: read as before", () => {
+    expect(closed({ closes: false })).toBe('3Anoteofours.H=K')
+  })
+})
