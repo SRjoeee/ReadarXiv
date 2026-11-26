@@ -5,13 +5,18 @@
 // which makes the file; and the same from the reading options in a window too narrow for the bar's own menu. The stand-in
 // serves its face as WOFF2, as our server serves its slices, so that each file decodes them as a host's reader does (PDF.js's
 // worker over the reader's own port, no global worker set: #686), and two files in a row leave the page's workers as they were;
-// and a page whose crops' ink sits inside a form (page-in-form.mjs) gives a file that draws every crop's ink (#crops-sharp).
+// and a page whose crops' ink sits inside a form (page-in-form.mjs) gives a file that draws every crop's ink (#crops-sharp);
+// and on both files every word poppler reads stands on ink and in its own half (a crop's form holds its own ink alone: a
+// clipped-away copy of a paragraph's other formulas is text a viewer selects where nothing is drawn, lane export-select).
 // Called by reader-v2.mjs with its context, its stand-in and its reporting.
-import { readFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { createRequire } from 'node:module'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { lex, openObjects } from '../../packages/engine/src/index.ts'
 import { withPageInForm } from './lib/page-in-form.mjs'
+import { withWidths } from './lib/with-widths.mjs'
 
 const PL = createRequire(import.meta.url)('@cantoo/pdf-lib')
 /** each crop a saved file draws on page `n` (its crop forms, AXTC…), and whether it draws ink: a show of a string, in a render
@@ -42,10 +47,46 @@ function cropsIn(path, n) {
     return false
   }
   const page = X.pages()[n - 1]
-  return [...text(look(page.node.get(N('Contents')))).matchAll(/\/(AXTC\d+_\d+) Do/g)].map((m) => {
+  return [...text(look(page.node.get(N('Contents')))).matchAll(/\/(AXTC\d+_\d+_\d+) Do/g)].map((m) => {
     const f = xobj(page.node.get(N('Resources')), m[1])
     return { name: m[1], ink: f instanceof PL.PDFRawStream && ink(f) }
   })
+}
+
+/** poppler's reading of a saved file's page `n` (pdftotext -bbox) against its own drawing of it (pdftoppm, 144 dpi, grey):
+ *  the words with no ink under them, and on a side-by-side page the words across its two halves. Null where poppler is not
+ *  installed */
+function wordsOnInk(path, n, halves) {
+  if (spawnSync('pdftotext', ['-v']).status !== 0 || spawnSync('pdftoppm', ['-v']).status !== 0) return null
+  const dir = mkdtempSync(join(tmpdir(), 'axt-ink-'))
+  try {
+    spawnSync('pdftotext', ['-bbox', '-f', String(n), '-l', String(n), path, join(dir, 'w.html')])
+    spawnSync('pdftoppm', ['-r', '144', '-gray', '-f', String(n), '-l', String(n), '-singlefile', path, join(dir, 'p')])
+    const html = readFileSync(join(dir, 'w.html'), 'utf8')
+    const [, pw] = /<page width="([\d.]+)"/.exec(html) ?? []
+    const b = readFileSync(join(dir, 'p.pgm'))
+    const head = new TextDecoder('latin1').decode(b.subarray(0, 40)).split(/\s+/)
+    const W = Number(head[1]),
+      H = Number(head[2])
+    const px = b.subarray(b.length - W * H)
+    const k = 144 / 72
+    const words = [...html.matchAll(/<word xMin="([\d.]+)" yMin="([\d.]+)" xMax="([\d.]+)" yMax="([\d.]+)">([^<]*)<\/word>/g)].map(
+      (m) => ({ box: m.slice(1, 5).map(Number), text: m[5] }),
+    )
+    const inked = ({ box: [x0, y0, x1, y1] }) => {
+      for (let r = Math.max(0, Math.floor(y0 * k)); r < Math.min(H, Math.ceil(y1 * k)); r++)
+        for (let c = Math.max(0, Math.floor(x0 * k)); c < Math.min(W, Math.ceil(x1 * k)); c++) if (px[r * W + c] < 200) return true
+      return false
+    }
+    const half = Number(pw) / 2
+    return {
+      words: words.length,
+      noInk: words.filter((w) => !inked(w)).map((w) => w.text),
+      across: halves ? words.filter((w) => w.box[0] < half - 0.5 && w.box[2] > half + 0.5).map((w) => w.text) : [],
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 }
 
 /** the menu's words in the interface's language the run uses (zh-CN): the button, the rows, the capsule's chips */
@@ -217,6 +258,24 @@ export async function exportChecks(t) {
       JSON.stringify({ inThePage: cropsHere, inAForm: cropsThere, failed: formFile?.failed }),
     )
     await inForm.close()
+
+    // every word poppler reads on page 1 of both files, its paragraphs of several formulas each among them, stands on ink, and
+    // on the side-by-side page in one half (the fixture with its fonts' widths stated, as arXiv's papers state them: with-widths)
+    await clearPaperStore()
+    api.use(await withWidths(t.fixture))
+    const wide = await openReader({ mode: 'bilingual' })
+    await translated(wide)
+    const trW = await press(wide, barMenu(wide), W.translation, { tag: 'widths-' })
+    const sbsW = await press(wide, barMenu(wide), W.sideBySide, { tag: 'widths-' })
+    const onInk = [trW?.path && wordsOnInk(trW.path, 1, false), sbsW?.path && wordsOnInk(sbsW.path, 1, true)]
+    check(
+      onInk.some((x) => x === null)
+        ? 'every word of both files stands on ink, in its own half (poppler not installed: not read)'
+        : "every word of both files stands on ink, in its own half: no formula's copy clipped out of sight",
+      onInk.every((x) => x === null || (x && x.words > 0 && x.noInk.length === 0 && x.across.length === 0)),
+      JSON.stringify(onInk),
+    )
+    await wide.close()
     api.use(t.fixture)
     await clearPaperStore()
   }

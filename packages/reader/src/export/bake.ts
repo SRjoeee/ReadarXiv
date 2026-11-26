@@ -30,6 +30,14 @@ export interface BakeStats {
   clipsKept: number
   /** forms a crop's source bakes a copy of: its own groups' ink inside them */
   formsBaked: number
+  /** a crop's own groups' ink cut by place (Within): codes kept by their advance, codes kept by their font's box (or for want
+   *  of one), codes left out as advances; shows kept whole for want of their widths or their place; paths, images and forms
+   *  left out */
+  codesKept: number
+  codesByBox: number
+  codesOut: number
+  showsWhole: number
+  inkOut: number
 }
 export const newBakeStats = (): BakeStats => ({
   pages: 0,
@@ -40,11 +48,19 @@ export const newBakeStats = (): BakeStats => ({
   images: 0,
   clipsKept: 0,
   formsBaked: 0,
+  codesKept: 0,
+  codesByBox: 0,
+  codesOut: 0,
+  showsWhole: 0,
+  inkOut: 0,
 })
 
 const PAINT = new Set(['S', 's', 'f', 'F', 'f*', 'B', 'B*', 'b', 'b*', 'n'])
 const PATH = new Set(['m', 'l', 'c', 'v', 'y', 'h', 're'])
 const SHOW = new Set(['Tj', 'TJ', "'", '"'])
+/** the text state's operators, and the text matrices' (ISO 32000-1 §9.3, §9.4.2) */
+const TEXT_STATE = new Set(['Tf', 'Tc', 'Tw', 'Tz', 'TL', 'Ts', 'Tr'])
+const TEXT_LINE = new Set(['Td', 'TD', 'T*', 'Tm'])
 const enc = (s: string) => {
   const b = new Uint8Array(s.length)
   for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i) & 255
@@ -52,6 +68,11 @@ const enc = (s: string) => {
 }
 const nameOf = (a: Operand | undefined) =>
   a && typeof a === 'object' && !Array.isArray(a) && a.t === 'name' ? a.v : null
+/** a number of the content's state written again, to a millionth (a size of 9.9626 stays 9.9626) */
+const num = (v: number) => {
+  const r = Math.round(v * 1e6) / 1e6
+  return Object.is(r, -0) ? '0' : String(r)
+}
 const fmt = (v: number) => {
   const r = Math.round(v * 1000) / 1000
   return Object.is(r, -0) ? '0' : String(r)
@@ -67,6 +88,258 @@ function advanceOf(e: ShowEvent, items: Operand[]): number | null {
   for (const c of e.codes) tx += font.width(c.v) * size + Tc + (c.ce - c.cs === 1 && c.v === 32 ? Tw : 0)
   return tx
 }
+
+/** a rectangle of page space [x0, y0, x1, y1] */
+export type Box = [number, number, number, number]
+type M = [number, number, number, number, number, number]
+const I: M = [1, 0, 0, 1, 0, 0]
+/** a × b, PDF's row-vector order: a's transform, then b's */
+const mul = (a: M, b: M): M => [
+  a[0] * b[0] + a[1] * b[2],
+  a[0] * b[1] + a[1] * b[3],
+  a[2] * b[0] + a[3] * b[2],
+  a[2] * b[1] + a[3] * b[3],
+  a[4] * b[0] + a[5] * b[2] + b[4],
+  a[4] * b[1] + a[5] * b[3] + b[5],
+]
+/** the box round points (x, y, …) under m */
+const boxOf = (m: M, pts: number[]): Box => {
+  const b: Box = [Infinity, Infinity, -Infinity, -Infinity]
+  for (let i = 0; i + 1 < pts.length; i += 2) {
+    const x = pts[i]! * m[0] + pts[i + 1]! * m[2] + m[4],
+      y = pts[i]! * m[1] + pts[i + 1]! * m[3] + m[5]
+    b[0] = Math.min(b[0], x)
+    b[1] = Math.min(b[1], y)
+    b[2] = Math.max(b[2], x)
+    b[3] = Math.max(b[3], y)
+  }
+  return b
+}
+/** whether box a meets box b: an overlap of some area, or, for an a of no width or no height (a glyph of no advance, a level
+ *  baseline), a point or a segment of it inside b */
+const meets = (a: Box, b: Box) => {
+  const ax = a[2] > a[0] ? a[0] < b[2] && a[2] > b[0] : a[0] >= b[0] && a[0] <= b[2]
+  const ay = a[3] > a[1] ? a[1] < b[3] && a[3] > b[1] : a[1] >= b[1] && a[1] <= b[3]
+  return ax && ay
+}
+const meetsAny = (a: Box, bs: readonly Box[]) => bs.some((b) => meets(a, b))
+
+/**
+ * Where a crop's source is cut, page space: `own`, the crop's own region (the part of the page its draw shows); `all`, every
+ * crop's region of the same member on the page. A member's elements and its label share one group of the add-on's, so a crop
+ * cut by group alone holds every element's ink, and each draw of it, clipped to one element, still holds every element's text,
+ * which viewers select and copy where the draw stands. Cut by place: a character is where its advance stands on its baseline
+ * (its origin to the next one's, as every text reader places it); one standing in some crop of its member belongs to the crops
+ * it stands in, and one standing in none (a glyph of no advance, \not's slash, whose ink lies past its origin; a glyph whose
+ * ink lies wholly off its baseline, a prime) to every crop its font's box (FontBBox: every glyph's ink, ISO 32000-1 §9.8.1)
+ * meets there, or to every crop where the font gives no box, so that no ink of the crop's is lost. A path, an image, a form is
+ * the crop's where its own box meets the crop's region.
+ */
+export interface Within {
+  own: Box[]
+  all: Box[]
+}
+
+/** the place state a content's operators set (ISO 32000-1 §8.4.4, §9.3, §9.4), read where a crop is cut by place: the CTM
+ *  and the text matrices, the text state the walk's show events do not carry (horizontal scaling, rise, leading, the font's
+ *  resource name), the line width and miter limit; `lost`, the text matrix unknown since a show whose widths are not read,
+ *  until the next matrix set (a line's move is from the line matrix, which no show moves) */
+interface Geo {
+  ctm: M
+  tm: M
+  tlm: M
+  th: number
+  rise: number
+  tl: number
+  font: string | null
+  size: number
+  tc: number
+  tw: number
+  tr: number
+  lw: number
+  ml: number
+  lost: boolean
+  stack: Pick<Geo, 'ctm' | 'th' | 'rise' | 'tl' | 'font' | 'size' | 'tc' | 'tw' | 'tr' | 'lw' | 'ml'>[]
+}
+/** a form's place state where it is painted: its matrix after the painter's CTM, the graphics state's text state inherited */
+const geoIn = (ctm: M, from?: Geo): Geo => ({
+  ctm,
+  tm: I,
+  tlm: I,
+  th: from?.th ?? 1,
+  rise: from?.rise ?? 0,
+  tl: from?.tl ?? 0,
+  font: from?.font ?? null,
+  size: from?.size ?? 0,
+  tc: from?.tc ?? 0,
+  tw: from?.tw ?? 0,
+  tr: from?.tr ?? 0,
+  lw: from?.lw ?? 1,
+  ml: from?.ml ?? 10,
+  lost: false,
+  stack: [],
+})
+const six = (a: Operand[]): M | null =>
+  a.length >= 6 && a.slice(0, 6).every((x) => typeof x === 'number') ? (a.slice(0, 6) as M) : null
+/** a state operator's effect on the place state (a show's own move is codesAt's) */
+const argN = (o: LexOp, i: number) => {
+  const v = o.args[i]
+  return typeof v === 'number' ? v : 0
+}
+/** a line's move from the line matrix (Td, TD, T*) */
+const lineTo = (g: Geo, tx: number, ty: number) => {
+  g.tlm = g.tm = mul([1, 0, 0, 1, tx, ty], g.tlm)
+  g.lost = false
+}
+function track(g: Geo, o: LexOp): void {
+  const a = o.args
+  switch (o.op) {
+    case 'q':
+      g.stack.push({
+        ctm: g.ctm,
+        th: g.th,
+        rise: g.rise,
+        tl: g.tl,
+        font: g.font,
+        size: g.size,
+        tc: g.tc,
+        tw: g.tw,
+        tr: g.tr,
+        lw: g.lw,
+        ml: g.ml,
+      })
+      break
+    case 'Q':
+      Object.assign(g, g.stack.pop() ?? {})
+      break
+    case 'cm': {
+      const m = six(a)
+      if (m) g.ctm = mul(m, g.ctm)
+      break
+    }
+    case 'w':
+      g.lw = argN(o, 0)
+      break
+    case 'M':
+      g.ml = argN(o, 0)
+      break
+    case 'BT':
+      g.tm = g.tlm = I
+      g.lost = false
+      break
+    case 'Tm': {
+      const m = six(a)
+      if (m) {
+        g.tm = g.tlm = m
+        g.lost = false
+      }
+      break
+    }
+    case 'TD':
+      g.tl = -argN(o, 1)
+      lineTo(g, argN(o, 0), argN(o, 1))
+      break
+    case 'Td':
+      lineTo(g, argN(o, 0), argN(o, 1))
+      break
+    case '"':
+      g.tw = argN(o, 0)
+      g.tc = argN(o, 1)
+      lineTo(g, 0, -g.tl)
+      break
+    case 'T*':
+    case "'":
+      lineTo(g, 0, -g.tl)
+      break
+    case 'Tc':
+      g.tc = argN(o, 0)
+      break
+    case 'Tw':
+      g.tw = argN(o, 0)
+      break
+    case 'Tr':
+      g.tr = argN(o, 0)
+      break
+    case 'TL':
+      g.tl = argN(o, 0)
+      break
+    case 'Tz':
+      g.th = argN(o, 0) / 100
+      break
+    case 'Ts':
+      g.rise = argN(o, 0)
+      break
+    case 'Tf':
+      g.font = nameOf(a[0])
+      g.size = argN(o, 1)
+      break
+  }
+}
+/** a show's array of strings and numbers as its operator holds it */
+const arrayOf = (o: LexOp): Operand[] =>
+  o.op === 'TJ' ? (Array.isArray(o.args[0]) ? o.args[0] : []) : [o.args[o.op === '"' ? 2 : 0] ?? null]
+/** each code of a show where it stands: its advance on its baseline (`seg`) and its font's box (`box`, `fbox` in text space
+ *  at size 1: none where the font gives none), page space; the text matrix moved past the show. Null where its widths or its
+ *  place are not known (the matrix lost after it). `want` false: the move alone */
+function codesAt(
+  g: Geo,
+  e: ShowEvent | undefined,
+  arr: Operand[],
+  fbox: Box | null,
+  want: boolean,
+): { seg: Box; box: Box | null }[] | null {
+  if (!e || g.lost || !e.state.font.width || e.state.font.vertical || e.state.font.refused) {
+    g.lost = true
+    return null
+  }
+  const { size, Tc, Tw } = e.state
+  const width = e.state.font.width
+  const m = want ? mul(g.tm, g.ctm) : I
+  const out: { seg: Box; box: Box | null }[] = []
+  let x = 0
+  let k = 0
+  arr.forEach((el, ei) => {
+    if (typeof el === 'number') {
+      x -= (el / 1000) * size * g.th
+      return
+    }
+    for (; k < e.codes.length && e.codes[k]!.ei === ei; k++) {
+      const c = e.codes[k]!
+      const w = width(c.v) * size
+      if (want) {
+        const [a, b, cc, d] = fbox ?? [0, 0, 0, 0]
+        out.push({
+          seg: boxOf(m, [x, g.rise, x + w * g.th, g.rise]),
+          box: fbox
+            ? boxOf(m, [
+                x + a * size * g.th,
+                g.rise + b * size,
+                x + cc * size * g.th,
+                g.rise + d * size,
+                x + a * size * g.th,
+                g.rise + d * size,
+                x + cc * size * g.th,
+                g.rise + b * size,
+              ])
+            : null,
+        })
+      }
+      x += (w + Tc + (c.ce - c.cs === 1 && c.v === 32 ? Tw : 0)) * g.th
+    }
+  })
+  g.tm = mul([1, 0, 0, 1, x, 0], g.tm)
+  return out
+}
+/** the points a path's construction names (a rectangle by two corners), user space */
+const pointsOf = (path: LexOp[]): number[] =>
+  path.flatMap((p) => {
+    const a = p.args.filter((x): x is number => typeof x === 'number')
+    return p.op === 're' && a.length >= 4 ? [a[0]!, a[1]!, a[0]! + a[2]!, a[1]! + a[3]!] : a
+  })
+/** a name as a content stream writes it: a byte outside '!' to '~', a delimiter or '#' as #xx (ISO 32000-1 §7.3.5) */
+const nameTok = (s: string) =>
+  `/${[...new TextEncoder().encode(s)].map((b) => (b < 0x21 || b > 0x7e || '()<>[]{}/%#'.includes(String.fromCharCode(b)) ? `#${b.toString(16).toUpperCase().padStart(2, '0')}` : String.fromCharCode(b))).join('')}`
+const hexOf = (b: Uint8Array) => [...b].map((x) => x.toString(16).toUpperCase().padStart(2, '0')).join('')
 
 /** a form a crop's source draws, baked as the source is: its content with its groups' ink alone, and the forms it draws so */
 export interface BakedForm {
@@ -94,7 +367,12 @@ export interface Baker {
    * those groups drawn as a baked copy of it, its ink of those groups alone (the paper's figure a form whose text the add-on
    * wrapped inside it: the crop's ink is there, never in the page's own content). Null where the walk refuses
    */
-  bakeCrop(pageIndex: number, ours: Ours, stats: BakeStats): { bytes: Uint8Array; forms: BakedForm[] } | null
+  bakeCrop(
+    pageIndex: number,
+    ours: Ours,
+    stats: BakeStats,
+    within?: Within,
+  ): { bytes: Uint8Array; forms: BakedForm[] } | null
 }
 
 type Piece = { bytes: Uint8Array; ops: LexOp[] }
@@ -171,8 +449,50 @@ export function makeBaker(R: Walker): Baker {
     return got
   }
 
+  /** an array's numbers (null where it is none, or holds anything else) */
+  const numsOf = (v: PdfObject | undefined): number[] | null => {
+    const a = R.look(v)
+    if (!(a instanceof R.PL.PDFArray)) return null
+    const out = a.asArray().map((x) => {
+      const n = R.look(x)
+      return n instanceof R.PL.PDFNumber ? n.asNumber() : Number.NaN
+    })
+    return out.every(Number.isFinite) ? out : null
+  }
+  /** a font's box, text space at size 1, by its name in the resources `res`: its FontBBox (a Type 3 font's under its
+   *  FontMatrix, any other's in thousandths), a Type0 font's its descendant's; null where it gives none, or one of no area */
+  const boxes = new Map<PdfObject | undefined, Map<string, Box | null>>()
+  const fontBox = (name: string | null, res: PdfObject | undefined): Box | null => {
+    if (name === null) return null
+    const byName = boxes.get(res) ?? new Map<string, Box | null>()
+    boxes.set(res, byName)
+    if (byName.has(name)) return byName.get(name)!
+    const f = R.get(R.get(R.look(res), 'Font'), name)
+    let b: Box | null = null
+    if (R.nameOf(R.get(f, 'Subtype')) === 'Type3') {
+      const bb = numsOf(R.get(f, 'FontBBox'))
+      const fm = six(numsOf(R.get(f, 'FontMatrix')) ?? [])
+      if (bb?.length === 4 && fm) b = boxOf(fm, [bb[0]!, bb[1]!, bb[2]!, bb[3]!, bb[0]!, bb[3]!, bb[2]!, bb[1]!])
+    } else {
+      const d = R.look(R.get(f, 'DescendantFonts'))
+      const cid = d instanceof R.PL.PDFArray ? R.look(d.get(0)) : f
+      const bb = numsOf(R.get(R.get(cid, 'FontDescriptor'), 'FontBBox'))
+      if (bb?.length === 4)
+        b = [
+          Math.min(bb[0]!, bb[2]!) / 1000,
+          Math.min(bb[1]!, bb[3]!) / 1000,
+          Math.max(bb[0]!, bb[2]!) / 1000,
+          Math.max(bb[1]!, bb[3]!) / 1000,
+        ]
+    }
+    if (b && !(b[2] > b[0] && b[3] > b[1])) b = null
+    byName.set(name, b)
+    return b
+  }
+
   /** one container's content baked: `mc0` its starting frame (the free ink's rule); `sink`, a crop's, the forms of its groups
-   *  baked as copies into it (null: every form drawn as it is or dropped, as the bake has always done) */
+   *  baked as copies into it (null: every form drawn as it is or dropped, as the bake has always done); `within`, a crop's
+   *  own groups' ink cut by place (Within), `geo` the place state the content starts in */
   const run = (
     page: Exclude<Read, { refused: true }>,
     cont: Container,
@@ -183,6 +503,9 @@ export function makeBaker(R: Walker): Baker {
     sink: BakedForm[] | null,
     names: { n: number },
     holds: (c: Container) => boolean,
+    within: Within | null = null,
+    geo: Geo = geoIn(I),
+    dirty0 = false,
   ): Uint8Array => {
     const shows = page.shows.get(cont) ?? new Map<string, ShowEvent>()
     const forms = page.forms.get(cont)
@@ -194,11 +517,172 @@ export function makeBaker(R: Walker): Baker {
     const dropping = () => mc[mc.length - 1]!.drop
     let path: LexOp[] = []
     let clip = false
+    /** a crop's form, the lean form: out of its own groups it writes no show and no text state or text position at all, so
+     *  that what it writes stands apart from the content's own state; `state`, the text state written differs from the
+     *  content's (a Tf, Tc, Tw, Tz, TL, Ts or Tr left out), `pos`, the text matrices do (a show or a line's move left out) */
+    const dirty = { state: dirty0, pos: false }
+    const saved: boolean[] = []
+    /** before a show or a line's move is written: the content's own text state and line set again where they were left out
+     *  (its line matrix, and the way along the line to its text matrix as a TJ's number) */
+    const sync = (p: Geo) => {
+      if (dirty.state) {
+        const f = p.font !== null ? `${nameTok(p.font)} ${num(p.size)} Tf ` : ''
+        out.push(
+          enc(
+            `${f}${num(p.tc)} Tc ${num(p.tw)} Tw ${num(p.th * 100)} Tz ${num(p.tl)} TL ${num(p.rise)} Ts ${p.tr} Tr\n`,
+          ),
+        )
+        dirty.state = false
+      }
+      if (dirty.pos) {
+        out.push(enc(`${p.tlm.map(num).join(' ')} Tm\n`))
+        const l = p.tlm,
+          m = p.tm
+        const dx = Math.abs(l[0]) >= Math.abs(l[1]) ? (l[0] ? (m[4] - l[4]) / l[0] : 0) : (m[5] - l[5]) / l[1]
+        const k = p.size * p.th
+        if (Math.abs(dx) > 1e-9 && k) out.push(enc(`[${num((-dx * 1000) / k)}] TJ\n`))
+        dirty.pos = false
+      }
+    }
+    /** a box of the page that is the crop's: meeting its own region */
+    const mine = (b: Box) => !!within && meetsAny(b, within.own)
+    /** a form's box where it is painted: its /BBox under its /Matrix and the CTM */
+    const formBox = (c: Container, ctm: M): Box | null => {
+      const bb = numsOf(R.get(c.st ?? undefined, 'BBox'))
+      return bb && bb.length === 4
+        ? boxOf(mul(six(numsOf(R.get(c.st ?? undefined, 'Matrix')) ?? []) ?? I, ctm), bb)
+        : null
+    }
     for (let pi = 0; pi < pieces.length; pi++) {
       const { bytes, ops } = pieces[pi]!
       const copy = (o: LexOp) => out.push(bytes.subarray(o.s, o.e), NL)
+      /** an operator of the crop's own groups, cut by place: a show's codes kept where they are the crop's, the others an
+       *  advance in their place; a path painted, an image or a form kept where its box meets the crop's region; a clip kept */
+      const bakeCut = (o: LexOp, at: { seg: Box; box: Box | null }[] | null, pre: Geo) => {
+        const op = o.op
+        if (SHOW.has(op)) {
+          const e = shows.get(`${pi}:${o.e}`)
+          if (!e || e.state.Tr >= 4 || !e.state.size) {
+            sync(pre)
+            copy(o)
+            return
+          }
+          if (!at) {
+            st.showsWhole++
+            sync(pre)
+            copy(o)
+            return
+          }
+          const keep = at.map(({ seg, box }) => {
+            if (meetsAny(seg, within!.all)) return mine(seg)
+            st.codesByBox++
+            return !box || mine(box)
+          })
+          const kept = keep.filter(Boolean).length
+          st.codesKept += kept
+          st.codesOut += keep.length - kept
+          if (!kept) {
+            // (none of its codes the crop's: written as nothing, as a show out of its groups)
+            dirty.pos = true
+            if (op === '"') dirty.state = true
+            return
+          }
+          sync(pre)
+          if (kept === keep.length) {
+            copy(o)
+            return
+          }
+          // (the show again: its codes kept as they were, each other an advance of its own width, so that every code after it
+          // stands where it stood)
+          const { size, Tc, Tw } = e.state
+          const width = e.state.font.width!
+          const toks: (number | string)[] = []
+          const add = (t: number | string) => {
+            const last = toks[toks.length - 1]
+            if (typeof t === 'number' && typeof last === 'number') toks[toks.length - 1] = last + t
+            else if (typeof t === 'string' && typeof last === 'string') toks[toks.length - 1] = last + t
+            else toks.push(t)
+          }
+          let k = 0
+          arrayOf(o).forEach((el, ei) => {
+            if (typeof el === 'number') add(el)
+            else
+              for (; k < e.codes.length && e.codes[k]!.ei === ei; k++) {
+                const c = e.codes[k]!
+                if (keep[k] && el && typeof el === 'object' && !Array.isArray(el) && el.t === 'str')
+                  add(hexOf(el.b.subarray(c.cs, c.ce)))
+                else add((-(width(c.v) * size + Tc + (c.ce - c.cs === 1 && c.v === 32 ? Tw : 0)) * 1000) / size)
+              }
+          })
+          if (op === "'") out.push(enc('T*\n'))
+          if (op === '"') out.push(enc(`${fmt(o.args[0] as number)} Tw ${fmt(o.args[1] as number)} Tc T*\n`))
+          out.push(enc(`[${toks.map((t) => (typeof t === 'number' ? fmt(t) : `<${t}>`)).join(' ')}] TJ\n`))
+          return
+        }
+        if (PATH.has(op) || op === 'W' || op === 'W*') {
+          path.push(o)
+          if (op === 'W' || op === 'W*') clip = true
+          return
+        }
+        if (PAINT.has(op)) {
+          // (a stroke reaches half its width past its path, a miter join its miter limit times that)
+          const scale = Math.max(Math.hypot(geo.ctm[0], geo.ctm[1]), Math.hypot(geo.ctm[2], geo.ctm[3]))
+          const reach = 'SsBb'.includes(op[0]!) ? ((Math.max(geo.lw, 0) * Math.max(geo.ml, 1)) / 2) * scale : 0
+          const b = boxOf(geo.ctm, pointsOf(path))
+          if (op !== 'n' && mine([b[0] - reach, b[1] - reach, b[2] + reach, b[3] + reach])) {
+            for (const p of path) copy(p)
+            copy(o)
+          } else if (clip) {
+            for (const p of path) copy(p)
+            out.push(enc('n\n'))
+            st.clipsKept++
+          } else if (op !== 'n') st.inkOut++
+          path = []
+          clip = false
+          return
+        }
+        if (op === 'Do' || op === 'BI') {
+          const child = op === 'Do' ? forms?.get(`${pi}:${o.e}`) : undefined
+          const b = child ? formBox(child, geo.ctm) : boxOf(geo.ctm, [0, 0, 1, 1, 0, 1, 1, 0])
+          if (!b || mine(b)) copy(o)
+          else st.inkOut++
+          return
+        }
+        copy(o)
+      }
       for (const o of ops) {
         const op = o.op
+        // (the place state, where a crop is cut by place: every operator's, whatever group it stands in)
+        let at: { seg: Box; box: Box | null }[] | null = null
+        const cut = !!within && !dropping() && op !== 'BDC' && op !== 'BMC' && op !== 'EMC'
+        // (the state before the operator, which a left-out state is written again from)
+        const pre: Geo = within && SHOW.has(op) ? { ...geo } : geo
+        if (within) {
+          if (!SHOW.has(op) || op === "'" || op === '"') track(geo, o)
+          // (the lean form writes no text state and no line of the content's own: each show it writes is preceded by them, as
+          // they stand there)
+          if (TEXT_STATE.has(op)) {
+            dirty.state = true
+            continue
+          }
+          if (TEXT_LINE.has(op)) {
+            // (TD sets the leading too)
+            dirty.pos = true
+            if (op === 'TD') dirty.state = true
+            continue
+          }
+          // (a graphics state saved and restored holds its text state: what was written, and so whether it differs, with it;
+          // a text object begun sets both matrices, the written one and the content's, alike)
+          if (op === 'q') saved.push(dirty.state)
+          if (op === 'Q') dirty.state = saved.pop() ?? dirty.state
+          if (op === 'BT') dirty.pos = false
+          if (SHOW.has(op))
+            at = codesAt(geo, shows.get(`${pi}:${o.e}`), arrayOf(o), cut ? fontBox(geo.font, res) : null, cut)
+        }
+        if (cut) {
+          bakeCut(o, at, pre)
+          continue
+        }
         if (op === 'BDC' || op === 'BMC') {
           const prop = op === 'BDC' && nameOf(o.args[0]) === 'OC' ? nameOf(o.args[1]) : null
           const mine = prop !== null ? ours(prop, res) : null
@@ -229,11 +713,19 @@ export function makeBaker(R: Walker): Baker {
           const tr = e?.state.Tr ?? 0
           if (tr >= 4) {
             st.clipsKept++
+            if (within) sync(pre)
             out.push(enc('7 Tr\n'))
             copy(o)
             out.push(enc(`${tr} Tr\n`))
             continue
           }
+          // (a crop's form: a show out of its own groups written as nothing at all, nor its advance)
+          if (within && at && e) {
+            dirty.pos = true
+            if (op === '"') dirty.state = true
+            continue
+          }
+          if (within) sync(pre)
           const items = op === 'TJ' ? ((o.args[0] as Operand[]) ?? []) : []
           const tx = e ? advanceOf(e, items) : null
           if (tx === null) {
@@ -271,7 +763,20 @@ export function makeBaker(R: Walker): Baker {
           const child = op === 'Do' && sink && !mc.some((f) => f.ours) ? forms?.get(`${pi}:${o.e}`) : undefined
           if (child?.st && holds(child)) {
             const inner: BakedForm[] = []
-            const baked = run(page, child, piecesOf(child), ours, st, true, inner, names, holds)
+            const baked = run(
+              page,
+              child,
+              piecesOf(child),
+              ours,
+              st,
+              true,
+              inner,
+              names,
+              holds,
+              within,
+              within ? geoIn(mul(six(numsOf(R.get(child.st, 'Matrix')) ?? []) ?? I, geo.ctm), geo) : undefined,
+              dirty.state,
+            )
             const name = `AXTB${names.n++}`
             sink!.push({ name, st: child.st, res: child.res, bytes: baked, forms: inner })
             st.formsBaked++
@@ -326,7 +831,7 @@ export function makeBaker(R: Walker): Baker {
       st.pages++
       return run(page, page.pc, page.pieces, ours, st, dropFree, null, { n: 0 }, () => false)
     },
-    bakeCrop(pageIndex, ours, st) {
+    bakeCrop(pageIndex, ours, st, within) {
       const page = readPage(pageIndex, true)
       if ('refused' in page) {
         st.refused++
@@ -338,7 +843,19 @@ export function makeBaker(R: Walker): Baker {
         lexedPage = pageIndex
       }
       const forms: BakedForm[] = []
-      const bytes = run(page, page.pc, page.pieces, ours, st, true, forms, { n: 0 }, holdsOf(page, ours))
+      const bytes = run(
+        page,
+        page.pc,
+        page.pieces,
+        ours,
+        st,
+        true,
+        forms,
+        { n: 0 },
+        holdsOf(page, ours),
+        within ?? null,
+        geoIn(I),
+      )
       return { bytes, forms }
     },
   }

@@ -641,3 +641,23 @@ These open the reader on the demo papers and need no TeX page. `pnpm build` firs
 
 The reader's checks that need the local TeX page (service faults, viewer faults, the live mode and its states) are
 parked with it: `parked/README.md`.
+
+### The PDF download's selection
+
+What a reader selects and copies in a file the PDF download makes (`docs/PDF-READER.md` §11.12), as macOS Preview selects
+it: a proof step for any change to the export's text, its crops or its fonts, run on the files before and after (macOS).
+
+| File | What it does |
+|---|---|
+| `lab/pdf/spikes/export-selection.swift` | PDFKit's own selection of a page: each selection line and character with its box, the page drawn by CoreGraphics with them over it (PNG), the page as drawn in grey (PGM), the JSON. `page` selects the page whole; `drag` a drag between two points, as a reader's. |
+| `lab/pdf/spikes/export-selection.py` | A side-by-side page's selection classed against its drawing: for each half, the characters with no ink under them, outside the text area, across both halves; the lines, their median height, and the pairs that overlap. |
+
+```
+swiftc -O -o <bin> lab/pdf/spikes/export-selection.swift
+<bin> page <file.pdf> <page> 100 <page.png> <page.json>
+python3 -I lab/pdf/spikes/export-selection.py <page.json> <page.json>.pgm
+```
+
+The translated half should hold no character with no ink under it but glyphs of a pixel or less at 100 dpi, and its lines
+overlap no more than the original half's do. The export's unit tests hold what poppler reads of a paragraph of two formulas
+(`packages/reader/tests/export/crop-own.test.ts`), and `pnpm e2e:reader` every word of both files' first page.
