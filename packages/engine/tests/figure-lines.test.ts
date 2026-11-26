@@ -816,6 +816,22 @@ describe('figure-lines: a path’s rows whose paragraphs a blank line ends, as t
     // (2610.37668v1's overlays, words of our own, two groups a blank line apart: no row goes on from the one above)
     expect(panel(['PSNR 29.49 dB', 'LPIPS 0.1086', null, 'FPS 69.7', 'SSIM 0.912'], 40)).toEqual([])
   })
+  it('reads no blank line off a step between rows of two faces: a heading set apart over its rows shows none', () => {
+    // (2608.17019v1 p3's box, words of our own: a bold heading a larger step over three statements at the leading, one of which
+    // goes on in lower case. The heading's step is a change of face, not the rows' blank line: the rows are read by the wrap
+    // test, which joins none of them in a box this wide)
+    const rows: [string, string, number][] = [
+      ['Changes made:', 'Arial-BoldMT', 0],
+      ['Restart level raised', T, 18],
+      ['safety latch held', T, 18 + 10],
+      ['Manual reset after use', T, 18 + 20],
+    ]
+    const { page, fig } = pageOf(rows.map(([text, font, d], li) => [{ text, font, x: 80, dy: 14 * li - d }]))
+    const g = page.glyphs as Glyph[]
+    const x1 = Math.max(...g.map((x) => x.x1)) + 40
+    fig.holds = [{ p: 1, b: 9, ks: fig.units.map((u) => u.k), shape: rect(75, 650, x1, 712) }]
+    expect(figureLinesOf([page], fig, () => false, null).filter((t) => t.ks.length > 1)).toEqual([])
+  })
   it('joins no rows of a script without letter case, a blank line shown or not: no break shows its text going on', () => {
     // (Hebrew words of our own, ragged, two paragraphs a blank line apart, and the same rows with no blank line: no row opens in
     // lower case and none ends in a hyphen, so no run shows running text, as before the blank line was read)

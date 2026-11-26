@@ -723,7 +723,7 @@ function linesOf(
       // box, items 1 to 4 each wrapped over its rows); whether a row opens one or not, the wrap rule joins the rows under it)
       const side = spread((l) => l.x0) <= tol ? 'l' : spread((l) => l.x1) <= tol ? 'r' : null
       if (!side || legend) continue
-      // (a blank line the rows show (lane fig-para, 2026-11-27): a step between two rows larger than the rows' own leading (their
+      // (a blank line the rows show (lane fig-para, 2026-11-27): a step between two rows of one face larger than the rows' own leading (their
       // smallest step, within the tolerance) and no push (at the leading their ink would have come no closer than the rows at
       // the leading do: a taller row set apart is no blank line) is how the path ends a paragraph, and the rows show where each
       // ends: a run of rows between two such steps, one under the other in one face, not each led by ink of its own, none opening
@@ -732,10 +732,16 @@ function linesOf(
       // run's rows or more end at that edge (a justified paragraph's last row, TeX's \parfillskip); in a ragged run neither a
       // short row nor a capital or a digit at a row's start ends one (2611.18114v1 p26: rows wrapped short of the box's measure,
       // the next row's first word able to stand on the row above). Rows that show no blank line: the wrap test below)
-      const steps = F.slice(1).map((b, k) => ({ pitch: F[k]!.y - b.y, clear: F[k]!.bottom - b.top }))
-      const lead = Math.min(...steps.map((s) => s.pitch))
-      const clear0 = Math.min(...steps.filter((s) => s.pitch <= lead + tol).map((s) => s.clear))
-      const blank = steps.map((s) => s.pitch > lead + tol && s.clear - (s.pitch - lead) >= clear0 - tol)
+      // (the steps read between two rows of one face alone: a step to a row of another face, a heading's over its rows, is a
+      // change of face, which ends a text by itself and tells no blank line: 2608.17019v1 p3's bold heading over its statements)
+      const steps = F.slice(1).map((b, k) => ({
+        pitch: F[k]!.y - b.y,
+        clear: F[k]!.bottom - b.top,
+        one: sameFace(F[k]!, b),
+      }))
+      const lead = Math.min(...steps.filter((s) => s.one).map((s) => s.pitch))
+      const clear0 = Math.min(...steps.filter((s) => s.one && s.pitch <= lead + tol).map((s) => s.clear))
+      const blank = steps.map((s) => s.one && s.pitch > lead + tol && s.clear - (s.pitch - lead) >= clear0 - tol)
       if (blank.some(Boolean)) {
         const runs: number[][] = [[0]]
         steps.forEach((_, k) => {
