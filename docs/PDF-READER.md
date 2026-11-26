@@ -1602,7 +1602,9 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
   own. Under the cap PDF.js draws no detail canvas and nothing changes. **The hand-over** is one task, once the new crops are
   cut: the base crops canvas cut away under their box (`clip-path`, the page's rectangle with the box as an even-odd hole,
   `holeOf`) and the new canvas put in the old one's place. Until then the base's crops show there, as the page view's own
-  canvas shows until PDF.js's detail canvas is drawn: no frame shows a crop twice, none, or one cut for another area. A detail
+  canvas shows until PDF.js's detail canvas is drawn: no frame shows a crop twice, none, or one cut for another area. A cut is
+  its overlay's while no later one is asked and its crops are not let go (`askDetail`): one that finishes after a zoom back
+  under the cap, or after a later cut, is dropped (the harness's zoom back found one put back, 1 run in 3). A detail
   canvas let go (the page whole in view, or under the cap again) lets its crops go and the base whole again; a zoom keeps them
   where they are of its scale, else lets them go in the task the base's crops are drawn again (`cropsAgain`); a kept page
   keeps them as they are, with the page view's detail canvas they match, their pixels counted in the budget. **The cost**
