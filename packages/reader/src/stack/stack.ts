@@ -373,6 +373,8 @@ export interface Stack {
   dispose(): void
 }
 
+/** what the stack reads of a page view's detail view (PDF.js's PDFPageDetailView): its state, its canvas once drawn, its draw */
+type DetailView = { renderingState: number; canvas?: HTMLCanvasElement | null; draw(): Promise<unknown> }
 /** drawing d's crops cut for its page view's detail canvas, standing over `area`, or let go (null): its overlay's `detail`
  *  (docs/PDF-READER.md §11.8); nothing where it has none */
 function detailCut(d: Drawing, n: number, area: DetailArea | null): Promise<void> | undefined {
@@ -1040,11 +1042,7 @@ export function createStack(o: StackOptions): Stack {
         pv.updateVisibleArea(whole ? null : ({ minX, minY, maxX, maxY } as never))
         // (no detail canvas now, the page in view whole or under the cap: the crops cut for one go with it)
         if (!pv.detailView && d.detailCrops) void detailCut(d, s.n, null)
-        const detail = pv.detailView as unknown as {
-          renderingState: number
-          canvas?: HTMLCanvasElement | null
-          draw(): Promise<unknown>
-        } | null
+        const detail = pv.detailView as unknown as DetailView | null
         if (detail && detail.renderingState === INITIAL) {
           const stands = () => s.shown === d && pv.detailView === (detail as never)
           const job: Job = {

@@ -216,6 +216,13 @@ const PAPER = /^((?:[a-z-]+(?:\.[A-Z]{2})?\/\d{7})|(?:\d{4}\.\d{4,5}))(?:v(\d+))
 const BAND_VARS = ['--axt-hl-color', '--axt-hl-mix'] as const
 /** how long a new reading place stands before its units are asked first (a scroll's pages passed over ask nothing) */
 const NEAR_MS = 150
+/** the probe's crops cut for a detail canvas: how many, and the last one's page, ms, pixels and its sources' pixels (§11.8) */
+const detailProbe = (c: Composer | null): Record<string, number> => ({
+  'detail.cuts': c?.details().length ?? 0,
+  ...Object.fromEntries(
+    Object.entries(c?.details().at(-1) ?? {}).map(([k, v]) => [`detail.${k}`, Math.round(v * 10) / 10]),
+  ),
+})
 
 export function openReader(
   root: HTMLElement,
@@ -1318,11 +1325,7 @@ export function openReader(
         clockDue: clock.due,
         laidPages: (composer?.probe().laidPages as number) ?? 0,
         lays: (composer?.probe().lays as number) ?? 0,
-        // (the crops cut for a detail canvas: how many, and the last one's page, ms, pixels and its sources' pixels: §11.8)
-        'detail.cuts': composer?.details().length ?? 0,
-        ...Object.fromEntries(
-          Object.entries(composer?.details().at(-1) ?? {}).map(([k, v]) => [`detail.${k}`, Math.round(v * 10) / 10]),
-        ),
+        ...detailProbe(composer),
         lit: highlight?.lit?.id ?? null,
         crashed,
         // (the moments, ms from the open; the open itself, ms from performance's origin, to place them on the page's clock)
