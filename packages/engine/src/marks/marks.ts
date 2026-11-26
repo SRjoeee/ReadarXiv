@@ -1649,6 +1649,7 @@ export function probeFactsOf(
   decorated: [string, string][]
   ends: string[]
   tails: { unit: number; piece: string }[]
+  joined: { unit: number; piece: string }[]
 } {
   const ink = inkSamples(units),
     leads = leadSamples(units, ink)
@@ -1657,7 +1658,73 @@ export function probeFactsOf(
     decorated: readInkDecorated(log, [...ink, ...leads], { quotes: true }),
     ends: readInkEnds(log, ink),
     tails: tailsSettingNothing(log, units),
+    joined: joinedPieces(readMarkProbe(log, aheadSamples(units), { proof: true }), units),
   }
+}
+/** whether piece k of a unit stands inside the unit's own marks, as patch writes them: from its head's end to its last text,
+ *  every piece of a unit marked whole (AUTHOR_WIDE) or of one with no text (no end mark). A look-ahead answer gives marks to a
+ *  piece inside alone (layoutMarking) */
+function insideMarks(u: Unit, whole: boolean): (k: number) => boolean {
+  const headAt = headEnd(u.pieces, 0),
+    lastAt = u.pieces.findLastIndex((p) => p.t === 'text' && /[^ \t\r\n]/.test(p.s))
+  return (k) => whole || lastAt < 0 || (k >= headAt && k <= lastAt)
+}
+/**
+ * The placeholders TeX answered no mark may stand before, by unit index and piece id: each one after a paper's macro, right after
+ * it or past white space alone (pairOf), inside its unit's marks, whose look-ahead pair (aheadSamples) TeX answered 2 — a mark
+ * between the two changes the box TeX sets, or the macro's list ends with a character the next one may kern or join with
+ * (aheadSection: `\\=A\\=T`, the A and the T kerned; a ligature's two letters set by two macros). The marking gives such a piece no
+ * mark of its own (layoutMarking: `reads`), so no point of TeX's parts its ink from the one before: the two are one ink, which
+ * the macro's opening point reads through to the text after them (marks/marks.ts followsOf `joined`, own/stream.ts ownedOf), and
+ * the piece itself sets nothing apart from it, stated empty (instrument.ts). No answer, or an error in a box (`x`), is no such
+ * statement: the piece stays as before
+ */
+export function joinedPieces(said: Switches, units: readonly Unit[]): { unit: number; piece: string }[] {
+  const front = frontMarks(units),
+    base = markUnits(units),
+    out: { unit: number; piece: string }[] = []
+  units.forEach((u, i) => {
+    const pieces = u?.pieces ?? []
+    if (!pieces.length) return
+    const lead = front(u) ? ROBUST_LEAD : ''
+    // (the unit's own marks as layoutMarking's `own` reads them: a cell's and a heading's are never whole)
+    const um = u.kind === 'cell' || u.kind === 'heading' ? null : (front(u) ?? base(u)),
+      inside = insideMarks(u, !!um?.whole)
+    for (let q = 0; q < pieces.length; q++) {
+      const pair = inside(q) ? pairOf(pieces, q) : null
+      if (pair && said[aheadKey(pair[0].src, pair[1], (pieces[q] as PhPiece).src, lead)] === '2')
+        out.push({ unit: i, piece: String(q) })
+    }
+  })
+  return out
+}
+/** of the joined placeholders (joinedPieces), those an opening point reads through (followsOf): each with no opening mark of its
+ *  own, after a paper's macro that has one, or after joined pieces after it, nothing but white space between. `names`, the
+ *  points TeX set */
+export function joinedRead(
+  units: readonly Unit[],
+  names: ReadonlySet<string>,
+  joined: Iterable<{ unit: number; piece: string }>,
+): { unit: number; piece: string }[] {
+  const joins = new Set([...joined].map((x) => `${x.unit}|${x.piece}`))
+  const marked = (i: number, k: number): boolean => {
+    const c = classOf(units[i]?.pieces[k])
+    return !!c && names.has(`${c === 'footnote' ? 'n' : 'p'}${i}.${k}a`)
+  }
+  const out: { unit: number; piece: string }[] = []
+  for (const key of joins) {
+    const [i, q] = key.split('|').map(Number) as [number, number]
+    const pieces = units[i]?.pieces ?? []
+    if (marked(i, q)) continue
+    let k = q - 1
+    for (;;) {
+      while (k >= 0 && pieces[k]!.t === 'text' && !/\S/.test(plainTranslated([pieces[k]!]))) k--
+      if (k >= 0 && joins.has(`${i}|${k}`) && !marked(i, k)) k--
+      else break
+    }
+    if (k >= 0 && marked(i, k)) out.push({ unit: i, piece: String(q) })
+  }
+  return out
 }
 /**
  * The pairs' tail arguments TeX sets nothing for, by unit index and piece id: those its tail sample answered 1, the call with
@@ -1942,9 +2009,15 @@ const TEX_ERROR = /^(?:! |[^\s:]+:\d+: |Missing character: There is no .* in fon
  * row (the probe stopped short of it), a row of another shape is no answer at all. layoutMarking sets
  * no mark where there is no answer. And per look-ahead pair (aheadSamples, by its rows `ahead`), its key (aheadKey) and its
  * one code: an error in the box let go or as the paper sets it no answer (`x`), in the one with the two openings or the one
- * asking what the list ends with 2, in the one with every mark at most 1
+ * asking what the list ends with 2, in the one with every mark at most 1. `proof`: the answers read as a statement of what TeX
+ * set (joinedPieces), where an error in the box with the two openings or the one asking what the list ends with answers nothing
+ * (`x`): the marking's 2 there is the safe side of no answer, not TeX's word that the two are joined
  */
-export function readMarkProbe(log: string | null | undefined, samples: readonly ProbeSample[]): Switches {
+export function readMarkProbe(
+  log: string | null | undefined,
+  samples: readonly ProbeSample[],
+  o: { proof?: boolean } = {},
+): Switches {
   const out: Switches = {},
     errored = new Map<string, Set<string>>(),
     listed = samples.filter((s) => !s.ahead),
@@ -1976,7 +2049,9 @@ export function readMarkProbe(log: string | null | undefined, samples: readonly 
         : bad.has('w') || bad.has('a')
           ? 'x'
           : bad.has('d') || bad.has('g')
-            ? '2'
+            ? o.proof
+              ? 'x'
+              : '2'
             : code === '2'
               ? '2'
               : '1'
@@ -3366,9 +3441,7 @@ export function layoutMarking(
     // keywords, `Radio astronomy\axtend{38e} \sep \src`) is no piece of the unit's ink, and its opening point there read the
     // whole line)
     const um = own(u),
-      headAt = headEnd(u.pieces, 0),
-      lastAt = u.pieces.findLastIndex((p) => p.t === 'text' && /[^ \t\r\n]/.test(p.s)),
-      inside = (k: number): boolean => !!um?.whole || lastAt < 0 || (k >= headAt && k <= lastAt)
+      inside = insideMarks(u, !!um?.whole)
     // (a piece that sets ink between the texts of a front unit — a name's mark in a unit of several names, `Ann Lee\\inst{1},
     // Bob Ray` — gets its closing mark before the next name's text where TeX's probe answered, for that call as it stands and
     // what follows it, that the mark changes nothing (frontSaid, probeSamples' `front`): a macro that reads what follows it,
@@ -3793,7 +3866,9 @@ const cellEndOf = (u: Unit | undefined, i: number): string[] => (u?.kind === 'ce
  * What the marking says of each piece with an opening mark, for its own ink (own/stream.ts Follow): by its opening
  * mark's name, whether it has a closing mark (`names`: the destinations set and those dropped), the first WANT
  * characters of the text after it in its unit up to the next visible piece (and, `rest`, the whole of it as the spell check
- * reads one: own/stream.ts spellOf), its unit's next marks (a cell's end point among them: where TeX ends what a piece of a cell
+ * reads one: own/stream.ts spellOf) — past the placeholders TeX joined to it (`joined`: joinedPieces, unit index and piece id,
+ * each with no mark of its own, right after it or after one of them, nothing but white space between: their ink is its own, so
+ * what follows them is the text after it) —, its unit's next marks (a cell's end point among them: where TeX ends what a piece of a cell
  * stands in, LAYOUT_TEX's template end, so that a cell's piece with its opening mark alone ends there), and whether a visible
  * piece with no mark follows it with no text between. A display's group (`group`): the displays right after it, with
  * nothing visible between, that have no opening mark (TeX sets none on the empty list it resumes the paragraph with
@@ -3819,7 +3894,9 @@ export function followsOf(
   names: ReadonlySet<string>,
   texts: readonly string[] | ReadonlyMap<string, string> | null = null,
   inkless: Iterable<string> | null = null,
+  joined: Iterable<{ unit: number; piece: string }> | null = null,
 ): (name: string) => Follow | null {
+  const joins = new Set([...(joined ?? [])].map((x) => `${x.unit}|${x.piece}`))
   const shown: ReadonlyMap<string | undefined, string> | null =
     texts instanceof Map
       ? texts
@@ -3859,6 +3936,13 @@ export function followsOf(
       group: string[] = []
     let after = '',
       q = k + 1
+    // (the placeholders TeX joined to it, nothing but white space before each: its own ink, read through)
+    let r = q
+    while (r < u.pieces.length && u.pieces[r]!.t === 'text' && !/\S/.test(plainTranslated([u.pieces[r]!]))) r++
+    while (r < u.pieces.length && joins.has(`${i}|${r}`) && !names.has(`${nameOf(i, r)}a`)) {
+      q = ++r
+      while (r < u.pieces.length && u.pieces[r]!.t === 'text' && !/\S/.test(plainTranslated([u.pieces[r]!]))) r++
+    }
     for (;;) {
       // biome-ignore lint/suspicious/noAssignInExpressions: each piece's text read once, as the loop's test (the module's own form)
       for (let t: string | null; q < u.pieces.length && (t = shownAt(i, q, after)) !== null; q++) after += t

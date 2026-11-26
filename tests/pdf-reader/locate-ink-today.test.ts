@@ -113,7 +113,9 @@ describe('today’s ink makers in the engine package', () => {
     type Fig = typeof copy.fig & { met?: unknown; holds?: unknown; stats?: Record<string, number> }
     const { met: _met, holds: _holds, ...figCopy } = copy.fig as Fig
     const { boxed: _boxed, interior: _interior, ...stats } = (figCopy as Fig).stats ?? {}
-    expect({ ...copy, fig: { ...figCopy, stats }, ink: copy.ink.map(bare) }).toEqual(today)
+    // (and each ledger line's TeX line, `tex`, the glyph range its scripts are read against: ledger.ts texLinesOf)
+    const lines = (copy.lines as { tex?: unknown }[]).map(({ tex: _tex, ...l }) => l)
+    expect({ ...copy, fig: { ...figCopy, stats }, lines, ink: copy.ink.map(bare) }).toEqual(today)
     for (const u of copy.ink) {
       const runs = runsOf(u) ?? []
       expect(runs.flatMap(([, gs]) => gs)).toEqual((u as unknown as { glyphs: Glyphs }).glyphs.ph)

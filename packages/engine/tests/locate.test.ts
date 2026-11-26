@@ -521,8 +521,10 @@ describe('locate', () => {
     expect(trailOf(L2b)).toEqual([['19104,', 1, 3.6]])
     expect(L2b.members[0]!.tail?.map(([t]) => t)).toEqual([','])
     // (what stays as before: a word after the gap on the line (amsart's "AND", an "and" a class sets: text, an ink unit's,
-    // translated; acmart's reference format, "Ru Huang. 2027. ABNAT": the paragraph's text going on), and the marks of no letter
-    // before it with it; the next unit's own label; a member of no author block; a mark on another line)
+    // translated; acmart's reference format, "Ru Huang. 2027. ABNAT": the paragraph's text going on); the next unit's own label;
+    // a member of no author block; a mark on another line. CHANGED: a mark TeX set as a script of the line (smaller than its
+    // text and off its baseline) before that word is the name's trail, the word alone left to the ink units: REVTeX's
+    // "Ni Xiang¹ and Yuni Xiong"; before, "1 and" went to the translator as one text and came back flat at the mark's size)
     const andDoc = docOf([
       {
         lines: [
@@ -540,7 +542,24 @@ describe('locate', () => {
     ])
     const units3 = [unitOf('author', 'Ni Xiang'), unitOf('author', 'Yuni Xiong')]
     const L3 = locate(instrumentOf(andDoc, units3, [[0, -1, -1, 1]]), andDoc, align(andDoc, andDoc))
-    expect(trailOf(L3)).toEqual([])
+    expect(trailOf(L3)).toEqual([['1', 1, 3.6]])
+    // (the same mark set on the baseline at the text's size, no script: text going on with the word, as before)
+    const flat = docOf([
+      {
+        lines: [
+          { text: 'Ni Xiang', x: 72, y: 700 },
+          { text: '1', x: 72 + 8 * 6 + 3.6, y: 700 },
+          { text: 'and', x: 72 + 9 * 6 + 2 * 3.6, y: 700 },
+          { text: 'Yuni Xiong', x: 72 + 12 * 6 + 3 * 3.6, y: 700 },
+        ],
+        points: [
+          ['0s', 0],
+          ['0e', 8],
+          ['1s', 12],
+        ],
+      },
+    ])
+    expect(trailOf(locate(instrumentOf(flat, units3, [[0, -1, -1, 1]]), flat, align(flat, flat)))).toEqual([])
     // (a separator glued to the name, then the word: the glued one its trail, glued, as before)
     const glued = docOf([
       {

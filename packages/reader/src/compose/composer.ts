@@ -57,7 +57,6 @@ import {
   cropsFor,
   cropsFree,
   detailAway,
-  detailBoxOf,
   detailCropsFor,
   detailKept,
   detailPixels,
@@ -124,6 +123,9 @@ export interface ComposerEvents {
   laid: { n: number; page: Page | null }
   /** the first page laid of a layer and target */
   first: { n: number }
+  /** page n settled as the original's (a failure, a stall, the rule: no part, nothing of its own hidden), told no `laid` where
+   *  nothing of it was committed: what the reader counts as held reads the page then (page(n)) */
+  settled: { n: number }
 }
 
 export interface Composer {
@@ -427,6 +429,7 @@ export function createComposer(o: ComposerOptions): Composer {
     marks.unmark(n)
     if (stack.near(n)) o.aheadGo?.()
     stack.refresh(n)
+    tell('settled', { n })
   }
 
   /** the overlay of a committed page over its page view: made in the drawing's turn, before the swap */
@@ -515,8 +518,9 @@ export function createComposer(o: ComposerOptions): Composer {
       return false
     }
     const was = el.querySelector<HTMLCanvasElement>(':scope > canvas.axt-crops-detail')
-    const box = next && detailBoxOf(next)
-    base.style.clipPath = box ? holeOf(box, at.viewport) : ''
+    // (the base cut away under the whole area, not the box of the detail's places: every crop whose place meets the area is the
+    // detail's, and the base's copy of one, cut on its coarser grid, spreads past that box)
+    base.style.clipPath = next ? holeOf(area, at.viewport) : ''
     if (next) {
       if (was) was.replaceWith(next)
       else base.after(next)

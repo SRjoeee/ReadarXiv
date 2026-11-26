@@ -44,6 +44,7 @@ import {
   followsOf,
   headEnd,
   INK_ANY,
+  joinedRead,
   leadStep,
   probeFactsOf,
   readColours,
@@ -2290,7 +2291,9 @@ export async function instrumentOf({
   const told = textsOf(options.told)
   const endSamples = new Set(probe?.ends ?? [])
   const names = new Set(pages.flatMap((pg) => pg.points.map((x) => x.name)))
-  const follows = followsOf(units, names, shown, inkless)
+  // (the placeholders TeX joined to the macro before them, marks/marks.ts joinedPieces: read through as that macro's ink)
+  const joined = probe ? joinedRead(units, names, probe.joined) : []
+  const follows = followsOf(units, names, shown, inkless, joined)
   const own = ownOf(pages, {
     units,
     follows,
@@ -2544,7 +2547,9 @@ export async function instrumentOf({
   // (and the pairs' tail arguments TeX's tail samples answered set nothing: probeFactsOf's `tails`, marks.ts tailsSettingNothing)
   const empty = inklessPieces(units, { classes: classesBy, inkless })
   const stated = new Set(empty.map((x) => `${x.unit}|${x.piece}`))
-  for (const x of probe?.tails ?? [])
+  // (and the placeholders TeX joined to the macro before them, marks.ts joinedPieces: their ink is that macro's, read through by
+  // its opening point, and they set nothing apart from it)
+  for (const x of [...(probe?.tails ?? []), ...joined])
     if (!stated.has(`${x.unit}|${x.piece}`)) {
       empty.push(x)
       stated.add(`${x.unit}|${x.piece}`)

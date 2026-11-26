@@ -588,8 +588,9 @@ const detailBoxes = new WeakMap<HTMLCanvasElement, DetailArea>()
 /** a detail crops' canvas's box (detailCropsFor's), where its crops are drawn */
 export const detailBoxOf = (c: HTMLCanvasElement): DetailArea | undefined => detailBoxes.get(c)
 
-/** the page's crops cut away under a detail crops' box (a clip-path of the frame less the box: the detail's own crops drawn
- *  there), so that a crop is never drawn twice, its base's softer edge under the detail's */
+/** the page's crops cut away under a detail's area (a clip-path of the frame less the area, in the shares PDF.js stands its
+ *  detail canvas by): every crop whose place meets the area is the detail's own drawing, so that none is drawn twice, and the
+ *  base's coarser copy of one, spreading past the detail's box, never shows round it */
 export function holeOf(area: DetailArea, vp: Pick<PageViewport, 'width' | 'height'>): string {
   const l = (area.left * 100) / vp.width,
     t = (area.top * 100) / vp.height,
