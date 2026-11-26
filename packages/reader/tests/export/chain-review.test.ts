@@ -80,17 +80,17 @@ const decoded = (X: ReturnType<typeof openObjects>, v: unknown) =>
   latin1(L.decodePDFRawStream(look(X, v) as PdfRawStream).decode())
 
 /** the plain document: a page of Helvetica text, its first word wrapped by the add-on in group 7 (axt:1.1.t) */
-const plain = (o: { pageExtra?: string; pagesExtra?: string } = {}) =>
+const plain = (o: { pageExtra?: string; pagesExtra?: string; catalogExtra?: string } = {}) =>
   composedOf(
     [
-      '<< /Type /Catalog /Pages 2 0 R >>',
+      `<< /Type /Catalog /Pages 2 0 R ${o.catalogExtra ?? ''} >>`,
       `<< /Type /Pages /Kids [3 0 R] /Count 1 ${o.pagesExtra ?? ''} >>`,
       `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] ${o.pageExtra ?? ''} /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>`,
       { dict: '', data: 'BT /F1 10 Tf 72 700 Td (Hello) Tj ( World) Tj ET' },
       F1,
     ],
     {
-      1: '<< /Type /Catalog /Pages 2 0 R /OCProperties << /OCGs [7 0 R] /D << /BaseState /ON /ON [7 0 R] >> >> >>',
+      1: `<< /Type /Catalog /Pages 2 0 R ${o.catalogExtra ?? ''} /OCProperties << /OCGs [7 0 R] /D << /BaseState /ON /ON [7 0 R] >> >> >>`,
       3: `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] ${o.pageExtra ?? ''} /Resources << /Font << /F1 5 0 R >> /Properties << /G0 7 0 R >> >> /Contents 6 0 R >>`,
       6: { dict: '', data: 'BT /F1 10 Tf 72 700 Td /OC /G0 BDC (Hello) Tj EMC ( World) Tj ET' },
       7: '<< /Type /OCG /Name (axt:1.1.t) >>',
@@ -118,6 +118,35 @@ describe('what the paper says is written as PDF strings and names, never as PDF 
     const a = await annotOf(JSON.stringify([{ num: 3, gen: 0 }, { name: 'XY Z' }, null, ') /JS (x', 700]))
     expect(a.get(N('Dest'))?.toString()).toBe('[ 3 0 R /XY#20Z null null 700 ]')
   })
+})
+
+describe('a named destination is written in the encoding PDF.js reads back as its name (#685: 4704253033)', () => {
+  // (the name tree's keys: PDFDocEncoding's 0x84, an em dash; its 0xA0, the euro sign; UTF-16BE with its BOM for a CJK name and
+  // for a no-break space, which PDFDocEncoding has no byte for. Sorted by their bytes, as a name tree keeps its keys)
+  const names: [string, string][] = [
+    ['(a\\204b)', 'a—b'],
+    ['(x\\240y)', 'x€y'],
+    ['<FEFF007800A00079>', 'x y'],
+    ['<FEFF4E2D6587>', '中文'],
+  ]
+  const tree = `/Names << /Dests << /Names [${names.map(([k]) => `${k} [3 0 R /Fit]`).join(' ')}] >> >>`
+  for (const form of ['translation', 'side-by-side'] as const)
+    it(`each link of the ${form} file resolves through PDF.js to the page its name names`, async () => {
+      const links: Page['links'] = names.map(([, name], i) => [
+        [72, 600 + 20 * i, 100, 610 + 20 * i],
+        { dest: JSON.stringify(name) },
+      ])
+      const { file } = await made(plain({ catalogExtra: tree }), laid([run('文')], links), form)
+      const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
+      const task = pdfjs.getDocument({ data: file.slice() })
+      const doc = await task.promise
+      const annots = (await (await doc.getPage(1)).getAnnotations()).filter((a) => a.subtype === 'Link' && a.dest)
+      const got = await Promise.all(
+        annots.map(async (a) => [a.dest, ((await doc.getDestination(a.dest as string)) ?? [null])[1]?.name ?? null]),
+      )
+      await task.destroy()
+      expect(got.sort()).toEqual(names.map(([, name]) => [name, 'Fit']).sort())
+    })
 })
 
 describe("the left half of a side-by-side page is arXiv's own drawing (#685: 4703877261, 4703881297)", () => {
@@ -253,4 +282,65 @@ describe("a formula's crop is drawn between the words it stands among (#685: 470
       z = text.indexOf('<0514>')
     expect(a >= 0 && b > a && z > b).toBe(true)
   })
+})
+
+describe('a turned page set side by side in its upright frame (#685: 4704125905)', () => {
+  // (the paper's own link on the page, a URI; the reader's laid link, a destination)
+  const own =
+    '/Annots [<< /Type /Annot /Subtype /Link /Rect [72 600 100 620] /Border [0 0 0] /A << /S /URI /URI (https://example.org/) >> >>]'
+  const turned = (rotate: number) => plain({ pageExtra: `/Rotate ${rotate} ${own}` })
+  const view = async (file: Uint8Array) => {
+    const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
+    const task = pdfjs.getDocument({ data: file.slice() })
+    const page = await (await task.promise).getPage(1)
+    const vp = page.getViewport({ scale: 1 })
+    const words = (await page.getTextContent()).items
+      .filter((i) => 'str' in i && i.str.includes('World'))
+      // (where the word ends: the item that holds it begins at Hello in a copy that draws it, after it in one that bakes it out)
+      .map((i) => {
+        const t = i as { transform: number[]; width: number }
+        return vp.convertToViewportPoint(t.transform[4]! + t.width, t.transform[5]!)
+      })
+      .sort((a, b) => a[0]! - b[0]!)
+    const annots = (await page.getAnnotations())
+      .filter((a) => a.subtype === 'Link')
+      .map((a) => {
+        const r = a.rect as number[]
+        const [x0] = vp.convertToViewportPoint(r[0]!, r[1]!)
+        const [x1] = vp.convertToViewportPoint(r[2]!, r[3]!)
+        return [
+          a.url ? 'own' : 'laid',
+          Math.min(x0!, x1!) >= vp.width / 2 ? 'right' : Math.max(x0!, x1!) <= vp.width / 2 ? 'left' : 'across',
+        ] as const
+      })
+      .sort()
+    await task.destroy()
+    return { size: [vp.width, vp.height], words, annots }
+  }
+  for (const rotate of [0, 90, 180, 270])
+    for (const laidPage of [true, false])
+      it(`/Rotate ${rotate}, ${laidPage ? 'a laid page' : 'a page with nothing laid'}: twice as wide as it shows, the original on the left`, async () => {
+        const [w, h] = rotate % 180 ? [792, 612] : [612, 792]
+        const page = laidPage
+          ? laid([run('文')], [[[72, 690, 100, 710], { dest: JSON.stringify('x') }]])
+          : { ...laid([]), members: [] }
+        const { file } = await made(turned(rotate), page, 'side-by-side')
+        const v = await view(file)
+        expect(v.size).toEqual([2 * w, h])
+        // (the same word of each copy: one page's width apart, on one line)
+        expect(v.words).toHaveLength(2)
+        expect(v.words[1]![0]! - v.words[0]![0]!).toBeCloseTo(w, 2)
+        expect(v.words[1]![1]!).toBeCloseTo(v.words[0]![1]!, 2)
+        expect(v.annots).toEqual(
+          laidPage
+            ? [
+                ['laid', 'right'],
+                ['own', 'left'],
+              ]
+            : [
+                ['own', 'left'],
+                ['own', 'right'],
+              ],
+        )
+      })
 })

@@ -31,12 +31,13 @@ export function offsetsOf(measure: Measure, face: string, text: string): number[
   return out
 }
 
-/** the browser's measure: a canvas's, the run's font string with its small capitals dropped (the class draws a face's own) */
+/** the browser's measure: a canvas's, in the font string given (its small capitals the caller's: run.ts glyphsFor asks them
+ *  only of a face that has its own, where the canvas sets the face's smcp glyphs as the class draws them) */
 export function canvasMeasure(): Measure {
   let ctx: CanvasRenderingContext2D | null = null
   return (font, text) => {
     ctx ??= document.createElement('canvas').getContext('2d') as CanvasRenderingContext2D
-    ctx.font = font.replace(/^(italic )?small-caps /, '$1')
+    ctx.font = font
     ctx.fontKerning = 'normal'
     return ctx.measureText(text).width
   }

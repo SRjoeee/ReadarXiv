@@ -3,7 +3,7 @@
 // engine's walk (each show's codes and text state as the remover reads them): a show becomes the advance it made, a painted
 // path and an image go, a clip stays a clip, our own marks go. A document of our own (pdf-build.ts).
 import * as PL from '@cantoo/pdf-lib'
-import { openRemover, type PdfLib } from '@readarxiv/engine'
+import { openObjects, openRemover, openWalker, type PdfLib } from '@readarxiv/engine'
 import { describe, expect, it } from 'vitest'
 import { type BakeStats, makeBaker, newBakeStats } from '../../src/export/bake.ts'
 import { latin1, pdf } from './pdf-build.ts'
@@ -76,5 +76,26 @@ describe('the bake', () => {
     expect(s).toContain('(Kept) Tj')
     expect(s).not.toContain('( World) Tj')
     expect(s).not.toContain('(Hello)')
+  })
+})
+
+describe("the bake reads the page through the export's own objects, nothing of the document loaded whole (round 3, memory)", () => {
+  it('bakes the same bytes over openObjects as over the loaded document, with an object layer that cannot load one', async () => {
+    const [over] = await baked(offG0)
+    // (an object layer whose whole-document load throws: the walk must not ask it)
+    const NoLoad = {
+      ...(PL as unknown as PdfLib),
+      PDFDocument: {
+        load: () => {
+          throw new Error('the whole document loaded')
+        },
+      },
+    } as unknown as PdfLib
+    const X = openObjects(doc(), { PL: NoLoad, objectsMax: 1e5, decodedMax: 1 << 24 })
+    const W = openWalker(X, { PL: NoLoad })
+    const st = newBakeStats()
+    const out = makeBaker(W).bake(0, offG0, st)
+    expect(out && latin1(out)).toBe(over)
+    expect(W.numPages).toBe(1)
   })
 })

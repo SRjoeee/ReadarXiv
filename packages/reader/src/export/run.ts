@@ -4,13 +4,14 @@
 // drawn in fetched (the browser's cache holds those the page drew) and decoded by the reader's PDF.js; the object layer loaded
 // (@cantoo/pdf-lib, the host's, as PDF.js is); then the file (chain.ts). Its share told as it goes: the bytes to 45 %, the
 // pages to 75 %, the fonts to 85 %, the file the rest.
+import { SMCP } from '@readarxiv/text'
 import type { Page } from '../compose/page.ts'
 import type { Composer } from '../compose/composer.ts'
 import type { Served } from '../compose/served.ts'
 import { type ExportForm, exportPdf, ExportRefusal, type Glyphs } from './chain.ts'
 import type { SfntFont } from './fonts.ts'
 import { fontsByPdfJs, type PdfJsLike } from './index.ts'
-import { canvasMeasure, offsetsOf } from './measure.ts'
+import { canvasMeasure, type Measure, offsetsOf } from './measure.ts'
 
 export interface ReaderHandles {
   fetch: (url: string, init?: RequestInit) => Promise<Response>
@@ -88,6 +89,53 @@ export async function readComposed(
   return composed
 }
 
+/** the faces whose small capitals are their own, by their file's smcp feature (@readarxiv/text SMCP) */
+const OWN_CAPS: ReadonlySet<string> = new Set(SMCP)
+const CAPS = /^(italic )?small-caps /
+
+/**
+ * How a run's characters are drawn: each one's slice and its glyph there — the face's own small capital where the run asks
+ * small capitals and the slice's face has its own (the reader's class draws a run so: font-variant-caps over the face's smcp,
+ * font-synthesis none) — and where each stands, as the browser sets the run: a run that asks small capitals cut where the
+ * face that holds a character turns from one with its own small capitals to one with none, each piece measured alone, in
+ * small capitals or in lower case as its face draws it (the reader's measure, compose/served.ts partsOf); any other run
+ * measured whole (measure.ts offsetsOf).
+ */
+export function glyphsFor(
+  served: { sliceOf(font: string, cp: number): { path: string; face: string } | null },
+  fonts: ReadonlyMap<string, SfntFont | null>,
+  measure: Measure,
+): Glyphs {
+  const ownAt = (face: string, cp: number) => OWN_CAPS.has(served.sliceOf(face, cp)?.face ?? '')
+  return {
+    glyph(face, cp) {
+      const s = served.sliceOf(face, cp)
+      const font = s ? fonts.get(s.path) : null
+      const gid = font?.cmap.get(cp)
+      if (!font || !gid) return null
+      return { font, gid: CAPS.test(face) && OWN_CAPS.has(s?.face ?? '') ? (font.smcp.get(gid) ?? gid) : gid }
+    },
+    offsets(face, text) {
+      if (!CAPS.test(face)) return offsetsOf(measure, face, text)
+      const plain = face.replace(CAPS, '$1')
+      const out: number[] = []
+      let start = 0
+      for (let i = 0; i < text.length; ) {
+        const own = ownAt(face, text.codePointAt(i) as number)
+        let j = i
+        while (j < text.length && ownAt(face, text.codePointAt(j) as number) === own)
+          j += (text.codePointAt(j) as number) > 0xffff ? 2 : 1
+        const piece = text.slice(i, j)
+        const font = own ? face : plain
+        for (const x of offsetsOf(measure, font, piece)) out.push(start + x)
+        start += measure(font, piece)
+        i = j
+      }
+      return out
+    },
+  }
+}
+
 /** the Latin ligatures a face may hold at their compatibility code points, which the chain draws for their letters */
 const LIGATURES = [0xfb00, 0xfb01, 0xfb02, 0xfb03, 0xfb04]
 
@@ -148,17 +196,7 @@ export async function exportFromReader(
   const fonts: Map<string, SfntFont | null> = await fontsByPdfJs(files, h.pdfjs)
   if (signal.aborted) throw aborted()
   share(0.75, 0.85)(1)
-  // ---- how a run's characters are drawn: the slice of each, its glyph; where each stands, as the browser sets the run
-  const measure = canvasMeasure()
-  const glyphs: Glyphs = {
-    glyph(face, cp) {
-      const s = h.served.sliceOf(face, cp)
-      const font = s ? fonts.get(s.path) : null
-      const gid = font?.cmap.get(cp)
-      return font && gid ? { font, gid } : null
-    },
-    offsets: (face, text) => offsetsOf(measure, face, text),
-  }
+  const glyphs = glyphsFor(h.served, fonts, canvasMeasure())
   // ---- the file
   const PL = await h.pdfLib()
   const fileShare = share(0.85, 1)

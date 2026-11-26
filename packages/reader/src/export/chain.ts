@@ -16,7 +16,7 @@
 import {
   appendSection,
   openObjects,
-  openRemover,
+  openWalker,
   type PdfArray,
   type PdfDict,
   type PdfLib,
@@ -90,8 +90,6 @@ export interface ExportStats {
   /** fonts of TrueType outlines (CIDFontType2) */
   fontsTrueType: number
   fontBytes: number
-  /** pages whose walk does not name the object layer's page (left unbaked) */
-  pagesUnwalked: number
   bake: BakeStats
   cropBake: BakeStats
   cropForms: number
@@ -117,9 +115,34 @@ const f2 = (v: number) => {
   const r = Math.round(v * 1000) / 1000
   return Object.is(r, -0) ? '0' : String(r)
 }
-/** the bytes of a text from the paper as PDF writes a string's or a name's: Latin-1 where every character is, else UTF-8 */
-const bytesOf = (s: string): number[] =>
-  [...s].every((c) => c.charCodeAt(0) <= 0xff) ? [...s].map((c) => c.charCodeAt(0)) : [...new TextEncoder().encode(s)]
+/** PDFDocEncoding's bytes whose characters are not their own code (ISO 32000-1 Annex D.2, as PDF.js's stringToPDFString
+ *  reads them): 0x18 to 0x1F, 0x80 to 0x9E, 0xA0; 0x7F, 0x9F and 0xAD are their own */
+const PDF_DOC: Readonly<Record<number, number>> = Object.fromEntries(
+  [
+    [0x18, [0x2d8, 0x2c7, 0x2c6, 0x2d9, 0x2dd, 0x2db, 0x2da, 0x2dc]],
+    [
+      0x80,
+      [
+        0x2022, 0x2020, 0x2021, 0x2026, 0x2014, 0x2013, 0x192, 0x2044, 0x2039, 0x203a, 0x2212, 0x2030, 0x201e, 0x201c,
+        0x201d, 0x2018, 0x2019, 0x201a, 0x2122, 0xfb01, 0xfb02, 0x141, 0x152, 0x160, 0x178, 0x17d, 0x131, 0x142, 0x153,
+        0x161, 0x17e,
+      ],
+    ],
+    [0xa0, [0x20ac]],
+  ].flatMap(([at, cps]) => (cps as number[]).map((cp, i) => [cp, (at as number) + i])),
+)
+const pdfDocByte = (cp: number): number | null =>
+  PDF_DOC[cp] ?? (cp <= 0xff && !(cp >= 0x18 && cp <= 0x1f) && !(cp >= 0x80 && cp <= 0x9e) && cp !== 0xa0 ? cp : null)
+/** the bytes of a text from the paper as PDF writes a string's or a name's, in the encoding a reader decodes back to it:
+ *  PDFDocEncoding where every character has a byte there, else UTF-16BE with its byte order mark (ISO 32000-1 §7.9.2.2). A
+ *  PDFDocEncoding text that would open as a byte order mark (þÿ, ÿþ, ï»¿) is UTF-16BE too: a reader would decode it as one */
+const bytesOf = (s: string): number[] => {
+  const doc = [...s].map((c) => pdfDocByte(c.codePointAt(0) as number))
+  if (doc.every((b) => b !== null) && !/^(\u00fe\u00ff|\u00ff\u00fe|\u00ef\u00bb\u00bf)/.test(s)) return doc as number[]
+  const out = [0xfe, 0xff]
+  for (let i = 0; i < s.length; i++) out.push(s.charCodeAt(i) >> 8, s.charCodeAt(i) & 255)
+  return out
+}
 /** a PDF literal string of `s`: its bytes, a parenthesis and the backslash escaped, any byte outside ' ' to '~' by its octal
  *  code (ISO 32000-1 §7.3.4.2) — text of the paper's never written as PDF syntax */
 const pdfStr = (s: string) =>
@@ -173,8 +196,8 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
   const bound = { PL, objectsMax: 5_000_000, decodedMax: 1 << 30 }
   const X = openObjects(composed, bound)
   const XO = openObjects(composed.subarray(0, seam), bound)
-  const R = await openRemover(composed, { PL })
-  const baker = makeBaker(R)
+  // (the walk reads the composed document through X, as the file does: nothing of it loaded whole, engine openWalker)
+  const baker = makeBaker(openWalker(X, { PL }))
   lap('objects')
   const { PDFRef, PDFDict, PDFArray, PDFName, PDFNumber, PDFRawStream } = PL
   const N = (n: string) => PDFName.of(n)
@@ -206,8 +229,6 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
   const pages = X.pages()
   const opages = XO.pages()
   if (pages.length !== opages.length) throw new Error(`pages: composed ${pages.length}, original ${opages.length}`)
-  // (the walk's pages are the object layer's own: each page's number checked, a page the two read apart left unbaked)
-  const walkRefs = (R.doc.getPages() as { ref: PdfRef }[]).map((p) => p.ref.objectNumber)
 
   // ---- the groups: each optional content group of ours by its name. Ours are those the add-on brought: a group the paper's
   // own catalog lists is the paper's, whatever its name, and stays as the paper set it
@@ -261,7 +282,6 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
     fontBytesWhole: 0,
     fontsTrueType: 0,
     fontBytes: 0,
-    pagesUnwalked: 0,
     bake: newBakeStats(),
     cropBake: newBakeStats(),
     cropForms: 0,
@@ -298,11 +318,6 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
       const nm = r ? groupName.get(lit(r)) : undefined
       return nm === undefined ? null : isOff(nm)
     }
-  }
-  const walked = (i: number) => {
-    const ok = walkRefs[i] === pages[i]!.ref.objectNumber
-    if (!ok) stats.pagesUnwalked++
-    return ok
   }
 
   // ---- arXiv's own objects, for the left half of a side-by-side page. The add-on writes some of them again under their numbers
@@ -430,15 +445,14 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
     const had = cropForms.get(key)
     if (had) return had
     const want = new Set([`axt:${ord}.${i + 1}.e`, `axt:${ord}.${i + 1}.l`])
-    const kept =
-      [...want].some((g) => groupRef.has(g)) && walked(i)
-        ? baker.bake(
-            i,
-            oursFor(i, (nm) => !want.has(nm)),
-            stats.cropBake,
-            true,
-          )
-        : null
+    const kept = [...want].some((g) => groupRef.has(g))
+      ? baker.bake(
+          i,
+          oursFor(i, (nm) => !want.has(nm)),
+          stats.cropBake,
+          true,
+        )
+      : null
     if (!kept) {
       const f = await originalForm(i)
       cropForms.set(key, f)
@@ -460,8 +474,8 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
   }
 
   const destsByName = !!dictOf(dictOf(root.get(N('Names')))?.get(N('Dests')))
-  /** a link's annotation, its box moved by dx */
-  const linkBody = (l: Page['links'][number], dx: number): string => {
+  /** a link's annotation, its box moved by (dx, dy) */
+  const linkBody = (l: Page['links'][number], dx: number, dy = 0): string => {
     const [b, to, , border] = l
     let target: string
     if ('url' in to) target = `/A << /S /URI /URI ${pdfStr(encodeURI(to.url).replace(/%25/g, '%'))} >>`
@@ -488,7 +502,7 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
     const bd = border
       ? ` /C [${[16, 8, 0].map((s) => f2(((border[1] >> s) & 255) / 255)).join(' ')}] /BS << /W ${f2(border[0])}${border[2] === 'dashed' ? ' /S /D' : border[2] === 'underline' ? ' /S /U' : ''} >>`
       : ' /Border [0 0 0]'
-    return `<< /Type /Annot /Subtype /Link /Rect [${f2(b[0] + dx)} ${f2(b[1])} ${f2(b[2] + dx)} ${f2(b[3])}]${bd} ${target} >>`
+    return `<< /Type /Annot /Subtype /Link /Rect [${f2(b[0] + dx)} ${f2(b[1] + dy)} ${f2(b[2] + dx)} ${f2(b[3] + dy)}]${bd} ${target} >>`
   }
 
   /** a laid page's drawing: its runs as text, its crops as the original's ink, the fonts and forms it names */
@@ -629,7 +643,45 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
       (look(dictOf(r)?.get(N('Subtype')))?.toString() === '/Link' ? links : others).push(r)
     return { others, links }
   }
-  /** a side-by-side page: its box twice as wide, the left form and the right form, their annotations */
+  /** an annotation of the page copied as an object of ours, its box (and its quadrilaterals) moved by (dx, dy) */
+  const movedAnnot = (r: PdfObject, dx: number, dy: number): string | null => {
+    const d = dictOf(r)
+    if (!d) return null
+    const at = (k: string) => nums(d.get(N(k)))
+    const rect = at('Rect') ?? [0, 0, 0, 0]
+    const quads = at('QuadPoints')
+    const an = take()
+    const rest = d
+      .entries()
+      .filter(([k]) => !['/Rect', '/P', '/QuadPoints'].includes(k.toString()))
+      .map(([k, v]) => ` ${k.toString()} ${lit(v)}`)
+      .join('')
+    const q = quads ? ` /QuadPoints [${quads.map((v, k) => f2(v + (k % 2 ? dy : dx))).join(' ')}]` : ''
+    objs.push([
+      an,
+      objText(
+        an,
+        `<<${rest} /Rect [${f2(rect[0]! + dx)} ${f2(rect[1]! + dy)} ${f2(rect[2]! + dx)} ${f2(rect[3]! + dy)}]${q} >>`,
+      ),
+    ])
+    return `${an} 0 R`
+  }
+  /**
+   * Where a side-by-side page's two copies stand, as it shows: the page keeps its /Rotate, and the copies are laid along the
+   * axis it shows across, the original first. Turned 90 degrees a page shows its user space's y across (its top to the right),
+   * so the translation stands a page's height above the original; turned 180 or 270, the axis it shows across runs the other
+   * way, so the original stands a page's width (or height) along it and the translation at the page's own place.
+   */
+  const sidesOf = (b: number[], rotate: number) => {
+    const W = b[2]! - b[0]!,
+      H = b[3]! - b[1]!
+    const across = rotate % 180 ? ([0, H] as const) : ([W, 0] as const)
+    return rotate >= 180
+      ? { left: across, right: [0, 0] as const, across }
+      : { left: [0, 0] as const, right: across, across }
+  }
+  /** a side-by-side page: its box twice as wide as it shows, the left form and the right form where they stand, their
+   *  annotations */
   const writeSide = (
     num: number,
     g: number,
@@ -638,13 +690,18 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
     left: number,
     right: number,
     ann: string[],
+    at: ReturnType<typeof sidesOf>,
   ) => {
-    const W = b[2]! - b[0]!
     const c = take()
-    objs.push([c, objStream(c, '', enc(`q /AXTL Do Q q 1 0 0 1 ${f2(W)} 0 cm /AXTR Do Q\n`))])
-    // (every box the page shows by written on it, twice as wide: its media and crop boxes, whatever it inherits, and its own
-    // bleed, trim and art boxes where it has them)
-    const wide = (r: number[]) => `[${f2(r[0]!)} ${f2(r[1]!)} ${f2(r[2]! + W)} ${f2(r[3]!)}]`
+    // (a copy at the page's own place is drawn where it stands, unmoved)
+    const move = (x: number, y: number) => (x || y ? `1 0 0 1 ${f2(x)} ${f2(y)} cm ` : '')
+    const [lx, ly] = at.left,
+      [rx, ry] = at.right,
+      [ax, ay] = at.across
+    objs.push([c, objStream(c, '', enc(`q ${move(lx, ly)}/AXTL Do Q q ${move(rx, ry)}/AXTR Do Q\n`))])
+    // (every box the page shows by written on it, twice as wide as it shows: its media and crop boxes, whatever it inherits,
+    // and its own bleed, trim and art boxes where it has them)
+    const wide = (r: number[]) => `[${f2(r[0]!)} ${f2(r[1]!)} ${f2(r[2]! + ax)} ${f2(r[3]! + ay)}]`
     const own = ['BleedBox', 'TrimBox', 'ArtBox']
       .map((k) => [k, nums(node.get(N(k)))] as const)
       .filter((x): x is readonly [string, number[]] => !!x[1] && x[1].length === 4)
@@ -674,8 +731,16 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
     const num = pn.ref.objectNumber
     const gen = pn.ref.generationNumber
     const b = box(i)
-    const W = b[2]! - b[0]!
-    if ((nums(pn.inherited.Rotate) ?? [0])[0]) stats.rotated++
+    const r = look(pn.inherited.Rotate)
+    const turn = r instanceof PDFNumber ? (r as PdfNumber).asNumber() : 0
+    const rotate = turn % 90 ? 0 : ((turn % 360) + 360) % 360
+    if (rotate) stats.rotated++
+    const at = sidesOf(b, rotate)
+    // (the paper's own annotations, where the original stands: as they are at the page's place, else copies moved to it)
+    const ownAt = (rs: PdfObject[]) =>
+      at.left[0] || at.left[1]
+        ? rs.map((r) => movedAnnot(r, at.left[0], at.left[1])).filter((x): x is string => !!x)
+        : rs.map(lit)
     const p0 = o.pages.get(n)
     // (a member whose groups the document does not hold stays the original's, as the reader shows it)
     let page: Page | null = null
@@ -705,13 +770,11 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
       const res = merged(pn.inherited.Resources, d.fontsUsed, d.xobj)
       // (the add-on's streams with the groups the page turns off baked out, then ours)
       const kept =
-        (walked(i)
-          ? baker.bake(
-              i,
-              oursFor(i, (nm) => pageOff.has(nm)),
-              stats.bake,
-            )
-          : null) ?? cat(streamsOf(node.get(N('Contents')), X).flatMap((s) => [decoded(s), enc('\n')]))
+        baker.bake(
+          i,
+          oursFor(i, (nm) => pageOff.has(nm)),
+          stats.bake,
+        ) ?? cat(streamsOf(node.get(N('Contents')), X).flatMap((s) => [decoded(s), enc('\n')]))
       const zb = await deflate(cat([enc('q\n'), kept, enc(`\nQ\n${d.ops}\n`)]))
       if (!side) {
         const mine = take()
@@ -748,34 +811,23 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
         const sl: string[] = []
         for (const l of page.links) {
           const an = take()
-          objs.push([an, objText(an, linkBody(l, W))])
+          objs.push([an, objText(an, linkBody(l, at.right[0], at.right[1]))])
           sl.push(`${an} 0 R`)
           stats.links++
         }
-        writeSide(num, gen, node, b, left, tf, [...[...oLinks, ...others].map(lit), ...sl])
+        writeSide(num, gen, node, b, left, tf, [...ownAt([...oLinks, ...others]), ...sl], at)
       }
     } else if (side) {
       // the original on both sides, its links copied onto the right
       const left = await originalForm(i)
       const sl: string[] = []
       for (const r of oLinks) {
-        const d = dictOf(r)
-        if (!d) continue
-        const rect = nums(d.get(N('Rect'))) ?? [0, 0, 0, 0]
-        const an = take()
-        const rest = d
-          .entries()
-          .filter(([k]) => !['/Rect', '/P'].includes(k.toString()))
-          .map(([k, v]) => ` ${k.toString()} ${lit(v)}`)
-          .join('')
-        objs.push([
-          an,
-          objText(an, `<<${rest} /Rect [${f2(rect[0]! + W)} ${f2(rect[1]!)} ${f2(rect[2]! + W)} ${f2(rect[3]!)}] >>`),
-        ])
-        sl.push(`${an} 0 R`)
+        const an = movedAnnot(r, at.right[0], at.right[1])
+        if (!an) continue
+        sl.push(an)
         stats.links++
       }
-      writeSide(num, gen, node, b, left, left, [...[...oLinks, ...others].map(lit), ...sl])
+      writeSide(num, gen, node, b, left, left, [...ownAt([...oLinks, ...others]), ...sl], at)
     }
     o.progress?.(i + 1, pages.length + 1)
   }

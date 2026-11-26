@@ -9,7 +9,7 @@
 // its text still read, its place kept, counted); a path painted is dropped, a clipping path kept as a clip; an image, a form
 // or a shading dropped. Our own marks go, on or off; the page's own marked content stays. The page's content alone is
 // baked: a form the add-on wrapped inside keeps its groups, which the default view turns off (counted as `forms`).
-import { type LexOp, lex, type Operand, type Remover, type ShowEvent } from '@readarxiv/engine'
+import { type LexOp, lex, type Operand, type ShowEvent, type Walker } from '@readarxiv/engine'
 
 export interface BakeStats {
   pages: number
@@ -69,7 +69,7 @@ export interface Baker {
   ): Uint8Array | null
 }
 
-export function makeBaker(R: Remover): Baker {
+export function makeBaker(R: Walker): Baker {
   /** a page read once for every bake of it (the page's own, and each crop's source on it): its walk's refusal, or its
    *  shows by their piece and the operator's end, and each piece's bytes and operators */
   const read = new Map<
