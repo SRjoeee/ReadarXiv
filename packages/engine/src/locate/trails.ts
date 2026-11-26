@@ -259,7 +259,8 @@ function lineOf(w: Work, mem: Member, end: number) {
     bottom = Math.min(bottom, x.bottom)
     own.push(x)
   }
-  return { last: { ...g, top, bottom }, text: lineTextOf(own) }
+  // (a plain glyph of its coordinates: a page glyph's are read by getters, which a spread does not copy (glyph.ts))
+  return { last: { x0: g.x0, x1: g.x1, y: g.y, size: g.size, top, bottom }, text: lineTextOf(own) }
 }
 
 /**
