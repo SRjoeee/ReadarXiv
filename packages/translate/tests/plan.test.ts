@@ -73,6 +73,13 @@ describe("a target's translation steps: plan", () => {
     const generations = [fastDone, gen('llm:x', 'building')]
     expect(plan({ policy: policy({ upgrade: ['llm:x'] }), target: 'zh-CN', generations })).toEqual([])
   })
+  it("plans no upgrade to a model whose generation for the paper's version and target was retired", () => {
+    const generations = [fastDone, gen('llm:x', 'retired')]
+    expect(plan({ policy: policy({ upgrade: ['llm:x'] }), target: 'zh-CN', generations })).toEqual([])
+  })
+  it("plans no fast translation where the fast producer's only generation was retired", () => {
+    expect(plan({ policy: policy(), target: 'zh-CN', generations: [gen('free:default', 'retired')] })).toEqual([])
+  })
   it("plans no upgrade where the model's generation is complete and selected", () => {
     const generations = [fastDone, gen('llm:x', 'complete')]
     expect(plan({ policy: policy({ upgrade: ['llm:x'] }), target: 'zh-CN', generations })).toEqual([])

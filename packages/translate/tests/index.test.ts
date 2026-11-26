@@ -11,6 +11,7 @@ describe('@readarxiv/translate', () => {
       'PolicySchema',
       'parsePolicy',
       'targetPolicyOf',
+      'effectiveOf',
       'producerKindOf',
       'producerIdentityOf',
       'plan',

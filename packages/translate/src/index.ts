@@ -13,6 +13,8 @@ export { chainOf, identityOf, keyOf, realClock, rowContextOf } from './chain.ts'
 export { sha256Hex } from './sha256.ts'
 export { plan, type Step } from './plan.ts'
 export {
+  type Dropped,
+  effectiveOf,
   type FreeEntry,
   type KeyEntry,
   type ModelCheck,

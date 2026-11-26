@@ -9,8 +9,8 @@
 //   - `fast` is a free chain the ranking holds, and every `upgrade` producer is a model the ranking holds, so what either
 //     makes can be served;
 //   - a model a named target ranks has a passing check for that target; a model `default` ranks serves only the targets
-//     its check passed for (`targetPolicyOf` leaves it out of the others), so no model translates a target it was not
-//     checked on;
+//     its check passed for (`effectiveOf` leaves it out of the others and names it), so no model translates a target it
+//     was not checked on;
 //   - a paid model states its prices above zero; a free model runs inside its provider's groups, each of which states a
 //     limit in requests or tokens; no number is negative.
 
@@ -246,12 +246,29 @@ export function parsePolicy(v: unknown): { ok: true; policy: Policy } | { ok: fa
   return { ok: false, issues }
 }
 
-/** a target's part: its own where the policy names it; else `default`, less the models with no passing check for it */
-export function targetPolicyOf(p: Policy, target: string): TargetPolicy {
+/** a producer `default` names that a target's part leaves out, and why: a model with no passing check for the target */
+export interface Dropped {
+  producer: ProducerId
+  why: 'no-check'
+}
+
+/** a target's part and what it left out: its own where the policy names it (nothing left out: validation refused a
+ *  model with no passing check there); else `default`, less the models with no passing check for the target, each named
+ *  once in `dropped`, so that nothing is left out silently */
+export function effectiveOf(p: Policy, target: string): { policy: TargetPolicy; dropped: Dropped[] } {
   const named = own(p.targets, target)
-  if (named) return named
+  if (named) return { policy: named, dropped: [] }
   const d = p.default
   const served = (id: ProducerId) => checkedFor(p, id, target)
-  if (d.ranking.every(served) && d.upgrade.every(served)) return d
-  return { ranking: d.ranking.filter(served), fast: d.fast, upgrade: d.upgrade.filter(served) }
+  const left = [...new Set([...d.ranking, ...d.upgrade].filter((id) => !served(id)))]
+  if (left.length === 0) return { policy: d, dropped: [] }
+  return {
+    policy: { ranking: d.ranking.filter(served), fast: d.fast, upgrade: d.upgrade.filter(served) },
+    dropped: left.map((producer) => ({ producer, why: 'no-check' })),
+  }
+}
+
+/** a target's part: `effectiveOf`'s policy */
+export function targetPolicyOf(p: Policy, target: string): TargetPolicy {
+  return effectiveOf(p, target).policy
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { type ModelEntry, type Policy, parsePolicy, targetPolicyOf } from '../src/policy.ts'
+import { effectiveOf, type ModelEntry, type Policy, parsePolicy, targetPolicyOf } from '../src/policy.ts'
 
 /** the smallest valid policy: today's chain, alone, for every target */
 const base = (): Policy => ({
@@ -74,6 +74,24 @@ describe("a target's policy: targetPolicyOf", () => {
     expect(parsePolicy(p).ok).toBe(true)
     expect(targetPolicyOf(p, 'zh-CN')).toBe(p.default)
     expect(targetPolicyOf(p, 'ja')).toEqual({ ranking: ['free:default'], fast: 'free:default', upgrade: [] })
+  })
+  it('says what it left out of `default` and why (effectiveOf), its policy the one targetPolicyOf gives', () => {
+    const p = base()
+    p.models = [model()]
+    p.default = { ranking: ['llm:x', 'free:default'], fast: 'free:default', upgrade: ['llm:x'] }
+    expect(effectiveOf(p, 'zh-CN')).toEqual({ policy: p.default, dropped: [] })
+    expect(effectiveOf(p, 'zh-CN').policy).toBe(targetPolicyOf(p, 'zh-CN'))
+    const ja = effectiveOf(p, 'ja')
+    expect(ja).toEqual({
+      policy: { ranking: ['free:default'], fast: 'free:default', upgrade: [] },
+      dropped: [{ producer: 'llm:x', why: 'no-check' }],
+    })
+    expect(ja.policy).toEqual(targetPolicyOf(p, 'ja'))
+  })
+  it("leaves nothing out of a target's own part, and nothing out of a policy with no model", () => {
+    const own = withX()
+    expect(effectiveOf(own, 'zh-CN')).toEqual({ policy: own.targets?.['zh-CN'], dropped: [] })
+    expect(effectiveOf(base(), 'ja')).toEqual({ policy: base().default, dropped: [] })
   })
 })
 
