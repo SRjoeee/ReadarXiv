@@ -177,13 +177,13 @@ const INLINE = unit('para', [
 ])
 /** the body as B ships it: the paragraph's line, the formula's opening point at the column's end, the note's label and the
  *  note (`closes`: its end mark there), then at the next column's head the formula and its closing point, the text after it */
-const CLOSED = (o: { closes?: boolean; notes?: number; rule?: boolean }): Item[] => [
+const CLOSED = (o: { closes?: boolean; notes?: number; rule?: boolean; label?: boolean }): Item[] => [
   { at: 'bs1' },
   { at: '1s' },
   'Wehave',
   { at: 'p1.1a' },
   ...(o.rule ? [{ rule: true as const }] : []),
-  '\f3',
+  o.label === false ? '\f' : '\f3',
   { at: '2s' },
   'Anoteofours.',
   ...(o.closes === false ? [] : [{ at: '2e' }]),
@@ -215,6 +215,10 @@ describe("a piece with both its points, a note TeX shipped whole between them: t
 
   it("the notes' separator rule TeX shipped with them, before the first label and after no glyph of the piece's: left out", () => {
     expect(closed({ rule: true })).toBe('H=K')
+  })
+
+  it("the other side: a unit with no label between the points (a paper's macro whose definition is a unit of its own, which the call sets): the piece's ink, as before", () => {
+    expect(closed({ label: false })).toBe('Anoteofours.H=K')
   })
 
   it("the other side: the note's end mark not between the points: read as before", () => {
