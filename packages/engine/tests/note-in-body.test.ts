@@ -13,13 +13,14 @@ import { followsOf } from '../src/marks/marks.ts'
 import type { SourceUnit } from '../src/source/latex-front.ts'
 import { OWNED, OWNED_HOW, ownedOf, STREAM_COLUMNS, type StreamPage } from '../src/own/stream.ts'
 
-type Item = string | { at: string }
+type Item = string | { at: string } | { rule: true }
 /** a page from items in stream order: a string is glyphs on the current line (a space 3 pt, `\n` the next line 12 pt down,
  *  `\f` a line 200 pt down: a column's foot), `{ at }` a point */
 function pageOf(items: readonly Item[]): StreamPage {
   const glyphs: Glyph[] = [],
     points: { name: string; glyph: number; box: number }[] = [],
-    boxAt: number[] = []
+    boxAt: number[] = [],
+    boxes: number[] = []
   let x = 72,
     y = 700
   for (const it of items) {
@@ -42,15 +43,19 @@ function pageOf(items: readonly Item[]): StreamPage {
             ix0: x,
             ix1: x + 5,
           } as Glyph)
-          boxAt.push(0)
+          boxAt.push(boxes.length / 4)
           x += 5
         }
       }
-    } else points.push({ name: it.at, glyph: glyphs.length, box: 0 })
+    } else if ('rule' in it) {
+      // (a rule 36 pt wide on a line of its own, as a class sets the notes' separator above them)
+      y -= 12
+      boxes.push(72, y, 108, y + 0.4)
+    } else points.push({ name: it.at, glyph: glyphs.length, box: boxes.length / 4 })
   }
   return {
     glyphs: packGlyphs(glyphs, { columns: STREAM_COLUMNS }),
-    boxes: [],
+    boxes,
     points,
     boxAt: Int32Array.from(boxAt),
     view: [0, 0, 612, 792],
@@ -172,11 +177,12 @@ const INLINE = unit('para', [
 ])
 /** the body as B ships it: the paragraph's line, the formula's opening point at the column's end, the note's label and the
  *  note (`closes`: its end mark there), then at the next column's head the formula and its closing point, the text after it */
-const CLOSED = (o: { closes?: boolean; notes?: number }): Item[] => [
+const CLOSED = (o: { closes?: boolean; notes?: number; rule?: boolean }): Item[] => [
   { at: 'bs1' },
   { at: '1s' },
   'Wehave',
   { at: 'p1.1a' },
+  ...(o.rule ? [{ rule: true as const }] : []),
   '\f3',
   { at: '2s' },
   'Anoteofours.',
@@ -194,7 +200,8 @@ function closed(o: Parameters<typeof CLOSED>[0]): string | null {
   const follows = followsOf(units as never, new Set(pages.flatMap((pg) => pg.points.map((p) => p.name))))
   const e = ownedOf(pages, { follows, erasure: true }).get('p1.1a')
   if (!e) return null
-  return e.how < OWNED ? e.glyphs.map(([p, g]) => pages[p - 1]!.glyphs.u[g]).join('') : (OWNED_HOW[e.how] as string)
+  if (e.how >= OWNED) return OWNED_HOW[e.how] as string
+  return `${e.glyphs.map(([p, g]) => pages[p - 1]!.glyphs.u[g]).join('')}${e.boxes.length ? ` +${e.boxes.length} box` : ''}`
 }
 
 describe("a piece with both its points, a note TeX shipped whole between them: the note is not the piece's ink", () => {
@@ -206,7 +213,12 @@ describe("a piece with both its points, a note TeX shipped whole between them: t
     expect(closed({ notes: 2 })).toBe('H=K')
   })
 
+  it("the notes' separator rule TeX shipped with them, before the first label and after no glyph of the piece's: left out", () => {
+    expect(closed({ rule: true })).toBe('H=K')
+  })
+
   it("the other side: the note's end mark not between the points: read as before", () => {
     expect(closed({ closes: false })).toBe('3Anoteofours.H=K')
+    expect(closed({ closes: false, rule: true })).toBe('3Anoteofours.H=K +1 box')
   })
 })
