@@ -87,6 +87,14 @@ export async function exportChecks(t) {
     // (the page's workers before the two files: the decoding of their faces' WOFF2 opens one of the export's own, which each file
     // ends; none is left behind)
     const workersBefore = page.workers().length
+    const started = []
+    page.on('worker', (w) => {
+      const one = { closed: false }
+      started.push(one)
+      w.on('close', () => {
+        one.closed = true
+      })
+    })
     const tr = await press(page, barMenu(page), W.translation)
     const s = await readerState(page)
     check('the translation\'s file: saved as <id>.<target>.pdf, its translation read as text (the echo\'s), arXiv\'s page width',
@@ -96,7 +104,7 @@ export async function exportChecks(t) {
       !!sbs?.name && !!tr?.name && sbs.name.endsWith(`.${s.prefs?.target}.side-by-side.pdf`) && sbs.pages === tr.pages && Math.abs(sbs.width - 2 * tr.width) <= 1 && /\[echo\]/.test(sbs.text), JSON.stringify(sbs && (sbs.failed ? sbs : { name: sbs.name, pages: sbs.pages, width: sbs.width })))
     await page.waitForTimeout(500)
     const workersAfter = page.workers().length
-    check('two files in a row leave no worker behind: the page\'s workers as before them', !!tr?.name && !!sbs?.name && workersAfter === workersBefore, JSON.stringify({ before: workersBefore, after: workersAfter }))
+    check('two files in a row: each decodes its faces on a worker of its own and ends it, the page\'s workers as before them', !!tr?.name && !!sbs?.name && workersAfter === workersBefore && started.length === 2 && started.every((w) => w.closed), JSON.stringify({ before: workersBefore, after: workersAfter, started: started.length, closed: started.filter((w) => w.closed).length }))
     const done = await page.evaluate(() => document.querySelector('.capsule')?.textContent ?? '')
     check('the capsule says the file is downloaded', /已下载/.test(done), done)
 
