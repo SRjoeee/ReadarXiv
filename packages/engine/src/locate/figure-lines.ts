@@ -756,7 +756,7 @@ function linesOf(
         clear: F[k]!.bottom - b.top,
         one: sameFace(F[k]!, b),
       }))
-      // (each face's rows against their own leading: a bold heading's tighter leading is no measure of its body's, Codex on #693)
+      // (each face's rows against their own leading: a bold heading's tighter leading is no measure of its body's)
       const blank = steps.map((s, k) => {
         if (!s.one) return false
         const mine = steps.filter((t, j) => t.one && sameFace(F[j]!, F[k]!))
