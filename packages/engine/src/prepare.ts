@@ -201,8 +201,9 @@ async function placedOf(
 
 /** the most pages arXiv's PDF may have: a paper past it is refused `too-large` as soon as its page count is read, before its
  *  tree is decided and before anything is compiled, nothing of it made. A budget, unmeasured: the value the engine's first
- *  layout reader held a document's pages to, kept as it was; nothing states why 10,000 */
-const PAGES_MAX = 10_000
+ *  layout reader held a document's pages to, kept as it was; nothing states why 10,000. The head of a paper of this many pages
+ *  stays within its bound (format's BOUNDS.head; tests/head-bound.test.ts) */
+export const PAGES_MAX = 10_000
 
 /** what a prepare is handed, once: the source's files, A and, where a compile of the same original made them, the instrument's
  *  five objects (TeX does not run then) */
