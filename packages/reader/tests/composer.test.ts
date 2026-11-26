@@ -17,13 +17,14 @@ import {
 import { createFaces, type Faces, WAVE_SLOTS } from '../src/compose/faces.ts'
 import type { Groups } from '../src/compose/groups.ts'
 import type { Lay, Laid, Page, Rows } from '../src/compose/page.ts'
+import { detailBoxOf, holeOf } from '../src/compose/paint.ts'
 import { createServed, type Served } from '../src/compose/served.ts'
 import { PROBE_TEXT } from '../src/compose/text-rendering.ts'
 import { BACKOFF_MS } from '../src/session/machine.ts'
 import type { Clock } from '../src/stack/clock.ts'
 import { layPage, rulesFor } from '@readarxiv/typeset'
 import { kindShown, leftKinds } from '../src/compose/classes.ts'
-import type { PageContent, Stack, StackEvents } from '../src/stack/stack.ts'
+import type { DetailArea, PageContent, Stack, StackEvents, ViewContent } from '../src/stack/stack.ts'
 
 // ---------------------------------------------------------------- the stand-ins
 function handClock() {
@@ -1949,4 +1950,111 @@ describe('the toggles turned and turned back: the drawing a function of the part
       expect(kindShown(toggleKind(note), { ...DEFAULTS, names: true })).toBe(true)
     },
   )
+})
+
+describe("the base's crops past PDF.js's canvas cap, cut away under the detail's whole area (docs/PDF-READER.md §11.8)", () => {
+  afterEach(() => vi.restoreAllMocks())
+  /** a page 792 points high at 600 %: 6 CSS px a point, upright */
+  const vp = {
+    width: 3600,
+    height: 4752,
+    scale: 6,
+    rotation: 0,
+    viewBox: [0, 0, 600, 792],
+    convertToViewportPoint: (x: number, y: number) => [x * 6, (792 - y) * 6],
+  }
+  /** a formula's crop on member 10's line: 100 to 120 pt across, 700 to 710 up, so 600 to 720 CSS px across and 492 to 552
+   *  down */
+  const cropLay = () => {
+    const lay = standInLay()
+    const withCrop = ((part: Part, rows: Rows) => {
+      const p = lay(part, rows)
+      for (const m of p.members)
+        if (m.state === 'laid' && m.ord === 10)
+          m.lines = [[702, 72, 300, [{ s: 'x', x: 100, src: [1, 100, 700, 120, 710, 702], k: 1, piece: '1' }]]] as never
+      return p
+    }) as unknown as ReturnType<typeof standInLay>
+    withCrop.calls = 0
+    return withCrop
+  }
+  /** page 1 laid with its crop, and its overlay with the base crops canvas the page view's resolution drew */
+  async function laidWithCrop() {
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(
+      () => ({ drawImage() {}, save() {}, restore() {}, beginPath() {}, rect() {}, clip() {} }) as never,
+    )
+    const pdfPage = {
+      getViewport: () => vp,
+      render: () => ({ promise: Promise.resolve(), cancel: () => {} }),
+    }
+    const w = world({ lay: cropLay() })
+    w.composer.setDocuments({
+      original: {} as never,
+      composed: { getPage: async () => pdfPage } as never,
+      groups: groupsStub(),
+    })
+    w.stack.setNear([1])
+    open(w, rowsOf('de', allIds(w)))
+    await settle()
+    const content = w.stack.contentOf(1) as ViewContent
+    expect(content.detail).toBeTypeOf('function')
+    const over = document.createElement('div')
+    const base = Object.assign(document.createElement('canvas'), { className: 'axt-crops' })
+    over.append(base)
+    const at = (outputScale = { sx: 0.355, sy: 0.355 }) => ({
+      n: 1,
+      view: { viewport: vp, outputScale } as never,
+      viewport: vp as never,
+      signal: new AbortController().signal,
+    })
+    return { content, over, base, at }
+  }
+  const detailIn = (over: HTMLElement) => over.querySelector<HTMLCanvasElement>(':scope > canvas.axt-crops-detail')
+
+  it("cuts the base away under the whole area, not the box of the crops' places, the detail canvas that box alone", async () => {
+    const { content, over, base, at } = await laidWithCrop()
+    const area: DetailArea = { left: 500, top: 400, width: 800, height: 600, px: [1600, 1200] }
+    expect(await content.detail!(over, at(), area)).toBe(true)
+    const det = detailIn(over)!
+    expect(det).not.toBeNull()
+    // (the detail canvas the box of the crop's place, well inside the area: its memory)
+    const box = detailBoxOf(det)!
+    expect(box.width * box.height).toBeLessThan((area.width * area.height) / 20)
+    // (the base's own copy of the crop, on its coarser grid, spreads past that box: within the area it draws nothing)
+    expect(base.style.clipPath).toBe(holeOf(area, vp))
+  })
+  it("a crop across the area's edge: the detail draws it up to the edge, the base from the edge on", async () => {
+    const { content, over, base, at } = await laidWithCrop()
+    // (the area's right edge at 660 CSS px, through the crop's place of 600 to 720)
+    const area: DetailArea = { left: 500, top: 400, width: 160, height: 600, px: [320, 1200] }
+    expect(await content.detail!(over, at(), area)).toBe(true)
+    const box = detailBoxOf(detailIn(over)!)!
+    expect(box.left + box.width).toBe(area.left + area.width)
+    expect(box.left).toBeLessThanOrEqual(600)
+    expect(base.style.clipPath).toBe(holeOf(area, vp))
+  })
+  it('carries the hole to the base drawn again at the scale, moves it with the area, lets it go with the detail', async () => {
+    const { content, over, at } = await laidWithCrop()
+    const area: DetailArea = { left: 500, top: 400, width: 800, height: 600, px: [1600, 1200] }
+    await content.detail!(over, at(), area)
+    // (the base drawn again on another grid at the same scale: the detail of this scale stays, the new base cut as the old)
+    await content.again!(over, at({ sx: 0.5, sy: 0.5 }))
+    const again = over.querySelector<HTMLCanvasElement>(':scope > canvas.axt-crops')!
+    expect(again.style.clipPath).toBe(holeOf(area, vp))
+    expect(detailIn(over)).not.toBeNull()
+    // (a detail of another area that holds the crop: the hole that area)
+    const other: DetailArea = { left: 300, top: 200, width: 900, height: 700, px: [1800, 1400] }
+    expect(await content.detail!(over, at(), other)).toBe(true)
+    expect(again.style.clipPath).toBe(holeOf(other, vp))
+    // (an area no crop meets: no detail crops, the base whole)
+    const far: DetailArea = { left: 2000, top: 3000, width: 800, height: 600, px: [1600, 1200] }
+    expect(await content.detail!(over, at(), far)).toBe(true)
+    expect(detailIn(over)).toBeNull()
+    expect(again.style.clipPath).toBe('')
+    // (a detail again, then none drawn: let go, the base whole)
+    await content.detail!(over, at(), area)
+    expect(again.style.clipPath).toBe(holeOf(area, vp))
+    expect(await content.detail!(over, at(), null)).toBe(false)
+    expect(detailIn(over)).toBeNull()
+    expect(again.style.clipPath).toBe('')
+  })
 })

@@ -1601,8 +1601,17 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
   area are cut again at its resolution, its pixels over its box, into a canvas of their own (`canvas.axt-crops-detail`,
   paint.ts `detailCropsFor`): the smallest box that holds those places within the area, stood by shares as PDF.js stands its
   own. Under the cap PDF.js draws no detail canvas and nothing changes. **The hand-over** is one task, once the new crops are
-  cut: the base crops canvas cut away under their box (`clip-path`, the page's rectangle with the box as an even-odd hole,
-  `holeOf`) and the new canvas put in the old one's place. Until then the base's crops show there, as the page view's own
+  cut: the base crops canvas cut away under the detail canvas's whole area (`clip-path`, the page's rectangle with the area
+  as an even-odd hole, `holeOf`, in the shares of the frame PDF.js stands its detail canvas by) and the new canvas put in the
+  old one's place. **The hole is the area, not the box**: every crop whose place meets the area is the detail's own drawing
+  (a cut that fails or is let go puts none in place), so within the area the base has nothing to add, while its copy of a
+  crop, cut on its coarser grid with a ring of one of its own pixels round the ink (`cropsOf`), spreads past the box of the
+  detail's places (cut on the detail's grid, a ring of one detail pixel): at 629 % on a 2x screen a base pixel is 2.8 CSS px,
+  and a box-sized hole left a grey rim under and right of 2611.18114v1 p26's "3×3", both canvases darkened into the page. A
+  crop across the area's edge is the detail's up to the edge (its canvas held within the area) and the base's past it. The
+  hole stands and goes with a detail crops canvas: an area no crop meets puts none in place and leaves the base whole (no
+  crop's place is in it; a crop whose place lies outside reaches in by its base ring alone, at the edge where PDF.js's own
+  coarse canvas meets its detail canvas). Until then the base's crops show there, as the page view's own
   canvas shows until PDF.js's detail canvas is drawn: no frame shows a crop twice, none, or one cut for another area. A cut is
   its overlay's while no later one is asked and its crops are not let go (`askDetail`): one that finishes after a zoom back
   under the cap, or after a later cut, is dropped (the harness's zoom back found one put back, 1 run in 3). A detail
@@ -1619,7 +1628,8 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
   detail canvas is shown as it is drawn and the cut is made after it, in the same job: the page comes sharp as before (its
   detail canvas 16 and 30 ms after a scroll at 600 %), its crops a cut's time later (19 and 22 ms after it). Held by
   paint.test.ts ("crops past PDF.js's canvas cap") and the harness's check (`tests/e2e/reader-v2-crops.mjs`: at 400 %, the
-  crops in view at the detail canvas's pixels a CSS px, within its area, the base's coarser and cut away under them; back at
+  crops in view at the detail canvas's pixels a CSS px, within its area, the base's coarser and cut away under the whole area;
+  a ring one base pixel wide round the detail's box, within the area, the same with the crops shown and hidden; back at
   100 %, none left and the base whole).
 - **The faces, in one wave** (`layer-proto/warm.mjs`). v0 checks and loads the faces of a unit as it lays it, one unit after
   another (E2), so a page whose units brought new characters waited a round trip a unit: 2602.23285v2 in Chinese asked 38
