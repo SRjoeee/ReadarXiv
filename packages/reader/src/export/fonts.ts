@@ -1,8 +1,10 @@
-// A served slice's sfnt (a CFF-flavoured OpenType) read for what a PDF font needs: its cmap, advances, units per em, metrics,
-// and its CFF's charset (the CIDs a CID-keyed CFF names its glyphs by); and written as a Type0 font (Identity-H, a CIDFontType0
-// over the CFF subset to the glyphs drawn, FontFile3 /CIDFontType0C) with a ToUnicode map of exactly the glyphs drawn, so that
-// the text a reader selects, searches and copies is the translation's own characters (ISO 32000-1 §9.7, §9.10.3).
-import { readCff } from './cff.ts'
+// A served slice's sfnt read for what a PDF font needs: its cmap, advances, units per em, metrics, and for a CFF-flavoured one
+// its CFF's charset (the CIDs a CID-keyed CFF names its glyphs by); and written as a Type0 font (Identity-H) with a ToUnicode
+// map of exactly the glyphs drawn, so that the text a reader selects, searches and copies is the translation's own characters
+// (ISO 32000-1 §9.7, §9.10.3): a CIDFontType0 over the CFF subset to the glyphs drawn (FontFile3 /CIDFontType0C), or for a
+// TrueType-flavoured one a CIDFontType2 over the font subset (FontFile2), its CIDs its glyph ids (CIDToGIDMap /Identity).
+import { readCff, subsetCff } from './cff.ts'
+import { glyphsOf, subsetTrueType, tablesOf } from './ttf.ts'
 
 export interface SfntFont {
   key: string
@@ -12,7 +14,10 @@ export interface SfntFont {
   advance(gid: number): number
   /** glyph id -> CID (a CID-keyed CFF's charset; the glyph id otherwise, as a CIDFontType0C reads a name-keyed CFF) */
   cid(gid: number): number
+  /** what its outlines are: a CFF table (`cff`), or glyf's (`ttf`: `sfnt` the whole font) */
+  kind: 'cff' | 'ttf'
   cff: Uint8Array
+  sfnt: Uint8Array
   cidKeyed: boolean
   ascent: number
   descent: number
@@ -29,19 +34,6 @@ const i16 = (b: Uint8Array, i: number) => {
   return v & 0x8000 ? v - 0x10000 : v
 }
 const u32 = (b: Uint8Array, i: number) => ((b[i]! << 24) >>> 0) + (b[i + 1]! << 16) + (b[i + 2]! << 8) + b[i + 3]!
-
-function tablesOf(b: Uint8Array): Map<string, Uint8Array> {
-  const n = u16(b, 4)
-  const out = new Map<string, Uint8Array>()
-  for (let k = 0; k < n; k++) {
-    const r = 12 + 16 * k
-    const tag = String.fromCharCode(b[r]!, b[r + 1]!, b[r + 2]!, b[r + 3]!)
-    const off = u32(b, r + 8),
-      len = u32(b, r + 12)
-    if (off + len <= b.length) out.set(tag, b.subarray(off, off + len))
-  }
-  return out
-}
 
 /** the cmap's Unicode subtable (format 12 over 4), code point -> glyph */
 function cmapOf(t: Uint8Array): Map<number, number> {
@@ -106,13 +98,15 @@ export function readSfnt(key: string, b: Uint8Array): SfntFont | null {
     hhea = t.get('hhea'),
     hmtx = t.get('hmtx'),
     cmap = t.get('cmap')
-  if (!cff || !head || !hhea || !hmtx || !cmap) return null
-  let cids: Uint16Array
-  let cidKeyed: boolean
+  if (!head || !hhea || !hmtx || !cmap) return null
+  let cids: Uint16Array | null = null
+  let cidKeyed = false
   try {
-    const c = readCff(cff)
-    cids = c.cids
-    cidKeyed = c.cidKeyed
+    if (cff) {
+      const c = readCff(cff)
+      cids = c.cids
+      cidKeyed = c.cidKeyed
+    } else glyphsOf(t)
   } catch {
     return null
   }
@@ -125,8 +119,10 @@ export function readSfnt(key: string, b: Uint8Array): SfntFont | null {
     upem,
     cmap: cmapOf(cmap),
     advance: (g) => u16(hmtx, 4 * Math.min(g, nh - 1)),
-    cid: (g) => cids[g] ?? g,
-    cff,
+    cid: (g) => cids?.[g] ?? g,
+    kind: cff ? 'cff' : 'ttf',
+    cff: cff ?? new Uint8Array(0),
+    sfnt: b,
     cidKeyed,
     ascent: i16(hhea, 4),
     descent: i16(hhea, 6),
@@ -176,8 +172,22 @@ export function fontBodies(
   const bb = f.bbox.map((v) => Math.round(v * k))
   return {
     type0: `<< /Type /Font /Subtype /Type0 /BaseFont /${base} /Encoding /Identity-H /DescendantFonts [${n.cidFont} 0 R] /ToUnicode ${n.toUni} 0 R >>`,
-    cidFont: `<< /Type /Font /Subtype /CIDFontType0 /BaseFont /${base} /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> /FontDescriptor ${n.desc} 0 R /DW 1000 /W [${w}] >>`,
-    desc: `<< /Type /FontDescriptor /FontName /${base} /Flags 4 /FontBBox [${bb.join(' ')}] /ItalicAngle ${Math.round(f.italicAngle)} /Ascent ${Math.round(f.ascent * k)} /Descent ${Math.round(f.descent * k)} /CapHeight ${Math.round(f.capHeight * k)} /StemV 80 /FontFile3 ${n.file} 0 R >>`,
+    cidFont: `<< /Type /Font /Subtype /CIDFontType${f.kind === 'ttf' ? '2' : '0'} /BaseFont /${base} /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> /FontDescriptor ${n.desc} 0 R /DW 1000 /W [${w}]${f.kind === 'ttf' ? ' /CIDToGIDMap /Identity' : ''} >>`,
+    desc: `<< /Type /FontDescriptor /FontName /${base} /Flags 4 /FontBBox [${bb.join(' ')}] /ItalicAngle ${Math.round(f.italicAngle)} /Ascent ${Math.round(f.ascent * k)} /Descent ${Math.round(f.descent * k)} /CapHeight ${Math.round(f.capHeight * k)} /StemV 80 /FontFile${f.kind === 'ttf' ? '2' : '3'} ${n.file} 0 R >>`,
     toUnicode,
   }
+}
+
+/** the font file of `f` for the glyphs `gids` drawn: its bytes, the stream dictionary's entries of its kind, and whether the
+ *  subset was refused (the font embedded whole) */
+export function fontFileOf(
+  f: SfntFont,
+  gids: ReadonlySet<number>,
+): { bytes: Uint8Array; dict: string; whole: boolean } {
+  if (f.kind === 'ttf') {
+    const bytes = subsetTrueType(f.sfnt, gids)
+    return { bytes, dict: ` /Length1 ${bytes.length}`, whole: false }
+  }
+  const sub = subsetCff(f.cff, gids)
+  return { bytes: sub ?? f.cff, dict: ' /Subtype /CIDFontType0C', whole: !sub }
 }

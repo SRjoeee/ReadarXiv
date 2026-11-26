@@ -5,14 +5,16 @@
 // English the group held gone, the English beside it kept).
 import * as PL from '@cantoo/pdf-lib'
 import { openObjects, type PdfDict, type PdfLib, type PdfRawStream, type PdfRef } from '@readarxiv/engine'
+import { brotliCompressSync, brotliDecompressSync } from 'node:zlib'
 import { describe, expect, it } from 'vitest'
 import type { Page } from '../../src/compose/page.ts'
 import { readCff } from '../../src/export/cff.ts'
 import { exportPdf, type Glyphs } from '../../src/export/chain.ts'
 import { readSfnt } from '../../src/export/fonts.ts'
+import { sfntOfWoff2, woff2Payload } from '../../src/export/woff2.ts'
 import { cs } from './cff-build.ts'
 import { latin1, pdf, update } from './pdf-build.ts'
-import { buildSfnt } from './sfnt-build.ts'
+import { buildSfnt, buildTrueTypeWoff2 } from './sfnt-build.ts'
 
 const L = PL as unknown as PdfLib
 const widths = Array.from({ length: 95 }, () => 500)
@@ -61,9 +63,50 @@ const font = readSfnt(
     advances: [0, 1000, 1000],
   }).sfnt,
 )!
+/** a TrueType face of ours (its glyf stored transformed in its WOFF2), for a run in `TT`: A and B */
+const TT = '400 100px "axt-mono"'
+const ttFont = (() => {
+  const w = buildTrueTypeWoff2(
+    {
+      glyphs: [
+        null,
+        {
+          contours: [
+            [
+              [0, 0, true],
+              [500, 0, true],
+              [250, 700, true],
+            ],
+          ],
+        },
+        {
+          contours: [
+            [
+              [0, 0, true],
+              [500, 0, true],
+              [500, 700, true],
+              [0, 700, true],
+            ],
+          ],
+        },
+      ],
+      cmap: [
+        [0x41, 1],
+        [0x42, 2],
+      ],
+      advances: [600, 600, 600],
+    },
+    (b) => new Uint8Array(brotliCompressSync(b)),
+  )
+  const p = woff2Payload(w)!
+  return readSfnt('mono', sfntOfWoff2(p, new Uint8Array(brotliDecompressSync(p.stream))))!
+})()
 const glyphs: Glyphs = {
-  glyph: (face, cp) => (face === FACE && font.cmap.has(cp) ? { font, gid: font.cmap.get(cp)! } : null),
-  offsets: (_face, text) => [...text].map((_, i) => i * 100),
+  glyph: (face, cp) => {
+    const f = face === FACE ? font : face === TT ? ttFont : null
+    return f?.cmap.has(cp) ? { font: f, gid: f.cmap.get(cp)! } : null
+  },
+  offsets: (face, text) => [...text].map((_, i) => i * (face === TT ? 60 : 100)),
 }
 const laid = (s: string): Page => ({
   page: 1,
@@ -75,7 +118,17 @@ const laid = (s: string): Page => ({
       page: 1,
       state: 'laid',
       off: 1,
-      lines: [[700, 72, 200, [{ s, x: 72, face: FACE, size: 10 }]]],
+      lines: [
+        [
+          700,
+          72,
+          200,
+          [
+            { s, x: 72, face: FACE, size: 10 },
+            { s: 'AB', x: 120, face: TT, size: 10 },
+          ],
+        ],
+      ],
       lit: { left: [], right: [], own: [] },
     },
   ],
@@ -117,6 +170,7 @@ describe('the translated PDF', () => {
     const { file } = await made('translation', TWO)
     const t = await pdfjsText(file)
     expect(t).toContain(TWO)
+    expect(t).toContain('AB')
     expect(t).not.toContain('Hello')
     expect(t).toContain('World')
   })
@@ -136,7 +190,7 @@ describe('the translated PDF', () => {
     const cff = readCff(L.decodePDFRawStream(fontFile).decode())
     expect(cff.glyphs).toHaveLength(3)
     expect([...(cff.glyphs[2] ?? [])]).toEqual([14])
-    expect([stats.fonts, stats.fontsWhole, stats.glyphs, stats.missing]).toEqual([1, 0, 1, 0])
+    expect([stats.fonts, stats.fontsWhole, stats.fontsTrueType, stats.glyphs, stats.missing]).toEqual([2, 0, 1, 3, 0])
   })
 
   it('turns the laid groups off in the default view and keeps its links where the reader draws them', async () => {
@@ -146,6 +200,38 @@ describe('the translated PDF', () => {
     expect(root.get(L.PDFName.of('OCProperties'))?.toString()).toMatch(/\/OFF \[\s*7 0 R\s*\]/)
     expect(page.node.get(L.PDFName.of('Annots'))).toBeDefined()
     expect(stats.links).toBe(1)
+  })
+})
+
+describe('a file the export will not write', () => {
+  it('refuses a translation with a character no slice of its face draws, rather than write a hole where the reader shows a letter', async () => {
+    const c = composed()
+    await expect(
+      exportPdf({
+        composed: c.bytes,
+        seam: c.seam,
+        pages: new Map([[1, laid('\u6587\u4e00')]]),
+        glyphs,
+        PL: L,
+        form: 'translation',
+      }),
+    ).rejects.toMatchObject({ code: 'glyphs' })
+  })
+  it('stops at its next page once cancelled', async () => {
+    const c = composed()
+    const ac = new AbortController()
+    ac.abort()
+    await expect(
+      exportPdf({
+        composed: c.bytes,
+        seam: c.seam,
+        pages: new Map([[1, laid(ONE)]]),
+        glyphs,
+        PL: L,
+        form: 'side-by-side',
+        signal: ac.signal,
+      }),
+    ).rejects.toMatchObject({ code: 'aborted' })
   })
 })
 

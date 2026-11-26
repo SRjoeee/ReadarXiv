@@ -131,6 +131,11 @@ export interface Composer {
   settled(n: number): boolean
   /** every member of the layer laid so far, by ord (the parts' Placed) */
   member(ord: number): Placed | null
+  /** every page of the layer laid, for the PDF download (export/): a page's commit of this generation where it has one, else its
+   *  part laid now over the rows, its faces waited for, nothing drawn; a page with no part, or nothing of its own laid, left
+   *  out (the original's, as the reader shows it). Null where the layer or the rows are not there; it throws where a page
+   *  cannot be laid, its part not read or its faces not had (the file would not be the page the reader shows) */
+  layAll(o: { signal: AbortSignal; progress?: (done: number, of: number) => void }): Promise<Map<number, Page> | null>
   on<K extends keyof ComposerEvents>(type: K, f: (e: ComposerEvents[K]) => void): () => void
   probe(): Record<string, number | string>
   /** the last overlays' timings (ms) */
@@ -1080,6 +1085,38 @@ export function createComposer(o: ComposerOptions): Composer {
     },
     settled: (n) => settledOriginal(n),
     member: (ord) => members.get(ord) ?? null,
+    async layAll({ signal, progress }) {
+      const l = layer
+      if (!l || !rows) return null
+      const out = new Map<number, Page>()
+      for (let n = 1; n <= l.pages; n++) {
+        if (signal.aborted) throw new DOMException('the export was cancelled', 'AbortError')
+        const c = commits.get(n)
+        let page: Page | null = c && c.gen === gen ? c.page : null
+        if (!page) {
+          const part = await partFor(n)
+          if (part) {
+            // (its faces loaded and laid again, as a page near the view waits for them: a few rounds at most, a slice a text
+            // of its own needs at each)
+            // (over the rows as ended: the files are offered once the translation the view waits for is final, chrome/model.ts
+            // `download`; a unit with no row there is the original's, as the reader shows it)
+            const lay = () => held(lostIn(() => o.lay(part, endedView))[0], part)
+            let got = lay()
+            for (let round = 0; got.wait.faces.length && round < 4; round++) {
+              await faces.ready(got.wait.faces, () => !signal.aborted)
+              got = lay()
+            }
+            if (got.wait.faces.length) throw new Error(`page ${n}: its faces could not be had`)
+            page = got
+          }
+        }
+        if (page?.members.some((m) => m.state === 'laid' && m.off)) out.set(n, page)
+        progress?.(n, l.pages)
+        // (a turn between pages: the page stays answerable while a long paper is laid)
+        await new Promise((ok) => setTimeout(ok, 0))
+      }
+      return out
+    },
     on: onOf<ComposerEvents>(listeners),
     timings: () => timings,
     probe() {

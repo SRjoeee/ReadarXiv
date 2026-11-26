@@ -243,13 +243,24 @@ off-state track, n-5 in the harness (1.5:1 against chrome), uses ink-3 here.
    readers; the maintainer, 2026-09-26: words ran off the thumb in English),
    深色时调暗页面 (switch). All are settings (§9.1), the same values the popup and the settings page change; a change
    applies at once.
-5. 下载 (`download`), a menu of two items, text only: 译文 PDF, 原文 PDF (the maintainer: 「只要译文 PDF / 原文 PDF」).
-   The translation's file is named `<id>.<target>.pdf`. Free. 译文 PDF is the final translation: while the translation is
-   still coming in (previews), the item is greyed. The original's item opens arXiv's own PDF in a tab of its own, with no
-   opener and no referrer, at `#axt-viewer` (§2: no reader laid over it): the browser streams it and its viewer saves it
-   (`<id>.pdf` as arXiv names it). The reader never reads the whole
+5. 下载 (`download`), a menu of three items, text only: 译文 PDF, 对照 PDF, 原文 PDF (the maintainer: 「只要译文 PDF / 原文 PDF」; the
+   side-by-side file added by the owner's choice of 2026-11-26, direction A of the preview: two rows, one a file, in both hosts;
+   the website's 分享与下载 menu holds 下载译文 PDF and 下载对照 PDF). The two files are made in the page (§11.12) from what the
+   reader holds, no work on our server: the translation's file is named `<id>.<target>.pdf`, the side-by-side's
+   `<id>.<target>.side-by-side.pdf` (each page twice as wide, the original on the left). Free. Both rows are greyed until the
+   final translation is on screen (while it is still coming in, and again while another target's comes). A press closes the
+   menu and the file is made with the menu closed: one at a time (the other row greyed, the row being made shows its share and
+   turns), the capsule saying the file and its share in whole percents (正在生成对照 PDF · 45%), with 取消 (the coordinator's
+   ruling of 2026-11-26: the work runs after the menu closes, and a long paper on a phone takes many seconds and much memory;
+   without it a mistaken press would force a wait and a download), its start said once to screen readers, never each share.
+   Made, the browser saves it and the capsule says 已下载对照 PDF with the check, for a toast's time; cancelled, nothing is
+   saved or said; failed, the capsule says 对照 PDF 下载失败 with the alert, 重试 (the same file made again) and a close, and
+   stands until closed or tried again. English: Translation PDF, Side-by-side PDF, "Creating side-by-side PDF · 45%",
+   "Side-by-side PDF downloaded", "Couldn't download the side-by-side PDF", Try again (the owner's, 2026-11-26). The original's
+   item opens arXiv's own PDF in a tab of its own, with no opener and no referrer, at `#axt-viewer` (§2: no reader laid over
+   it): the browser streams it and its viewer saves it (`<id>.pdf` as arXiv names it). The reader never reads the whole
    original to save it: that is 46 MB through the page for every reader, in case one asks (ruled 2026-10-17, for the web
-   too); a true download from the reader would need the `downloads` permission, a store-listing item not taken.
+   too); it reads it whole for a file of its own, on that file's press alone (§11.12).
 6. 设置 (`settings`): opens the settings page at its PDF reader section.
 7. 在默认查看器中打开 (`log-out`): leaves the reader for the browser's own viewer (the maintainer's wording, 2026-09-25).
 
@@ -2163,23 +2174,40 @@ in the page, after the slices' decoding (0.13 to 0.24 s); each file arXiv's size
   1,408 words remain, words the translation keeps and formula text in the crops. A show whose widths the walk cannot read stays,
   drawn invisibly (render mode 3), counted (0 of 9,890 on the four papers; 1 of 46,455 in the crops' sources). A form the add-on
   wrapped inside keeps its groups, which the default view turns off.
-- **The fonts** (`woff2.ts`, `brotli.ts`, `fonts.ts`, `cff.ts`). Each served slice drawn is a Type0 font (Identity-H, a
-  CIDFontType0 over its CFF, `/CIDFontType0C`) with a ToUnicode of exactly the glyphs drawn, so that selection, search and copy
-  give the translation's characters. A slice is WOFF2, whose tables are brotli: a browser's `DecompressionStream` has none
+- **The fonts** (`woff2.ts`, `brotli.ts`, `fonts.ts`, `cff.ts`, `ttf.ts`). Each served slice drawn is a Type0 font
+  (Identity-H, a CIDFontType0 over its CFF, `/CIDFontType0C`, or a CIDFontType2 over a TrueType one, FontFile2, its CIDs its
+  glyph ids) with a ToUnicode of exactly the glyphs drawn, so that selection, search and copy give the translation's characters. A slice is WOFF2, whose tables are brotli: a browser's `DecompressionStream` has none
   (Chromium 153), and PDF.js (6.3.289, both hosts' pin) decodes PDF's `/BrotliDecode`, so the slices' streams are the embedded
   files of a document of ours read back through PDF.js's public API: no decoder shipped. The CFF is subset (`subsetCff`): every
   glyph not drawn and every subroutine no kept glyph reaches made empty, glyph ids and CIDs kept (the text's codes need no
   renumbering), the table written again with every offset five bytes wide; the walk of a Type 2 charstring that tells which
   subroutines a glyph reaches refuses what it cannot tell (a computed call, `seac`), and that font goes whole, counted. All 3,705
-  CFF-flavoured slices served are read and subset; the 134 TrueType-flavoured ones (their outlines stored transformed) are not
-  drawn, counted. A paper's fonts came to 243 to 379 KB, two thirds of it the outlines drawn themselves (2610.37668v1-zh: 1,423
+  CFF-flavoured slices served are read and subset. The 134 TrueType-flavoured ones (bkai00mp, DejaVu Sans Mono's four faces, PT
+  Mono's two) store glyf and loca transformed (WOFF2 §5.1), rebuilt by `woff2.ts` (each of their 27,901 glyphs equal to
+  fontTools' own reading of the slice: its contours, points, components, instructions, box, advance and side bearing) and
+  subset by `ttf.ts` (every glyph not drawn, nor a component of one drawn, emptied). A character of the translation that no
+  slice of its face draws refuses the file (`ExportRefusal` 'glyphs': a file with a hole where the reader shows a letter is
+  not written; none on the four papers measured). A paper's fonts came to 243 to 379 KB, two thirds of it the outlines drawn themselves (2610.37668v1-zh: 1,423
   glyphs, 261 KB deflated).
+- **From the reader** (`run.ts`, `Reader.export`, the session's `exportPdf`): the original and the add-on read whole, once
+  each (one ask of each object, never the store's ranges), into one buffer, each held to its digest; every page laid by the
+  composer (`layAll`: a page's commit, else its part laid now over the rows as ended, its faces waited for, nothing drawn); the
+  slices the runs are drawn in fetched (the browser's cache holds those the page drew); the object layer, `@cantoo/pdf-lib`,
+  loaded on the press as PDF.js is the host's (both hosts' root manifests pin it; its own chunk, 578 KB, 249 KB gzipped). The
+  share told: the bytes to 45 %, the pages to 75 %, the fonts to 85 %, the file the rest. The engine reaches the reader in
+  this module alone (`scripts/check-boundary.mjs` `PACKAGE_WITHIN`).
+- **Memory**: one translated file of the 46 MB paper (2608.16117v1) in Chromium 153 with V8's heap capped at 256 MB
+  (`--js-flags=--max-old-space-size=256`, a phone's heap stood in; the browser's own process tree sampled): made, its JS heap
+  at most 158 MB, its renderer's resident memory at most 450 MB.
 - **Not yet** (counted where it occurs): small capitals (smcp) not substituted, ligatures only at U+FB00 to U+FB04; a page turned
   (`/Rotate`) set side by side in its upright frame; a non-CID-keyed CFF under `/CIDFontType0C` (poppler warns, every renderer
   tried draws it).
 
-The rows: `packages/reader/tests/export/` (the subset on CFF fonts of our own, the WOFF2 and brotli path, the bake, the chain
-on a document of our own, read back by the object layer and PDF.js).
+The rows: `packages/reader/tests/export/` (the subset on CFF fonts of our own, the WOFF2 path and its transformed TrueType,
+brotli by PDF.js, the bake, the chain on a document of our own, read back by the object layer and PDF.js),
+`packages/reader/tests/chrome/model.test.ts` and `capsule-export.test.ts` (the controller's file, its share, cancel, failure
+and retry, the capsule), and in a real browser `pnpm e2e:reader` (`tests/e2e/reader-v2-export.mjs`: both files saved and read
+back, one at a time, a cancel, a failure and its retry, the reading options' row in a narrow window).
 
 ## 12. Performance gates
 

@@ -344,7 +344,17 @@ const R: Locale['R'] = {
   zoom: { out: '축소', in: '확대', value: '확대/축소', width: '너비에 맞추기', page: '페이지에 맞추기', actual: '실제 크기' },
   options: { name: '읽기 옵션', color: '하이라이트 색상', appearance: '모양', light: '라이트', dark: '다크', system: '시스템', dim: '다크 모드에서 페이지 어둡게' },
   classes: { name: '번역 범위', figures: '그림 속 텍스트', tables: '표 속 텍스트', heads: '머리글 및 바닥글', references: '참고문헌', names: '저자 정보' },
-  download: { name: '다운로드', translation: '번역문 PDF', original: '원문 PDF' },
+  download: { name: '다운로드', translation: '번역문 PDF', sideBySide: '대조 PDF', original: '원문 PDF' },
+  export: {
+    making: (form: 'translation' | 'sideBySide', percent: number): string =>
+      `${form === 'translation' ? '번역문' : '대조'} PDF 만드는 중 · ${percent}%`,
+    done: (form: 'translation' | 'sideBySide'): string =>
+      `${form === 'translation' ? '번역문' : '대조'} PDF를 다운로드했습니다`,
+    failed: (form: 'translation' | 'sideBySide'): string =>
+      `${form === 'translation' ? '번역문' : '대조'} PDF를 다운로드하지 못했습니다`,
+    cancel: '취소',
+    retry: '다시 시도',
+  },
   leave: '기본 뷰어에서 열기',
   pill: { original: '원문 페이지', translation: '번역문 페이지', previous: '이전 페이지', next: '다음 페이지' },
   fold: { expand: '펼치기', collapse: '접기' },

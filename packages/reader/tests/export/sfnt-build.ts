@@ -142,3 +142,106 @@ export function buildWoff2(tables: Map<string, Uint8Array>, compress: (b: Uint8A
   out.set(z, 48 + dir.length)
   return out
 }
+
+/** a glyph of a TrueType font of ours: contours of points [x, y, on curve], or components [glyph, dx, dy] */
+export type TtGlyph = { contours: [number, number, boolean][][] } | { components: [number, number, number][] } | null
+
+/** a TrueType-flavoured WOFF2 of `glyphs`, its glyf and loca stored transformed (WOFF2 §5.1: every point's delta in four bytes,
+ *  a composite's box in the box stream), head, hhea, maxp, hmtx and cmap stored as they are */
+export function buildTrueTypeWoff2(
+  p: { glyphs: TtGlyph[]; cmap: [cp: number, gid: number][]; advances: number[] },
+  compress: (b: Uint8Array) => Uint8Array,
+): Uint8Array {
+  const n = p.glyphs.length
+  const { tables } = buildSfnt({ glyphs: [], gsubrs: [], lsubrs: [[]], cmap: p.cmap, advances: p.advances })
+  tables.delete('CFF ')
+  const maxp = new Uint8Array([0, 0, 0x50, 0, ...be16(n)])
+  tables.set('maxp', maxp)
+  const hhea = tables.get('hhea')!.slice()
+  hhea.set(be16(n), 34)
+  tables.set('hhea', hhea)
+  const nContour: number[] = [],
+    nPoints: number[] = [],
+    flags: number[] = [],
+    glyph: number[] = [],
+    composite: number[] = [],
+    boxes: number[] = []
+  const bitmap = new Uint8Array(((n + 31) >> 5) << 2)
+  p.glyphs.forEach((g, k) => {
+    if (!g) {
+      nContour.push(...be16(0))
+      return
+    }
+    if ('contours' in g) {
+      nContour.push(...be16(g.contours.length))
+      let x = 0,
+        y = 0
+      for (const c of g.contours) {
+        nPoints.push(c.length)
+        for (const [px, py, on] of c) {
+          const dx = px - x,
+            dy = py - y
+          flags.push((on ? 0 : 0x80) | (124 + (dx >= 0 ? 1 : 0) + (dy >= 0 ? 2 : 0)))
+          glyph.push(...be16(Math.abs(dx)), ...be16(Math.abs(dy)))
+          x = px
+          y = py
+        }
+      }
+      glyph.push(0)
+    } else {
+      nContour.push(...be16(-1 & 0xffff))
+      g.components.forEach(([gid, dx, dy], i) => {
+        const more = i < g.components.length - 1 ? 0x20 : 0
+        composite.push(...be16(0x0001 | 0x0002 | more), ...be16(gid), ...be16(dx & 0xffff), ...be16(dy & 0xffff))
+      })
+      bitmap[k >> 3]! |= 0x80 >> (k & 7)
+      boxes.push(...be16(0), ...be16(0), ...be16(1000), ...be16(1000))
+    }
+  })
+  const streams = [nContour, nPoints, flags, glyph, composite, [...bitmap, ...boxes], []]
+  const glyf = new Uint8Array([
+    ...be16(0),
+    ...be16(0),
+    ...be16(n),
+    ...be16(1),
+    ...streams.flatMap((s) => be32(s.length)),
+    ...streams.flat(),
+  ])
+  const order: [string, Uint8Array, number, number | null][] = [
+    ...[...tables].map(([t, d]): [string, Uint8Array, number, number | null] => [t, d, KNOWN.indexOf(t), null]),
+    ['glyf', glyf, 10, glyf.length],
+    ['loca', new Uint8Array(0), 11, 0],
+  ]
+  const dir: number[] = []
+  for (const [t, d, known, transformLength] of order) {
+    dir.push(known >= 0 ? known : 63)
+    if (known < 0) dir.push(...[...t].map((c) => c.charCodeAt(0)))
+    dir.push(...base128(t === 'loca' ? 4 * (n + 1) : d.length))
+    if (transformLength !== null) dir.push(...base128(transformLength))
+  }
+  const data = new Uint8Array(order.reduce((m, [, d]) => m + d.length, 0))
+  let at = 0
+  for (const [, d] of order) {
+    data.set(d, at)
+    at += d.length
+  }
+  const z = compress(data)
+  const total = 48 + dir.length + z.length
+  const out = new Uint8Array(total)
+  out.set(
+    [
+      ...be32(0x774f4632),
+      ...be32(0x00010000),
+      ...be32(total),
+      ...be16(order.length),
+      0,
+      0,
+      ...be32(0),
+      ...be32(z.length),
+    ],
+    0,
+  )
+  out.set(dir, 48)
+  out.set(z, 48 + dir.length)
+  return out
+}

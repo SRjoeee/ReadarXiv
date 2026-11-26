@@ -88,8 +88,10 @@ export function openSession(o: ChromeOpen): (chrome: SessionHost) => Promise<Ses
       zoomTo: (to) => reader.do({ do: 'zoom', to }),
       goToPage: (side, page) => reader.do({ do: 'page', side, page }),
       setPrefs: set,
-      // (no translation's PDF yet: its download greyed in both hosts, S-R-09)
+      // (the translation's file is made by exportPdf: a session of before had pdfBytes alone, S-R-09)
       pdfBytes: async () => null,
+      // the PDF download, made in the page from what the reader holds (PDF-READER §11.12)
+      exportPdf: (form, x) => reader.export(form, x),
       // arXiv's own PDF, opened by the browser in a tab of its own: never read through the reader
       openOriginal: () => reader.do({ do: 'original' }),
       goToUnit: (id, o) => reader.do({ do: 'heading', id, ...(o?.focus ? { focus: true } : {}) }),

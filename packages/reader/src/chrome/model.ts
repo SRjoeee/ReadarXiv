@@ -235,7 +235,14 @@ export interface ReaderState {
   chose: boolean
   /** the paper's layer was made during this visit (a prepare told): its run is the making's */
   made: boolean
+  /** a PDF download being made in the page (export/): its file and how far it has come, a whole percent; null while none is.
+   *  One at a time (the other download greyed) */
+  exporting: { form: ExportForm; percent: number } | null
+  /** the PDF download that failed (its retry offered in the capsule until it is closed or tried again); null while none did */
+  exportFailed: ExportForm | null
 }
+/** the files the reader makes (UI.md S-R-09): the translation's, the side-by-side's */
+export type ExportForm = 'translation' | 'side-by-side'
 
 export const INITIAL: ReaderState = {
   display: 'original',
@@ -276,6 +283,8 @@ export const INITIAL: ReaderState = {
   toast: null,
   chose: false,
   made: false,
+  exporting: null,
+  exportFailed: null,
 }
 
 /** the session's commands the controller passes on */
@@ -287,8 +296,12 @@ export interface Session {
   goToPage(side: Side, page: number): void
   /** a patch of the preferences, on top of what the store holds when its turn comes */
   setPrefs(patch: PrefsPatch): void
-  /** the translation's bytes, to save; null while there are none (no host makes them yet: open.ts) */
+  /** the translation's bytes, to save; null while there are none (a session of before the PDF download: the website's until its
+   *  pin takes exportPdf; `exportPdf`, where there is one, is asked instead) */
   pdfBytes(which: 'translation'): Promise<Uint8Array | null>
+  /** a file of `form` made in the page, its parts in order (the PDF download, PDF-READER §11.12): `progress` told the share
+   *  made (0–1), `signal` the reader's cancel; it rejects where it cannot be made (an AbortError where cancelled) */
+  exportPdf?(form: ExportForm, o: { signal: AbortSignal; progress: (share: number) => void }): Promise<Uint8Array[]>
   /** arXiv's own PDF of the paper opened by the browser, in a tab of its own: the browser streams it and saves it. Never read
    *  through the reader (the whole file, for every reader, in case one asks to save it) */
   openOriginal(): void
@@ -510,6 +523,8 @@ function reduceRunFree(
         translated: countOf(state, event),
         failedUnits: event.lost,
         failureAt: null,
+        // (a translation coming in again, another target's or a retry's: its files wait for its end)
+        download: state.download === 'translation' ? 'original' : state.download,
       }
     }
     case 'translated': {
@@ -540,6 +555,8 @@ function reduceRunFree(
           laying: true,
           progress,
           failedUnits: event.lost,
+          // (the translation final, its first page not laid yet: its files can be made, every page laid for them)
+          download: 'translation' as const,
         }
       return {
         ...withFailures(counted, { ...state.failures, service: event.stopped }),
@@ -548,6 +565,8 @@ function reduceRunFree(
         laying: false,
         progress,
         failedUnits: event.lost,
+        // (the final translation on screen: its files can be made, S-R-09; a run stopped short has none)
+        ...(event.stopped ? {} : { download: 'translation' as const }),
       }
     }
     case 'unavailable': {
@@ -578,8 +597,10 @@ const countOf = (state: ReaderState, e: { got: number; total: number }): ReaderS
 
 /** a download's file name (the reader's design, §6.1): the paper's id, the translation's with its language; the slash of
  *  an old-style id (hep-th/9711200) made safe */
-export function fileName(id: string, which: 'translation' | 'original', lang: string): string {
-  return `${id.replace(/\//g, '_')}${which === 'translation' ? `.${lang}` : ''}.pdf`
+export function fileName(id: string, which: ExportForm | 'original', lang: string): string {
+  const safe = id.replace(/\//g, '_')
+  if (which === 'original') return `${safe}.pdf`
+  return which === 'translation' ? `${safe}.${lang}.pdf` : `${safe}.${lang}.side-by-side.pdf`
 }
 
 export interface ReaderController {
@@ -605,8 +626,16 @@ export interface ReaderController {
   /** both sides shown taken to a heading from the contents; `focus`: the focus taken to its page where the reader holds a
    *  target for it (the contents laid over the document, closed by the jump) */
   goToHeading(id: number, o?: { focus?: boolean }): void
-  /** a side's PDF saved as a file, named by the paper (fileName) */
-  download(which: 'translation' | 'original'): Promise<void>
+  /** a side's PDF saved as a file, named by the paper (fileName): the original arXiv's (opened by the browser), the translation's
+   *  and the side-by-side's made in the page, one at a time (a press while one is made does nothing), its share in the
+   *  capsule with its cancel, its failure there with its retry, its end the browser's save and the capsule's word */
+  download(which: ExportForm | 'original'): Promise<void>
+  /** the PDF download being made let go: nothing saved, nothing said */
+  cancelExport(): void
+  /** the PDF download that failed made again */
+  retryExport(): void
+  /** the failed PDF download's word closed */
+  closeExportFailure(): void
   /** a host's passing words in the capsule's place, over whatever it shows, for their time; words said again start their time
    *  again, and a toast replaced before its time comes back after the one that replaced it for the time it has left (the
    *  website's "copied" over its word for a crash) */
@@ -689,7 +718,9 @@ export function createController({
     toasts.push({ t, until: Date.now() + (t.ms ?? TOAST_MS) })
     showToast()
   }
-  return {
+  /** the PDF download being made: its cancel */
+  let exportAc: AbortController | null = null
+  const controller: ReaderController = {
     getState: () => state,
     subscribe(listener) {
       listeners.add(listener)
@@ -748,15 +779,65 @@ export function createController({
         s?.openOriginal()
         return
       }
-      const bytes = await s?.pdfBytes(which)
-      if (!bytes) return
+      if (!s || state.exporting) return
       const lang = state.prefs?.target ?? ''
-      const a = Object.assign(document.createElement('a'), {
-        href: URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'application/pdf' })),
-        download: fileName(state.paper.id, which, lang),
-      })
-      a.click()
-      setTimeout(() => URL.revokeObjectURL(a.href), 1000)
+      const save = (parts: Uint8Array[]) => {
+        const a = Object.assign(document.createElement('a'), {
+          href: URL.createObjectURL(new Blob(parts as BlobPart[], { type: 'application/pdf' })),
+          download: fileName(state.paper.id, which, lang),
+        })
+        a.click()
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000)
+      }
+      // (a session of before the PDF download: the translation's bytes where it has them, as it gave them)
+      if (!s.exportPdf) {
+        if (which !== 'translation') return
+        const bytes = await s.pdfBytes(which)
+        if (bytes) save([bytes])
+        return
+      }
+      const ac = new AbortController()
+      exportAc = ac
+      set({ exporting: { form: which, percent: 0 }, exportFailed: null })
+      try {
+        const parts = await s.exportPdf(which, {
+          signal: ac.signal,
+          progress: (share) => {
+            const percent = Math.max(0, Math.min(99, Math.floor(share * 100)))
+            if (exportAc === ac && state.exporting && percent > state.exporting.percent)
+              set({ exporting: { form: which, percent } })
+          },
+        })
+        if (ac.signal.aborted) return
+        save(parts)
+        exportAc = null
+        set({ exporting: null })
+        toast({ words: R.export.done(which === 'translation' ? 'translation' : 'sideBySide'), icon: 'check' })
+      } catch (e) {
+        if (exportAc !== ac) return
+        exportAc = null
+        if (ac.signal.aborted) {
+          set({ exporting: null })
+          return
+        }
+        console.warn('[reader] the PDF download failed:', e)
+        set({ exporting: null, exportFailed: which })
+      }
+    },
+    cancelExport() {
+      exportAc?.abort()
+      exportAc = null
+      set({ exporting: null })
+    },
+    retryExport() {
+      const form = state.exportFailed
+      if (!form) return
+      set({ exportFailed: null })
+      void controller.download(form)
+    },
+    closeExportFailure() {
+      set({ exportFailed: null })
     },
   }
+  return controller
 }

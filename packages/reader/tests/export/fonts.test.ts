@@ -4,9 +4,10 @@
 import { brotliCompressSync, brotliDecompressSync } from 'node:zlib'
 import { describe, expect, it } from 'vitest'
 import { readSfnt } from '../../src/export/fonts.ts'
+import { glyphsOf, subsetTrueType, tablesOf } from '../../src/export/ttf.ts'
 import { sfntOfWoff2, woff2Payload } from '../../src/export/woff2.ts'
 import { cs } from './cff-build.ts'
-import { buildSfnt, buildWoff2 } from './sfnt-build.ts'
+import { buildSfnt, buildTrueTypeWoff2, buildWoff2 } from './sfnt-build.ts'
 
 const font = () =>
   buildSfnt({
@@ -42,14 +43,84 @@ describe("a served slice's sfnt", () => {
     )
   })
 
-  it('refuses a slice whose outlines are stored transformed (a TrueType glyf), as no table of ours rebuilds it', () => {
-    const { tables } = font()
-    const t = new Map([...tables].filter(([k]) => k !== 'CFF '))
-    t.set('glyf', new Uint8Array(8))
-    t.set('loca', new Uint8Array(8))
-    // (glyf and loca under transform version 0: transformed)
-    const w = buildWoff2(t, (b) => new Uint8Array(brotliCompressSync(b)))
-    expect(woff2Payload(w)).toBeNull()
+  it('rebuilds a TrueType slice whose glyf and loca are stored transformed: each point, contour and component as drawn', async () => {
+    const w = buildTrueTypeWoff2(
+      {
+        glyphs: [
+          null,
+          {
+            contours: [
+              [
+                [10, 0, true],
+                [500, 0, true],
+                [500, 700, false],
+                [10, 700, true],
+              ],
+            ],
+          },
+          { components: [[1, 30, -20]] },
+        ],
+        cmap: [
+          [0x41, 1],
+          [0x42, 2],
+        ],
+        advances: [500, 600, 650],
+      },
+      (b) => new Uint8Array(brotliCompressSync(b)),
+    )
+    const [sfnt] = await brotliAll([w])
+    const f = readSfnt('t', sfnt as Uint8Array)
+    expect(f?.kind).toBe('ttf')
+    expect(f?.cid(2)).toBe(2)
+    expect(f?.advance(2)).toBe(650)
+    const glyphs = glyphsOf(tablesOf(f?.sfnt as Uint8Array))
+    const g1 = glyphs[1] as Uint8Array
+    const dv = new DataView(g1.buffer, g1.byteOffset, g1.byteLength)
+    // one contour, its box from its points, its end at point 3, no instructions, the flags (on, on, off, on), the deltas
+    expect([0, 2, 4, 6, 8, 10, 12].map((o) => dv.getInt16(o))).toEqual([1, 10, 0, 500, 700, 3, 0])
+    expect([...g1.subarray(14, 18)]).toEqual([1, 1, 0, 1])
+    expect([0, 1, 2, 3].map((k) => dv.getInt16(18 + 2 * k))).toEqual([10, 490, 0, -490])
+    expect([0, 1, 2, 3].map((k) => dv.getInt16(26 + 2 * k))).toEqual([0, 0, 700, 0])
+    // the composite: its box from the box stream, its component glyph 1 moved (30, -20)
+    const g2 = glyphs[2] as Uint8Array
+    const d2 = new DataView(g2.buffer, g2.byteOffset, g2.byteLength)
+    expect([0, 2, 4, 6, 8, 12, 14, 16].map((o) => d2.getInt16(o))).toEqual([-1, 0, 0, 1000, 1000, 1, 30, -20])
+  })
+
+  it('subsets a TrueType font to the glyphs drawn and their components, every glyph id kept', async () => {
+    const w = buildTrueTypeWoff2(
+      {
+        glyphs: [
+          null,
+          {
+            contours: [
+              [
+                [0, 0, true],
+                [9, 9, true],
+                [0, 9, true],
+              ],
+            ],
+          },
+          { components: [[1, 0, 0]] },
+          {
+            contours: [
+              [
+                [1, 1, true],
+                [2, 2, true],
+                [1, 2, true],
+              ],
+            ],
+          },
+        ],
+        cmap: [[0x41, 2]],
+        advances: [500, 500, 500, 500],
+      },
+      (b) => new Uint8Array(brotliCompressSync(b)),
+    )
+    const [sfnt] = await brotliAll([w])
+    const sub = subsetTrueType(sfnt as Uint8Array, new Set([2]))
+    const glyphs = glyphsOf(tablesOf(sub))
+    expect(glyphs.map((g) => g.length > 0)).toEqual([false, true, true, false])
   })
 
   it('is read for its glyphs by code point, their advances and their CIDs', () => {

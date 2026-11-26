@@ -561,6 +561,119 @@ describe('createController', () => {
     }
   })
 
+  describe('the PDF download made in the page (S-R-09)', () => {
+    /** a session whose export the test drives: each call's progress, its signal, and its end */
+    const exporting = () => {
+      const calls: {
+        form: string
+        progress: (s: number) => void
+        signal: AbortSignal
+        done: (p: Uint8Array[]) => void
+        fail: (e: unknown) => void
+      }[] = []
+      const session: Session = {
+        ...fakeSession(),
+        exportPdf: (form, o) =>
+          new Promise((done, fail) => {
+            calls.push({ form, ...o, done, fail })
+          }),
+      }
+      return { session, calls }
+    }
+    const saving = () => {
+      const saved: string[] = []
+      const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
+        this: HTMLAnchorElement,
+      ) {
+        saved.push(this.download)
+      })
+      return { saved, restore: () => click.mockRestore() }
+    }
+    const open = async (session: Session) => {
+      const controller = createController({
+        open: async () => session,
+        paper: '2609.40181v2',
+        first: { prefs: { ...DEFAULTS, target: 'zh' }, unreadable: false },
+        defaults: DEFAULTS,
+      })
+      await controller.attach(panes())
+      return controller
+    }
+    const tick = () => new Promise((ok) => setTimeout(ok, 0))
+
+    it('offers the files once the final translation is on screen, and not while another translation comes in', () => {
+      const ready = fold([opened, { type: 'translated', got: 4, total: 4, lost: 0, stopped: null }])
+      expect(ready.download).toBe('translation')
+      expect(fold([{ type: 'translating', got: 1, total: 4, lost: 0 }], ready).download).toBe('original')
+      const stopped = fold([opened, { type: 'translated', got: 2, total: 4, lost: 2, stopped: 'network' }])
+      expect(stopped.download).toBe('original')
+    })
+
+    it('makes one file at a time, its share a whole percent, and saves it named by its form; the capsule says it is done', async () => {
+      const { session, calls } = exporting()
+      const s = saving()
+      try {
+        const controller = await open(session)
+        void controller.download('side-by-side')
+        await tick()
+        expect(controller.getState().exporting).toEqual({ form: 'side-by-side', percent: 0 })
+        calls[0]?.progress(0.456)
+        expect(controller.getState().exporting?.percent).toBe(45)
+        // (another press while it is made does nothing)
+        void controller.download('translation')
+        await tick()
+        expect(calls).toHaveLength(1)
+        calls[0]?.done([new Uint8Array([37, 80, 68, 70])])
+        await tick()
+        expect([controller.getState().exporting, s.saved]).toEqual([null, ['2609.40181v2.zh.side-by-side.pdf']])
+        expect(controller.getState().toast?.icon).toBe('check')
+      } finally {
+        s.restore()
+      }
+    })
+
+    it('a cancel lets the file go: nothing saved, nothing said', async () => {
+      const { session, calls } = exporting()
+      const s = saving()
+      try {
+        const controller = await open(session)
+        void controller.download('translation')
+        await tick()
+        controller.cancelExport()
+        expect(calls[0]?.signal.aborted).toBe(true)
+        calls[0]?.fail(new DOMException('cancelled', 'AbortError'))
+        await tick()
+        expect([controller.getState().exporting, controller.getState().exportFailed, s.saved]).toEqual([null, null, []])
+      } finally {
+        s.restore()
+      }
+    })
+
+    it('a failure stands with its retry until closed, and the retry makes the same file again', async () => {
+      const { session, calls } = exporting()
+      const s = saving()
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      try {
+        const controller = await open(session)
+        void controller.download('side-by-side')
+        await tick()
+        calls[0]?.fail(new Error('a part could not be had'))
+        await tick()
+        expect(controller.getState().exportFailed).toBe('side-by-side')
+        controller.retryExport()
+        await tick()
+        expect([controller.getState().exportFailed, calls[1]?.form]).toEqual([null, 'side-by-side'])
+        calls[1]?.fail(new Error('again'))
+        await tick()
+        controller.closeExportFailure()
+        expect(controller.getState().exportFailed).toBeNull()
+      } finally {
+        s.restore()
+        warn.mockRestore()
+      }
+    })
+  })
+
   it("both failures told in the start's order: the controller shows the PDF's, then, once it opens, the service's (Codex on #391)", async () => {
     let host: SessionHost | null = null
     const controller = createController({

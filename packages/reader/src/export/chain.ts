@@ -28,8 +28,7 @@ import {
 import type { Item, Page } from '../compose/page.ts'
 import { cropsOf, faceScale } from '../compose/paint.ts'
 import { type BakeStats, makeBaker, newBakeStats } from './bake.ts'
-import { subsetCff } from './cff.ts'
-import { fontBodies, type SfntFont } from './fonts.ts'
+import { fontBodies, fontFileOf, type SfntFont } from './fonts.ts'
 
 /** how a run's characters are drawn: the slice font and glyph of a code point in a face (the reader's rule: the first family
  *  of the font string whose face holds it), null for none; and each UTF-16 index's offset from the run's start at 100 px, as
@@ -40,6 +39,17 @@ export interface Glyphs {
 }
 
 export type ExportForm = 'translation' | 'side-by-side'
+
+/** a file the export will not write: `glyphs`, a character of the translation that no slice of its face draws (a file with a
+ *  hole where the reader shows a letter is no translation of the page; the reader's own rule draws such a run's element as
+ *  the original's ink, so none is expected), `aborted`, the reader's cancel */
+export class ExportRefusal extends Error {
+  declare code: 'glyphs' | 'aborted'
+  constructor(code: 'glyphs' | 'aborted', why: string) {
+    super(why)
+    this.code = code
+  }
+}
 
 export interface ExportInput {
   /** arXiv's bytes and the add-on after them (the composed document the reader reads) */
@@ -56,6 +66,8 @@ export interface ExportInput {
   px?: number
   /** told each page as it is done, and the fonts at the end */
   progress?: (done: number, of: number) => void
+  /** the reader's cancel: the export stops at its next page (ExportRefusal 'aborted') */
+  signal?: AbortSignal
 }
 
 export interface ExportStats {
@@ -75,6 +87,8 @@ export interface ExportStats {
   /** fonts the subset refused, embedded whole, and their deflated bytes */
   fontsWhole: number
   fontBytesWhole: number
+  /** fonts of TrueType outlines (CIDFontType2) */
+  fontsTrueType: number
   fontBytes: number
   /** pages whose walk does not name the object layer's page (left unbaked) */
   pagesUnwalked: number
@@ -213,6 +227,7 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
     fonts: 0,
     fontsWhole: 0,
     fontBytesWhole: 0,
+    fontsTrueType: 0,
     fontBytes: 0,
     pagesUnwalked: 0,
     bake: newBakeStats(),
@@ -498,7 +513,11 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
 
   const off: string[] = []
   const side = o.form === 'side-by-side'
+  const stop = () => {
+    if (o.signal?.aborted) throw new ExportRefusal('aborted', 'the export was cancelled')
+  }
   for (let i = 0; i < pages.length; i++) {
+    stop()
     const n = i + 1
     const pn = pages[i]!
     const node = pn.node
@@ -608,14 +627,17 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
     o.progress?.(i + 1, pages.length + 1)
   }
   lap('pages')
+  if (stats.missing) throw new ExportRefusal('glyphs', `${stats.missing} characters no slice of their face draws`)
+  stop()
 
-  // ---- the fonts, written once their glyphs are known: each CFF subset to the glyphs drawn
+  // ---- the fonts, written once their glyphs are known: each subset to the glyphs drawn
   for (const e of fonts.values()) {
     const ids = { type0: e.num, cidFont: take(), desc: take(), file: take(), toUni: take() }
-    const sub = subsetCff(e.f.cff, new Set([...e.used.values()].map((u) => u[0])))
-    const z = await deflate(sub ?? e.f.cff)
+    const file = fontFileOf(e.f, new Set([...e.used.values()].map((u) => u[0])))
+    const z = await deflate(file.bytes)
     stats.fontBytes += z.length
-    if (!sub) {
+    if (e.f.kind === 'ttf') stats.fontsTrueType++
+    if (file.whole) {
       stats.fontsWhole++
       stats.fontBytesWhole += z.length
     }
@@ -624,7 +646,7 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
       [ids.type0, objText(ids.type0, body.type0)],
       [ids.cidFont, objText(ids.cidFont, body.cidFont)],
       [ids.desc, objText(ids.desc, body.desc)],
-      [ids.file, objStream(ids.file, ' /Subtype /CIDFontType0C /Filter /FlateDecode', z)],
+      [ids.file, objStream(ids.file, `${file.dict} /Filter /FlateDecode`, z)],
       [ids.toUni, objStream(ids.toUni, ' /Filter /FlateDecode', await deflate(enc(body.toUnicode)))],
     )
   }

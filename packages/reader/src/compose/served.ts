@@ -240,6 +240,11 @@ export interface Served {
   /** the tables these font strings' faces need read ahead (the faces' index, their groups'), no slice: so that a page's first
    *  slices wait for no table */
   warm(fonts: readonly string[]): Promise<void>
+  /** the PDF download's (export/): the slice a code point of a font string is drawn in (the first family of the string whose
+   *  face holds it, as a page's runs are cut), its key and its file's path; null where none holds it or a table is not read */
+  sliceOf(font: string, cp: number): { key: string; path: string } | null
+  /** a slice's file, asked as every slice is (the browser's cache holds it where the page drew it) */
+  sliceBytes(path: string): Promise<Uint8Array>
 }
 
 class Answer extends Error {
@@ -833,5 +838,15 @@ export function createServed(o: {
       if (gone) return
       await Promise.all([theIndex(), ...fonts.map((f) => tablesOf(f).catch((e) => o.warn?.(`the faces of ${f}`, e)))])
     },
+    sliceOf(font, cp) {
+      const fs = facesOf(font)
+      if (!fs?.read) return null
+      for (const face of fs.faces) {
+        const slice = face.slices?.find((x) => inRanges(x.ranges, cp))
+        if (slice) return { key: slice.key, path: slice.path }
+      }
+      return null
+    },
+    sliceBytes: (path) => fileOf(`/${path}`, CAPS.slice),
   }
 }

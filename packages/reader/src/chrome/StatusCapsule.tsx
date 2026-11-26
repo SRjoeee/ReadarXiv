@@ -146,13 +146,15 @@ export function StatusCapsule({
           data-tone={look.tone}
           words={capsule.words}
           {...(capsule.kind === 'progress' ? { spoken: now === null ? '' : (stageSaid.current?.words ?? '') } : {})}
+          // (a PDF download being made is said once, its file, never each share: S-R-09)
+          {...(capsule.kind === 'export' ? { spoken: capsule.words.prefix.replace(/\s*·\s*$/, '') } : {})}
           wordsId={words}
           alone={alone}
           out={now === null}
           {...timed}
           {...linger}
           // what follows the words, named by what it holds: another brings it in with the motion
-          afterKey={`${link ? 'link' : ''}|${capsule.kind === 'notice' ? capsule.action : capsule.kind === 'unreadable' ? 'settings' : retryNow ? 'retry' : capsule.kind === 'progress' ? 'show' : ''}`}
+          afterKey={`${link ? 'link' : ''}|${capsule.kind === 'notice' ? capsule.action : capsule.kind === 'unreadable' ? 'settings' : retryNow ? 'retry' : capsule.kind === 'progress' ? 'show' : capsule.kind === 'export' || capsule.kind === 'exportFailed' ? capsule.kind : ''}`}
           after={
             alone ? null : (
               <>
@@ -188,6 +190,26 @@ export function StatusCapsule({
                   <button type="button" data-action className="chip" onClick={onChooseLanguage}>
                     {R.status.chooseLanguage}
                   </button>
+                )}
+                {capsule.kind === 'export' && (
+                  <button type="button" data-action className="chip" onClick={() => controller.cancelExport()}>
+                    {R.export.cancel}
+                  </button>
+                )}
+                {capsule.kind === 'exportFailed' && (
+                  <button type="button" data-action className="chip" onClick={() => controller.retryExport()}>
+                    {R.export.retry}
+                  </button>
+                )}
+                {capsule.kind === 'exportFailed' && (
+                  <TippedButton
+                    label={R.status.close}
+                    side="top"
+                    className="close"
+                    onClick={() => controller.closeExportFailure()}
+                  >
+                    <Icon node={X} size={13} />
+                  </TippedButton>
                 )}
                 {(capsule.kind === 'notice' || capsule.kind === 'saveFailed') && (
                   <TippedButton

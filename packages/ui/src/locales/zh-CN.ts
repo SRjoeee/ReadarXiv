@@ -395,7 +395,16 @@ const R = {
   // S-R-27 (作者信息 the whole author block): the reading options' "What to translate",
   // its heading and its rows in the order they are listed; the settings page's group too (S-O-56)
   classes: { name: '翻译范围', figures: '图中文字', tables: '表中文字', heads: '页眉页脚', references: '参考文献', names: '作者信息' },
-  download: { name: '下载', translation: '译文 PDF', original: '原文 PDF' }, // S-R-09
+  download: { name: '下载', translation: '译文 PDF', sideBySide: '对照 PDF', original: '原文 PDF' }, // S-R-09
+  // S-R-09: the PDF download made in the page (the owner's words, 2026-11-26): its capsule's words, a file named by its form
+  export: {
+    making: (form: 'translation' | 'sideBySide', percent: number): string =>
+      `正在生成${form === 'translation' ? '译文' : '对照'} PDF · ${percent}%`,
+    done: (form: 'translation' | 'sideBySide'): string => `已下载${form === 'translation' ? '译文' : '对照'} PDF`,
+    failed: (form: 'translation' | 'sideBySide'): string => `${form === 'translation' ? '译文' : '对照'} PDF 下载失败`,
+    cancel: '取消',
+    retry: '重试',
+  },
   leave: '在默认查看器中打开', // S-R-10
   pill: { original: '原文页码', translation: '译文页码', previous: '上一页', next: '下一页' }, // S-R-11
   fold: { expand: '展开', collapse: '收起' }, // the folds of the outline kept for the website's import contract (UI.md S-R-02a)

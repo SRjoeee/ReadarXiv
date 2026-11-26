@@ -8,11 +8,12 @@ import { sfntOfWoff2, woff2Payload } from './woff2.ts'
 
 export type { BakeStats } from './bake.ts'
 export { brotliByPdfJs, type PdfJsLike } from './brotli.ts'
-export { exportPdf, type ExportForm, type ExportInput, type ExportStats, type Glyphs } from './chain.ts'
+export { ExportRefusal, exportPdf, type ExportForm, type ExportInput, type ExportStats, type Glyphs } from './chain.ts'
 export { readSfnt, type SfntFont } from './fonts.ts'
 
-/** served slices (each its key and its WOFF2) made fonts, every brotli stream decoded in one call of `decode` (the reader's
- *  PDF.js: brotliByPdfJs); a slice that is no CFF-flavoured font with no transformed table is null (its glyphs not drawn) */
+/** served slices (each its key and its file) made fonts, every brotli stream decoded in one call of `decode` (the reader's
+ *  PDF.js: brotliByPdfJs). A slice is WOFF2 as our site serves it, or an sfnt as it stands (a host's own stand-in: the e2e's);
+ *  one that is neither, or whose outlines cannot be read, is null (its glyphs not drawn: the export refuses the file) */
 export async function fontsOfSlices(
   slices: readonly { key: string; woff2: Uint8Array }[],
   decode: (streams: Uint8Array[]) => Promise<Uint8Array[]>,
@@ -23,9 +24,15 @@ export async function fontsOfSlices(
   let k = 0
   slices.forEach((s, i) => {
     const p = payloads[i]
-    out.set(s.key, p ? readSfnt(s.key, sfntOfWoff2(p, decoded[k++]!)) : null)
+    if (p) out.set(s.key, readSfnt(s.key, sfntOfWoff2(p, decoded[k++]!)))
+    else out.set(s.key, isSfnt(s.woff2) ? readSfnt(s.key, s.woff2) : null)
   })
   return out
+}
+/** an sfnt's own first four bytes: TrueType's 1.0, 'true', or CFF's 'OTTO' */
+const isSfnt = (b: Uint8Array) => {
+  const tag = b.length >= 4 ? ((b[0]! << 24) | (b[1]! << 16) | (b[2]! << 8) | b[3]!) >>> 0 : 0
+  return tag === 0x00010000 || tag === 0x74727565 || tag === 0x4f54544f
 }
 
 /** the same, decoded by `pdfjs` */

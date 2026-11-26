@@ -343,7 +343,17 @@ const R: Locale['R'] = {
   zoom: { out: '縮小', in: '拡大', value: 'ズーム', width: '幅に合わせる', page: 'ページに合わせる', actual: '実際のサイズ' },
   options: { name: '閲覧オプション', color: 'ハイライトの色', appearance: '外観', light: 'ライト', dark: 'ダーク', system: 'システム', dim: 'ダークモードでページを暗くする' },
   classes: { name: '翻訳する範囲', figures: '図中のテキスト', tables: '表中のテキスト', heads: 'ヘッダーとフッター', references: '参考文献', names: '著者情報' },
-  download: { name: 'ダウンロード', translation: '訳文 PDF', original: '原文 PDF' },
+  download: { name: 'ダウンロード', translation: '訳文 PDF', sideBySide: '対訳 PDF', original: '原文 PDF' },
+  export: {
+    making: (form: 'translation' | 'sideBySide', percent: number): string =>
+      `${form === 'translation' ? '訳文' : '対訳'} PDF を作成中 · ${percent}%`,
+    done: (form: 'translation' | 'sideBySide'): string =>
+      `${form === 'translation' ? '訳文' : '対訳'} PDF をダウンロードしました`,
+    failed: (form: 'translation' | 'sideBySide'): string =>
+      `${form === 'translation' ? '訳文' : '対訳'} PDF をダウンロードできませんでした`,
+    cancel: 'キャンセル',
+    retry: '再試行',
+  },
   leave: '既定のビューアで開く',
   pill: { original: '原文のページ', translation: '訳文のページ', previous: '前のページ', next: '次のページ' },
   fold: { expand: '展開', collapse: '折りたたむ' },

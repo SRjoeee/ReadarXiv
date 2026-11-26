@@ -1,0 +1,132 @@
+// The PDF download of the rebuilt reader (UI.md S-R-09, PDF-READER §11.12), as the extension's reader gives it: the download
+// menu's two files greyed until the final translation is on screen, each made in the page and saved by the browser under its
+// name, read back (the translation's characters as text, the side-by-side's pages twice as wide); one at a time, the file being
+// made's share in the capsule with its cancel; a cancel saving nothing; a failure (the add-on not read whole) with its retry,
+// which makes the file; and the same from the reading options in a window too narrow for the bar's own menu. Called by
+// reader-v2.mjs with its context, its stand-in and its reporting.
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
+/** the menu's words in the interface's language the run uses (zh-CN): the button, the rows, the capsule's chips */
+const W = { menu: '下载', translation: '译文 PDF', sideBySide: '对照 PDF', cancel: '取消', retry: '重试', options: '阅读选项' }
+
+export async function exportChecks(t) {
+  const { api, PAPER, openReader, laid, readerState, setConfig, clearPaperStore, section, check, SHOTS } = t
+  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
+  /** a saved file read back by PDF.js: its pages, its first page's width, its text */
+  const readBack = async (path) => {
+    const task = pdfjs.getDocument({ data: new Uint8Array(readFileSync(path)) })
+    const doc = await task.promise
+    const page = await doc.getPage(1)
+    const text = (await page.getTextContent()).items.map((i) => ('str' in i ? i.str : '')).join(' ')
+    const out = { pages: doc.numPages, width: Math.round(page.getViewport({ scale: 1 }).width), text }
+    await task.destroy()
+    return out
+  }
+  /** the file of a row of the download menu (opened from `opener`), saved by the browser: its name and what it reads as */
+  const press = async (page, opener, row, o = {}) => {
+    await opener()
+    const item = page.getByRole('menuitem', { name: row, exact: true })
+    const saved = o.expect === false ? null : page.waitForEvent('download', { timeout: o.timeout ?? 30_000 })
+    await item.click()
+    if (!saved) return null
+    const d = await saved
+    const path = join(SHOTS, `export-${d.suggestedFilename()}`)
+    await d.saveAs(path)
+    return { name: d.suggestedFilename(), ...(await readBack(path)) }
+  }
+  /** the browser's cache emptied: an object of the layer is immutable, and a file made again reads it from there, never from
+   *  the stand-in that holds or refuses it */
+  const uncached = async (page) => {
+    const cdp = await page.context().newCDPSession(page)
+    await cdp.send('Network.clearBrowserCache')
+    await cdp.detach()
+  }
+  const barMenu = (page) => () => page.getByRole('button', { name: W.menu, exact: true }).click()
+  /** the reader with its final translation on screen */
+  const translated = async (page) =>
+    (await laid(page)) &&
+    (await page.waitForFunction(() => window.__reader?.controller?.getState().download === 'translation', null, { timeout: 45_000 }).then(() => true, () => false))
+
+  section('the PDF download: the translation\'s file and the side-by-side\'s, made in the page; one at a time, its cancel, its failure and retry, a narrow window')
+  {
+    api.set({ whole: null })
+    await setConfig({ targetLanguage: 'deu' })
+    const page = await openReader({ mode: 'bilingual' })
+    // greyed until the final translation is on screen
+    await barMenu(page)()
+    const early = await page.evaluate(() => ({
+      rows: [...document.querySelectorAll('[role="menuitem"]')].map((r) => ({ text: r.textContent, disabled: r.getAttribute('aria-disabled') })),
+      download: window.__reader.controller.getState().download,
+    }))
+    await page.keyboard.press('Escape')
+    const ready = await translated(page)
+    const greyed = early.download !== 'translation' && early.rows.filter((r) => /PDF/.test(r.text ?? '') && r.disabled === 'true').length >= 2
+    check('the two files\' rows stand greyed until the final translation is on screen, then are offered', ready && greyed, JSON.stringify(early))
+
+    const tr = await press(page, barMenu(page), W.translation)
+    const s = await readerState(page)
+    check('the translation\'s file: saved as <id>.<target>.pdf, its translation read as text (the echo\'s), arXiv\'s page width',
+      !!tr && tr.name === `${PAPER}v${t.fixture.version}.${s.prefs?.target}.pdf` && /\[echo\]/.test(tr.text) && tr.width < 700, JSON.stringify(tr && { name: tr.name, pages: tr.pages, width: tr.width, text: tr.text.slice(0, 80) }))
+    const sbs = await press(page, barMenu(page), W.sideBySide)
+    check('the side-by-side file: saved as <id>.<target>.side-by-side.pdf, as many pages, each twice as wide, the translation read on it',
+      !!sbs && !!tr && sbs.name.endsWith(`.${s.prefs?.target}.side-by-side.pdf`) && sbs.pages === tr.pages && Math.abs(sbs.width - 2 * tr.width) <= 1 && /\[echo\]/.test(sbs.text), JSON.stringify(sbs && { name: sbs.name, pages: sbs.pages, width: sbs.width }))
+    const done = await page.evaluate(() => document.querySelector('.capsule')?.textContent ?? '')
+    check('the capsule says the file is downloaded', /已下载/.test(done), done)
+
+    await page.close()
+
+    // one at a time, its share and its cancel: the add-on's whole read held, the capsule and the menu read meanwhile (a reader of
+    // its own, the papers this machine keeps emptied: a file made before left the add-on there, read whole)
+    await clearPaperStore()
+    api.set({ whole: 4000 })
+    const held = await openReader({ mode: 'bilingual' })
+    await translated(held)
+    await uncached(held)
+    await press(held, barMenu(held), W.sideBySide, { expect: false })
+    const working = await held.waitForFunction(() => /正在生成对照 PDF/.test(document.querySelector('.capsule')?.textContent ?? ''), null, { timeout: 5000 }).then(() => true, () => false)
+    await barMenu(held)()
+    const rows = await held.evaluate(() => [...document.querySelectorAll('[role="menuitem"]')].map((r) => ({ text: r.textContent, disabled: r.getAttribute('aria-disabled'), busy: r.getAttribute('aria-busy') })))
+    await held.keyboard.press('Escape')
+    const one = rows.find((r) => r.text?.startsWith(W.sideBySide))?.busy === 'true' && rows.find((r) => r.text === W.translation)?.disabled === 'true'
+    check('while a file is made: the capsule says which, with its share; its row turns, the other is greyed', working && one, JSON.stringify(rows))
+    let saved = false
+    held.once('download', () => {
+      saved = true
+    })
+    await held.getByRole('button', { name: W.cancel, exact: true }).click()
+    await held.waitForTimeout(5000)
+    const after = await readerState(held)
+    check('a cancel saves nothing and says nothing: the capsule gone, nothing failed', !saved && after.exporting === null && after.exportFailed === null, JSON.stringify({ saved, exporting: after.exporting, failed: after.exportFailed }))
+
+    await held.close()
+
+    // a failure, and its retry (a reader of its own, as above)
+    await clearPaperStore()
+    api.set({ whole: 'reset' })
+    const page2 = await openReader({ mode: 'bilingual' })
+    await translated(page2)
+    await uncached(page2)
+    await press(page2, barMenu(page2), W.translation, { expect: false })
+    const failed = await page2.waitForFunction(() => /译文 PDF 下载失败/.test(document.querySelector('.capsule')?.textContent ?? ''), null, { timeout: 15_000 }).then(() => true, () => false)
+    check('a file that cannot be made: the capsule says so, with its retry', failed && (await page2.getByRole('button', { name: W.retry, exact: true }).count()) === 1)
+    api.set({ whole: null })
+    const retried = page2.waitForEvent('download', { timeout: 30_000 }).then((d) => d.suggestedFilename(), () => null)
+    await page2.getByRole('button', { name: W.retry, exact: true }).click()
+    const name = await retried
+    check('its retry makes the same file and saves it', name?.endsWith('.pdf') === true && !name.includes('side-by-side'), String(name))
+    await page2.close()
+
+    // a window too narrow for the bar's menu: the reading options' download row
+    const narrow = await openReader({ mode: 'bilingual' })
+    await narrow.setViewportSize({ width: 420, height: 800 })
+    await translated(narrow)
+    const viaOptions = await press(narrow, async () => {
+      await narrow.getByRole('button', { name: W.options, exact: true }).click()
+      await narrow.locator('.pop .row').filter({ hasText: W.menu }).getByRole('button', { name: W.menu, exact: true }).click()
+    }, W.sideBySide)
+    check('below 500 px: the reading options\' download row offers both files, and the side-by-side one is saved from it', !!viaOptions && viaOptions.name.endsWith('.side-by-side.pdf'), JSON.stringify(viaOptions && { name: viaOptions.name, width: viaOptions.width }))
+    await narrow.close()
+  }
+  api.set({ whole: null })
+}

@@ -344,7 +344,17 @@ const R: Locale['R'] = {
   zoom: { out: 'Zoom out', in: 'Zoom in', value: 'Zoom', width: 'Fit width', page: 'Fit page', actual: 'Actual size' },
   options: { name: 'Reading options', color: 'Highlight colour', appearance: 'Appearance', light: 'Light', dark: 'Dark', system: 'System', dim: 'Dim pages in dark mode' },
   classes: { name: 'What to translate', figures: 'Text in figures', tables: 'Text in tables', heads: 'Headers and footers', references: 'References', names: 'Authors and affiliations' },
-  download: { name: 'Download', translation: 'Translation PDF', original: 'Original PDF' },
+  download: { name: 'Download', translation: 'Translation PDF', sideBySide: 'Side-by-side PDF', original: 'Original PDF' },
+  export: {
+    making: (form: 'translation' | 'sideBySide', percent: number): string =>
+      `Creating ${form === 'translation' ? 'translation' : 'side-by-side'} PDF · ${percent}%`,
+    done: (form: 'translation' | 'sideBySide'): string =>
+      `${form === 'translation' ? 'Translation' : 'Side-by-side'} PDF downloaded`,
+    failed: (form: 'translation' | 'sideBySide'): string =>
+      `Couldn't download the ${form === 'translation' ? 'translation' : 'side-by-side'} PDF`,
+    cancel: 'Cancel',
+    retry: 'Try again',
+  },
   leave: 'Open in the default viewer',
   pill: { original: "Original's page", translation: "Translation's page", previous: 'Previous page', next: 'Next page' },
   fold: { expand: 'Expand', collapse: 'Collapse' },
