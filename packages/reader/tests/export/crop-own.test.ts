@@ -260,7 +260,7 @@ describe("a crop's cut against #690's second review", () => {
     const text = (st: PdfRawStream) => latin1(L.decodePDFRawStream(st).decode())
     const crop = xo(X.pages()[0]!.node, 'AXTC1_1_0')
     const copy = xo(crop.dict, 'AXTB0')
-    expect(text(crop)).toMatch(/\/F1 10 Tf[^]*\/AXTB0 Do/)
+    expect(text(crop)).toMatch(/\/F1 10 Tf[\s\S]*\/AXTB0 Do/)
     expect(text(copy)).not.toContain('/F1')
     expect(text(copy)).toContain('(x=1) Tj')
   })
