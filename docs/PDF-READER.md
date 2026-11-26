@@ -3728,6 +3728,17 @@ the history of `pipeline/versions.mjs`, where they were kept until 2026-11-04 (t
   flows' order test reads a leader's end as TeX's advance; a font named Demi read bold. Over the lab's 245 papers against the
   line: 9 papers' parts move (2608.30730v1 56 parts, its LMRomanDemi10 text bold and its names line one flow; 8 papers' size
   declarations stated, 2 of them titles at two sizes).
+- 124: lane fix-16683 (on rebuild/v2 at 1f0bc8718, merged over 7f9a582b6 (#688), the owner's report of 2026-11-26 on
+  2611.16683v1), no field added (FORMAT 1: a joined piece's `El.text` '' was there, read by an older typesetter as drawn
+  nothing); TRANSLATE_VERSION stays 11, LAYOUT 48 stays (no marked TeX moves). Parts (§18.117): a display's opening point alone
+  read past the units TeX shipped whole into its region to the text after it, on whatever page that text resumes (the stream
+  read a page at a time alike); a unit shipped whole between a piece's two points, its label and the notes' rule with it, and
+  the label of a unit shipped inside a unit's text range, left out; a placeholder TeX answered inseparable from the paper's macro
+  before it read through by that macro's opening point and stated empty (an errored probe box no such answer). Units: an
+  accent's argument read past white space, a whole character (a code point with its combining marks), none where the paper
+  defines the accent with no parameter. Over the lab's 245 papers against the line: 6 papers' parts move (3 REVTeX displays'
+  paragraphs drawn, 2608.01890v1, 2608.08350v2, 2610.20716v1; 3 labels their units' own, 2212.06817v2's ink unit "Table 8:"
+  gone, its row no longer met); no unit id moves in the 245 (2611.16683v1's FIG. 1 caption, one row asked again).
 
 **`REMOVAL`** (how a drawn unit's ink is taken away):
 
