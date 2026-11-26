@@ -727,6 +727,11 @@ export function ownedOf(
           Math.abs(G.y[g0 - 1]! - G.y[N.glyph]!) < 0.5 * Math.max(G.size[g0 - 1]!, G.size[N.glyph]!)
         )
           g0--
+        // (a unit TeX shipped there carries its label, a note's number, a float's name and number: one with none before its start
+        // on its line is what the piece itself sets — a paper's macro whose definition is a unit of its own, 2610.39068v1's
+        // \\LawStrongNames{} —, its ink the piece's)
+        const label = Array.from({ length: N.glyph - g0 }, (_, j) => G.u[g0 + j] ?? '').join('')
+        if (!labelText(label) || !isLabelForm(label)) continue
         const T = P.points[E[1]]!
         // (where the piece set no glyph of its own before the first of them, TeX set the piece whole after them — a formula moved
         // whole to the next column —, and what it painted from the piece's opening point to that label is what it shipped with
