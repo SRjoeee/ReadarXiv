@@ -13,6 +13,8 @@ export interface Job {
   /** its place among jobs of one rank, lowest first */
   order(): number
   run(): Promise<unknown>
+  /** told where it is dropped unrun, no longer wanted at its turn (its owner lets go of it) */
+  dropped?(): void
 }
 
 export interface Scheduler {
@@ -54,6 +56,7 @@ export function createScheduler(o: { warn?: (what: string, e: unknown) => void }
       const r = j.rank()
       if (r === null) {
         queue.delete(j)
+        j.dropped?.()
         continue
       }
       if (held && r > 0) continue

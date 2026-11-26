@@ -111,10 +111,21 @@ function server() {
     tell(d: unknown) {
       stream?.enqueue(enc(`data: ${JSON.stringify(d)}\n\n`))
     },
+    /** whether the reader has opened the paper's stream */
+    listening: () => stream !== null,
   }
 }
 
 let reader: Reader | null = null
+/** the reader let run until `done` holds: a frame's time at each turn, as a browser's frames come, and its real work between
+ *  (the code chunk's first import, the digests, the bodies read). Bounded by the test's own time, never by a count of turns:
+ *  that work takes real time, which a machine under load stretched past the counts this test waited (2 of 6 runs failed) */
+async function until(done: () => boolean) {
+  while (!done()) {
+    await vi.advanceTimersByTimeAsync(16)
+    await new Promise<void>((r) => setImmediate(r))
+  }
+}
 async function pass(ms = 0) {
   await vi.advanceTimersByTimeAsync(ms)
   for (let i = 0; i < 400; i++) {
@@ -151,7 +162,7 @@ async function opened(s: ReturnType<typeof server>) {
     paper: '2600.00001v1',
     visit: { display: 'bilingual', target: 'de' },
   })
-  await pass()
+  await until(s.listening)
   const units = files.filter((f) => f.endsWith('.units')).map((f) => at(bytesOf(f)))
   s.tell(
     paperDoc({
@@ -159,18 +170,21 @@ async function opened(s: ReturnType<typeof server>) {
       layer: layerOf({ catalog: at(HEAD), units }),
     }),
   )
-  await pass(2000)
-  // (the reader's code in, its composer the stand-in: what the reader does after it is done before the test goes on)
-  for (let i = 0; i < 20_000 && composers === 0; i++) await new Promise<void>((r) => setImmediate(r))
+  // (the head and the units read, the contents made with page 2's heading in them; the reader's code asked, after the left's
+  // page 1 or 1.5 s, and in: its composer the stand-in)
+  const r = reader as Reader
+  await until(() => composers > 0 && r.state().view.outline.some((e) => e.page === 2))
   expect(composers).toBe(1)
   await pass()
-  return reader
+  return r
 }
 
 describe('a contents entry gone to with the focus, its page’s part read first', () => {
   // (a heading of the fixture's page 2, whose part is read only for the jump)
   const part2 = `${dir}/${head.parts[1]}`
   const onPage2 = (r: Reader) => r.state().view.outline.find((e) => e.page === 2)?.id as number
+  /** a jump the panes were asked for */
+  const jump = (a: { name: string }) => a.name === 'goToRect' || a.name === 'goToPage'
 
   it('gives the focus to the heading’s page once the part is read, the focus not moved meanwhile', async () => {
     const s = server()
@@ -180,8 +194,10 @@ describe('a contents entry gone to with the focus, its page’s part read first'
     r.do({ do: 'heading', id: onPage2(r), focus: true })
     await pass()
     expect(asked.some((a) => a.name === 'focusPage')).toBe(false)
+    const from = asked.length
     s.let(part2)
-    await pass()
+    // (the part read and the jump made: the focus is given, or not, in the jump's own task)
+    await until(() => asked.slice(from).some(jump))
     expect(asked.filter((a) => a.name === 'focusPage').map((a) => a.args)).toEqual([['left', 2]])
   })
 
@@ -194,11 +210,12 @@ describe('a contents entry gone to with the focus, its page’s part read first'
     const control = document.createElement('button')
     document.body.append(control)
     control.focus()
+    const from = asked.length
     s.let(part2)
-    await pass()
+    await until(() => asked.slice(from).some(jump))
     expect(document.activeElement).toBe(control)
     expect(asked.some((a) => a.name === 'focusPage')).toBe(false)
     // (the jump itself still made: the heading gone to)
-    expect(asked.some((a) => a.name === 'goToRect' || a.name === 'goToPage')).toBe(true)
+    expect(asked.slice(from).some(jump)).toBe(true)
   })
 })

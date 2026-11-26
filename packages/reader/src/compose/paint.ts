@@ -13,7 +13,7 @@
 // by CSS with the page view's own canvas, and nothing of it is made again at a scale (the crops are drawn again only where the
 // page view is: `cropsFor`).
 import type { PageViewport, PDFPageProxy } from 'pdfjs-dist'
-import type { OptionalContentConfig } from '../stack/stack.ts'
+import type { DetailArea, OptionalContentConfig } from '../stack/stack.ts'
 import type { Faces } from './faces.ts'
 import type { Ink, Item, Page } from './page.ts'
 
@@ -319,8 +319,9 @@ export function cropGrid(
   return { css, px: [Math.max(1, Math.round(css[0] * scale.sx)), Math.max(1, Math.round(css[1] * scale.sy))] }
 }
 
-/** a page rendered in the crop configuration at the page view's resolution, on a canvas of its own `px` (its grid, cropGrid);
- *  null where the render was let go (a page that leaves the view) */
+/** a page rendered in the crop configuration at the page view's resolution, on a canvas of its own `px` (its grid, cropGrid;
+ *  a region of it from `origin`, device pixels, for a detail's crops); null where the render was let go (a page that leaves
+ *  the view) */
 async function cropRender(
   pdfPage: PDFPageProxy,
   vp: PageViewport,
@@ -328,6 +329,7 @@ async function cropRender(
   scale: { sx: number; sy: number },
   px: [number, number],
   signal?: AbortSignal,
+  origin: readonly [number, number] = [0, 0],
 ): Promise<HTMLCanvasElement | null> {
   const source = document.createElement('canvas')
   source.width = px[0]
@@ -338,7 +340,11 @@ async function cropRender(
     canvas: source,
     canvasContext: sctx,
     viewport: vp,
-    transform: scale.sx !== 1 || scale.sy !== 1 ? [scale.sx, 0, 0, scale.sy, 0, 0] : undefined,
+    // (a region of the page from `origin`, its device pixels: a detail's sources; the whole page from its corner else)
+    transform:
+      scale.sx !== 1 || scale.sy !== 1 || origin[0] || origin[1]
+        ? [scale.sx, 0, 0, scale.sy, -origin[0], -origin[1]]
+        : undefined,
     optionalContentConfigPromise: crops,
     annotationMode: 0,
   } as Parameters<PDFPageProxy['render']>[0])
@@ -455,6 +461,176 @@ export async function cropsFor(
     source.height = 0
   }
   return out
+}
+
+/**
+ * The crops of the area a page view's detail canvas draws, past PDF.js's canvas cap (PDFPageView limits a page's canvas to
+ * min(maxCanvasPixels, 3 screens of pixels) and halves it again for its detail canvas, which draws the part in view at the
+ * device's own resolution: docs/PDF-READER.md §11.8), cut at that canvas's resolution: a canvas on the detail canvas's own grid
+ * over the box of the crops' places in its area (detailBoxOf: its share of the page's frame), each crop whose place meets the
+ * area cut from its page's crop
+ * render of the region its sources span at that resolution, darkened in as the page's crops are. So a crop past the cap is as
+ * sharp as the page around it; below the cap there is no detail canvas and none is made. A source region past four times the
+ * box's pixels (crops whose sources stand far apart) is rendered crop by crop. Null where no crop meets the area. `told`
+ * counts the pixels of the source regions rendered for it (each let go once cut).
+ */
+export async function detailCropsFor(
+  page: Page,
+  pageOf: (n: number) => Promise<PDFPageProxy>,
+  vp: PageViewport,
+  crops: Promise<OptionalContentConfig>,
+  area: DetailArea,
+  signal?: AbortSignal,
+  told?: { srcPx: number },
+): Promise<HTMLCanvasElement | null> {
+  const sx = area.px[0] / area.width,
+    sy = area.px[1] / area.height
+  if (!Number.isFinite(sx) || !Number.isFinite(sy) || sx <= 0 || sy <= 0) return null
+  const quarter = turnOf(vp) % 180 !== 0
+  const px = {
+    x: 1 / (vp.scale * (quarter ? sy : sx)),
+    y: 1 / (vp.scale * (quarter ? sx : sy)),
+  }
+  const devOf =
+    (v: PageViewport) =>
+    ([x0, y0, x1, y1]: [number, number, number, number]) => {
+      const [ax, ay] = v.convertToViewportPoint(x0, y1) as [number, number],
+        [bx, by] = v.convertToViewportPoint(x1, y0) as [number, number]
+      return [Math.min(ax, bx) * sx, Math.min(ay, by) * sy, Math.abs(bx - ax) * sx, Math.abs(by - ay) * sy] as const
+    }
+  const at = devOf(vp)
+  const [ax, ay] = [area.left * sx, area.top * sy]
+  const [aw, ah] = area.px
+  const list = cropsOf(page, px).filter((c) => {
+    const [x, y, w, h] = at(c.at)
+    return x < ax + aw && x + w > ax && y < ay + ah && y + h > ay
+  })
+  if (!list.length || signal?.aborted) return null
+  // (the canvas the box of those crops' places within the area, whole device pixels of the detail's grid: the area's own
+  // pixels are some three screens', most of them no crop's)
+  const places = list.map((c) => at(c.at))
+  const ox = Math.max(ax, Math.floor(Math.min(...places.map((r) => r[0])))),
+    oy = Math.max(ay, Math.floor(Math.min(...places.map((r) => r[1]))))
+  const ow = Math.min(ax + aw, Math.ceil(Math.max(...places.map((r) => r[0] + r[2])))) - ox,
+    oh = Math.min(ay + ah, Math.ceil(Math.max(...places.map((r) => r[1] + r[3])))) - oy
+  if (ow <= 0 || oh <= 0) return null
+  const out = document.createElement('canvas')
+  out.className = 'axt-crops-detail'
+  out.width = ow
+  out.height = oh
+  out.dataset.axtScale = String(vp.scale)
+  const box: DetailArea = { left: ox / sx, top: oy / sy, width: ow / sx, height: oh / sy, px: [ow, oh] }
+  detailBoxes.set(out, box)
+  const pct = (v: number, of: number) => `${(v * 100) / of}%`
+  out.style.left = pct(box.left, vp.width)
+  out.style.top = pct(box.top, vp.height)
+  out.style.width = pct(box.width, vp.width)
+  out.style.height = pct(box.height, vp.height)
+  out.setAttribute('aria-hidden', 'true')
+  const ctx = out.getContext('2d') as CanvasRenderingContext2D
+  ctx.globalCompositeOperation = 'darken'
+  const fail = () => {
+    out.width = 0
+    out.height = 0
+    return null
+  }
+  for (const from of new Set(list.map((c) => c.from))) {
+    const pdfPage = await pageOf(from)
+    const v = from === page.page ? vp : pdfPage.getViewport({ scale: vp.scale, rotation: turnOf(vp) })
+    const src = devOf(v)
+    const mine = list.filter((c) => c.from === from)
+    const W = Math.round(v.width * sx),
+      H = Math.round(v.height * sy)
+    // (the region the sources span, whole device pixels within the page; crop by crop where it is past four of the area)
+    const regionOf = (cs: typeof mine) => {
+      const rs = cs.map((c) => src(c.src))
+      const x0 = Math.max(0, Math.floor(Math.min(...rs.map((r) => r[0])))),
+        y0 = Math.max(0, Math.floor(Math.min(...rs.map((r) => r[1]))))
+      const x1 = Math.min(W, Math.ceil(Math.max(...rs.map((r) => r[0] + r[2])))),
+        y1 = Math.min(H, Math.ceil(Math.max(...rs.map((r) => r[1] + r[3]))))
+      return [x0, y0, x1 - x0, y1 - y0] as const
+    }
+    const whole = regionOf(mine)
+    const groups = whole[2] * whole[3] > 4 * ow * oh ? mine.map((c) => [c]) : [mine]
+    for (const g of groups) {
+      const [rx, ry, rw, rh] = g === mine ? whole : regionOf(g)
+      if (rw <= 0 || rh <= 0) continue
+      const source = signal?.aborted
+        ? null
+        : await cropRender(pdfPage, v, crops, { sx, sy }, [rw, rh], signal, [rx, ry])
+      if (!source) return fail()
+      if (told) told.srcPx += rw * rh
+      for (const c of g) {
+        const [cx, cy, cw, ch] = src(c.src),
+          [dx, dy, dw, dh] = at(c.at)
+        if (cw <= 0 || ch <= 0) continue
+        if (c.clip) {
+          ctx.save()
+          ctx.beginPath()
+          for (const r of c.clip) {
+            const [x, y, w, h] = at(r)
+            ctx.rect(x - ox, y - oy, w, h)
+          }
+          ctx.clip()
+        }
+        ctx.drawImage(source, cx - rx, cy - ry, cw, ch, dx - ox, dy - oy, dw, dh)
+        if (c.clip) ctx.restore()
+      }
+      source.width = 0
+      source.height = 0
+    }
+  }
+  return out
+}
+
+/** each detail crops' canvas's box in the page view's viewport (CSS px) and its pixels */
+const detailBoxes = new WeakMap<HTMLCanvasElement, DetailArea>()
+/** a detail crops' canvas's box (detailCropsFor's), where its crops are drawn */
+export const detailBoxOf = (c: HTMLCanvasElement): DetailArea | undefined => detailBoxes.get(c)
+
+/** the page's crops cut away under a detail crops' box (a clip-path of the frame less the box: the detail's own crops drawn
+ *  there), so that a crop is never drawn twice, its base's softer edge under the detail's */
+export function holeOf(area: DetailArea, vp: Pick<PageViewport, 'width' | 'height'>): string {
+  const l = (area.left * 100) / vp.width,
+    t = (area.top * 100) / vp.height,
+    r = ((area.left + area.width) * 100) / vp.width,
+    b = ((area.top + area.height) * 100) / vp.height
+  const p = (x: number, y: number) => `${Math.round(x * 1e4) / 1e4}% ${Math.round(y * 1e4) / 1e4}%`
+  return `polygon(evenodd, 0% 0%, 100% 0%, 100% 100%, 0% 100%, 0% 0%, ${p(l, t)}, ${p(r, t)}, ${p(r, b)}, ${p(l, b)}, ${p(l, t)})`
+}
+
+/** a canvas taken out of the document and its bitmap let go */
+export function dropCanvas(c: HTMLCanvasElement) {
+  c.remove()
+  c.width = 0
+  c.height = 0
+}
+/** each overlay's last detail cut asked (a count): a cut is its overlay's only while no later one is asked and its crops are
+ *  not let go */
+const detailTurns = new WeakMap<HTMLElement, number>()
+/** a detail cut asked for an overlay: whether it is still the last asked, once it is cut (a cut that finishes after a zoom
+ *  back let its crops go, or after a later cut was asked, is dropped: it would put back crops of another area or scale) */
+export function askDetail(over: HTMLElement): () => boolean {
+  const n = (detailTurns.get(over) ?? 0) + 1
+  detailTurns.set(over, n)
+  return () => detailTurns.get(over) === n
+}
+/** a page kept far (`over` its overlay): a detail cut under way for it dropped when it is done (the page's pixels are counted as
+ *  it is kept), the crops cut before kept as they are */
+export function detailKept(over: HTMLElement) {
+  detailTurns.set(over, (detailTurns.get(over) ?? 0) + 1)
+}
+/** a page's detail crops let go (`over` its overlay), its base's crops whole again, a cut under way dropped when it is done */
+export function detailAway(over: HTMLElement) {
+  detailKept(over)
+  const det = over.querySelector<HTMLCanvasElement>(':scope > canvas.axt-crops-detail')
+  if (det) dropCanvas(det)
+  over.querySelector<HTMLCanvasElement>(':scope > canvas.axt-crops')?.style.removeProperty('clip-path')
+}
+/** the pixels a page's detail crops hold */
+export function detailPixels(over: HTMLElement): number {
+  const det = over.querySelector<HTMLCanvasElement>(':scope > canvas.axt-crops-detail')
+  return det ? det.width * det.height : 0
 }
 
 /** a box of device pixels on a crops' grid */

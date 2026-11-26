@@ -27,7 +27,7 @@ import {
 } from '@readarxiv/engine'
 import type { Item, Page } from '../compose/page.ts'
 import { cropsOf, faceScale } from '../compose/paint.ts'
-import { type BakeStats, makeBaker, newBakeStats } from './bake.ts'
+import { type BakedForm, type BakeStats, makeBaker, newBakeStats } from './bake.ts'
 import { fontBodies, fontFileOf, type SfntFont } from './fonts.ts'
 
 /** how a run's characters are drawn: the slice font and glyph of a code point in a face (the reader's rule: the first family
@@ -95,6 +95,9 @@ export interface ExportStats {
   bake: BakeStats
   cropBake: BakeStats
   cropForms: number
+  /** Type 3 fonts a crop draws, each written again as a dictionary of its own, and those dictionaries' bytes */
+  type3Aliases: number
+  type3AliasBytes: number
   sectionBytes: number
   ms: Record<string, number>
 }
@@ -338,6 +341,8 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
     bake: newBakeStats(),
     cropBake: newBakeStats(),
     cropForms: 0,
+    type3Aliases: 0,
+    type3AliasBytes: 0,
     sectionBytes: 0,
     ms,
   }
@@ -371,10 +376,12 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
     return []
   }
   const decoded = (s: PdfRawStream) => PL.decodePDFRawStream(s).decode()
-  /** a page's ours(prop) over the groups `off` turns off (every other group of ours left on) */
+  /** a page's ours(prop, res) over the groups `off` turns off (every other group of ours left on): a name read in the
+   *  resources it is given (a form's own, where its content names it), else the page's */
   const oursFor = (i: number, isOff: (name: string) => boolean) => {
-    const props = dictOf(dictOf(pages[i]!.inherited.Resources)?.get(N('Properties')))
-    return (prop: string): boolean | null => {
+    const pageProps = dictOf(dictOf(pages[i]!.inherited.Resources)?.get(N('Properties')))
+    return (prop: string, res: PdfObject | undefined): boolean | null => {
+      const props = res === undefined ? pageProps : dictOf(dictOf(res)?.get(N('Properties')))
       const r = props?.get(N(prop))
       const nm = r ? groupName.get(lit(r)) : undefined
       return nm === undefined ? null : isOff(nm)
@@ -501,17 +508,63 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
   /** a crop's source: the composed page's content with the ink of member `ord`'s element and label groups alone; the
    *  original page's form where the page holds no group of the member, or its walk is refused */
   const cropForms = new Map<string, number>()
+  /** each Type 3 font a crop draws, written again as a dictionary of its own (the font's own entries), one for every crop:
+   *  the translated page draws the font's glyphs first under the crop's group turned off, and poppler's Splash keeps a Type 3
+   *  glyph's drawing by its font and size: through that font a crop would draw the blank kept there (38 of the 245's crops).
+   *  A crop drawing its ink through a font no hidden ink is drawn with gets no renderer's cached blank */
+  const type3 = new Map<string, number>()
+  const isType3 = (v: PdfObject | undefined) => look(dictOf(v)?.get(N('Subtype')))?.toString() === '/Type3'
+  const type3Of = (v: PdfObject): string | null => {
+    if (!isType3(v)) return null
+    const key = v instanceof PDFRef ? lit(v) : null
+    const had = key === null ? undefined : type3.get(key)
+    if (had !== undefined) return `${had} 0 R`
+    const n = take()
+    const body = objText(n, lit(dictOf(v)!))
+    objs.push([n, body])
+    if (key !== null) type3.set(key, n)
+    stats.type3Aliases++
+    stats.type3AliasBytes += body.length
+    return `${n} 0 R`
+  }
+  const holdsType3 = (res: PdfObject | undefined) =>
+    (dictOf(dictOf(res)?.get(N('Font')))?.entries() ?? []).some(([, v]) => isType3(v))
+  /** the forms a crop's source draws baked (bake.ts bakeCrop): each written as a form of ours, its dictionary the form's own
+   *  (its box, its matrix, its group) with its baked content, its resources naming the copies it draws in turn */
+  const writeBaked = async (forms: BakedForm[]): Promise<Map<string, number>> => {
+    const names = new Map<string, number>()
+    for (const f of forms) {
+      const inner = await writeBaked(f.forms)
+      const n = take()
+      const d = f.st instanceof PDFRawStream ? (f.st as PdfRawStream).dict : undefined
+      const own = (d?.entries() ?? [])
+        .filter(([k]) => !['/Length', '/Filter', '/DecodeParms', '/Resources'].includes(k.toString()))
+        .map(([k, v]) => ` ${k.toString()} ${lit(v)}`)
+        .join('')
+      objs.push([
+        n,
+        objStream(
+          n,
+          `${own} /Resources ${merged(f.res, new Set(), inner, type3Of)} /Filter /FlateDecode`,
+          await deflate(f.bytes),
+        ),
+      ])
+      names.set(f.name, n)
+    }
+    return names
+  }
   const cropForm = async (i: number, ord: number): Promise<number> => {
     const key = `${i}:${ord}`
     const had = cropForms.get(key)
     if (had) return had
     const want = new Set([`axt:${ord}.${i + 1}.e`, `axt:${ord}.${i + 1}.l`])
+    // (the crop's own groups' ink alone: in the page's content, and in each form it draws whose content marks them, a figure's
+    // text the add-on wrapped inside its form)
     const kept = [...want].some((g) => groupRef.has(g))
-      ? baker.bake(
+      ? baker.bakeCrop(
           i,
           oursFor(i, (nm) => !want.has(nm)),
           stats.cropBake,
-          true,
         )
       : null
     if (!kept) {
@@ -521,13 +574,16 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
     }
     const n = take()
     cropForms.set(key, n)
+    const copies = await writeBaked(kept.forms)
+    // (the page's resources as they are where the source draws no copy and no Type 3 font, else with the copies named and
+    // each Type 3 font through its own dictionary)
     const res = pages[i]!.inherited.Resources
     objs.push([
       n,
       objStream(
         n,
-        ` /Type /XObject /Subtype /Form /BBox [${box(i).map(f2).join(' ')}] /Resources ${res ? lit(res) : '<< >>'} /Filter /FlateDecode`,
-        await deflate(kept),
+        ` /Type /XObject /Subtype /Form /BBox [${box(i).map(f2).join(' ')}] /Resources ${copies.size || holdsType3(res) ? merged(res, new Set(), copies, type3Of) : res ? lit(res) : '<< >>'} /Filter /FlateDecode`,
+        await deflate(kept.bytes),
       ),
     ])
     stats.cropForms++
@@ -721,12 +777,19 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
     return { ops: out.join('\n'), xobj, fontsUsed }
   }
 
-  /** a resources dict with fonts and forms of ours beside its own */
-  const merged = (res: PdfObject | undefined, fontsUsed: Set<string>, xobj: Map<string, number>): string => {
+  /** a resources dict with fonts and forms of ours beside its own; `alias`, a font of its own named in place of one */
+  const merged = (
+    res: PdfObject | undefined,
+    fontsUsed: Set<string>,
+    xobj: Map<string, number>,
+    alias?: (v: PdfObject) => string | null,
+  ): string => {
     const d = dictOf(res)
     const keep = (d?.entries() ?? []).filter(([k]) => k.toString() !== '/Font' && k.toString() !== '/XObject')
     const sub = (key: string, extra: string[]) => {
-      const own = (dictOf(d?.get(N(key)))?.entries() ?? []).map(([k, v]) => ` ${k.toString()} ${lit(v)}`)
+      const own = (dictOf(d?.get(N(key)))?.entries() ?? []).map(
+        ([k, v]) => ` ${k.toString()} ${(key === 'Font' && alias?.(v)) || lit(v)}`,
+      )
       return own.length || extra.length ? ` /${key} <<${own.join('')}${extra.join('')} >>` : ''
     }
     const fe = [...fontsUsed].map((r) => ` /${r} ${[...fonts.values()].flat().find((e) => e.res === r)!.num} 0 R`)
