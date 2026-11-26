@@ -20,7 +20,7 @@ describe('useReader: a component renders again for the part of the state it show
     }
     const { container } = await mountElement(createElement(Page, { controller: fake.controller }))
     const first = renders
-    await act(async () => fake.set({ currentHeading: 7 }))
+    await act(async () => fake.set({ narrow: true }))
     expect(renders).toBe(first)
     await act(async () => fake.set({ sides: { left: { page: 4, pages: 20 }, right: { page: 1, pages: 20 } } }))
     expect([renders, container.textContent]).toEqual([first + 1, '4'])

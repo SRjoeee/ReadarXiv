@@ -142,6 +142,9 @@ export interface Member {
   spanSeveral?: string[]
   /** the face TeX set its marks in outside every group, where it is not its letters' (group-style.ts; Placed.markFace) */
   markFace?: { bold?: 1; slant?: 1 }
+  /** each size declaration at its top level whose run's glyphs share one size (group-style.ts `sizes`): its element's id and
+   *  that size, stated as the element's El.size (facts-pass.ts readElements) */
+  sizeDecls?: [id: string, size: number][]
   /** a unit made on A's forced breaks (ink-units.ts rule 3b), by piece id: the last glyph (A, global) of the line TeX ended at
    *  each, the break's line (facts-pass.ts readElements); a source unit's break is placed by its point on B instead */
   breakAfter?: ReadonlyMap<string, number>

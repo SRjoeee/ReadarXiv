@@ -216,7 +216,6 @@ function visit(
         narrow: false,
         sides: { left: { page: 1, pages: 4 }, right: { page: 1, pages: 4 } },
         outline: [],
-        heading: null,
       },
       reconnecting: wait.reconnecting,
       network: wait.network,

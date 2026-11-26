@@ -138,7 +138,7 @@ describe('the reader state told to the chrome', () => {
     original: { s: 'opening', loaded: 0, total: 0 },
     layer: { s: 'none' },
     rows: { target: 'de', from: 'here', s: 'none' },
-    view: { display: 'bilingual', sync: { on: true, available: false }, scale: 1, zoom: 'page-width', narrow: false, sides: { left: { page: 1, pages: 0 }, right: { page: 1, pages: 0 } }, outline: [], heading: null },
+    view: { display: 'bilingual', sync: { on: true, available: false }, scale: 1, zoom: 'page-width', narrow: false, sides: { left: { page: 1, pages: 0 }, right: { page: 1, pages: 0 } }, outline: [] },
     reconnecting: false,
     network: false,
     crashed: false,

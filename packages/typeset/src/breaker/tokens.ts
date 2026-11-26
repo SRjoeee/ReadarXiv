@@ -164,6 +164,9 @@ type Reading = {
   orig?: { size?: number } | null
   openBreaks?: ReadonlyMap<number, number> | null
   referenced?: ReadonlySet<number> | null
+  /** each declaration's stated size by its piece (a bare element of no ink whose El.size the part states: `\large` at a unit's
+   *  top level), the size TeX set what follows it at, to the end of its group */
+  declSizes?: ReadonlyMap<number, number> | null
   tail?: readonly { ch: string; st?: TStyle | null }[] | null
   tailOwn?: readonly string[] | null
 }
@@ -979,6 +982,20 @@ export function tokens(i: TokensInput): Tokens {
         if (glue.fill) fillOn(glue.fill)
         else kernOn(glue)
         return
+      }
+      // (a declaration the part states a size for: what follows it, to its group's end, at that size's share of the member's,
+      // as a group at its own size is (TStyle.rel, absolute); none stated, the size around it. A part made before states none)
+      // (a stated size the member's to the page's hundredth, as El.size is stated, is the member's: no share, as a run with none)
+      const declared = i.statedBase === false ? undefined : resolved.declSizes?.get(k),
+        of = resolved.orig?.size
+      if (declared! > 0 && of! > 0) {
+        const at = (s: TStyle): TStyle => {
+          const { rel: _rel, ...rest } = s
+          void _rel
+          return Math.round(declared! * 100) === Math.round(of! * 100) ? rest : { ...rest, rel: declared! / of! }
+        }
+        stack[stack.length - 1] = at(style())
+        if (mstack.length) mstack[mstack.length - 1] = at(mstyle())
       }
       const sw = applyCmd(p.src, style(), designs)
       if (sw && /^\\[A-Za-z]+$/.test(p.src)) {
