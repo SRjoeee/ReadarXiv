@@ -386,6 +386,28 @@ async function detailCut(d: Drawing, n: number, area: DetailArea | null): Promis
   const stand = await c.detail(d.over, { n, view: d.view, viewport: d.view.viewport, signal: d.ac.signal }, area)
   if (area !== null) d.detailCrops = stand
 }
+/** the job that cuts drawing d's crops for `detail`, its page view's detail canvas, once `first` is done (the canvas's draw, or
+ *  nothing where it is drawn), while it still stands and the page is in view; `after` once it is done */
+function detailJob(
+  d: Drawing,
+  n: number,
+  detail: DetailView,
+  o: { stands: () => boolean; inView: () => boolean; first: () => Promise<unknown>; after: () => void },
+): Job {
+  const job: Job = {
+    rank: () => (o.stands() && o.inView() ? 0 : null),
+    order: () => n + 0.5,
+    run: async () => {
+      await o.first()
+      // (the crops in view cut at the detail canvas's resolution, as it stands: docs/PDF-READER.md §11.8)
+      const area = detail.canvas && d.view ? detailAreaOf(detail.canvas, d.view.viewport) : null
+      if (o.stands() && area) await detailCut(d, n, area)
+      if (d.detailJob === job) d.detailJob = null
+      o.after()
+    },
+  }
+  return job
+}
 
 export function createStack(o: StackOptions): Stack {
   const { scroller, kit, scheduler, clock } = o
@@ -996,7 +1018,7 @@ export function createStack(o: StackOptions): Stack {
     counts.keptDropped++
     name(s)
   }
-  /** a drawing's bitmaps: its page view's canvas and, past PDF.js's cap, the detail canvas PDF.js keeps with it (#688's review) */
+  /** a drawing's bitmaps: its page view's canvas and, past PDF.js's cap, the detail canvas PDF.js keeps with it */
   const pixelsOf = (d: Drawing) => {
     const c = d.view?.canvas as unknown as HTMLCanvasElement | undefined
     const dc = detailViewOf(d.view)?.canvas
@@ -1049,35 +1071,19 @@ export function createStack(o: StackOptions): Stack {
         if (!pv.detailView && d.detailCrops) void detailCut(d, s.n, null)
         const detail = detailViewOf(pv)
         const stands = () => s.shown === d && detailViewOf(pv) === detail
-        /** the crops in view cut at the detail canvas's resolution, as it stands: docs/PDF-READER.md §11.8 */
-        const cut = async () => {
-          const area = detail?.canvas ? detailAreaOf(detail.canvas, pv.viewport) : null
-          if (stands() && area) await detailCut(d, s.n, area)
-        }
-        if (detail && detail.renderingState === INITIAL) {
-          const job: Job = {
-            rank: () => (stands() && s.inView ? 0 : null),
-            order: () => s.n + 0.5,
-            run: async () => {
-              await detail.draw()
-              await cut()
-              if (d.detailJob === job) d.detailJob = null
-              if (s.shown === d) tell('drawn', { n: s.n, scale, key: d.key, detail: true })
-            },
-          }
+        // (a detail canvas to draw, then its crops cut; or one drawn with no crops standing for it, a cut dropped as the page
+        // was kept far and the page back: its crops cut)
+        const draw = detail?.renderingState === INITIAL
+        const bare =
+          detail?.renderingState === FINISHED && !!detail.canvas && !!d.over && !d.detailCrops && !d.detailJob
+        if (detail && (draw || bare)) {
+          const job = detailJob(d, s.n, detail, {
+            stands,
+            inView: () => s.inView,
+            first: draw ? () => detail.draw() : async () => {},
+            after: () => draw && s.shown === d && tell('drawn', { n: s.n, scale, key: d.key, detail: true }),
+          })
           if (d.detailJob) scheduler.forget(d.detailJob)
-          d.detailJob = job
-          scheduler.want(job)
-        } else if (detail?.renderingState === FINISHED && detail.canvas && d.over && !d.detailCrops && !d.detailJob) {
-          // (its detail canvas drawn and no crops standing for it: a cut dropped as the page was kept far, the page back)
-          const job: Job = {
-            rank: () => (stands() && s.inView ? 0 : null),
-            order: () => s.n + 0.5,
-            run: async () => {
-              await cut()
-              if (d.detailJob === job) d.detailJob = null
-            },
-          }
           d.detailJob = job
           scheduler.want(job)
         }

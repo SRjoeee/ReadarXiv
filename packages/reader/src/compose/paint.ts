@@ -615,8 +615,8 @@ export function askDetail(over: HTMLElement): () => boolean {
   detailTurns.set(over, n)
   return () => detailTurns.get(over) === n
 }
-/** a page kept far (`over` its overlay): a detail cut under way for it dropped when it is done (the page's pixels were counted as
- *  it was kept, #688's review), the crops cut before kept as they are */
+/** a page kept far (`over` its overlay): a detail cut under way for it dropped when it is done (the page's pixels are counted as
+ *  it is kept), the crops cut before kept as they are */
 export function detailKept(over: HTMLElement) {
   detailTurns.set(over, (detailTurns.get(over) ?? 0) + 1)
 }

@@ -510,8 +510,8 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
   const cropForms = new Map<string, number>()
   /** each Type 3 font a crop draws, written again as a dictionary of its own (the font's own entries), one for every crop:
    *  the translated page draws the font's glyphs first under the crop's group turned off, and poppler's Splash keeps a Type 3
-   *  glyph's drawing by its font and size, so the crop got back the blank drawn there (38 of the 245's crops, #688). A crop
-   *  drawing its ink through a font no hidden ink is drawn with gets no renderer's cached blank */
+   *  glyph's drawing by its font and size: through that font a crop would draw the blank kept there (38 of the 245's crops).
+   *  A crop drawing its ink through a font no hidden ink is drawn with gets no renderer's cached blank */
   const type3 = new Map<string, number>()
   const isType3 = (v: PdfObject | undefined) => look(dictOf(v)?.get(N('Subtype')))?.toString() === '/Type3'
   const type3Of = (v: PdfObject): string | null => {

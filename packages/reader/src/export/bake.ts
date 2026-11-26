@@ -92,7 +92,7 @@ export interface Baker {
    * A crop's source: page `pageIndex`'s content with the ink of the groups `ours` leaves on alone (every other ink dropped, as
    * `bake`'s dropFree), and each form it draws whose content (or a form within it, to the walk's own depth) marks one of
    * those groups drawn as a baked copy of it, its ink of those groups alone (the paper's figure a form whose text the add-on
-   * wrapped inside it: the crop's ink is there, never in the page's own content, #crops-sharp). Null where the walk refuses
+   * wrapped inside it: the crop's ink is there, never in the page's own content). Null where the walk refuses
    */
   bakeCrop(pageIndex: number, ours: Ours, stats: BakeStats): { bytes: Uint8Array; forms: BakedForm[] } | null
 }
@@ -101,7 +101,7 @@ type Piece = { bytes: Uint8Array; ops: LexOp[] }
 /** a page read once for every bake of it (the page's own, and each crop's source on it): its walk's refusal, or what the walk
  *  read: each container's shows and the forms it draws (by piece and operator end), the page's own pieces. `full`: its forms'
  *  shows and the forms they draw kept, which its crops read; for the page read last alone (a figure's walk can hold megabytes
- *  of operators), the others keep their page's own shows, which its bake reads (#688's review) */
+ *  of operators), the others keep their page's own shows, which its bake reads */
 type Read =
   | { refused: true }
   | {
@@ -224,8 +224,8 @@ export function makeBaker(R: Walker): Baker {
         if (SHOW.has(op)) {
           st.shows++
           const e = shows.get(`${pi}:${o.e}`)
-          // (a show that clips, render modes 4 to 7: its outlines still added to the clip, nothing painted, its mode back after
-          // it: a clip stays a clip; as an advance it was lost, #688's review)
+          // (a show that clips, render modes 4 to 7: its outlines added to the clip, nothing painted, its mode restored after
+          // it: a clip stays a clip)
           const tr = e?.state.Tr ?? 0
           if (tr >= 4) {
             st.clipsKept++
