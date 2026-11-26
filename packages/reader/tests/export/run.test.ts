@@ -31,7 +31,11 @@ describe("the PDF download's whole reads, one operation", () => {
       return new Response(null, { status: 404 })
     }
     const read = readComposed(
-      { fetch, original: { url: '/orig', bytes: ORIG.length, sha256: sha(ORIG) }, addOn: { url: '/addon', bytes: ADD.length, sha256: sha(ADD) } },
+      {
+        fetch,
+        original: { url: '/orig', bytes: ORIG.length, sha256: sha(ORIG) },
+        addOn: { url: '/addon', bytes: ADD.length, sha256: sha(ADD) },
+      },
       new AbortController().signal,
       () => {},
     ).catch((e: unknown) => {
@@ -46,7 +50,11 @@ describe("the PDF download's whole reads, one operation", () => {
   it('reads both into one buffer, each held to its digest', async () => {
     const fetch = async (url: string) => new Response(url === '/orig' ? ORIG : ADD, { status: 200 })
     const out = await readComposed(
-      { fetch, original: { url: '/orig', bytes: ORIG.length, sha256: sha(ORIG) }, addOn: { url: '/addon', bytes: ADD.length, sha256: sha(ADD) } },
+      {
+        fetch,
+        original: { url: '/orig', bytes: ORIG.length, sha256: sha(ORIG) },
+        addOn: { url: '/addon', bytes: ADD.length, sha256: sha(ADD) },
+      },
       new AbortController().signal,
       () => {},
     )
