@@ -120,7 +120,7 @@ const STREAM = (o: {
 const pagesOf = (items: readonly Item[]): StreamPage[] => {
   const out: Item[][] = [[]]
   for (const it of items) {
-    if (typeof it !== 'string' && it.at === '\f') out.push([])
+    if (typeof it !== 'string' && 'at' in it && it.at === '\f') out.push([])
     else out.at(-1)!.push(it)
   }
   return out.map(pageOf)
