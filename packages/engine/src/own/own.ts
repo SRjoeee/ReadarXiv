@@ -451,6 +451,12 @@ export function ownOf(
     // as a letter (an icon), a rule past its lines — is the page's, left standing; a placeholder's are its own, `.p`, claimed
     // over the text's below. A title of an end mark alone takes no box: `list.boxes` is empty there. Their search past
     // OWN_WORK: the unit not owned, as any past it)
+    // (another unit TeX shipped whole inside the range, in its region, its start opening a line of its own — a class that sets a
+    // column's notes inside the body it brackets, REVTeX's grid, between the two parts of a paragraph that crosses the column —:
+    // the glyphs before its start on that line are its label, no text of this unit's, as at a later unit's start (stream.ts
+    // toStart). 2611.16683v1 p3: a note's number was the paragraph's, which laid a line of its translation over the note. One set on
+    // the range's own line after its words (an inline unit) keeps them: they are the line's text)
+    list = withoutShippedLabels(list, s, e, id)
     const rules = lineRules(list)
     if (!rules) {
       u.unhidden = 'marks'
@@ -458,6 +464,41 @@ export function ownOf(
     }
     textOf.set(id, { s, e })
     claim({ glyphs: list.glyphs, boxes: rules }, `u${id}`, 'u')
+  }
+  /** a unit's range without the labels of the units TeX shipped whole inside it (from its start `s` to `e`): each other unit
+   *  whose start and end stand between them in the range's region, and whose start TeX set in a paragraph it began inside the
+   *  range (a paragraph start, `q<n>`, after the range's start and before that unit's start on its page): the range's glyphs
+   *  from that paragraph's start to the unit's start, on the start's line (half the larger size apart across at most, toStart's
+   *  line). A unit TeX set inline in the range's own paragraph has no such start before it: the words before it are the range's */
+  function withoutShippedLabels(list: Taken, s: Place | null, e: Place, id: number): Taken {
+    if (!s || !list.glyphs.length) return list
+    const r = at(s),
+      cut = new Set<string>()
+    for (let p = s[0]; p <= e[0]; p++) {
+      const pg = pages[p - 1]!,
+        paras = pg.paras ?? []
+      for (const [x, q] of pointsOn(p, p === s[0] ? s[1] + 1 : 0, p === e[0] ? e[1] : pg.points.length)) {
+        const m = START.exec(x.name)
+        if (!m || Number(m[2]) === id || regions[p - 1]!.at[q] !== r) continue
+        work += 1
+        const ends = [`${m[2]}e`, `t${m[2]}e`, `h${m[2]}e`].flatMap((n) => where.get(n) ?? [])
+        if (!ends.some((y) => before([p, q], y) && before(y, e))) continue
+        const G = pg.glyphs,
+          N = G[x.glyph]
+        if (!N) continue
+        // (the paragraph that unit's start stands in, begun after the range's start)
+        const low = p === s[0] ? pt(s).glyph : 0
+        let from = -1
+        for (const P of paras) if (P.glyph > low && P.glyph <= x.glyph && P.glyph > from) from = P.glyph
+        work += paras.length
+        if (from < 0) continue
+        for (const [q2, g] of list.glyphs)
+          if (q2 === p && g >= from && g < x.glyph && Math.abs(G[g]!.y - N.y) < 0.5 * Math.max(G[g]!.size, N.size))
+            cut.add(`${p}|${g}`)
+        work += list.glyphs.length
+      }
+    }
+    return cut.size ? { glyphs: list.glyphs.filter(([p, g]) => !cut.has(`${p}|${g}`)), boxes: list.boxes } : list
   }
   /** the rules TeX painted on the text's own lines: lineRulesOf over the range's glyphs and boxes, its work counted;
    *  null where it would pass OWN_WORK */

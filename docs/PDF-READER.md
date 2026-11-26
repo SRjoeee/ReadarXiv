@@ -10416,7 +10416,12 @@ stand between it and its closing point, and the formula's element owned the note
 the closing point), with its label, the glyphs before its start on that start's line, is no ink of the piece's (ownedOf's closed
 reading); where the piece set no glyph before the first of them (TeX set it whole after them), what was painted from its opening
 point to that label went with them too: the rule the class sets above a column's notes, which had made the formula's element one
-box from the rule to the next column's head, its crop the page between.
+box from the rule to the next column's head, its crop the page between. And a paragraph that crosses the column holds the
+column's notes inside its own range: their text is theirs (an earlier unit's text first), but a note's number, set in the paragraph
+TeX began for the note before its start, was the crossing paragraph's text, and that paragraph laid a line of its translation over
+the note. The glyphs of a unit's range from a paragraph start TeX made inside it to another unit's start shipped whole there, on
+that start's line, are that unit's label (own.ts withoutShippedLabels); a unit TeX set inline in the range's own paragraph has no
+such start before it, and the words before it stay the range's.
 
 **Two placeholders TeX joined are one ink.** `(\=A\=T)`: the marking asks TeX, for a paper's macro and the placeholder right
 after it, whether a mark between them moves anything (the look-ahead probe, aheadSamples). TeX answers 2 where the mark changes
