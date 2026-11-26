@@ -5949,8 +5949,10 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
       i = character.end
       continue
     }
+    // (its argument past white space whatever the accent's name: TeX skips spaces before an undelimited argument, `\\= T` is
+    // `\\=T`, as accentBase reads it; after a control symbol the space is a token, skipped there all the same)
     if (ACCENTS.has(name)) {
-      let k = /^[A-Za-z]$/.test(name) ? skipSpaces(s, end) : end
+      let k = skipSpaces(s, end)
       if (s[k] === '{') k = matchGroup(s, k)
       else if (s[k] === '\\') k = commandAt(s, k).end
       else k = k + 1
