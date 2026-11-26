@@ -31,7 +31,7 @@ const doc = (content: string, wrapped: string) => {
   const objects: Obj[] = [
     '<< /Type /Catalog /Pages 2 0 R >>',
     '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
-    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R /F2 8 0 R >> /ExtGState << /GS1 << /Font [8 0 R 20] >> >> >> /Contents 4 0 R >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R /F2 8 0 R >> /ExtGState << /GS1 << /Font [8 0 R 20] >> /GS2 << /LW 20 >> >> >> /Contents 4 0 R >>',
     { dict: '', data: content },
     F1,
     '<< >>',
@@ -42,7 +42,7 @@ const doc = (content: string, wrapped: string) => {
   const a = pdf(objects)
   const addOn: Record<number, Obj> = {
     1: '<< /Type /Catalog /Pages 2 0 R /OCProperties << /OCGs [10 0 R 11 0 R 12 0 R] /D << /BaseState /ON /ON [10 0 R 11 0 R 12 0 R] >> >> >>',
-    3: '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R /F2 8 0 R >> /ExtGState << /GS1 << /Font [8 0 R 20] >> >> /Properties << /T 10 0 R /E 11 0 R /L 12 0 R >> >> /Contents 6 0 R >>',
+    3: '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R /F2 8 0 R >> /ExtGState << /GS1 << /Font [8 0 R 20] >> /GS2 << /LW 20 >> >> /Properties << /T 10 0 R /E 11 0 R /L 12 0 R >> >> /Contents 6 0 R >>',
     6: { dict: '', data: wrapped },
     10: '<< /Type /OCG /Name (axt:1.1.t) >>',
     11: '<< /Type /OCG /Name (axt:1.1.e) >>',
@@ -215,6 +215,54 @@ describe("a crop's cut against #690's review", () => {
       ]),
     )
     expect(shown(forms[1]!)).toContain(hex('|'))
+  })
+})
+
+describe("a crop's cut against #690's second review", () => {
+  it("a graphics state's line width (gs /LW) is the stroke's reach (4712232455)", async () => {
+    // (a stroke at x 100, 20 wide: its ink from 90 to 110; a crop from 108 to 112)
+    const content = '/GS2 gs 100 690 m 100 710 l S'
+    const wrapped = '/OC /E BDC /GS2 gs 100 690 m 100 710 l S EMC'
+    const [form] = await cropTexts(doc(content, wrapped), page([[108, 112, 'p0']]))
+    expect(form).toContain('100 710 l')
+  })
+
+  it("a font a form inherits is written in its caller's resources, never inside the form (4712232449)", async () => {
+    // (the page sets F1 at 10 and draws a form of resources of its own, no font among them, whose element group holds x=1)
+    const objects: Obj[] = [
+      '<< /Type /Catalog /Pages 2 0 R >>',
+      '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+      '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> /XObject << /Fm 6 0 R >> >> /Contents 4 0 R >>',
+      { dict: '', data: '/F1 10 Tf q /Fm Do Q' },
+      F1,
+      { dict: '/Type /XObject /Subtype /Form /BBox [0 0 612 792] /Resources << >>', data: 'BT 102 700 Td (x=1) Tj ET' },
+    ]
+    const a = pdf(objects)
+    const addOn: Record<number, Obj> = {
+      1: '<< /Type /Catalog /Pages 2 0 R /OCProperties << /OCGs [7 0 R 8 0 R 9 0 R] /D << /BaseState /ON /ON [7 0 R 8 0 R 9 0 R] >> >> >>',
+      6: {
+        dict: '/Type /XObject /Subtype /Form /BBox [0 0 612 792] /Resources << /Properties << /E 7 0 R >> >>',
+        data: 'BT 102 700 Td /OC /E BDC (x=1) Tj EMC ET',
+      },
+      7: '<< /Type /OCG /Name (axt:1.1.e) >>',
+      8: '<< /Type /OCG /Name (axt:1.1.t) >>',
+      9: '<< /Type /OCG /Name (axt:1.1.l) >>',
+    }
+    const file = await fileOf(
+      { bytes: update(a, addOn, 10), seam: a.length },
+      page([[101.6, 117.4, 'p0']]),
+      'translation',
+    )
+    const X = openObjects(file, { PL: L, objectsMax: 1e5, decodedMax: 1 << 24 })
+    const look = (v: unknown) => (v instanceof L.PDFRef ? X.lookup(v as PdfRef) : v)
+    const xo = (d: PdfDict, n: string) =>
+      look((look((look(d.get(N('Resources'))) as PdfDict).get(N('XObject'))) as PdfDict).get(N(n))) as PdfRawStream
+    const text = (st: PdfRawStream) => latin1(L.decodePDFRawStream(st).decode())
+    const crop = xo(X.pages()[0]!.node, 'AXTC1_1_0')
+    const copy = xo(crop.dict, 'AXTB0')
+    expect(text(crop)).toMatch(/\/F1 10 Tf[^]*\/AXTB0 Do/)
+    expect(text(copy)).not.toContain('/F1')
+    expect(text(copy)).toContain('(x=1) Tj')
   })
 })
 

@@ -160,7 +160,9 @@ interface Geo {
   lw: number
   ml: number
   lost: boolean
-  stack: Pick<Geo, 'ctm' | 'th' | 'rise' | 'tl' | 'font' | 'size' | 'tc' | 'tw' | 'tr' | 'lw' | 'ml'>[]
+  /** the resources the font's name was chosen in (a form that inherits its caller's font names it in its caller's) */
+  fontRes: PdfObject | undefined
+  stack: Pick<Geo, 'ctm' | 'th' | 'rise' | 'tl' | 'font' | 'fontRes' | 'size' | 'tc' | 'tw' | 'tr' | 'lw' | 'ml'>[]
 }
 /** a form's place state where it is painted: its matrix after the painter's CTM, the graphics state's text state inherited */
 const geoIn = (ctm: M, from?: Geo): Geo => ({
@@ -171,6 +173,7 @@ const geoIn = (ctm: M, from?: Geo): Geo => ({
   rise: from?.rise ?? 0,
   tl: from?.tl ?? 0,
   font: from?.font ?? null,
+  fontRes: from?.fontRes,
   size: from?.size ?? 0,
   tc: from?.tc ?? 0,
   tw: from?.tw ?? 0,
@@ -202,6 +205,7 @@ function track(g: Geo, o: LexOp): void {
         rise: g.rise,
         tl: g.tl,
         font: g.font,
+        fontRes: g.fontRes,
         size: g.size,
         tc: g.tc,
         tw: g.tw,
@@ -538,9 +542,11 @@ export function makeBaker(R: Walker): Baker {
     const saved: boolean[] = []
     /** before a show or a line's move is written: the content's own text state and line set again where they were left out
      *  (its line matrix, and the way along the line to its text matrix as a TJ's number) */
-    const sync = (p: Geo) => {
+    const sync = (p: Geo, stateAlone = false) => {
       if (dirty.state) {
-        const f = p.font !== null ? `${nameTok(p.font)} ${num(p.size)} Tf ` : ''
+        // (a font's name is written in the resources it was chosen in alone: a font a form inherits from its caller is
+        // written by its caller, before the form is drawn; #690, 4712232449)
+        const f = p.font !== null && p.fontRes === res ? `${nameTok(p.font)} ${num(p.size)} Tf ` : ''
         out.push(
           enc(
             `${f}${num(p.tc)} Tc ${num(p.tw)} Tw ${num(p.th * 100)} Tz ${num(p.tl)} TL ${num(p.rise)} Ts ${p.tr} Tr\n`,
@@ -548,7 +554,7 @@ export function makeBaker(R: Walker): Baker {
         )
         dirty.state = false
       }
-      if (dirty.pos) {
+      if (dirty.pos && !stateAlone) {
         out.push(enc(`${p.tlm.map(num).join(' ')} Tm\n`))
         const l = p.tlm,
           m = p.tm
@@ -679,6 +685,7 @@ export function makeBaker(R: Walker): Baker {
         let pre: Geo = within && SHOW.has(op) && !had ? { ...geo } : geo
         if (within) {
           if (!SHOW.has(op) || op === "'" || op === '"') track(geo, o)
+          if (op === 'Tf') geo.fontRes = res
           // (the lean form writes no text state and no line of the content's own: each show it writes is preceded by them, as
           // they stand there)
           if (TEXT_STATE.has(op)) {
@@ -699,17 +706,23 @@ export function makeBaker(R: Walker): Baker {
           // (a graphics state that chooses a font, /Font [font size] (ISO 32000-1 §8.4.5), is written as it stands, and so
           // is the font it chooses: no Tf of the content's is written over it, its size the line's way is measured at;
           // #690, 4712006427)
+          // (and its line width and miter limit, /LW and /ML, a stroke's reach; #690, 4712232455)
           if (op === 'gs') {
-            const f = R.look(R.get(R.get(R.get(R.look(res), 'ExtGState'), nameOf(o.args[0]) ?? ''), 'Font'))
+            const d = R.get(R.get(R.look(res), 'ExtGState'), nameOf(o.args[0]) ?? '')
+            const f = R.look(R.get(d, 'Font'))
             const size = f instanceof R.PL.PDFArray ? R.look(f.get(1)) : undefined
             if (size instanceof R.PL.PDFNumber) {
               geo.font = null
               geo.size = size.asNumber()
             }
+            const lw = R.look(R.get(d, 'LW')),
+              ml = R.look(R.get(d, 'ML'))
+            if (lw instanceof R.PL.PDFNumber) geo.lw = lw.asNumber()
+            if (ml instanceof R.PL.PDFNumber) geo.ml = ml.asNumber()
           }
           if (placed) {
             if (!had) {
-              had = { pre, at: codesAt(geo, shows.get(key), arrayOf(o), fontBox(geo.font, res), true) }
+              had = { pre, at: codesAt(geo, shows.get(key), arrayOf(o), fontBox(geo.font, geo.fontRes ?? res), true) }
               placed.set(key, had)
             }
             pre = had.pre
@@ -799,6 +812,8 @@ export function makeBaker(R: Walker): Baker {
           // as a copy baked as this content is, under a name of its own; to the walk's depth, each form as the walk met it)
           const child = op === 'Do' && sink && !mc.some((f) => f.ours) ? forms?.get(`${pi}:${o.e}`) : undefined
           if (child?.st && holds(child)) {
+            // (the text state the form inherits, written here, in the resources its names were chosen in)
+            if (within) sync(geo, true)
             const inner: BakedForm[] = []
             const baked = run(
               page,
@@ -812,7 +827,7 @@ export function makeBaker(R: Walker): Baker {
               holds,
               within,
               within ? geoIn(mul(six(numsOf(R.get(child.st, 'Matrix')) ?? []) ?? I, geo.ctm), geo) : undefined,
-              dirty.state,
+              false,
             )
             const name = `AXTB${names.n++}`
             sink!.push({ name, st: child.st, res: child.res, bytes: baked, forms: inner })

@@ -2268,11 +2268,13 @@ in the page, after the slices' decoding (0.13 to 0.24 s); each file arXiv's size
   whose advance meets no crop of its member (a glyph wholly off its baseline, a prime), go to every crop its font's box (FontBBox: every glyph's ink, ISO 32000-1 §9.8.1) meets there, or to every crop where the
   font gives none, so that no ink is lost; a show is cut code by code, the codes left out an advance in their place. A path, an
   image or a form is the crop's where its box meets the crop's region (a rectangle's and a form's box by their four corners,
-  turned or sheared as they are drawn; a stroke's reach its half width times its miter limit). The form is lean: a show none of whose codes is the crop's is written as nothing at all, nor its advance, and no
+  turned or sheared as they are drawn; a stroke's reach its half width times its miter limit, set by `w` and `M` or a graphics
+  state's `/LW` and `/ML`). The form is lean: a show none of whose codes is the crop's is written as nothing at all, nor its advance, and no
   text state or line of the content's is written; before each show written, the content's own text state and line matrix are
   written again exactly as they stand there (to a millionth, the way along the line a `TJ` number), a graphics state saved
   and restored keeping whether they differ; a font a graphics state chooses (`gs` with `/Font`, written as it stands) is
-  never written over by the content's `Tf` (#690's review). The crops' forms of a page name one resources object of the page (its resources
+  never written over by the content's `Tf`, and a font's name is written only in the resources it was chosen in: the text
+  state a form inherits is written by its caller before the form is drawn (#690's review). The crops' forms of a page name one resources object of the page (its resources
   inline were 371 of the 453 KB of the paper's crop forms). On 2611.34872v1's side-by-side file: 8,392 characters with no ink
   under them to 9 (commas, hyphens, a bar and `\not`'s combining slash: a pixel of ink or none at 100 dpi; BabelDOC's file 0
   to 9 a page); on the four pairs 12,065 to 1,292, the rest mostly the figures' own text (Not yet, below); the files 0.04 to 5 %
