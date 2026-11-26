@@ -767,7 +767,6 @@ function linesOf(
         })
         const far = (n: number) => (side === 'l' ? rows[n]!.l.x1 : -rows[n]!.l.x0)
         for (const run of runs) {
-          if (run.length < 2) continue
           if (!run.slice(1).some((n) => goesOn(n - 1))) continue
           const edge = Math.max(...run.map(far))
           const flush = run.filter((n) => far(n) >= edge - tol).length > 1
