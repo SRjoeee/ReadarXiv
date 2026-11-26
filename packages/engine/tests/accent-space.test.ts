@@ -13,9 +13,7 @@ const enc = (s: string) => new TextEncoder().encode(s)
 const utf8 = (latin: string) => new TextDecoder().decode(Uint8Array.from(latin, (c) => c.charCodeAt(0)))
 const piecesOf = (text: string, preamble = '') => {
   const u = openPaper(
-    new Map([
-      ['main.tex', enc(`\\documentclass{article}\n${preamble}\\begin{document}\n${text}\n\\end{document}\n`)],
-    ]),
+    new Map([['main.tex', enc(`\\documentclass{article}\n${preamble}\\begin{document}\n${text}\n\\end{document}\n`)]]),
   ).units.find((x) => x.kind === 'para')!
   return (u.pieces as { t: string; s?: string; src?: string }[]).map((p) =>
     p.t === 'text' ? utf8(p.s!.replace(/^\n|\n$/g, '')) : `[${utf8(p.src!)}]`,
@@ -70,7 +68,10 @@ describe("an accent's argument after white space", () => {
     expect(ps.filter((p) => p.startsWith('[')).every((p) => !/[a-z]/.test(p.slice(2)))).toBe(true)
     // (the other side: defined anew with an argument, its argument is read past the space as LaTeX's accent's is)
     expect(
-      piecesOf('We write (A\\= T) here in a sentence that is long enough to be one unit.', '\\renewcommand{\\=}[1]{\\bar{#1}}\n'),
+      piecesOf(
+        'We write (A\\= T) here in a sentence that is long enough to be one unit.',
+        '\\renewcommand{\\=}[1]{\\bar{#1}}\n',
+      ),
     ).toEqual(['We write (A', '[\\= T]', ') here in a sentence that is long enough to be one unit.'])
   })
 

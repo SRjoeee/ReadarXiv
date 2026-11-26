@@ -194,7 +194,9 @@ describe('a placeholder TeX answered inseparable from the macro before it is rea
     const samples = aheadSamples(UNITS as never)
     for (const box of ['d', 'g']) {
       const log = samples
-        .map((_, n) => `LAYOUT-PROBE 1 ahead-at ${n} ${box}\n! Undefined control sequence.\nLAYOUT-PROBE 1 ahead ${n} 0`)
+        .map(
+          (_, n) => `LAYOUT-PROBE 1 ahead-at ${n} ${box}\n! Undefined control sequence.\nLAYOUT-PROBE 1 ahead ${n} 0`,
+        )
         .join('\n')
       expect(Object.values(readMarkProbe(log, samples))).toEqual(samples.map(() => '2'))
       expect(probeFactsOf(log, UNITS as never).joined).toEqual([])

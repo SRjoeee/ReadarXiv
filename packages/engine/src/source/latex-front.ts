@@ -1179,9 +1179,9 @@ const ownAccents = (texts: readonly string[]) => {
     .matchAll(
       /\\((?:re)?newcommand\*?|providecommand\*?|DeclareRobustCommand\*?|(?:New|Renew|Provide|Declare)DocumentCommand|[gex]?def|let)\s*\{?\s*\\([cvuH]|[.'`^~"=])(?![A-Za-z@])\s*\}?\s*(?:\[\s*(\d)\s*\]|(#\d))?/g,
     )) {
+    // (\\def states its parameters by #n, a command its count in brackets, none where neither; \\let and a document command do not say)
     const how = m[1]!
-    const takes = /def$/.test(how) ? !!m[4] : /command\*?$/i.test(how) && !/Document/.test(how) ? Number(m[3] ?? 0) > 0 : true
-    out.set(m[2]!, takes)
+    out.set(m[2]!, m[4] ? true : m[3] ? Number(m[3]) > 0 : !/def$|command\*?$/i.test(how) || /Document/.test(how))
   }
   return out
 }

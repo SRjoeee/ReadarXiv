@@ -11,7 +11,15 @@ import { describe, expect, it } from 'vitest'
 import { type Glyph, packGlyphs } from '../src/ink.ts'
 import { followsOf } from '../src/marks/marks.ts'
 import type { SourceUnit } from '../src/source/latex-front.ts'
-import { OWNED, OWNED_HOW, type Owned, ownedOf, ownedPages, STREAM_COLUMNS, type StreamPage } from '../src/own/stream.ts'
+import {
+  OWNED,
+  OWNED_HOW,
+  type Owned,
+  ownedOf,
+  ownedPages,
+  STREAM_COLUMNS,
+  type StreamPage,
+} from '../src/own/stream.ts'
 
 type Item = string | { at: string } | { rule: true }
 /** a page from items in stream order: a string is glyphs on the current line (a space 3 pt, `\n` the next line 12 pt down,
