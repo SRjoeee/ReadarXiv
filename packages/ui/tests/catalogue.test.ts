@@ -16,6 +16,16 @@ const BEFORE = JSON.parse(
 const ADDED: readonly string[] = [
   // S-R-28: a font lost (added 2026-11-19; the owner's sentence approved 2026-11-21)
   'R.status.facesLost',
+  // S-R-09: the PDF download made in the page, its row and its capsule's words (the owner's direction A, 2026-11-26)
+  'R.download.sideBySide',
+  'R.export.cancel',
+  "R.export.done('α1')",
+  'R.export.done(3)',
+  "R.export.failed('α1')",
+  'R.export.failed(3)',
+  "R.export.making('α1', 'α2')",
+  'R.export.making(3, 7)',
+  'R.export.retry',
 ]
 
 describe('the string catalogue', () => {
