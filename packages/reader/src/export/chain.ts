@@ -89,6 +89,8 @@ export interface ExportStats {
   fontBytesWhole: number
   /** fonts of TrueType outlines (CIDFontType2) */
   fontsTrueType: number
+  /** Type0 fonts over a font program another one is written over: a glyph two texts are drawn with, each read back as its own */
+  fontsShared: number
   fontBytes: number
   bake: BakeStats
   cropBake: BakeStats
@@ -131,6 +133,55 @@ const PDF_DOC: Readonly<Record<number, number>> = Object.fromEntries(
     [0xa0, [0x20ac]],
   ].flatMap(([at, cps]) => (cps as number[]).map((cp, i) => [cp, (at as number) + i])),
 )
+/** a string's bytes as a PDF reader takes them for text (PDF.js's stringToPDFString): UTF-16BE or UTF-16LE after their byte
+ *  order mark, UTF-8 after its, else PDFDocEncoding (each byte its character, where the encoding gives it another) */
+const DOC_CP: Readonly<Record<number, number>> = Object.fromEntries(
+  Object.entries(PDF_DOC).map(([cp, b]) => [b, Number(cp)]),
+)
+const textOfBytes = (b: Uint8Array): string => {
+  const bom = (x: number[]) => x.every((v, i) => b[i] === v)
+  const unicode = bom([0xfe, 0xff])
+    ? 'utf-16be'
+    : bom([0xff, 0xfe])
+      ? 'utf-16le'
+      : bom([0xef, 0xbb, 0xbf])
+        ? 'utf-8'
+        : null
+  if (unicode)
+    try {
+      const body = b.subarray(unicode === 'utf-8' ? 3 : 2, unicode === 'utf-8' ? b.length : b.length - (b.length % 2))
+      return new TextDecoder(unicode, { fatal: true }).decode(body)
+    } catch {
+      // (not that encoding after all: read as PDFDocEncoding, as PDF.js falls back)
+    }
+  return [...b].map((x) => String.fromCharCode(DOC_CP[x] ?? x)).join('')
+}
+/** a PDF string token's bytes (a hexadecimal string's digits; a literal string's bytes, its escapes undone) */
+const bytesOfToken = (tok: string): Uint8Array => {
+  if (tok.startsWith('<'))
+    return new Uint8Array((tok.slice(1, -1).replace(/\s/g, '').match(/../g) ?? []).map((h) => Number.parseInt(h, 16)))
+  const out: number[] = []
+  const body = tok.slice(1, -1)
+  for (let i = 0; i < body.length; i++) {
+    const c = body[i]!
+    if (c !== '\\') {
+      out.push(c.charCodeAt(0) & 255)
+      continue
+    }
+    const o = /^[0-7]{1,3}/.exec(body.slice(i + 1))
+    if (o) {
+      out.push(Number.parseInt(o[0], 8) & 255)
+      i += o[0].length
+    } else if (body[i + 1] === '\r' || body[i + 1] === '\n') {
+      // (a line's end escaped: no byte; a CR LF pair is one end)
+      i += body[i + 1] === '\r' && body[i + 2] === '\n' ? 2 : 1
+    } else {
+      const e = body[++i]!
+      out.push(({ n: 10, r: 13, t: 9, b: 8, f: 12 } as Record<string, number>)[e] ?? e.charCodeAt(0))
+    }
+  }
+  return new Uint8Array(out)
+}
 const pdfDocByte = (cp: number): number | null =>
   PDF_DOC[cp] ?? (cp <= 0xff && !(cp >= 0x18 && cp <= 0x1f) && !(cp >= 0x80 && cp <= 0x9e) && cp !== 0xa0 ? cp : null)
 /** the bytes of a text from the paper as PDF writes a string's or a name's, in the encoding a reader decodes back to it:
@@ -282,6 +333,7 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
     fontsWhole: 0,
     fontBytesWhole: 0,
     fontsTrueType: 0,
+    fontsShared: 0,
     fontBytes: 0,
     bake: newBakeStats(),
     cropBake: newBakeStats(),
@@ -290,14 +342,22 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
     ms,
   }
 
-  // ---- fonts: every slice drawn, one Type0 font each, its glyphs gathered as the pages are drawn
-  const fonts = new Map<string, { f: SfntFont; num: number; res: string; used: Map<number, [number, string]> }>()
-  const fontOf = (f: SfntFont) => {
-    let e = fonts.get(f.key)
+  // ---- fonts: every slice drawn, one Type0 font each, its glyphs gathered as the pages are drawn. A glyph two texts are drawn
+  // with (a face's small capitals drawing i and dotless i with one glyph; a cmap giving a hyphen two code points) is drawn,
+  // for each text after the first, through another Type0 font over the same font program, whose ToUnicode reads it as that
+  // text: a code reads back as one text, so that copy and search give each character the reader holds (#686, 4705748606)
+  type FontUse = { f: SfntFont; num: number; res: string; used: Map<number, [number, string]> }
+  const fonts = new Map<string, FontUse[]>()
+  let fontNames = 0
+  const fontOf = (f: SfntFont, cid: number, gid: number, text: string) => {
+    const list = fonts.get(f.key) ?? []
+    if (!list.length) fonts.set(f.key, list)
+    let e = list.find((u) => (u.used.get(cid)?.[1] ?? text) === text)
     if (!e) {
-      e = { f, num: take(), res: `AXTF${fonts.size}`, used: new Map() }
-      fonts.set(f.key, e)
+      e = { f, num: take(), res: `AXTF${fontNames++}`, used: new Map() }
+      list.push(e)
     }
+    if (!e.used.has(cid)) e.used.set(cid, [gid, text])
     return e
   }
   const box = (i: number) => {
@@ -475,6 +535,45 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
   }
 
   const destsByName = !!dictOf(dictOf(root.get(N('Names')))?.get(N('Dests')))
+  // (each destination the paper names, by its text as a reader decodes it: its key as the paper wrote it, which a link is
+  // written with, so that a viewer that compares a key's bytes (poppler) finds it as one that decodes it (PDF.js) does; a name
+  // the paper does not hold is encoded by bytesOf. The name tree's string keys first, the catalog's /Dests names after: #686,
+  // 4705748922)
+  let destKeys: Map<string, string> | null = null
+  const destKeyOf = (name: string): string | undefined => {
+    if (!destKeys) {
+      const keys = new Map<string, string>()
+      const walk = (node: PdfObject | undefined, depth: number) => {
+        const d = dictOf(node)
+        if (!d || depth > 64) return
+        const ns = look(d.get(N('Names')))
+        if (ns instanceof PDFArray)
+          for (let i = 0; i + 1 < (ns as PdfArray).size(); i += 2) {
+            const tok = look((ns as PdfArray).get(i))?.toString() ?? ''
+            if (!/^[<(]/.test(tok)) continue
+            const text = textOfBytes(bytesOfToken(tok))
+            if (!keys.has(text)) keys.set(text, tok)
+          }
+        const kids = look(d.get(N('Kids')))
+        if (kids instanceof PDFArray) for (const k of (kids as PdfArray).asArray()) walk(k, depth + 1)
+      }
+      walk(dictOf(root.get(N('Names')))?.get(N('Dests')), 0)
+      for (const [k] of dictOf(root.get(N('Dests')))?.entries() ?? []) {
+        const tok = k.toString()
+        const bytes = new Uint8Array(
+          [
+            ...tok
+              .slice(1)
+              .replace(/#([0-9a-fA-F]{2})/g, (_, h: string) => String.fromCharCode(Number.parseInt(h, 16))),
+          ].map((c) => c.charCodeAt(0) & 255),
+        )
+        const text = textOfBytes(bytes)
+        if (!keys.has(text)) keys.set(text, tok)
+      }
+      destKeys = keys
+    }
+    return destKeys.get(name)
+  }
   /** a link's annotation, its box moved by (dx, dy) */
   const linkBody = (l: Page['links'][number], dx: number, dy = 0): string => {
     const [b, to, , border] = l
@@ -498,7 +597,7 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
     } else {
       const name = JSON.parse(to.dest) as unknown
       const s = typeof name === 'string' ? name : String(to.dest)
-      target = destsByName ? `/Dest ${pdfStr(s)}` : `/Dest ${pdfName(s)}`
+      target = `/Dest ${destKeyOf(s) ?? (destsByName ? pdfStr(s) : pdfName(s))}`
     }
     const bd = border
       ? ` /C [${[16, 8, 0].map((s) => f2(((border[1] >> s) & 255) / 255)).join(' ')}] /BS << /W ${f2(border[0])}${border[2] === 'dashed' ? ' /S /D' : border[2] === 'underline' ? ' /S /U' : ''} >>`
@@ -572,9 +671,8 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
               if (/\s/.test(text)) stats.blanks++
               else stats.missing++
             } else {
-              const e = fontOf(g.font)
               const cid = g.font.cid(g.gid)
-              if (!e.used.has(cid)) e.used.set(cid, [g.gid, text])
+              const e = fontOf(g.font, cid, g.gid, text)
               gs.push({ e, cid, x: at })
               stats.glyphs++
             }
@@ -626,7 +724,7 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
       const own = (dictOf(d?.get(N(key)))?.entries() ?? []).map(([k, v]) => ` ${k.toString()} ${lit(v)}`)
       return own.length || extra.length ? ` /${key} <<${own.join('')}${extra.join('')} >>` : ''
     }
-    const fe = [...fontsUsed].map((r) => ` /${r} ${[...fonts.values()].find((e) => e.res === r)!.num} 0 R`)
+    const fe = [...fontsUsed].map((r) => ` /${r} ${[...fonts.values()].flat().find((e) => e.res === r)!.num} 0 R`)
     const xe = [...xobj].map(([k, n]) => ` /${k} ${n} 0 R`)
     return `<<${keep.map(([k, v]) => ` ${k.toString()} ${lit(v)}`).join('')}${sub('Font', fe)}${sub('XObject', xe)} >>`
   }
@@ -836,25 +934,35 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
   if (stats.missing) throw new ExportRefusal('glyphs', `${stats.missing} characters no slice of their face draws`)
   stop()
 
-  // ---- the fonts, written once their glyphs are known: each subset to the glyphs drawn
-  for (const e of fonts.values()) {
-    const ids = { type0: e.num, cidFont: take(), desc: take(), file: take(), toUni: take() }
-    const file = fontFileOf(e.f, new Set([...e.used.values()].map((u) => u[0])))
-    const z = await deflate(file.bytes)
-    stats.fontBytes += z.length
-    if (e.f.kind === 'ttf') stats.fontsTrueType++
-    if (file.whole) {
-      stats.fontsWhole++
-      stats.fontBytesWhole += z.length
+  // ---- the fonts, written once their glyphs are known: each font program subset to the glyphs drawn with it, written once,
+  // and each Type0 font over it (the first's objects numbered as one font's were: a paper whose glyphs no two texts share is
+  // written as before)
+  for (const list of fonts.values()) {
+    const f = list[0]!.f
+    let fileId = 0
+    for (const [n, e] of list.entries()) {
+      const ids = { type0: e.num, cidFont: take(), desc: take(), file: n ? fileId : take(), toUni: take() }
+      const body = fontBodies(f, e.used, ids)
+      objs.push(
+        [ids.type0, objText(ids.type0, body.type0)],
+        [ids.cidFont, objText(ids.cidFont, body.cidFont)],
+        [ids.desc, objText(ids.desc, body.desc)],
+      )
+      if (!n) {
+        fileId = ids.file
+        const file = fontFileOf(f, new Set(list.flatMap((u) => [...u.used.values()].map((x) => x[0]))))
+        const z = await deflate(file.bytes)
+        stats.fontBytes += z.length
+        if (f.kind === 'ttf') stats.fontsTrueType++
+        if (file.whole) {
+          stats.fontsWhole++
+          stats.fontBytesWhole += z.length
+        }
+        objs.push([ids.file, objStream(ids.file, `${file.dict} /Filter /FlateDecode`, z)])
+      }
+      objs.push([ids.toUni, objStream(ids.toUni, ' /Filter /FlateDecode', await deflate(enc(body.toUnicode)))])
     }
-    const body = fontBodies(e.f, e.used, ids)
-    objs.push(
-      [ids.type0, objText(ids.type0, body.type0)],
-      [ids.cidFont, objText(ids.cidFont, body.cidFont)],
-      [ids.desc, objText(ids.desc, body.desc)],
-      [ids.file, objStream(ids.file, `${file.dict} /Filter /FlateDecode`, z)],
-      [ids.toUni, objStream(ids.toUni, ' /Filter /FlateDecode', await deflate(enc(body.toUnicode)))],
-    )
+    stats.fontsShared += list.length - 1
   }
   stats.fonts = fonts.size
   lap('fonts')

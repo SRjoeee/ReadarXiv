@@ -126,6 +126,8 @@ describe('a named destination is written in the encoding PDF.js reads back as it
   const names: [string, string][] = [
     ['(a\\204b)', 'a—b'],
     ['(x\\240y)', 'x€y'],
+    // (UTF-16BE of a name PDFDocEncoding holds: PDF.js decodes both alike, poppler compares the bytes)
+    ['<FEFF0061>', 'a'],
     ['<FEFF007800A00079>', 'x y'],
     ['<FEFF4E2D6587>', '\u4e2d\u6587'],
   ]
@@ -146,8 +148,40 @@ describe('a named destination is written in the encoding PDF.js reads back as it
       )
       await task.destroy()
       expect(got.sort()).toEqual(names.map(([, name]) => [name, 'Fit']).sort())
+      // (byte for byte the tree's key, as a viewer that compares bytes looks a destination up: #686, 4705748922)
+      const X = openObjects(file, { PL: L, objectsMax: 1e5, decodedMax: 1 << 24 })
+      const annots2 = look(X, X.pages()[0]!.node.get(N('Annots'))) as PdfArray
+      const written = annots2
+        .asArray()
+        .map((a) => (look(X, a) as PdfDict).get(N('Dest')))
+        .filter((d) => !!d && !(d instanceof L.PDFArray))
+        .map((d) => hexOfToken(String(d)))
+      expect(written.sort()).toEqual(names.map(([k]) => hexOfToken(k)).sort())
     })
 })
+
+/** a PDF string token's bytes, as hex: a hexadecimal string's digits, a literal string's bytes with its escapes undone */
+function hexOfToken(tok: string): string {
+  if (tok.startsWith('<')) return tok.slice(1, -1).replace(/\s/g, '').toUpperCase()
+  const out: number[] = []
+  const body = tok.slice(1, -1)
+  for (let i = 0; i < body.length; i++) {
+    const c = body[i]!
+    if (c !== '\\') {
+      out.push(c.charCodeAt(0) & 255)
+      continue
+    }
+    const o = /^[0-7]{1,3}/.exec(body.slice(i + 1))
+    if (o) {
+      out.push(Number.parseInt(o[0], 8) & 255)
+      i += o[0].length
+    } else {
+      const e = body[++i]!
+      out.push({ n: 10, r: 13, t: 9, b: 8, f: 12 }[e] ?? e.charCodeAt(0))
+    }
+  }
+  return out.map((b) => b.toString(16).toUpperCase().padStart(2, '0')).join('')
+}
 
 describe("the left half of a side-by-side page is arXiv's own drawing (#685: 4703877261, 4703881297)", () => {
   it("draws a figure form the add-on wrote again from arXiv's own revision of it, under a number of its own", async () => {
@@ -343,4 +377,46 @@ describe('a turned page set side by side in its upright frame (#685: 4704125905)
               ],
         )
       })
+})
+
+describe('two characters one glyph draws are each read back as themselves (#686: 4705748606)', () => {
+  // (a face whose small capitals draw i and dotless i with one glyph, I.sc: Computer Modern Unicode's; and a hyphen its cmap
+  // gives two code points: the text a PDF reader takes back of each is its own, in either order)
+  const shared: Glyphs = {
+    glyph: (face, cp) =>
+      face === FACE && [0x69, 0x131, 0x2d, 0x2010].includes(cp)
+        ? { font, gid: cp === 0x2d || cp === 0x2010 ? 2 : 1 }
+        : null,
+    offsets: (_face, text) => [...text].map((_, i) => i * 100),
+  }
+  for (const order of [
+    ['iı', 'ıi'],
+    ['ıi', 'iı'],
+  ])
+    it(`reads back ${JSON.stringify(order)} as written, and both hyphens`, async () => {
+      const page = laid([run(order[0]!, 72), run(order[1]!, 200), run('-‐', 300)])
+      const c = plain()
+      const r = await exportPdf({
+        composed: c.bytes,
+        seam: c.seam,
+        pages: new Map([[1, page]]),
+        glyphs: shared,
+        PL: L,
+        form: 'translation',
+      })
+      const file = new Uint8Array(r.parts.reduce((n, p) => n + p.length, 0))
+      let at = 0
+      for (const p of r.parts) {
+        file.set(p, at)
+        at += p.length
+      }
+      const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
+      const task = pdfjs.getDocument({ data: file.slice() })
+      const tc = await (await (await task.promise).getPage(1)).getTextContent()
+      await task.destroy()
+      const text = tc.items.map((i) => ('str' in i ? i.str : '')).join('')
+      expect(text).toContain(order[0])
+      expect(text).toContain(order[1])
+      expect(text).toContain('-‐')
+    })
 })

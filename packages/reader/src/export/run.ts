@@ -21,10 +21,36 @@ export interface ReaderHandles {
   composer: Composer
   /** the composer's generation at the press: the file is of it, and stops where another comes (composer.ts layAll) */
   gen: number
+  /** its target's tag, the lang the reader draws its translation in: a face's small capitals are shaped in its language system */
+  lang: string
   served: Served
   pdfjs: PdfJsLike
+  /** the export's own PDF.js worker (the reader's kit, its 'export' role over a port of the reader's): `open` gives
+   *  getDocument's options with it, `close` ends it (#686: PDF.js's global worker is never set, and none is asked of the host) */
+  worker: ExportWorker
   /** the object layer, loaded on the press (the host's @cantoo/pdf-lib) */
   pdfLib: () => Promise<unknown>
+}
+
+export interface ExportWorker {
+  open(): Record<string, unknown>
+  close(): void
+}
+
+/** the slices made fonts on the export's own PDF.js worker: opened for them and closed after, however their decoding ends (a
+ *  failure, a cancel: the decoding document destroyed at the abort, its worker ended), so that no file leaves one behind */
+export async function fontsOnWorker(
+  pdfjs: PdfJsLike,
+  worker: ExportWorker,
+  files: readonly { key: string; woff2: Uint8Array }[],
+  signal: AbortSignal,
+): Promise<Map<string, SfntFont | null>> {
+  const options = worker.open()
+  try {
+    return await fontsByPdfJs(files, pdfjs, { options, signal })
+  } finally {
+    worker.close()
+  }
 }
 
 const hex = (b: ArrayBuffer) => [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, '0')).join('')
@@ -92,6 +118,38 @@ export async function readComposed(
 /** the faces whose small capitals are their own, by their file's smcp feature (@readarxiv/text SMCP) */
 const OWN_CAPS: ReadonlySet<string> = new Set(SMCP)
 const CAPS = /^(italic )?small-caps /
+/** each target's OpenType language system tag (OpenType's registry of language system tags, as HarfBuzz maps a BCP 47 tag to
+ *  one): the system a browser shapes a run of the target's `lang` in (the reader draws a page's translation in its target's
+ *  lang, compose/paint.ts svgOf) */
+const OT_LANG: Readonly<Record<string, string>> = {
+  bg: 'BGR ',
+  cs: 'CSY ',
+  de: 'DEU ',
+  es: 'ESP ',
+  fr: 'FRA ',
+  id: 'IND ',
+  it: 'ITA ',
+  ja: 'JAN ',
+  ko: 'KOR ',
+  ms: 'MLY ',
+  nl: 'NLD ',
+  pl: 'PLK ',
+  pt: 'PTG ',
+  ru: 'RUS ',
+  sv: 'SVE ',
+  tr: 'TRK ',
+  uk: 'UKR ',
+  zh: 'ZHS ',
+  'zh-TW': 'ZHT ',
+}
+/** a character's script as a browser itemizes a small capitals run (OpenType's tag): Greek and Cyrillic their own, any other
+ *  (Latin, and the digits and marks a Latin run holds) Latin's */
+const scriptOf = (cp: number) =>
+  /\p{Script=Greek}/u.test(String.fromCodePoint(cp))
+    ? 'grek'
+    : /\p{Script=Cyrillic}/u.test(String.fromCodePoint(cp))
+      ? 'cyrl'
+      : 'latn'
 
 /**
  * How a run's characters are drawn: each one's slice and its glyph there — the face's own small capital where the run asks
@@ -105,7 +163,10 @@ export function glyphsFor(
   served: { sliceOf(font: string, cp: number): { path: string; face: string } | null },
   fonts: ReadonlyMap<string, SfntFont | null>,
   measure: Measure,
+  lang = '',
 ): Glyphs {
+  // (the target's language system, as the reader's drawing in its lang is shaped: #686, 4705749063)
+  const ot = OT_LANG[lang] ?? OT_LANG[lang.split('-')[0] ?? ''] ?? null
   const ownAt = (face: string, cp: number) => OWN_CAPS.has(served.sliceOf(face, cp)?.face ?? '')
   return {
     glyph(face, cp) {
@@ -113,7 +174,10 @@ export function glyphsFor(
       const font = s ? fonts.get(s.path) : null
       const gid = font?.cmap.get(cp)
       if (!font || !gid) return null
-      return { font, gid: CAPS.test(face) && OWN_CAPS.has(s?.face ?? '') ? (font.smcp.get(gid) ?? gid) : gid }
+      return {
+        font,
+        gid: CAPS.test(face) && OWN_CAPS.has(s?.face ?? '') ? (font.smcp(scriptOf(cp), ot).get(gid) ?? gid) : gid,
+      }
     },
     offsets(face, text) {
       if (!CAPS.test(face)) return offsetsOf(measure, face, text)
@@ -193,10 +257,13 @@ export async function exportFromReader(
     throw e
   })
   if (signal.aborted) throw aborted()
-  const fonts: Map<string, SfntFont | null> = await fontsByPdfJs(files, h.pdfjs)
+  const fonts = await fontsOnWorker(h.pdfjs, h.worker, files, signal).catch((e: unknown) => {
+    if (signal.aborted) throw aborted()
+    throw e
+  })
   if (signal.aborted) throw aborted()
   share(0.75, 0.85)(1)
-  const glyphs = glyphsFor(h.served, fonts, canvasMeasure())
+  const glyphs = glyphsFor(h.served, fonts, canvasMeasure(h.lang), h.lang)
   // ---- the file
   const PL = await h.pdfLib()
   const fileShare = share(0.85, 1)

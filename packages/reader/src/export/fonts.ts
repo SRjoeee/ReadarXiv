@@ -14,8 +14,9 @@ export interface SfntFont {
   advance(gid: number): number
   /** glyph id -> CID (a CID-keyed CFF's charset; the glyph id otherwise, as a CIDFontType0C reads a name-keyed CFF) */
   cid(gid: number): number
-  /** glyph id -> its small capital: what the face's smcp feature substitutes (GSUB), as the reader's class draws it */
-  smcp: Map<number, number>
+  /** glyph id -> its small capital in a script (OpenType's tag: latn, grek, cyrl) and a language system (OpenType's tag, or
+   *  null for the default): what the face's smcp feature substitutes there (GSUB), as the reader's drawing shapes it */
+  smcp(script: string, lang: string | null): Map<number, number>
   /** what its outlines are: a CFF table (`cff`), or glyf's (`ttf`: `sfnt` the whole font) */
   kind: 'cff' | 'ttf'
   cff: Uint8Array
@@ -94,28 +95,47 @@ function cmapOf(t: Uint8Array): Map<number, number> {
 
 /** a slice's sfnt read; null where it is no CFF-flavoured font, or its CFF cannot be read */
 /**
- * A face's small capitals, glyph by glyph: every single substitution (GSUB lookup type 1, or one an extension lookup, type 7,
- * holds) of the lookups its feature records tagged `smcp` name, applied lookup after lookup in the list's order, the first
- * subtable that covers a glyph its own (OpenType GSUB §6.2) — what a browser substitutes for a run asked small capitals in the
- * face (the reader's class: font-variant-caps over the face's feature). The served slices keep the feature and the glyphs it
- * reaches (@readarxiv/text font-caps.ts). A table that reads past its end gives none.
+ * A face's small capitals, glyph by glyph, in a script and a language system, as a browser shapes a run (HarfBuzz's choice):
+ * the script's record (its OpenType tag; where the font has none, DFLT's, then latn's), the language system its `lang` names
+ * there (OpenType's language tag; where the script has none of that tag, or `lang` is null, its default one), and the features
+ * that system lists tagged `smcp`; their lookups' single substitutions (GSUB lookup type 1, or one an extension lookup, type 7,
+ * holds), applied lookup after lookup in the list's order, the first subtable that covers a glyph its own (OpenType GSUB §6.2).
+ * A system with no smcp feature has no small capitals (Domitian's DEU: a German run in it is drawn in lower case). The
+ * served slices keep the feature and the glyphs it reaches (@readarxiv/text font-caps.ts). A table that reads past its end
+ * gives none.
  */
-export function smcpOf(g: Uint8Array | undefined): Map<number, number> {
+export function smcpOf(g: Uint8Array | undefined, script: string, lang: string | null): Map<number, number> {
   const out = new Map<number, number>()
   if (!g) return out
   const r16 = (i: number) => {
     if (i < 0 || i + 2 > g.length) throw new RangeError('GSUB read past its end')
     return u16(g, i)
   }
+  const tagAt = (i: number) => {
+    r16(i + 2)
+    return String.fromCharCode(g[i]!, g[i + 1]!, g[i + 2]!, g[i + 3]!)
+  }
   try {
-    const fl = r16(6),
+    const sl = r16(4),
+      fl = r16(6),
       ll = r16(8)
+    // (the script: its own record, else DFLT's, else latn's)
+    const scripts = new Map<string, number>()
+    for (let i = 0, n = r16(sl); i < n; i++) scripts.set(tagAt(sl + 2 + 6 * i), sl + r16(sl + 6 + 6 * i))
+    const st = scripts.get(script) ?? scripts.get('DFLT') ?? scripts.get('latn')
+    if (st === undefined) return out
+    // (its language system: the one `lang` names, else its default)
+    let sys = r16(st) ? st + r16(st) : -1
+    if (lang)
+      for (let i = 0, n = r16(st + 2); i < n; i++) if (tagAt(st + 4 + 6 * i) === lang) sys = st + r16(st + 8 + 6 * i)
+    if (sys < 0) return out
     const ids = new Set<number>()
-    for (let i = 0, n = r16(fl); i < n; i++) {
-      const rec = fl + 2 + 6 * i
-      if (String.fromCharCode(g[rec]!, g[rec + 1]!, g[rec + 2]!, g[rec + 3]!) !== 'smcp') continue
+    for (let k = 0, m = r16(sys + 4); k < m; k++) {
+      const fi = r16(sys + 6 + 2 * k)
+      const rec = fl + 2 + 6 * fi
+      if (fi >= r16(fl) || tagAt(rec) !== 'smcp') continue
       const f = fl + r16(rec + 4)
-      for (let k = 0, m = r16(f + 2); k < m; k++) ids.add(r16(f + 4 + 2 * k))
+      for (let x = 0, c = r16(f + 2); x < c; x++) ids.add(r16(f + 4 + 2 * x))
     }
     const steps: Map<number, number>[] = []
     for (const id of [...ids].sort((a, b) => a - b)) {
@@ -123,15 +143,15 @@ export function smcpOf(g: Uint8Array | undefined): Map<number, number> {
       const l = ll + r16(ll + 2 + 2 * id)
       const type = r16(l)
       for (let s = 0, n = r16(l + 4); s < n; s++) {
-        let st = l + r16(l + 6 + 2 * s)
+        let sub = l + r16(l + 6 + 2 * s)
         let t = type
         if (t === 7) {
-          t = r16(st + 2)
-          st += (r16(st + 4) << 16) + r16(st + 6)
+          t = r16(sub + 2)
+          sub += (r16(sub + 4) << 16) + r16(sub + 6)
         }
         if (t !== 1) continue
-        const fmt = r16(st)
-        const c = st + r16(st + 2)
+        const fmt = r16(sub)
+        const c = sub + r16(sub + 2)
         // (the coverage, glyph by its index: a list (format 1) or ranges (format 2))
         const covered: [number, number][] = []
         if (r16(c) === 1) for (let i = 0, n = r16(c + 2); i < n; i++) covered.push([r16(c + 4 + 2 * i), i])
@@ -142,7 +162,7 @@ export function smcpOf(g: Uint8Array | undefined): Map<number, number> {
             for (let gid = a; gid <= z; gid++) covered.push([gid, first + gid - a])
           }
         for (const [gid, i] of covered)
-          if (!step.has(gid)) step.set(gid, fmt === 1 ? (gid + r16(st + 4)) & 0xffff : r16(st + 6 + 2 * i))
+          if (!step.has(gid)) step.set(gid, fmt === 1 ? (gid + r16(sub + 4)) & 0xffff : r16(sub + 6 + 2 * i))
       }
       steps.push(step)
     }
@@ -179,13 +199,19 @@ export function readSfnt(key: string, b: Uint8Array): SfntFont | null {
   }
   const upem = u16(head, 18)
   const nh = u16(hhea, 34)
+  const smcps = new Map<string, Map<number, number>>()
   const os2 = t.get('OS/2')
   const post = t.get('post')
   return {
     key,
     upem,
     cmap: cmapOf(cmap),
-    smcp: smcpOf(t.get('GSUB')),
+    smcp: (script, lang) => {
+      const k = `${script}|${lang ?? ''}`
+      let m = smcps.get(k)
+      if (!m) smcps.set(k, (m = smcpOf(t.get('GSUB'), script, lang)))
+      return m
+    },
     advance: (g) => u16(hmtx, 4 * Math.min(g, nh - 1)),
     cid: (g) => cids?.[g] ?? g,
     kind: cff ? 'cff' : 'ttf',

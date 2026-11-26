@@ -2,6 +2,7 @@
 // The bake (export/bake.ts): a page's content with the ink of the groups the reader turns off taken out of the stream, on the
 // engine's walk (each show's codes and text state as the remover reads them): a show becomes the advance it made, a painted
 // path and an image go, a clip stays a clip, our own marks go. A document of our own (pdf-build.ts).
+import { deflateSync } from 'node:zlib'
 import * as PL from '@cantoo/pdf-lib'
 import { openObjects, openRemover, type PdfLib } from '@readarxiv/engine'
 import { describe, expect, it } from 'vitest'
@@ -97,5 +98,40 @@ describe("the bake reads the page through the export's own objects, nothing of t
     const out = makeBaker(W).bake(0, offG0, st)
     expect(out && latin1(out)).toBe(over)
     expect(W.numPages).toBe(1)
+  })
+})
+
+describe("a stream whose filters are named by reference, read through the export's objects (#686: 4705748788)", () => {
+  // (the page's content deflated, its /Filter an array whose entry is an indirect name, and its /DecodeParms an indirect
+  // dictionary: the object view parses a dictionary where no object is held, so its filters are looked up through the view)
+  const indirect = () =>
+    pdf([
+      '<< /Type /Catalog /Pages 2 0 R /OCProperties << /OCGs [6 0 R 7 0 R] /D << /BaseState /ON >> >> >>',
+      '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+      '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R /F2 8 0 R >> /Properties << /G0 6 0 R /G1 7 0 R >> /XObject << /Im 9 0 R >> >> /Contents 4 0 R >>',
+      { dict: '/Filter [10 0 R] /DecodeParms [11 0 R]', data: new Uint8Array(deflateSync(Buffer.from(content))) },
+      `<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /FirstChar 32 /LastChar 126 /Widths [${widths.join(' ')}] >>`,
+      '<< /Type /OCG /Name (axt:1.1.t) >>',
+      '<< /Type /OCG /Name (axt:2.1.t) >>',
+      '<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>',
+      {
+        dict: '/Type /XObject /Subtype /Image /Width 1 /Height 1 /ColorSpace /DeviceGray /BitsPerComponent 8',
+        data: '\x80',
+      },
+      '/FlateDecode',
+      '<< /Predictor 1 >>',
+    ])
+  it('bakes it as the whole load does', async () => {
+    const [plainBake] = await baked(offG0)
+    const X = openObjects(indirect(), { PL: PL as unknown as PdfLib, objectsMax: 1e5, decodedMax: 1 << 24 })
+    const st = newBakeStats()
+    const out = makeBaker(await openRemover(X, { PL: PL as unknown as PdfLib })).bake(0, offG0, st)
+    expect(out && latin1(out)).toBe(plainBake)
+    const whole = makeBaker(await openRemover(indirect(), { PL: PL as unknown as PdfLib })).bake(
+      0,
+      offG0,
+      newBakeStats(),
+    )
+    expect(whole && latin1(whole)).toBe(plainBake)
   })
 })

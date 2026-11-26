@@ -911,6 +911,33 @@ export async function openRemover(
     })
   }
   const look = (v: PdfObject | undefined) => (v instanceof PDFRef ? lookup(v) : v)
+  // (a stream the object view gives: its dictionary was parsed where no object is held, and the object layer's decoder looks
+  // its /Filter and /DecodeParms up there, so that an entry named by reference reads as none; given them through the view,
+  // as the whole load's own context resolves them. #686: none of the 245 papers' 87,461 streams names one so)
+  const FILTERS = [PDFName.of('Filter'), PDFName.of('DecodeParms')]
+  const byRef = (v: PdfObject | undefined) =>
+    v instanceof PDFRef || (v instanceof PDFArray && v.asArray().some((x) => x instanceof PDFRef))
+  const viewed = (st: PdfRawStream): PdfRawStream => {
+    if (loaded || !FILTERS.some((k) => byRef(st.dict.get(k)))) return st
+    const through = (v: PdfObject | undefined): PdfObject | undefined => {
+      const x = look(v)
+      if (!(x instanceof PDFArray)) return x
+      const a: PdfArray & { lookup?: unknown; lookupMaybe?: unknown } = Object.create(x)
+      a.lookup = (i: number) => look(x.get(i))
+      a.lookupMaybe = (i: number) => {
+        const y = look(x.get(i))
+        return y instanceof PDFDict ? y : undefined
+      }
+      return a
+    }
+    const [filter, parms] = FILTERS.map((k) => through(st.dict.get(k)))
+    const dict: PdfDict & { lookup?: unknown } = Object.create(st.dict)
+    dict.lookup = (k: PdfObject) =>
+      k === FILTERS[0] ? filter : k === FILTERS[1] ? parms : look(st.dict.get(k as PdfName))
+    const out: PdfRawStream = Object.create(st)
+    Object.defineProperty(out, 'dict', { value: dict })
+    return out
+  }
   const get = (d: PdfObject | undefined, k: string) => {
     if (!(d instanceof PDFDict) && !(d instanceof PDFStream)) return undefined
     const dict = d instanceof PDFStream ? d.dict : d
@@ -940,7 +967,7 @@ export async function openRemover(
     if (st instanceof PDFRawStream && st.contents.length === 0) out = new Uint8Array(0)
     else if (st instanceof PDFRawStream) {
       try {
-        out = readAtMost(decodePDFRawStream(st), limit)
+        out = readAtMost(decodePDFRawStream(viewed(st)), limit)
       } catch (e) {
         // (a failed allocation is no stream the object layer refuses: the paper's, memory.ts)
         if (e instanceof DecodeLimit || isMemoryError(e)) throw e

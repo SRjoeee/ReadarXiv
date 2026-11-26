@@ -34,8 +34,14 @@ const lookup = (type: number, subs: number[][]) => {
   }
   return [...b16(type), 0, 0, ...b16(subs.length), ...offs.flatMap(b16), ...subs.flat()]
 }
-/** a GSUB: its features (tag, lookup indices) and its lookups, no script */
-function gsub(features: [string, number[]][], lookups: number[][]): Uint8Array {
+/** a GSUB: its features (tag, lookup indices), its lookups, and its scripts (each its tag, its default language system's
+ *  feature indices and its language systems' (tag, feature indices)); by default one script, latn, whose default language
+ *  system holds every feature */
+function gsub(
+  features: [string, number[]][],
+  lookups: number[][],
+  scripts: [string, number[] | null, [string, number[]][]][] = [['latn', features.map((_, i) => i), []]],
+): Uint8Array {
   const fHead = 2 + 6 * features.length
   const fBodies = features.map(([, ix]) => [0, 0, ...b16(ix.length), ...ix.flatMap(b16)])
   const fOffs: number[] = []
@@ -57,13 +63,43 @@ function gsub(features: [string, number[]][], lookups: number[][]): Uint8Array {
     at += l.length
   }
   const lookupList = [...b16(lookups.length), ...lOffs.flatMap(b16), ...lookups.flat()]
-  const scriptList = [0, 0]
+  // (the script list: its records, then each script table (its default language system and its records), then the systems)
+  const langSys = (ix: number[]) => [0, 0, 0xff, 0xff, ...b16(ix.length), ...ix.flatMap(b16)]
+  const scriptTables = scripts.map(([, dflt, systems]) => {
+    const head = 4 + 6 * systems.length
+    const bodies: number[][] = [...(dflt ? [langSys(dflt)] : []), ...systems.map(([, ix]) => langSys(ix))]
+    const offs: number[] = []
+    let at2 = head
+    for (const b of bodies) {
+      offs.push(at2)
+      at2 += b.length
+    }
+    const dOff = dflt ? offs.shift()! : 0
+    return [
+      ...b16(dOff),
+      ...b16(systems.length),
+      ...systems.flatMap(([t], i) => [...tag(t), ...b16(offs[i]!)]),
+      ...bodies.flat(),
+    ]
+  })
+  const sHead = 2 + 6 * scripts.length
+  const sOffs: number[] = []
+  at = sHead
+  for (const t of scriptTables) {
+    sOffs.push(at)
+    at += t.length
+  }
+  const scriptList = [
+    ...b16(scripts.length),
+    ...scripts.flatMap(([t], i) => [...tag(t), ...b16(sOffs[i]!)]),
+    ...scriptTables.flat(),
+  ]
   return new Uint8Array([
     ...b16(1),
     ...b16(0),
     ...b16(10),
-    ...b16(12),
-    ...b16(12 + featureList.length),
+    ...b16(10 + scriptList.length),
+    ...b16(10 + scriptList.length + featureList.length),
     ...scriptList,
     ...featureList,
     ...lookupList,
@@ -106,7 +142,7 @@ describe("a face's small capitals read from its GSUB (fonts.ts readSfnt)", () =>
         ],
       ),
     )
-    expect([...f.smcp].sort((x, y) => x[0] - y[0])).toEqual([
+    expect([...f.smcp('latn', null)].sort((x, y) => x[0] - y[0])).toEqual([
       [1, 4],
       [2, 8],
       [3, 6],
@@ -115,8 +151,55 @@ describe("a face's small capitals read from its GSUB (fonts.ts readSfnt)", () =>
     ])
   })
   it('reads none where the face has no GSUB, and none from a table cut short', () => {
-    expect(fontWith(null).smcp.size).toBe(0)
-    expect(fontWith(new Uint8Array([0, 1, 0, 0, 0, 10, 0, 12, 0, 40])).smcp.size).toBe(0)
+    expect(fontWith(null).smcp('latn', null).size).toBe(0)
+    expect(fontWith(new Uint8Array([0, 1, 0, 0, 0, 10, 0, 12, 0, 40])).smcp('latn', null).size).toBe(0)
+  })
+})
+
+describe("a face's small capitals in the language system the reader's drawing takes (#686: 4705749063)", () => {
+  // (Libertine's case: smcp maps i to i.sc in latn's default language system and to a dotted capital (5) in TRK's; and a
+  // language system with no smcp at all (Domitian's DEU): the reader's drawing, in its target's lang, takes the system its
+  // target names, else the default one, as the browser shapes it)
+  const f = fontWith(
+    gsub(
+      [
+        ['smcp', [0]],
+        ['smcp', [1]],
+        ['liga', [2]],
+      ],
+      [lookup(1, [single2([1, 2], [4, 5])]), lookup(1, [single2([1, 2], [6, 5])]), lookup(1, [single1([1], 7)])],
+      [
+        [
+          'latn',
+          [0, 2],
+          [
+            ['TRK ', [1]],
+            ['DEU ', [2]],
+          ],
+        ],
+        ['grek', [2], []],
+      ],
+    ),
+  )
+  it("takes the default language system's smcp where the target names none of the font's", () => {
+    expect(f.smcp('latn', null).get(1)).toBe(4)
+    expect(f.smcp('latn', 'ZHS ').get(1)).toBe(4)
+  })
+  it("takes the target's own language system's, and none where that system has no smcp", () => {
+    expect(f.smcp('latn', 'TRK ').get(1)).toBe(6)
+    expect(f.smcp('latn', 'DEU ').size).toBe(0)
+  })
+  it("reads the character's script, and falls back as the browser does (DFLT, then latn) for a script the font lacks", () => {
+    expect(f.smcp('grek', null).size).toBe(0)
+    expect(f.smcp('cyrl', null).get(1)).toBe(4)
+  })
+  it('draws the Turkish target a dotted small capital, every other its default one (run.ts glyphsFor)', () => {
+    const fonts = new Map<string, SfntFont | null>([['own', f]])
+    const served = { sliceOf: () => ({ path: 'own', face: 'libertine-regular' }) }
+    const CAPS = 'small-caps 400 10px "axt-libertine-regular"'
+    expect(glyphsFor(served, fonts, () => 0, 'tr').glyph(CAPS, 0x61)?.gid).toBe(6)
+    expect(glyphsFor(served, fonts, () => 0, 'zh').glyph(CAPS, 0x61)?.gid).toBe(4)
+    expect(glyphsFor(served, fonts, () => 0, 'de').glyph(CAPS, 0x61)?.gid).toBe(1)
   })
 })
 

@@ -15,8 +15,10 @@
 import type * as Lib from 'pdfjs-dist'
 import type * as Viewer from 'pdfjs-dist/web/pdf_viewer.mjs'
 
-/** the documents a reader opens, each on a worker of its own: the left pane's original, the composed document */
-type Role = 'original' | 'composed'
+/** the documents a reader opens, each on a worker of its own: the left pane's original, the composed document; and the PDF
+ *  download's, which decodes the served slices' brotli (export/brotli.ts) on a worker it asks for and releases once its file's
+ *  fonts are read, however that ends (#686) */
+type Role = 'original' | 'composed' | 'export'
 
 export interface PdfModules {
   lib: typeof Lib
