@@ -57,7 +57,6 @@ import {
   cropsFor,
   cropsFree,
   detailAway,
-  detailBoxOf,
   detailCropsFor,
   detailKept,
   detailPixels,
@@ -519,8 +518,9 @@ export function createComposer(o: ComposerOptions): Composer {
       return false
     }
     const was = el.querySelector<HTMLCanvasElement>(':scope > canvas.axt-crops-detail')
-    const box = next && detailBoxOf(next)
-    base.style.clipPath = box ? holeOf(box, at.viewport) : ''
+    // (the base cut away under the whole area, not the box of the detail's places: every crop whose place meets the area is the
+    // detail's, and the base's copy of one, cut on its coarser grid, spreads past that box)
+    base.style.clipPath = next ? holeOf(area, at.viewport) : ''
     if (next) {
       if (was) was.replaceWith(next)
       else base.after(next)
