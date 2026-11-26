@@ -3,6 +3,10 @@
 // only as PDF strings and names; the left half of a side-by-side page drawn from arXiv's own objects, never the add-on's
 // rewritten forms; a page's boxes widened whatever it inherits; objects written again under their own generations; the paper's
 // own optional content kept as it set it; a formula's crop drawn between the words it stands among.
+import { spawnSync } from 'node:child_process'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import * as PL from '@cantoo/pdf-lib'
 import {
   openObjects,
@@ -504,4 +508,78 @@ describe("a crop whose ink the add-on wrapped inside a figure's form (#crops-sha
       expect(text).not.toContain('(Neighbour) Tj')
       expect(text).not.toContain('BDC')
     })
+})
+
+describe("a crop's Type 3 glyphs drawn through a font of its own (#688: poppler's Splash, 38 crops of the 245)", () => {
+  // (a figure, a form, whose element the add-on wraps: a glyph of a Type 3 font, a square, as matplotlib's figures draw their
+  // text. The translated page draws the figure first with the element's group off, then the element's crop: Splash keeps a
+  // Type 3 glyph's drawing by its font and size, so the glyph it drew under the group off, blank, came back for the crop)
+  const SQUARE = '1000 0 0 0 700 700 d1 0 0 700 700 re f'
+  const T3 = (charProcs: number) =>
+    `<< /Type /Font /Subtype /Type3 /FontBBox [0 0 700 700] /FontMatrix [0.001 0 0 0.001 0 0] /CharProcs << /sq ${charProcs} 0 R >> /Encoding << /Type /Encoding /Differences [97 /sq] >> /FirstChar 97 /LastChar 97 /Widths [1000] /Resources << >> >>`
+  const formDict = (res: string) => `/Type /XObject /Subtype /Form /BBox [0 0 612 792] /Resources ${res}`
+  const doc = () =>
+    composedOf(
+      [
+        '<< /Type /Catalog /Pages 2 0 R >>',
+        '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+        '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> /XObject << /Fm 6 0 R >> >> /Contents 4 0 R >>',
+        { dict: '', data: 'BT /F1 10 Tf 72 700 Td (Hello) Tj ET q /Fm Do Q' },
+        F1,
+        { dict: formDict('<< /Font << /F3 7 0 R >> >>'), data: 'BT /F3 20 Tf 250 600 Td (a) Tj ET' },
+        T3(8),
+        { dict: '', data: SQUARE },
+      ],
+      {
+        1: '<< /Type /Catalog /Pages 2 0 R /OCProperties << /OCGs [9 0 R 10 0 R] /D << /BaseState /ON /ON [9 0 R 10 0 R] >> >> >>',
+        6: {
+          dict: formDict('<< /Font << /F3 7 0 R >> /Properties << /T 9 0 R /E 10 0 R >> >>'),
+          data: 'BT /F3 20 Tf 250 600 Td /OC /E BDC (a) Tj EMC ET',
+        },
+        9: '<< /Type /OCG /Name (axt:1.1.t) >>',
+        10: '<< /Type /OCG /Name (axt:1.1.e) >>',
+      },
+      11,
+    )
+  // (the member laid: its element, the square, drawn as a crop at x 120 on the line at 700)
+  const crop: Item = { s: 'a', x: 120, src: [1, 249, 599, 265, 615, 600], k: 1, piece: '1' }
+  const page = (): Page => {
+    const p = laid([run('文', 72), crop])
+    p.members[0]!.off = 3
+    return p
+  }
+  const xobj = (X: ReturnType<typeof openObjects>, d: PdfDict, name: string) => {
+    const res = look(X, d.get(N('Resources'))) as PdfDict
+    return look(X, (look(X, res.get(N('XObject'))) as PdfDict).get(N(name))) as PdfRawStream
+  }
+  it("names the font through a dictionary of its own, the font's own entries, one for every crop that draws it", async () => {
+    const { X } = await made(doc(), page(), 'translation')
+    const copy = xobj(X, xobj(X, X.pages()[0]!.node, 'AXTC1_1').dict, 'AXTB0')
+    const fonts = look(X, (look(X, copy.dict.get(N('Resources'))) as PdfDict).get(N('Font'))) as PdfDict
+    const alias = fonts.get(N('F3')) as PdfRef
+    expect(alias).toBeInstanceOf(L.PDFRef)
+    expect(alias.objectNumber).not.toBe(7)
+    const d = look(X, alias) as PdfDict
+    expect(String(d.get(N('Subtype')))).toBe('/Type3')
+    expect(String((look(X, d.get(N('CharProcs'))) as PdfDict).get(N('sq')))).toBe('8 0 R')
+  })
+  // (Splash itself, where poppler is installed: the crop's place on the translated page holds the square's ink)
+  const pdftoppm = spawnSync('pdftoppm', ['-v']).status === 0
+  it.skipIf(!pdftoppm)("is drawn by poppler's Splash (pdftoppm) where the crop stands", async () => {
+    const { file } = await made(doc(), page(), 'translation')
+    const dir = mkdtempSync(join(tmpdir(), 'axt-t3-'))
+    try {
+      writeFileSync(join(dir, 'f.pdf'), file)
+      // (72 dpi: a pixel a point; the crop's place, x 120 to 136, 700 to 716 up, rows 76 to 92 down)
+      spawnSync('pdftoppm', ['-r', '72', '-gray', '-singlefile', join(dir, 'f.pdf'), join(dir, 'p')])
+      const b = readFileSync(join(dir, 'p.pgm'))
+      const [, w] = latin1(b.subarray(0, 32)).split(/\s+/).map(Number)
+      const px = b.subarray(b.length - w! * 792)
+      let dark = 0
+      for (let r = 78; r < 90; r++) for (let c = 122; c < 134; c++) if (px[r * w! + c]! < 128) dark++
+      expect(dark).toBeGreaterThan(100)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
 })
