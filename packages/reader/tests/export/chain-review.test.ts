@@ -100,7 +100,7 @@ const plain = (o: { pageExtra?: string; pagesExtra?: string } = {}) =>
 
 describe('what the paper says is written as PDF strings and names, never as PDF syntax (#685: 4703881927)', () => {
   const annotOf = async (dest: string) => {
-    const { X } = await made(plain(), laid([run('文')], [[[72, 690, 100, 710], { dest }]]), 'translation')
+    const { X } = await made(plain(), laid([run('\u6587')], [[[72, 690, 100, 710], { dest }]]), 'translation')
     const annots = look(X, X.pages()[0]!.node.get(N('Annots'))) as PdfArray
     return look(X, annots.get(0)) as PdfDict
   }
@@ -149,7 +149,7 @@ describe("the left half of a side-by-side page is arXiv's own drawing (#685: 470
       },
       11,
     )
-    const { X } = await made(c, laid([run('文')]), 'side-by-side')
+    const { X } = await made(c, laid([run('\u6587')]), 'side-by-side')
     const xo = look(X, look(X, X.pages()[0]!.node.get(N('Resources'))) as PdfDict) as PdfDict
     const left = look(X, (look(X, xo.get(N('XObject'))) as PdfDict).get(N('AXTL'))) as PdfRawStream
     const res = look(X, left.dict.get(N('Resources'))) as PdfDict
@@ -166,7 +166,7 @@ describe("a side-by-side page's boxes are its own, widened, whatever it inherits
       pagesExtra: '/CropBox [0 0 612 792]',
       pageExtra: '/BleedBox [0 0 612 792] /TrimBox [0 0 612 792] /ArtBox [0 0 612 792]',
     })
-    const { X } = await made(c, laid([run('文')]), 'side-by-side')
+    const { X } = await made(c, laid([run('\u6587')]), 'side-by-side')
     const node = X.pages()[0]!.node
     for (const box of ['MediaBox', 'CropBox', 'BleedBox', 'TrimBox', 'ArtBox'])
       expect([box, node.get(N(box))?.toString()]).toEqual([box, '[ 0 0 1224 792 ]'])
@@ -203,7 +203,7 @@ describe('objects written again keep their generation (#685: 4703881235)', () =>
     // (the trailer's /Root names the catalog's generation)
     const bytes = Uint8Array.from(latin1(c).replaceAll('/Root 1 0 R', '/Root 1 2 R'), (ch) => ch.charCodeAt(0))
     const seam = latin1(bytes).indexOf('%%EOF') + 6
-    const { X, section } = await made({ bytes, seam }, laid([run('文')]), 'translation')
+    const { X, section } = await made({ bytes, seam }, laid([run('\u6587')]), 'translation')
     expect(section).toMatch(/\b3 2 obj\b/)
     expect(section).toMatch(/\b1 2 obj\b/)
     expect(X.pages()).toHaveLength(1)
@@ -233,7 +233,7 @@ describe("the paper's own optional content stays as it set it; only ours go off 
       },
       12,
     )
-    const { X } = await made(c, laid([run('文')]), 'translation')
+    const { X } = await made(c, laid([run('\u6587')]), 'translation')
     const root = X.lookup(X.trailer.root as PdfRef) as PdfDict
     const d = look(X, (look(X, root.get(N('OCProperties'))) as PdfDict).get(N('D'))) as PdfDict
     expect(d.get(N('OFF'))?.toString()).toBe('[ 9 0 R 10 0 R ]')
@@ -246,7 +246,7 @@ describe("the paper's own optional content stays as it set it; only ours go off 
 describe("a formula's crop is drawn between the words it stands among (#685: 4703881576)", () => {
   it('writes the crop between the runs before and after it, in the line’s order', async () => {
     const crop: Item = { s: 'x', x: 90, src: [1, 200, 690, 220, 710, 700], k: 1, piece: 'p0' }
-    const { X } = await made(plain(), laid([run('文', 72), crop, run('字', 130)]), 'translation')
+    const { X } = await made(plain(), laid([run('\u6587', 72), crop, run('\u5b57', 130)]), 'translation')
     const text = decoded(X, X.pages()[0]!.node.get(N('Contents')))
     const a = text.indexOf('<04B0>'),
       b = text.indexOf('Do'),

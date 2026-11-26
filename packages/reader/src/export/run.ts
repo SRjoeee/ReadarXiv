@@ -10,6 +10,7 @@ import type { Served } from '../compose/served.ts'
 import { type ExportForm, exportPdf, ExportRefusal, type Glyphs } from './chain.ts'
 import type { SfntFont } from './fonts.ts'
 import { fontsByPdfJs, type PdfJsLike } from './index.ts'
+import { canvasMeasure, offsetsOf } from './measure.ts'
 
 export interface ReaderHandles {
   fetch: (url: string, init?: RequestInit) => Promise<Response>
@@ -116,8 +117,8 @@ export async function exportFromReader(
   const fonts: Map<string, SfntFont | null> = await fontsByPdfJs(files, h.pdfjs)
   if (signal.aborted) throw aborted()
   share(0.75, 0.85)(1)
-  // ---- how a run's characters are drawn: the slice of each, its glyph; the browser's own measure of a run's prefixes
-  let ctx: CanvasRenderingContext2D | null = null
+  // ---- how a run's characters are drawn: the slice of each, its glyph; where each stands, as the browser sets the run
+  const measure = canvasMeasure()
   const glyphs: Glyphs = {
     glyph(face, cp) {
       const s = h.served.sliceOf(face, cp)
@@ -125,14 +126,7 @@ export async function exportFromReader(
       const gid = font?.cmap.get(cp)
       return font && gid ? { font, gid } : null
     },
-    offsets(face, text) {
-      ctx ??= document.createElement('canvas').getContext('2d') as CanvasRenderingContext2D
-      ctx.font = face.replace(/^(italic )?small-caps /, '$1')
-      ctx.fontKerning = 'normal'
-      const out: number[] = []
-      for (let i = 0; i < text.length; i++) out.push(i === 0 ? 0 : ctx.measureText(text.slice(0, i)).width)
-      return out
-    },
+    offsets: (face, text) => offsetsOf(measure, face, text),
   }
   // ---- the file
   const PL = await h.pdfLib()

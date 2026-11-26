@@ -2160,7 +2160,10 @@ in the page, after the slices' decoding (0.13 to 0.24 s); each file arXiv's size
 - **One section of ours** (`chain.ts`). Each file is the composed document's bytes as they are and one incremental section after
   them (the engine's `openObjects` and `appendSection`): nothing of the original is parsed whole or written again. The
   translation: each laid page's dict written again under its number, its content the add-on's with the groups the page turns off
-  baked out, then the translation as real text, each crop the original's element ink (a form of the page's content with that
+  baked out, then the translation as real text (each glyph where the browser sets it in the run whole: a run's per-character
+  places where the lay gives them, else the run measured through the character less its own width, so that a kerned pair stands
+  as the reader draws it, #685; each run's end in the file equals its drawn width on the four papers, 0 pt off where the prefix
+  rule was up to 0.75 pt), each crop the original's element ink (a form of the page's content with that
   member's element and label groups alone, clipped as the reader cuts it) drawn where it stands in its line, between the words
   before and after it (so that text read in the stream's order reads a formula in its sentence), each link where the reader
   draws it; the catalog's default view lists our groups turned off, out of the ON list the add-on put them in, the paper's own

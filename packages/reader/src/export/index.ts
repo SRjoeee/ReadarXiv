@@ -10,6 +10,7 @@ export type { BakeStats } from './bake.ts'
 export { brotliByPdfJs, type PdfJsLike } from './brotli.ts'
 export { ExportRefusal, exportPdf, type ExportForm, type ExportInput, type ExportStats, type Glyphs } from './chain.ts'
 export { readSfnt, type SfntFont } from './fonts.ts'
+export { canvasMeasure, type Measure, offsetsOf } from './measure.ts'
 
 /** served slices (each its key and its file) made fonts, every brotli stream decoded in one call of `decode` (the reader's
  *  PDF.js: brotliByPdfJs). A slice is WOFF2 as our site serves it, or an sfnt as it stands (a host's own stand-in: the e2e's);
