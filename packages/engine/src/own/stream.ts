@@ -701,6 +701,42 @@ export function ownedOf(
         continue
       }
       let { glyphs, boxes } = takeTo([pb, qb])
+      // (another unit TeX shipped whole between its two points, in its region — a class that sets a column's notes inside the
+      // body it brackets, REVTeX's grid, at the column's end its opening point stands before, an inline formula TeX moved whole
+      // to the next column —, with its label, the glyphs before its start on that start's line, is no ink of the piece's, as at a
+      // later unit's start (toStart, pastUnit): 2611.16683v1 p25's note was its formula's element, the note a unit of no text)
+      const cuts: [page: number, g0: number, g1: number, b0: number, b1: number][] = []
+      const rb = rank.get(`${pb}|${qb}`) ?? -1
+      for (let r = (rank.get(`${pa}|${qa}`) ?? -2) + 1; r >= 1 && r < rb; r++) {
+        const [p, q] = seq[r]!
+        if (regions[p - 1]!.at[q] !== rA) continue
+        const P = pages[p - 1]!,
+          N = P.points[q]!,
+          s = START.exec(N.name)
+        if (!s || s[1] === m[2]) continue
+        const E = [`${s[1]}e`, `t${s[1]}e`, `h${s[1]}e`]
+          .flatMap((n) => where.get(n) ?? [])
+          .find(([e, x]) => e === p && x > q && (rank.get(`${e}|${x}`) ?? Infinity) < rb)
+        if (!E) continue
+        const G = P.glyphs,
+          low = p === pa ? A.glyph : 0
+        let g0 = N.glyph
+        while (
+          g0 > low &&
+          N.glyph < G.n &&
+          Math.abs(G.y[g0 - 1]! - G.y[N.glyph]!) < 0.5 * Math.max(G.size[g0 - 1]!, G.size[N.glyph]!)
+        )
+          g0--
+        const T = P.points[E[1]]!
+        cuts.push([p, g0, T.glyph, g0 < G.n ? P.boxAt[g0]! : N.box, T.box])
+        r = rank.get(`${E[0]}|${E[1]}`)!
+      }
+      if (cuts.length) {
+        const out = ([p, i]: Place, glyph: boolean) =>
+          cuts.some(([c, g0, g1, b0, b1]) => c === p && (glyph ? i >= g0 && i < g1 : i >= b0 && i < b1))
+        glyphs = glyphs.filter((x) => !out(x, true))
+        boxes = boxes.filter((x) => !out(x, false))
+      }
       // (a punctuation mark its command set before its own ink, moved from after it (marks/marks.ts followsOf `moved`, TeX's 3: the
       // closing mark after that mark), the text's, not the piece's: its first glyph where that is the mark, more follow, and no such
       // mark stands right after the closing point — TeX's own output telling the moved mark from a piece's own ink that opens
