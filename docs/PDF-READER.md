@@ -347,7 +347,9 @@ the extension's reader passes none (its narrow window keeps §5's rule).
 - **Narrow windows**: under 720 px (240 and 480: pushed, the document would fall under 480 px, a letter page at its width
   under 0.8 of its size) the contents lay over the document, min(240 px, 100vw − 48 px) wide with the pop shadow, the document
   keeping its width. A jump closes them, the focus going to the heading's page where the side read holds a target for it (the
-  laid side's page, as a link followed by keyboard gives it) and back to the contents button where it holds none; Escape
+  laid side's page, as a link followed by keyboard gives it) and back to the contents button where it holds none; a heading no
+  part has placed yet waits for its page's part, and a control the reader moved the focus to meanwhile keeps it (`goToHeading`
+  gives the page the focus only while it is where the jump found it; `packages/reader/tests/heading-focus.test.ts`); Escape
   closes them, the focus on the button. Nothing in the sidebar moves but its slide (none under reduced motion).
 - The headings and their levels come from the paper's source as the engine reads it: the source parser
   (`latex-front`) knows which sectioning command each heading unit comes from (`section`, `subsection`,
