@@ -122,6 +122,26 @@ export function heldAsOriginal(
   }
   return out
 }
+/** heldAsOriginal over the pages the composer laid in its generation now, pages 1..`pages`, read from the composer itself: a
+ *  page settled as arXiv's (nothing of its own hidden) is laid and never committed, so no event of commits holds it; a commit of
+ *  the generation before, shown muted until this one's, is not what the reader shows of this generation */
+export function heldOn(
+  composer: {
+    page(n: number): Page | null
+    laid(n: number): Page | null
+    muted(n: number): boolean
+    member(ord: number): { text?: unknown } | null
+  },
+  pages: number,
+  held: ReadonlyMap<string, Row>,
+): Record<string, number> {
+  const now: Page[] = []
+  for (let n = 1; n <= pages; n++) {
+    const p = composer.page(n)
+    if (p && !(composer.muted(n) && p === composer.laid(n))) now.push(p)
+  }
+  return heldAsOriginal(now, (o) => composer.member(o), held)
+}
 /** the run the view's rows come from, as the session states it: `own`, one that may bring rows is under way (the host's translate;
  *  our server's run of the target running or to start, as the document read for it says; one that failed and is asked again now,
  *  its open under way or due at once: `asking`); `ahead`, none of these, rows that arrive or ended while our server still has work

@@ -10449,8 +10449,9 @@ lost, a row that is none. Every unit above held an accepted row, so the reader s
 the 90 references' toggle off: the record's 597 asked less them), and the page count (`asOriginal`) sees only whole pages
 drawn as arXiv's. Now the reader's state tells, beside `lost`, the units a page laid so far draws as arXiv's though their row
 was accepted, by the cause its member states (`rows.original`: the prepare's `unwrapped`, `page`; the lay's `unfit`,
-`unproven`, a face it lacks, …; heldAsOriginal over each page's last commit in the composer's generation now). State alone:
-nothing is drawn or said of it. A unit the prepare located nowhere has no member on any page and is not in it.
+`unproven`, a face it lacks, …; heldOn: heldAsOriginal over every page the composer laid in its generation now, read from
+the composer itself, since a page whose every translated member is held settles as arXiv's with no commit, told `settled`, not
+`laid`). State alone: nothing is drawn or said of it. A unit the prepare located nowhere has no member on any page and is not in it.
 
 ## 19. The engine's contract
 

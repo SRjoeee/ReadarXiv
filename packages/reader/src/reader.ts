@@ -18,7 +18,7 @@ import { CHUNK, chunkStore } from './bytes/store.ts'
 import type { Composer, RowsSource } from './compose/composer.ts'
 import type { FaceTable } from './compose/faces.ts'
 import type { Highlight } from './compose/highlight.ts'
-import type { Lay, Page } from './compose/page.ts'
+import type { Lay } from './compose/page.ts'
 import { membersOnPage } from './compose/turn.ts'
 import { CATALOGUE_WORDS, type Words } from './compose/words.ts'
 import { createPanes, type Display, type Panes, type Side, type Zoom } from './panes/panes.ts'
@@ -55,7 +55,7 @@ import {
   missingOf,
   type PaperContext,
   ranked,
-  heldAsOriginal,
+  heldOn,
   shownAsOriginal,
   stopOf,
   toldWait,
@@ -560,8 +560,6 @@ export function openReader(
   /** the pages near the view the layer shows as arXiv's by the rule (none of theirs laid: no part, or laid with nothing of its
    *  own), told to the host as settled, never as laid; once a page a composed document and target */
   const asOriginal = new Set<number>()
-  /** each page's last commit, with the composer's generation it was laid in: what heldAsOriginal counts */
-  const laidPages = new Map<number, { gen: number; page: Page }>()
   function asOriginalNow(): number {
     const h = head
     if (!h || !panes || rt.state.layer.s !== 'ready' || !composed) return asOriginal.size
@@ -785,9 +783,8 @@ export function openReader(
             classes: rt.state.prefs.value.classes,
           })
           composer.on('laid', () => mark('firstLaid'))
-          composer.on('laid', ({ n, page }) => {
-            if (page && composer) laidPages.set(n, { gen: composer.generation(), page })
-          })
+          // (a page settled as arXiv's is told no `laid`: the units it holds as the original are told by the state read anew)
+          composer.on('settled', () => tellSoon())
           composer.on('laid', () =>
             rt.input({ i: 'panes.laid', laid: composer?.probe().laidPages as number, total: head?.paper.pages ?? 0 }),
           )
@@ -852,7 +849,6 @@ export function openReader(
           mine = { doc, groups, lay, part }
           composed = mine
           asOriginal.clear()
-          laidPages.clear()
           composer?.setDocuments({ original: original?.doc ?? null, composed: doc, groups })
           composer?.setLayer({ part, pages: h.paper.pages }, rowsSource())
           mark('composedOpen')
@@ -879,7 +875,6 @@ export function openReader(
         rows = new Map()
         rowsTarget = spec.target
         asOriginal.clear()
-        laidPages.clear()
         if (contents?.clearTexts()) outlineSoon()
         rowsDone = false
         composer?.setLayer(composed ? { part: composed.part, pages: head?.paper.pages ?? 0 } : null, rowsSource())
@@ -1164,13 +1159,11 @@ export function openReader(
       for (const f of [...listeners]) f()
     }, 0)
   }
-  /** the rows as told, with the units held as the original over the pages laid in the composer's generation now */
+  /** the rows as told, with the units held as the original over the pages the composer laid in its generation now */
   function withHeld(r: ReaderState['rows'], held: ReadonlyMap<string, Row>): ReaderState['rows'] {
     const c = composer
     if (r.s === 'none' || !c) return r
-    const g = c.generation()
-    const pages = [...laidPages.values()].filter((x) => x.gen === g).map((x) => x.page)
-    const original = heldAsOriginal(pages, (o) => c.member(o), held)
+    const original = heldOn(c, head?.paper.pages ?? 0, held)
     return Object.keys(original).length ? { ...r, original } : r
   }
   function stateOf(): ReaderState {
