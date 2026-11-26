@@ -6793,6 +6793,19 @@ glued first and gapped after (2608.08481v1's "1,∗") is one crop with its gap i
 line reaches it, no stay of any member's, and the member after it on the row is joined to it at TeX's separation (16117's
 five places one flow).
 
+CHANGED (2026-11-27, 2611.34872v1 p1, REVTeX's `superscriptaddress` line "Jonas Kitzinger,¹,* Jens Eisert,¹,²,³ and Ravi
+Kunjwal⁴", where the class sets the commas, the marks and the "and"). (1) The member's last line is its own glyphs on its last
+glyph's baseline (`trails.ts` lineOf: their band, their text), never its last glyph's ink alone: a comma after a name stands at
+the baseline, and the marks TeX raised right after it read off that line stayed where TeX set them (`Room.stays`), fencing the
+next name's join, so that the row was not laid as one run (`rowLinesOf`) and a blank stood before the last name. (2) A run of
+scripts of that line (smaller than its text and off its baseline, the ink units' reading: `scriptOn`, `lineTextOf`) that opens
+the trail is the member's whole, past a thin space inside it, where a word follows it: the letter rule cuts the trail back to
+that run, not to its glued part. Marks TeX set as scripts are no text of the sentence that goes on after them; "and" alone is
+then the ink unit between the names, translated at the text's size. A word set at the text's size on the baseline (acmart's
+"2027.") is no script, and the letter rule reads it as before. The run is drawn at TeX's size: the row laid as one centred run
+at 9.96 pt, its names no longer each squeezed into its own original extent (8.47 pt on the line), and centred on TeX's middle,
+wider than TeX's line where the translation is (as a translated TeX would set the centred line).
+
 **The lay** (`lay/adapt.ts`): the trail's crop after the member's tokens as before, `sep` laid before it as the kern an
 `\hspace` element's is (`kernW` on the token before, at the member's scale), so that no line breaks there.
 
@@ -12442,7 +12455,11 @@ brace of `\{0,\dots,J-1\}` between upright digits, 2610.21377v1 p42, or a biblio
 the middle of its line: 15 runs in 3 members; over the 88 corpus papers 10 ink units of 3 papers change their id, the copy text
 of 25 other runs gains the braces it had lost; and it reads a script by its glyph, whatever its face (`scriptsOf`): a glyph TeX
 set smaller than its line's text and off its baseline (the size most of the line's glyphs have, the baseline most of those stand
-on, each on the hundredth of a point, as locate reads one box's baseline: no threshold) is a kept run's, where the face alone made
+on, each on the hundredth of a point, as locate reads one box's baseline: no threshold; the line TeX's whole line, owned glyphs and
+all, where an ink unit's words are a ledger line, the part of TeX's line no unit owns: `LedgerLine.tex`, the walk's own law over
+every glyph, 2026-11-27 — read over the part alone, REVTeX's "1, 2, 3 and" between two names, five marks to three letters, took
+the marks' size for its text and found no script, and went to the translator as one text, drawn flat at the marks' size on the
+baseline, 2611.34872v1 p1) is a kept run's, where the face alone made
 a script in a text face the unit's text, drawn flat at the line's size — Times sets `$^{1,2}$`'s digits in its text face and
 Computer Modern a formula's digit or a footnote's mark in CMR7, so 2610.30854v1 p1's names read "Jiang1,2"; a run of scripts of one
 sign is written as TeX writes one, `$^{…}$` or `$_{…}$`, so that every reader of the source reads it as a source unit's mark (a
