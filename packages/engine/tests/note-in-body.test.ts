@@ -11,7 +11,7 @@ import { describe, expect, it } from 'vitest'
 import { type Glyph, packGlyphs } from '../src/ink.ts'
 import { followsOf } from '../src/marks/marks.ts'
 import type { SourceUnit } from '../src/source/latex-front.ts'
-import { OWNED, OWNED_HOW, ownedOf, STREAM_COLUMNS, type StreamPage } from '../src/own/stream.ts'
+import { OWNED, OWNED_HOW, type Owned, ownedOf, ownedPages, STREAM_COLUMNS, type StreamPage } from '../src/own/stream.ts'
 
 type Item = string | { at: string } | { rule: true }
 /** a page from items in stream order: a string is glyphs on the current line (a space 3 pt, `\n` the next line 12 pt down,
@@ -162,6 +162,43 @@ describe("a display before a note TeX ships into its own body region, the text a
 
   it("the other side: the note's marks do not close before the text after it: nothing is owned", () => {
     expect(display({ note: 2, closes: false })).toBe('open, the text after it not found')
+  })
+})
+
+/** what the display owns read by the whole document at once (ownedOf) and by the stream, a page at a time (ownedPages: today's
+ *  layout maker's path), with the same reading (no erasure: ownedPages' own) */
+function bothPaths(o: Parameters<typeof STREAM>[0]): [string | null, string | null] {
+  const units = o.note === 0 ? [NOTE, para(o.displays ?? 1)] : [unit('para', []), para(o.displays ?? 1), NOTE]
+  const pages = pagesOf(STREAM(o))
+  const follows = followsOf(units as never, new Set(pages.flatMap((pg) => pg.points.map((p) => p.name))))
+  const shown = (e: Owned | undefined, W: readonly StreamPage[]) =>
+    !e ? null : e.how < OWNED ? e.glyphs.map(([p, g]) => W[p - 1]!.glyphs.u[g]).join('') : (OWNED_HOW[e.how] as string)
+  const whole = shown(ownedOf(pages, { follows }).get('p1.1a'), pages)
+  let streamed: string | null = null
+  const take = (name: string, e: Owned, W: readonly StreamPage[]) => {
+    if (name === 'p1.1a') streamed = shown(e, W)
+  }
+  const s = ownedPages({ follows })
+  pages.forEach((pg, i) => s.add(i + 1, pg, take))
+  s.end(take)
+  return [whole, streamed]
+}
+
+describe('the stream read a page at a time reads the display as the whole document does (Devin on #689)', () => {
+  it("the text after the note at the head of the next page's body: the stream waits for that page", () => {
+    expect(bothPaths({ note: 2, page: true })).toEqual(['a=b0(1)', 'a=b0(1)'])
+  })
+
+  it('the note on the same page as the text after it, and two notes, alike', () => {
+    expect(bothPaths({ note: 2 })).toEqual(['a=b0(1)', 'a=b0(1)'])
+    expect(bothPaths({ note: 2, notes: 2 })).toEqual(['a=b0(1)', 'a=b0(1)'])
+  })
+
+  it("the other side: the note's marks do not close before the text after it: both read it not found", () => {
+    expect(bothPaths({ note: 2, closes: false, page: true })).toEqual([
+      'open, the text after it not found',
+      'open, the text after it not found',
+    ])
   })
 })
 
