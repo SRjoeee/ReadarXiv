@@ -127,7 +127,7 @@ describe('a named destination is written in the encoding PDF.js reads back as it
     ['(a\\204b)', 'a—b'],
     ['(x\\240y)', 'x€y'],
     ['<FEFF007800A00079>', 'x y'],
-    ['<FEFF4E2D6587>', '中文'],
+    ['<FEFF4E2D6587>', '\u4e2d\u6587'],
   ]
   const tree = `/Names << /Dests << /Names [${names.map(([k]) => `${k} [3 0 R /Fit]`).join(' ')}] >> >>`
   for (const form of ['translation', 'side-by-side'] as const)
@@ -136,7 +136,7 @@ describe('a named destination is written in the encoding PDF.js reads back as it
         [72, 600 + 20 * i, 100, 610 + 20 * i],
         { dest: JSON.stringify(name) },
       ])
-      const { file } = await made(plain({ catalogExtra: tree }), laid([run('文')], links), form)
+      const { file } = await made(plain({ catalogExtra: tree }), laid([run('\u6587')], links), form)
       const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
       const task = pdfjs.getDocument({ data: file.slice() })
       const doc = await task.promise
@@ -322,7 +322,7 @@ describe('a turned page set side by side in its upright frame (#685: 4704125905)
       it(`/Rotate ${rotate}, ${laidPage ? 'a laid page' : 'a page with nothing laid'}: twice as wide as it shows, the original on the left`, async () => {
         const [w, h] = rotate % 180 ? [792, 612] : [612, 792]
         const page = laidPage
-          ? laid([run('文')], [[[72, 690, 100, 710], { dest: JSON.stringify('x') }]])
+          ? laid([run('\u6587')], [[[72, 690, 100, 710], { dest: JSON.stringify('x') }]])
           : { ...laid([]), members: [] }
         const { file } = await made(turned(rotate), page, 'side-by-side')
         const v = await view(file)
