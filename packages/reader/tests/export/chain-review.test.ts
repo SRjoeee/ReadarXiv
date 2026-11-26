@@ -446,3 +446,62 @@ describe('two characters one glyph draws are each read back as themselves (#686:
       expect(text).toContain('-‐')
     })
 })
+
+describe("a crop whose ink the add-on wrapped inside a figure's form (#crops-sharp: 2611.18114v1 p26's 7×7)", () => {
+  // (arXiv's page draws a figure, a form; its text a neighbour's words and an element, which the add-on wraps inside the form:
+  // the words in the member's text group, the element in its element group. Once drawn by the page, once by a form within the
+  // page's form)
+  const FIG = 'BT /F1 10 Tf 200 600 Td (Neighbour) Tj ( x=1 ) Tj ET'
+  const WRAPPED = 'BT /F1 10 Tf 200 600 Td /OC /T BDC (Neighbour) Tj EMC /OC /E BDC ( x=1 ) Tj EMC ET'
+  const figRes = (props: boolean) => `<< /Font << /F1 5 0 R >>${props ? ' /Properties << /T 8 0 R /E 9 0 R >>' : ''} >>`
+  const formDict = (res: string) => `/Type /XObject /Subtype /Form /BBox [0 0 612 792] /Resources ${res}`
+  const doc = (nested: boolean) =>
+    composedOf(
+      [
+        '<< /Type /Catalog /Pages 2 0 R >>',
+        '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+        '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> /XObject << /Fm 6 0 R >> >> /Contents 4 0 R >>',
+        { dict: '', data: 'BT /F1 10 Tf 72 700 Td (Hello) Tj ET q 1 0 0 1 0 0 cm /Fm Do Q' },
+        F1,
+        nested
+          ? { dict: formDict('<< /XObject << /Fn 7 0 R >> >>'), data: 'q /Fn Do Q' }
+          : { dict: formDict(figRes(false)), data: FIG },
+        nested ? { dict: formDict(figRes(false)), data: FIG } : '<< >>',
+      ],
+      {
+        1: '<< /Type /Catalog /Pages 2 0 R /OCProperties << /OCGs [8 0 R 9 0 R] /D << /BaseState /ON /ON [8 0 R 9 0 R] >> >> >>',
+        [nested ? 7 : 6]: { dict: formDict(figRes(true)), data: WRAPPED },
+        8: '<< /Type /OCG /Name (axt:1.1.t) >>',
+        9: '<< /Type /OCG /Name (axt:1.1.e) >>',
+      },
+      10,
+    )
+  // (the member laid: its text and its element off on the page, its element drawn as a crop of " x=1 ")
+  const crop: Item = { s: 'x=1', x: 120, src: [1, 245, 598, 270, 608, 600], k: 1, piece: '1' }
+  const page = (): Page => {
+    const p = laid([run('文', 72), crop])
+    p.members[0]!.off = 3
+    return p
+  }
+  const xobj = (X: ReturnType<typeof openObjects>, d: PdfDict, name: string) => {
+    const res = look(X, d.get(N('Resources'))) as PdfDict
+    return look(X, (look(X, res.get(N('XObject'))) as PdfDict).get(N(name))) as PdfRawStream
+  }
+  for (const nested of [false, true])
+    it(`draws the element's ink and none of its neighbour's${nested ? ', the form within a form' : ''}`, async () => {
+      const { X } = await made(doc(nested), page(), 'translation')
+      const pageNode = X.pages()[0]!.node
+      expect(decoded(X, pageNode.get(N('Contents')))).toContain('/AXTC1_1 Do')
+      // (the crop's form, then the copies it draws down to the element)
+      let form = xobj(X, pageNode, 'AXTC1_1')
+      let text = latin1(L.decodePDFRawStream(form).decode())
+      for (const name of nested ? ['AXTB1', 'AXTB0'] : ['AXTB0']) {
+        expect(text).toContain(`/${name} Do`)
+        form = xobj(X, form.dict, name)
+        text = latin1(L.decodePDFRawStream(form).decode())
+      }
+      expect(text).toContain('( x=1 ) Tj')
+      expect(text).not.toContain('(Neighbour) Tj')
+      expect(text).not.toContain('BDC')
+    })
+})

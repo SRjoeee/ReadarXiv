@@ -27,7 +27,7 @@ import {
 } from '@readarxiv/engine'
 import type { Item, Page } from '../compose/page.ts'
 import { cropsOf, faceScale } from '../compose/paint.ts'
-import { type BakeStats, makeBaker, newBakeStats } from './bake.ts'
+import { type BakedForm, type BakeStats, makeBaker, newBakeStats } from './bake.ts'
 import { fontBodies, fontFileOf, type SfntFont } from './fonts.ts'
 
 /** how a run's characters are drawn: the slice font and glyph of a code point in a face (the reader's rule: the first family
@@ -371,10 +371,12 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
     return []
   }
   const decoded = (s: PdfRawStream) => PL.decodePDFRawStream(s).decode()
-  /** a page's ours(prop) over the groups `off` turns off (every other group of ours left on) */
+  /** a page's ours(prop, res) over the groups `off` turns off (every other group of ours left on): a name read in the
+   *  resources it is given (a form's own, where its content names it), else the page's */
   const oursFor = (i: number, isOff: (name: string) => boolean) => {
-    const props = dictOf(dictOf(pages[i]!.inherited.Resources)?.get(N('Properties')))
-    return (prop: string): boolean | null => {
+    const pageProps = dictOf(dictOf(pages[i]!.inherited.Resources)?.get(N('Properties')))
+    return (prop: string, res: PdfObject | undefined): boolean | null => {
+      const props = res === undefined ? pageProps : dictOf(dictOf(res)?.get(N('Properties')))
       const r = props?.get(N(prop))
       const nm = r ? groupName.get(lit(r)) : undefined
       return nm === undefined ? null : isOff(nm)
@@ -501,17 +503,42 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
   /** a crop's source: the composed page's content with the ink of member `ord`'s element and label groups alone; the
    *  original page's form where the page holds no group of the member, or its walk is refused */
   const cropForms = new Map<string, number>()
+  /** the forms a crop's source draws baked (bake.ts bakeCrop): each written as a form of ours, its dictionary the form's own
+   *  (its box, its matrix, its group) with its baked content, its resources naming the copies it draws in turn */
+  const writeBaked = async (forms: BakedForm[]): Promise<Map<string, number>> => {
+    const names = new Map<string, number>()
+    for (const f of forms) {
+      const inner = await writeBaked(f.forms)
+      const n = take()
+      const d = f.st instanceof PDFRawStream ? (f.st as PdfRawStream).dict : undefined
+      const own = (d?.entries() ?? [])
+        .filter(([k]) => !['/Length', '/Filter', '/DecodeParms', '/Resources'].includes(k.toString()))
+        .map(([k, v]) => ` ${k.toString()} ${lit(v)}`)
+        .join('')
+      objs.push([
+        n,
+        objStream(
+          n,
+          `${own} /Resources ${merged(f.res, new Set(), inner)} /Filter /FlateDecode`,
+          await deflate(f.bytes),
+        ),
+      ])
+      names.set(f.name, n)
+    }
+    return names
+  }
   const cropForm = async (i: number, ord: number): Promise<number> => {
     const key = `${i}:${ord}`
     const had = cropForms.get(key)
     if (had) return had
     const want = new Set([`axt:${ord}.${i + 1}.e`, `axt:${ord}.${i + 1}.l`])
+    // (the crop's own groups' ink alone: in the page's content, and in each form it draws whose content marks them, a figure's
+    // text the add-on wrapped inside its form)
     const kept = [...want].some((g) => groupRef.has(g))
-      ? baker.bake(
+      ? baker.bakeCrop(
           i,
           oursFor(i, (nm) => !want.has(nm)),
           stats.cropBake,
-          true,
         )
       : null
     if (!kept) {
@@ -521,13 +548,13 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
     }
     const n = take()
     cropForms.set(key, n)
-    const res = pages[i]!.inherited.Resources
+    const copies = await writeBaked(kept.forms)
     objs.push([
       n,
       objStream(
         n,
-        ` /Type /XObject /Subtype /Form /BBox [${box(i).map(f2).join(' ')}] /Resources ${res ? lit(res) : '<< >>'} /Filter /FlateDecode`,
-        await deflate(kept),
+        ` /Type /XObject /Subtype /Form /BBox [${box(i).map(f2).join(' ')}] /Resources ${merged(pages[i]!.inherited.Resources, new Set(), copies)} /Filter /FlateDecode`,
+        await deflate(kept.bytes),
       ),
     ])
     stats.cropForms++
