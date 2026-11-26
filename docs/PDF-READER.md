@@ -10474,8 +10474,8 @@ number): the piece's own words there tell nothing of the units after them (an ea
 2608.25210v2 p1), and the reading stays as before. A fact of TeX's stream, no class name. Over the lab's 245 papers it draws 3 more
 displays' paragraphs, each REVTeX's (2608.01890v1, 2608.08350v2, 2610.20716v1). The stream read a page at a time (ownedPages,
 today's layout maker's path) reads the same: another unit's start whose end TeX set after it on its page is no stop for a piece
-that waits for its next point, so the piece is read once the page holding the point after the units so shipped is in, the text
-after it on a later page with it. The same holds between a piece's two points:
+with text after it that waits for its next point, so the piece is read once the page holding the point after the units so shipped
+is in, the text after it on a later page with it (a piece with no text after it stops at the next unit's start, as before). The same holds between a piece's two points:
 an inline formula TeX moved whole to the next column leaves its opening point at the column's end, the notes shipped there
 stand between it and its closing point, and the formula's element owned the note's label and text (p25's note a unit of no text,
 'unwrapped', English). Another unit shipped whole between a piece's points in its region (its start, then its end mark, before

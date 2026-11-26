@@ -179,7 +179,7 @@ function bothPaths(o: Parameters<typeof STREAM>[0]): [string | null, string | nu
     if (name === 'p1.1a') streamed = shown(e, W)
   }
   const s = ownedPages({ follows })
-  pages.forEach((pg, i) => s.add(i + 1, pg, take))
+  for (const [i, pg] of pages.entries()) s.add(i + 1, pg, take)
   s.end(take)
   return [whole, streamed]
 }

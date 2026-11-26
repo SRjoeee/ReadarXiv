@@ -1184,6 +1184,8 @@ interface OpenPiece {
   needPage: number | null
   stop: boolean
   r: number
+  /** the unit's text after it (Follow.want): only a piece with text after it reads past a unit shipped whole (pastUnit) */
+  want: boolean
 }
 /** a piece's closing point: a placeholder's (p) or a footnote call's (n) */
 const CLOSING = /^[pn]\d+\.\d+b$/
@@ -1244,15 +1246,16 @@ export function ownedPages({
   /** the first point after (p, q) in region r on the pages held from p to the last: found where one is. Another unit's start
    *  whose end TeX set after it on its page is no stop: a unit shipped whole into the region (a note a class sets inside the
    *  body), which ownedOf reads past to the text after it (pastUnit), on whatever page that text resumes; the stop is the
-   *  first point after the units so shipped. `unit` the piece's own unit's id */
-  const stopFrom = (p: number, q: number, r: number, unit: string | undefined) => {
+   *  first point after the units so shipped, for a piece with text after it (`want`: pastUnit reads none past them for another).
+   *  `unit` the piece's own unit's id */
+  const stopFrom = (p: number, q: number, r: number, unit: string | undefined, want: boolean) => {
     for (let s = p; s <= last; s++) {
       const P = held.get(s)!,
         at = regions.get(s)!.at
       for (let k = s === p ? q + 1 : 0; k < P.points.length; k++) {
         if (!seqPoint(P.points[k]!.name) || at[k] !== r) continue
         const u = START.exec(P.points[k]!.name)?.[1]
-        const ends = u && u !== unit ? [`${u}e`, `t${u}e`, `h${u}e`] : null
+        const ends = want && u && u !== unit ? [`${u}e`, `t${u}e`, `h${u}e`] : null
         const e = ends ? P.points.findIndex((pt, j) => j > k && ends.includes(pt.name)) : -1
         if (e < 0) return true
         k = e
@@ -1311,12 +1314,13 @@ export function ownedPages({
           needPage: f.closing ? (Number.isInteger(at) ? at : Infinity) : null,
           stop: f.closing || R.at[q]! % 2 !== 1,
           r: R.at[q]!,
+          want: !!f.want,
         })
       })
       // the stops looked for again with each page: the pieces' pages' and this one's
       for (const entry of [...queue, { p, pieces }])
         for (const x of entry.pieces)
-          if (x.stop === false && stopFrom(entry.p, x.q, x.r, OPENING.exec(x.name)?.[2])) x.stop = true
+          if (x.stop === false && stopFrom(entry.p, x.q, x.r, OPENING.exec(x.name)?.[2], x.want)) x.stop = true
       queue.push({ p, pieces })
       drain(take)
       // (a display its unit opens with, by the start mark: its own page alone, so found with it; a start mark read again later is
