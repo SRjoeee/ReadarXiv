@@ -10392,6 +10392,42 @@ element (its crop); a unit TeX set turned (its group reading runs in its frame, 
 translator's own words (2609.40181v2's reply opens the subtitle with a full-width comma: laid as the reply says, as the translated TeX would set
 it).
 
+### 18.117 What TeX set between a piece and the text after it is the piece's, whoever shipped it; two placeholders TeX joined are one ink; an accent's argument past white space (the coordinator's ruling of 2026-11-26, on 2611.16683v1)
+
+2611.16683v1 (REVTeX, two columns; the owner's report, on staging): the caption of FIG. 1 and many paragraphs in English beside
+translated ones, though the record said every row was answered and the reader counted nothing lost. Every such paragraph was a
+unit with a stored row that the prepare left the original's (`unlocated: text past its source`: the locate counted more letters
+in the glyphs the ownership gave the unit's text than its source writes, `locate/place.ts`) or that the lay could not prove
+(`unproven`). Three causes, each older than the rebuild's rounds.
+
+**A display before units TeX shipped into the body.** A display has no closing mark (TeX resumes the paragraph on an empty list),
+so its opening point alone reads to the text after it. REVTeX's grid sets a column's footnotes inside the body it brackets, so a
+note's whole unit (its label, its start and end marks) can stand in the display's own region between the display and the text
+after it (`where …`): the reading stopped at the note's start, the text after it not found there, the display was LOST and its
+rows and equation number, with the note's label, were read as the paragraph's text. Now an opening point alone whose next mark
+in its region is another unit's start, each such unit whole (its start, then its end, on its page), the glyphs between them on
+each start's line alone (their labels), and the text after it right after the last of them, on its page or at the head of its
+region on a later one, owns what its region holds from it to the first such start, that unit's label left out, as at a later
+unit's start (`own/stream.ts` pastUnit). A fact of TeX's stream, no class name. Over the lab's 245 papers it draws 3 more
+displays' paragraphs, each REVTeX's (2608.01890v1, 2608.08350v2, 2610.20716v1).
+
+**Two placeholders TeX joined are one ink.** `(\=A\=T)`: the marking asks TeX, for a paper's macro and the placeholder right
+after it, whether a mark between them moves anything (the look-ahead probe, aheadSamples). TeX answers 2 where the mark changes
+the box it sets or the macro's list ends with a character the next may kern or join with (the A and the T kerned), so the second
+gets no mark of its own, and nothing of TeX's parts its ink from the first's. The first's opening point stopped at it ('open, an
+unmarked piece follows', LOST), and the two letters were read as the paragraph's text. Now the pieces TeX answered so
+(`marks/marks.ts` joinedPieces, read from the probe's own log beside the instrument; inside the unit's marks, as the marking
+asks) are read through by the opening point before them (followsOf: the text after it is the text after the joined pieces;
+joinedRead: only where that point was set and the joined piece has none of its own), and each joined piece is stated empty
+(`El.text` ''): what it set is in the ink of the piece before it, drawn there, once (FORMAT's El states this already). The
+translation, the rows and the unit ids do not move; the lay draws the first piece's crop where the translation puts it, holding
+both. No answer, an answer 0 or 1, or an error in the probe's box (`x`) is no joining: the piece stays as before.
+
+**An accent's argument past white space.** `\= T` is `\=T`: TeX skips spaces before an undelimited argument, and the source
+reader read a control symbol's argument with no space skipped, so the space was the argument and the T text, the accent's piece a
+bare macro of no ink (`unproven` in the lay: the caption of FIG. 1). Now every accent's argument is read past white space,
+whatever its name (`source/latex-front.ts`, as accentBase reads it).
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server
