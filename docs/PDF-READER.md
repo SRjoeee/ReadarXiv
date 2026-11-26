@@ -10437,7 +10437,9 @@ asks) are read through by the opening point before them (followsOf: the text aft
 joinedRead: only where that point was set and the joined piece has none of its own), and each joined piece is stated empty
 (`El.text` ''): what it set is in the ink of the piece before it, drawn there, once (FORMAT's El states this already). The
 translation, the rows and the unit ids do not move; the lay draws the first piece's crop where the translation puts it, holding
-both. No answer, an answer 0 or 1, or an error in the probe's box (`x`) is no joining: the piece stays as before.
+both. No answer, an answer 0 or 1, or an error in any of the pair's boxes is no joining: the piece stays as before (an error
+in the box with the two openings, or the one asking what the list ends with, is the marking's 2, no mark, the safe side of no
+answer; read as a statement, readMarkProbe's `proof`, it answers nothing, `x`).
 
 **An accent's argument past white space.** `\= T` is `\=T`: TeX skips spaces before an undelimited argument, and the source
 reader read a control symbol's argument with no space skipped, so the space was the argument and the T text, the accent's piece a

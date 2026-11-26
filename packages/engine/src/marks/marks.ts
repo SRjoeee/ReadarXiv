@@ -1658,7 +1658,7 @@ export function probeFactsOf(
     decorated: readInkDecorated(log, [...ink, ...leads], { quotes: true }),
     ends: readInkEnds(log, ink),
     tails: tailsSettingNothing(log, units),
-    joined: joinedPieces(readMarkProbe(log, aheadSamples(units)), units),
+    joined: joinedPieces(readMarkProbe(log, aheadSamples(units), { proof: true }), units),
   }
 }
 /** whether piece k of a unit stands inside the unit's own marks, as patch writes them: from its head's end to its last text,
@@ -2009,9 +2009,15 @@ const TEX_ERROR = /^(?:! |[^\s:]+:\d+: |Missing character: There is no .* in fon
  * row (the probe stopped short of it), a row of another shape is no answer at all. layoutMarking sets
  * no mark where there is no answer. And per look-ahead pair (aheadSamples, by its rows `ahead`), its key (aheadKey) and its
  * one code: an error in the box let go or as the paper sets it no answer (`x`), in the one with the two openings or the one
- * asking what the list ends with 2, in the one with every mark at most 1
+ * asking what the list ends with 2, in the one with every mark at most 1. `proof`: the answers read as a statement of what TeX
+ * set (joinedPieces), where an error in the box with the two openings or the one asking what the list ends with answers nothing
+ * (`x`): the marking's 2 there is the safe side of no answer, not TeX's word that the two are joined
  */
-export function readMarkProbe(log: string | null | undefined, samples: readonly ProbeSample[]): Switches {
+export function readMarkProbe(
+  log: string | null | undefined,
+  samples: readonly ProbeSample[],
+  o: { proof?: boolean } = {},
+): Switches {
   const out: Switches = {},
     errored = new Map<string, Set<string>>(),
     listed = samples.filter((s) => !s.ahead),
@@ -2043,7 +2049,9 @@ export function readMarkProbe(log: string | null | undefined, samples: readonly 
         : bad.has('w') || bad.has('a')
           ? 'x'
           : bad.has('d') || bad.has('g')
-            ? '2'
+            ? o.proof
+              ? 'x'
+              : '2'
             : code === '2'
               ? '2'
               : '1'
