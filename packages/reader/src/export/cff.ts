@@ -377,7 +377,8 @@ function writeIndex(items: Uint8Array[]): Uint8Array {
   put(items.length, off)
   return out
 }
-const cat = (parts: Uint8Array[]) => {
+/** byte strings one after another (the PDF.js document of brotli.ts writes its objects with it too) */
+export const cat = (parts: Uint8Array[]) => {
   const out = new Uint8Array(parts.reduce((n, b) => n + b.length, 0))
   let at = 0
   for (const p of parts) {

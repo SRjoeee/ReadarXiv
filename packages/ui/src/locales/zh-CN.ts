@@ -396,7 +396,7 @@ const R = {
   // its heading and its rows in the order they are listed; the settings page's group too (S-O-56)
   classes: { name: '翻译范围', figures: '图中文字', tables: '表中文字', heads: '页眉页脚', references: '参考文献', names: '作者信息' },
   download: { name: '下载', translation: '译文 PDF', sideBySide: '对照 PDF', original: '原文 PDF' }, // S-R-09
-  // S-R-09: the PDF download made in the page (the owner's words, 2026-11-26): its capsule's words, a file named by its form
+  // S-R-09: the PDF download made in the page: its capsule's words, a file named by its form
   export: {
     making: (form: 'translation' | 'sideBySide', percent: number): string =>
       `正在生成${form === 'translation' ? '译文' : '对照'} PDF · ${percent}%`,

@@ -4,6 +4,8 @@
 // through PDF.js's public API (getAttachments, getAttachmentContent), decoded in PDF.js's worker. One document for every
 // stream of a file. A stream that does not decode refuses the whole call: its slice would otherwise come back short.
 
+import { cat } from './cff.ts'
+
 /** the part of PDF.js this reads: its getDocument over bytes */
 export interface PdfJsLike {
   getDocument(src: { data: Uint8Array }): {
@@ -20,15 +22,6 @@ const enc = (s: string) => {
   const b = new Uint8Array(s.length)
   for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i) & 255
   return b
-}
-const cat = (parts: Uint8Array[]) => {
-  const out = new Uint8Array(parts.reduce((n, b) => n + b.length, 0))
-  let at = 0
-  for (const p of parts) {
-    out.set(p, at)
-    at += p.length
-  }
-  return out
 }
 const nameOf = (k: number) => `s${String(k).padStart(6, '0')}`
 
