@@ -208,8 +208,10 @@ export function readSfnt(key: string, b: Uint8Array): SfntFont | null {
     cmap: cmapOf(cmap),
     smcp: (script, lang) => {
       const k = `${script}|${lang ?? ''}`
-      let m = smcps.get(k)
-      if (!m) smcps.set(k, (m = smcpOf(t.get('GSUB'), script, lang)))
+      const had = smcps.get(k)
+      if (had) return had
+      const m = smcpOf(t.get('GSUB'), script, lang)
+      smcps.set(k, m)
       return m
     },
     advance: (g) => u16(hmtx, 4 * Math.min(g, nh - 1)),
