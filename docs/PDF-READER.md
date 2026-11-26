@@ -323,7 +323,11 @@ the extension's reader passes none (its narrow window keeps §5's rule).
   "3.1", "Appendix A"'s "A"; else its name where that is a counter alone as LaTeX prints one, IEEEtran's "IV.", which the label's
   reading states as a name: 457 headings of 57 papers of the release check's corpus), never counted by the reader. The head states each outline entry's (`Head.numbers`, by its member's ord: PIPELINE 122), so
   that every heading is numbered at open, the parts of its far pages unread; under a head made before, a heading is numbered
-  as its page's part is read. A heading TeX set no number for (a starred section, the references) has an empty column, its
+  as its page's part is read. The head's bound (format's `BOUNDS.head`) is the part's, 4 MiB and 1,048,576 values, so that a
+  paper is never left without a layer for the size of its head, which grows with its pages, its PDF and its headings: at 64 KiB
+  a paper of some 970 pages filled it with its parts' digests alone, and a 300-page thesis of 480 numbered headings passed it
+  only by its numbers; a head at the engine's page bound (`PAGES_MAX`, 10,000 pages) holds some 0.7 MB of digests. The largest
+  head of the lab's 322 papers is 26,920 bytes, 2,063 of them numbers (`packages/engine/tests/head-bound.test.ts`). A heading TeX set no number for (a starred section, the references) has an empty column, its
   titles on its level's edge. Each level's column is as wide as its widest number as drawn (`Outline.tsx` measures it once
   the entries or the faces change), so that a level's titles share one edge; a level with no number has no column.
 - **The translated title** wraps to two lines at most, then an ellipsis; **the original** one line, an ellipsis
@@ -343,7 +347,9 @@ the extension's reader passes none (its narrow window keeps §5's rule).
 - **Narrow windows**: under 720 px (240 and 480: pushed, the document would fall under 480 px, a letter page at its width
   under 0.8 of its size) the contents lay over the document, min(240 px, 100vw − 48 px) wide with the pop shadow, the document
   keeping its width. A jump closes them, the focus going to the heading's page where the side read holds a target for it (the
-  laid side's page, as a link followed by keyboard gives it) and back to the contents button where it holds none; Escape
+  laid side's page, as a link followed by keyboard gives it) and back to the contents button where it holds none; a heading no
+  part has placed yet waits for its page's part, and a control the reader moved the focus to meanwhile keeps it (`goToHeading`
+  gives the page the focus only while it is where the jump found it; `packages/reader/tests/heading-focus.test.ts`); Escape
   closes them, the focus on the button. Nothing in the sidebar moves but its slide (none under reduced motion).
 - The headings and their levels come from the paper's source as the engine reads it: the source parser
   (`latex-front`) knows which sectioning command each heading unit comes from (`section`, `subsection`,
