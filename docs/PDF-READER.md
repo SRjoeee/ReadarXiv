@@ -10415,8 +10415,9 @@ displays' paragraphs, each REVTeX's (2608.01890v1, 2608.08350v2, 2610.20716v1). 
 an inline formula TeX moved whole to the next column leaves its opening point at the column's end, the notes shipped there
 stand between it and its closing point, and the formula's element owned the note's label and text (p25's note a unit of no text,
 'unwrapped', English). Another unit shipped whole between a piece's points in its region (its start, then its end mark, before
-the closing point), with its label, the glyphs before its start on that start's line, is no ink of the piece's (ownedOf's closed
-reading); where the piece set no glyph before the first of them (TeX set it whole after them), what was painted from its opening
+the closing point), with its label, the glyphs before its start on that start's line (a label's form, which a unit TeX ships
+there carries: one with none is what the piece itself sets, a paper's macro whose definition is a unit of its own, and stays its
+ink), is no ink of the piece's (ownedOf's closed reading); where the piece set no glyph before the first of them (TeX set it whole after them), what was painted from its opening
 point to that label went with them too: the rule the class sets above a column's notes, which had made the formula's element one
 box from the rule to the next column's head, its crop the page between. And a paragraph that crosses the column holds the
 column's notes inside its own range: their text is theirs (an earlier unit's text first), but a note's number, set in the paragraph
