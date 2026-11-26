@@ -47,6 +47,7 @@ vi.mock('../src/compose/composer.ts', () => ({
       probe: () => ({ laidPages: 0 }),
       page: () => null,
       member: () => null,
+      generation: () => 0,
       setDocuments: () => {},
       setLayer: () => {},
       setShown: () => {},

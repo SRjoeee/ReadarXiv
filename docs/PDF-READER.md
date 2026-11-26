@@ -10433,6 +10433,14 @@ reader read a control symbol's argument with no space skipped, so the space was 
 bare macro of no ink (`unproven` in the lay: the caption of FIG. 1). Now every accent's argument is read past white space,
 whatever its name (`source/latex-front.ts`, as accentBase reads it).
 
+**Why the count said nothing was lost.** The rows' count (`session/rows.ts` viewOf) counts rows: got, an accepted row held;
+lost, a row that is none. Every unit above held an accepted row, so the reader said 507 of 507 with none lost (staging's view,
+the 90 references' toggle off: the record's 597 asked less them), and the page count (`asOriginal`) sees only whole pages
+drawn as arXiv's. Now the reader's state tells, beside `lost`, the units a page laid so far draws as arXiv's though their row
+was accepted, by the cause its member states (`rows.original`: the prepare's `unwrapped`, `page`; the lay's `unfit`,
+`unproven`, a face it lacks, …; heldAsOriginal over each page's last commit in the composer's generation now). State alone:
+nothing is drawn or said of it. A unit the prepare located nowhere has no member on any page and is not in it.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server
