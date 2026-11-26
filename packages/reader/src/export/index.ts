@@ -36,8 +36,9 @@ const isSfnt = (b: Uint8Array) => {
   return tag === 0x00010000 || tag === 0x74727565 || tag === 0x4f54544f
 }
 
-/** the same, decoded by `pdfjs` */
+/** the same, decoded by `pdfjs` on the worker `o.options` gives (getDocument's), let go at `o.signal`'s abort */
 export const fontsByPdfJs = (
   slices: readonly { key: string; woff2: Uint8Array }[],
   pdfjs: Parameters<typeof brotliByPdfJs>[0],
-) => fontsOfSlices(slices, brotliByPdfJs(pdfjs))
+  o?: Parameters<typeof brotliByPdfJs>[1],
+) => fontsOfSlices(slices, brotliByPdfJs(pdfjs, o))

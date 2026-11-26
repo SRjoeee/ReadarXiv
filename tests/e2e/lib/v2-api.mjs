@@ -28,7 +28,8 @@
 // `unknown`): the website runs its own contract of the routes against it through the engine it vendors, which is what holds it
 // to our server; this repository's test of it (v2-api.test.ts) restates only what a client sees. Beside the routes it serves
 // our site's static files the reader's typesetter reads (compose/served.ts): the faces' tables and one slice (PDF.js's Liberation
-// Sans, which node_modules holds, for every face), and no hyphenation patterns (404: the language hyphenates nothing).
+// Sans, which node_modules holds, for every face, served as our slices are, WOFF2: woff2.mjs), and no hyphenation patterns
+// (404: the language hyphenates nothing).
 //
 // What it answers is the test's to say (`set`): each paper prepared already (its first open answers its layer) or prepared for
 // `prepareMs` from its first open; and a fault on our server's every route, the static files included: a server error (5xx), the
@@ -40,6 +41,7 @@ import { fileURLToPath } from 'node:url'
 import { FORMATS, OpenAnswer, PaperDoc } from '../../../packages/format/src/index.ts'
 import { TYPESET_TARGETS } from '../../../packages/reader/src/compose/targets.ts'
 import { FACES } from '../../../packages/typeset/src/data/faces.ts'
+import { woff2Of } from './woff2.mjs'
 
 const FIXTURES = fileURLToPath(new URL('../../../packages/reader/e2e/fixtures/', import.meta.url))
 const LATIN_FACE = fileURLToPath(new URL('../../../node_modules/pdfjs-dist/standard_fonts/LiberationSans-Regular.ttf', import.meta.url))
@@ -166,7 +168,7 @@ export function v2Api({ fixtures = [loadFixture()], base = 'https://readarxiv.co
     if (!r) return answer(200, headers, bytes)
     return answer(206, { ...headers, 'content-range': `bytes ${r[0]}-${r[1]}/${bytes.length}` }, bytes.subarray(r[0], r[1] + 1))
   }
-  const FACE_BYTES = new Uint8Array(readFileSync(LATIN_FACE))
+  const FACE_BYTES = woff2Of(new Uint8Array(readFileSync(LATIN_FACE)))
   function staticAnswer(path) {
     if (/^\/hyph\/[a-zA-Z-]+\.json$/.test(path)) return answer(404, { 'content-type': 'application/json' }, text('{"error":"not-found"}'))
     if (path === '/static-fonts/index.json') return answer(200, { 'content-type': 'application/json', 'cache-control': 'public, max-age=300' }, text(JSON.stringify({ schema: 1, fonts: 'e2e', faces: Object.fromEntries(Object.keys(FACES).map(id => [id, { group: FACE_GROUP }])) })))

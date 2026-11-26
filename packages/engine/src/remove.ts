@@ -822,10 +822,8 @@ export interface RemoverOptions {
   heldMax?: number
   bytesMax?: number
 }
-/** the remover over one document (openRemover's) */
-export interface Remover {
-  doc: PdfDocument
-  ctx: PdfContext
+/** the walk over one document (openRemover's, given the document's objects or its bytes): its pages walked and aligned, its objects read */
+export interface Walker {
   PL: PdfLib
   numPages: number
   encrypted: boolean
@@ -841,7 +839,17 @@ export interface Remover {
   /** the decoded streams and the fonts read let go (a remover kept across asks holds the object layer's parse alone) */
   release(): void
 }
+/** the remover over one document (openRemover's): the walk over it, and the object layer's document it loaded whole */
+export interface Remover extends Walker {
+  doc: PdfDocument
+  ctx: PdfContext
+}
 
+/** a document's objects read already (the engine's openObjects: each object parsed when it is asked, kept by its number) */
+export interface WalkObjects {
+  lookup(ref: PdfRef): PdfObject | undefined
+  pages(): { ref: PdfRef; node: PdfDict; inherited: { Resources?: PdfObject } }[]
+}
 /**
  * The remover over one document: arXiv's bytes, read by `PL` (@cantoo/pdf-lib's exports), `inflate` (bytes, limit -> bytes,
  * no more than limit + 1 of them, or a throw: Node's zlib.inflateSync with maxOutputLength, a browser's inflater stopped
@@ -849,11 +857,18 @@ export interface Remover {
  * tolerant of a damaged zlib stream, as PDF.js reads one; null: none), `walkMax` (WALK_MAX), `heldMax` and `bytesMax`
  * (HELD_MAX, BYTES_MAX). Returns { numPages, encrypted, walkPage,
  * alignPage, decode }.
+ *
+ * Given the document's objects read already (`WalkObjects`) in place of its bytes, the walk alone (a Walker: no object layer's
+ * document, nothing loaded whole): the PDF download's bake reads the composed document so, through the view the file is
+ * written from (the reader package's export/chain.ts), where the whole load held a second copy of every object of a paper of
+ * 46 MB at once. The same walk over the same pages, resources and streams; openObjects refuses an encrypted document.
  */
+export async function openRemover(bytes: Uint8Array, o: RemoverOptions): Promise<Remover>
+export async function openRemover(objects: WalkObjects, o: RemoverOptions): Promise<Walker>
 export async function openRemover(
-  bytes: Uint8Array,
+  from: Uint8Array | WalkObjects,
   { PL, inflate = null, walkMax = WALK_MAX, heldMax = HELD_MAX, bytesMax = BYTES_MAX }: RemoverOptions,
-): Promise<Remover> {
+): Promise<Remover | Walker> {
   const {
     PDFDocument,
     PDFName,
@@ -866,17 +881,78 @@ export async function openRemover(
     decodePDFRawStream,
     ParseSpeeds,
   } = PL
-  // (parsed in one go: the object layer's default, ParseSpeeds.Slow, waits for a timer every 100 objects, a yield that keeps a
-  // page's events going; a child process that wraps our pages has none to keep, and only waited, 50 to 320 ms a paper on one core)
-  const doc = await PDFDocument.load(bytes, {
-    ignoreEncryption: true,
-    updateMetadata: false,
-    throwOnInvalidObject: false,
-    parseSpeed: ParseSpeeds.Fastest,
-  })
-  const ctx = doc.context
-  const encrypted = !!ctx.trailerInfo.Encrypt
-  const look = (v: PdfObject | undefined) => (v instanceof PDFRef ? ctx.lookup(v) : v)
+  let loaded: { doc: PdfDocument; ctx: PdfContext } | null = null
+  let lookup: (ref: PdfObject) => PdfObject | undefined
+  let pages: PdfPage[]
+  let encrypted = false
+  if (from instanceof Uint8Array) {
+    // (parsed in one go: the object layer's default, ParseSpeeds.Slow, waits for a timer every 100 objects, a yield that keeps a
+    // page's events going; a child process that wraps our pages has none to keep, and only waited, 50 to 320 ms a paper on one
+    // core)
+    const doc = await PDFDocument.load(from, {
+      ignoreEncryption: true,
+      updateMetadata: false,
+      throwOnInvalidObject: false,
+      parseSpeed: ParseSpeeds.Fastest,
+    })
+    const ctx = doc.context
+    loaded = { doc, ctx }
+    encrypted = !!ctx.trailerInfo.Encrypt
+    lookup = (r) => ctx.lookup(r)
+    pages = doc.getPages()
+  } else {
+    lookup = (v) => (v instanceof PDFRef ? from.lookup(v as PdfRef) : v)
+    // (each page's dictionary as the walk reads a page's: itself, through its prototype, answering its resources as inherited)
+    pages = from.pages().map((p): PdfPage => {
+      const r = p.inherited.Resources === undefined ? undefined : lookup(p.inherited.Resources)
+      const node = Object.create(p.node) as PdfPageLeaf
+      node.Resources = () => (r instanceof PDFDict ? (r as PdfDict) : undefined)
+      return { ref: p.ref, node }
+    })
+  }
+  const look = (v: PdfObject | undefined) => (v instanceof PDFRef ? lookup(v) : v)
+  // (a stream the object view gives: its dictionary was parsed where no object is held, and the object layer's decoder looks
+  // its /Filter and /DecodeParms up there, so that an entry named by reference reads as none; given them through the view,
+  // as the whole load's own context resolves them, the parameters' own entries too. #686: none of the 245 papers' 87,461
+  // streams names one so)
+  const FILTERS = [PDFName.of('Filter'), PDFName.of('DecodeParms')]
+  // (whether a direct value holds a reference anywhere: its arrays' entries and its dictionaries' values, a parameter
+  // dictionary's /EarlyChange among them, #686, 4706206060; a direct value is a tree, read once)
+  const holdsRef = (v: PdfObject | undefined): boolean =>
+    v instanceof PDFRef ||
+    (v instanceof PDFArray && v.asArray().some(holdsRef)) ||
+    (v instanceof PDFDict && v.entries().some(([, x]) => holdsRef(x)))
+  const viewed = (st: PdfRawStream): PdfRawStream => {
+    if (loaded || !FILTERS.some((k) => holdsRef(st.dict.get(k)))) return st
+    // (a value as the decoder reads it: resolved through the view, an array's entries and a dictionary's values as it looks
+    // each up, when it looks it up)
+    const through = (v: PdfObject | undefined): PdfObject | undefined => {
+      const x = look(v)
+      if (x instanceof PDFArray) {
+        const a: PdfArray & { lookup?: unknown; lookupMaybe?: unknown } = Object.create(x)
+        a.lookup = (i: number) => through(x.get(i))
+        a.lookupMaybe = (i: number) => {
+          const y = through(x.get(i))
+          return y instanceof PDFDict ? y : undefined
+        }
+        return a
+      }
+      if (x instanceof PDFDict) {
+        const d: PdfDict & { lookup?: unknown; lookupMaybe?: unknown } = Object.create(x)
+        d.lookup = (k: PdfObject) => through(x.get(k as PdfName))
+        d.lookupMaybe = (k: PdfObject) => through(x.get(k as PdfName))
+        return d
+      }
+      return x
+    }
+    const [filter, parms] = FILTERS.map((k) => through(st.dict.get(k)))
+    const dict: PdfDict & { lookup?: unknown } = Object.create(st.dict)
+    dict.lookup = (k: PdfObject) =>
+      k === FILTERS[0] ? filter : k === FILTERS[1] ? parms : look(st.dict.get(k as PdfName))
+    const out: PdfRawStream = Object.create(st)
+    Object.defineProperty(out, 'dict', { value: dict })
+    return out
+  }
   const get = (d: PdfObject | undefined, k: string) => {
     if (!(d instanceof PDFDict) && !(d instanceof PDFStream)) return undefined
     const dict = d instanceof PDFStream ? d.dict : d
@@ -906,7 +982,7 @@ export async function openRemover(
     if (st instanceof PDFRawStream && st.contents.length === 0) out = new Uint8Array(0)
     else if (st instanceof PDFRawStream) {
       try {
-        out = readAtMost(decodePDFRawStream(st), limit)
+        out = readAtMost(decodePDFRawStream(viewed(st)), limit)
       } catch (e) {
         // (a failed allocation is no stream the object layer refuses: the paper's, memory.ts)
         if (e instanceof DecodeLimit || isMemoryError(e)) throw e
@@ -928,8 +1004,6 @@ export async function openRemover(
     if ((decodedBytes += out.buffer.byteLength) <= 4 * bytesMax) decoded.set(st, out)
     return out
   }
-  const pages = doc.getPages()
-
   // ---- fonts: how a string splits into codes, and each code's width
   const fontCache = new Map<string | PdfObject | undefined, FontInfo>()
   function fontInfo(key: string | PdfObject | undefined, dict: PdfObject | undefined): FontInfo {
@@ -1393,7 +1467,19 @@ export async function openRemover(
     fontCache.clear()
   }
 
-  return { doc, ctx, PL, numPages: pages.length, encrypted, walkPage, alignPage, decode, look, get, nameOf, release }
+  const walker: Walker = {
+    PL,
+    numPages: pages.length,
+    encrypted,
+    walkPage,
+    alignPage,
+    decode,
+    look,
+    get,
+    nameOf,
+    release,
+  }
+  return loaded ? { ...loaded, ...walker } : walker
 }
 
 /**

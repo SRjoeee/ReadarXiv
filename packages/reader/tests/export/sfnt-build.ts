@@ -36,6 +36,8 @@ export interface SfntParts extends CffParts {
   /** each glyph's advance, font units */
   advances: number[]
   upem?: number
+  /** further tables, by tag (a GSUB of the test's own) */
+  extra?: Record<string, Uint8Array>
 }
 
 export function buildSfnt(p: SfntParts): { sfnt: Uint8Array; tables: Map<string, Uint8Array> } {
@@ -57,6 +59,7 @@ export function buildSfnt(p: SfntParts): { sfnt: Uint8Array; tables: Map<string,
     ['hhea', hhea],
     ['hmtx', hmtx],
     ['maxp', maxp],
+    ...Object.entries(p.extra ?? {}),
   ])
   const tags = [...tables.keys()].sort()
   const dir = 12 + 16 * tags.length

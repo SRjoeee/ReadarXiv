@@ -2,8 +2,10 @@
 // menu's two files greyed until the final translation is on screen, each made in the page and saved by the browser under its
 // name, read back (the translation's characters as text, the side-by-side's pages twice as wide); one at a time, the file being
 // made's share in the capsule with its cancel; a cancel saving nothing; a failure (the add-on not read whole) with its retry,
-// which makes the file; and the same from the reading options in a window too narrow for the bar's own menu. Called by
-// reader-v2.mjs with its context, its stand-in and its reporting.
+// which makes the file; and the same from the reading options in a window too narrow for the bar's own menu. The stand-in
+// serves its face as WOFF2, as our server serves its slices, so that each file decodes them as a host's reader does (PDF.js's
+// worker over the reader's own port, no global worker set: #686), and two files in a row leave the page's workers as they were.
+// Called by reader-v2.mjs with its context, its stand-in and its reporting.
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -23,17 +25,35 @@ export async function exportChecks(t) {
     await task.destroy()
     return out
   }
-  /** the file of a row of the download menu (opened from `opener`), saved by the browser: its name and what it reads as */
+  /** the file of a row of the download menu (opened from `opener`), saved by the browser: its name and what it reads as; where
+   *  the reader fails it instead, `failed`, the reader's own words of the failure (its console's) */
   const press = async (page, opener, row, o = {}) => {
-    await opener()
-    const item = page.getByRole('menuitem', { name: row, exact: true })
-    const saved = o.expect === false ? null : page.waitForEvent('download', { timeout: o.timeout ?? 30_000 })
-    await item.click()
-    if (!saved) return null
-    const d = await saved
-    const path = join(SHOTS, `export-${d.suggestedFilename()}`)
-    await d.saveAs(path)
-    return { name: d.suggestedFilename(), ...(await readBack(path)) }
+    const said = []
+    const heard = (m) => {
+      if (/the PDF download failed/.test(m.text())) said.push(m.text())
+    }
+    page.on('console', heard)
+    try {
+      await opener()
+      const item = page.getByRole('menuitem', { name: row, exact: true })
+      const timeout = o.timeout ?? 30_000
+      const saved = o.expect === false ? null : page.waitForEvent('download', { timeout }).then((d) => ({ d }), () => ({ why: 'no file in time' }))
+      await item.click()
+      if (!saved) return null
+      const failed = page
+        .waitForFunction(() => window.__reader?.controller?.getState().exportFailed != null, null, { timeout })
+        .then(() => ({ why: 'the reader failed the file' }), () => new Promise(() => {}))
+      const r = await Promise.race([saved, failed])
+      if (!r.d) {
+        await page.waitForTimeout(200)
+        return { failed: said.join(' | ') || r.why }
+      }
+      const path = join(SHOTS, `export-${r.d.suggestedFilename()}`)
+      await r.d.saveAs(path)
+      return { name: r.d.suggestedFilename(), ...(await readBack(path)) }
+    } finally {
+      page.off('console', heard)
+    }
   }
   /** the browser's cache emptied: an object of the layer is immutable, and a file made again reads it from there, never from
    *  the stand-in that holds or refuses it */
@@ -64,13 +84,27 @@ export async function exportChecks(t) {
     const greyed = early.download !== 'translation' && early.rows.filter((r) => /PDF/.test(r.text ?? '') && r.disabled === 'true').length >= 2
     check('the two files\' rows stand greyed until the final translation is on screen, then are offered', ready && greyed, JSON.stringify(early))
 
+    // (the page's workers before the two files: the decoding of their faces' WOFF2 opens one of the export's own, which each file
+    // ends; none is left behind)
+    const workersBefore = page.workers().length
+    const started = []
+    page.on('worker', (w) => {
+      const one = { closed: false }
+      started.push(one)
+      w.on('close', () => {
+        one.closed = true
+      })
+    })
     const tr = await press(page, barMenu(page), W.translation)
     const s = await readerState(page)
     check('the translation\'s file: saved as <id>.<target>.pdf, its translation read as text (the echo\'s), arXiv\'s page width',
-      !!tr && tr.name === `${PAPER}v${t.fixture.version}.${s.prefs?.target}.pdf` && /\[echo\]/.test(tr.text) && tr.width < 700, JSON.stringify(tr && { name: tr.name, pages: tr.pages, width: tr.width, text: tr.text.slice(0, 80) }))
+      !!tr && tr.name === `${PAPER}v${t.fixture.version}.${s.prefs?.target}.pdf` && /\[echo\]/.test(tr.text) && tr.width < 700, JSON.stringify(tr && (tr.failed ? tr : { name: tr.name, pages: tr.pages, width: tr.width, text: tr.text.slice(0, 80) })))
     const sbs = await press(page, barMenu(page), W.sideBySide)
     check('the side-by-side file: saved as <id>.<target>.side-by-side.pdf, as many pages, each twice as wide, the translation read on it',
-      !!sbs && !!tr && sbs.name.endsWith(`.${s.prefs?.target}.side-by-side.pdf`) && sbs.pages === tr.pages && Math.abs(sbs.width - 2 * tr.width) <= 1 && /\[echo\]/.test(sbs.text), JSON.stringify(sbs && { name: sbs.name, pages: sbs.pages, width: sbs.width }))
+      !!sbs?.name && !!tr?.name && sbs.name.endsWith(`.${s.prefs?.target}.side-by-side.pdf`) && sbs.pages === tr.pages && Math.abs(sbs.width - 2 * tr.width) <= 1 && /\[echo\]/.test(sbs.text), JSON.stringify(sbs && (sbs.failed ? sbs : { name: sbs.name, pages: sbs.pages, width: sbs.width })))
+    await page.waitForTimeout(500)
+    const workersAfter = page.workers().length
+    check('two files in a row: each decodes its faces on a worker of its own and ends it, the page\'s workers as before them', !!tr?.name && !!sbs?.name && workersAfter === workersBefore && started.length === 2 && started.every((w) => w.closed), JSON.stringify({ before: workersBefore, after: workersAfter, started: started.length, closed: started.filter((w) => w.closed).length }))
     const done = await page.evaluate(() => document.querySelector('.capsule')?.textContent ?? '')
     check('the capsule says the file is downloaded', /已下载/.test(done), done)
 
@@ -125,7 +159,7 @@ export async function exportChecks(t) {
       await narrow.getByRole('button', { name: W.options, exact: true }).click()
       await narrow.locator('.pop .row').filter({ hasText: W.menu }).getByRole('button', { name: W.menu, exact: true }).click()
     }, W.sideBySide)
-    check('below 500 px: the reading options\' download row offers both files, and the side-by-side one is saved from it', !!viaOptions && viaOptions.name.endsWith('.side-by-side.pdf'), JSON.stringify(viaOptions && { name: viaOptions.name, width: viaOptions.width }))
+    check('below 500 px: the reading options\' download row offers both files, and the side-by-side one is saved from it', !!viaOptions?.name && viaOptions.name.endsWith('.side-by-side.pdf'), JSON.stringify(viaOptions && (viaOptions.failed ? viaOptions : { name: viaOptions.name, width: viaOptions.width })))
     await narrow.close()
   }
   api.set({ whole: null })

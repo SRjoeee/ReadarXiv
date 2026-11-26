@@ -241,8 +241,9 @@ export interface Served {
    *  slices wait for no table */
   warm(fonts: readonly string[]): Promise<void>
   /** the PDF download's (export/): the slice a code point of a font string is drawn in (the first family of the string whose
-   *  face holds it, as a page's runs are cut), its key and its file's path; null where none holds it or a table is not read */
-  sliceOf(font: string, cp: number): { key: string; path: string } | null
+   *  face holds it, as a page's runs are cut), its key, its file's path and that face's id; null where none holds it or a table
+   *  is not read */
+  sliceOf(font: string, cp: number): { key: string; path: string; face: string } | null
   /** a slice's file, asked as every slice is (the browser's cache holds it where the page drew it); `signal` lets it go */
   sliceBytes(path: string, signal?: AbortSignal): Promise<Uint8Array>
 }
@@ -843,7 +844,7 @@ export function createServed(o: {
       if (!fs?.read) return null
       for (const face of fs.faces) {
         const slice = face.slices?.find((x) => inRanges(x.ranges, cp))
-        if (slice) return { key: slice.key, path: slice.path }
+        if (slice) return { key: slice.key, path: slice.path, face: face.id }
       }
       return null
     },

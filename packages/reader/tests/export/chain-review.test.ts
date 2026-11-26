@@ -80,22 +80,25 @@ const decoded = (X: ReturnType<typeof openObjects>, v: unknown) =>
   latin1(L.decodePDFRawStream(look(X, v) as PdfRawStream).decode())
 
 /** the plain document: a page of Helvetica text, its first word wrapped by the add-on in group 7 (axt:1.1.t) */
-const plain = (o: { pageExtra?: string; pagesExtra?: string } = {}) =>
+const plain = (
+  o: { pageExtra?: string; pagesExtra?: string; catalogExtra?: string; more?: Record<number, Obj> } = {},
+) =>
   composedOf(
     [
-      '<< /Type /Catalog /Pages 2 0 R >>',
+      `<< /Type /Catalog /Pages 2 0 R ${o.catalogExtra ?? ''} >>`,
       `<< /Type /Pages /Kids [3 0 R] /Count 1 ${o.pagesExtra ?? ''} >>`,
       `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] ${o.pageExtra ?? ''} /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>`,
       { dict: '', data: 'BT /F1 10 Tf 72 700 Td (Hello) Tj ( World) Tj ET' },
       F1,
     ],
     {
-      1: '<< /Type /Catalog /Pages 2 0 R /OCProperties << /OCGs [7 0 R] /D << /BaseState /ON /ON [7 0 R] >> >> >>',
+      1: `<< /Type /Catalog /Pages 2 0 R ${o.catalogExtra ?? ''} /OCProperties << /OCGs [7 0 R] /D << /BaseState /ON /ON [7 0 R] >> >> >>`,
       3: `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] ${o.pageExtra ?? ''} /Resources << /Font << /F1 5 0 R >> /Properties << /G0 7 0 R >> >> /Contents 6 0 R >>`,
       6: { dict: '', data: 'BT /F1 10 Tf 72 700 Td /OC /G0 BDC (Hello) Tj EMC ( World) Tj ET' },
       7: '<< /Type /OCG /Name (axt:1.1.t) >>',
+      ...o.more,
     },
-    8,
+    Math.max(8, ...Object.keys(o.more ?? {}).map((n) => Number(n) + 1)),
   )
 
 describe('what the paper says is written as PDF strings and names, never as PDF syntax (#685: 4703881927)', () => {
@@ -118,6 +121,92 @@ describe('what the paper says is written as PDF strings and names, never as PDF 
     const a = await annotOf(JSON.stringify([{ num: 3, gen: 0 }, { name: 'XY Z' }, null, ') /JS (x', 700]))
     expect(a.get(N('Dest'))?.toString()).toBe('[ 3 0 R /XY#20Z null null 700 ]')
   })
+})
+
+describe('a named destination is written in the encoding PDF.js reads back as its name (#685: 4704253033)', () => {
+  // (the name tree's keys: PDFDocEncoding's 0x84, an em dash; its 0xA0, the euro sign; UTF-16BE with its BOM for a CJK name and
+  // for a no-break space, which PDFDocEncoding has no byte for. Sorted by their bytes, as a name tree keeps its keys)
+  const names: [string, string][] = [
+    ['(a\\204b)', 'a—b'],
+    ['(x\\240y)', 'x€y'],
+    // (UTF-16BE of a name PDFDocEncoding holds: PDF.js decodes both alike, poppler compares the bytes)
+    ['<FEFF0061>', 'a'],
+    ['<FEFF007800A00079>', 'x y'],
+    ['<FEFF4E2D6587>', '\u4e2d\u6587'],
+  ]
+  const tree = `/Names << /Dests << /Names [${names.map(([k]) => `${k} [3 0 R /Fit]`).join(' ')}] >> >>`
+  for (const form of ['translation', 'side-by-side'] as const)
+    it(`each link of the ${form} file resolves through PDF.js to the page its name names`, async () => {
+      const links: Page['links'] = names.map(([, name], i) => [
+        [72, 600 + 20 * i, 100, 610 + 20 * i],
+        { dest: JSON.stringify(name) },
+      ])
+      const { file } = await made(plain({ catalogExtra: tree }), laid([run('\u6587')], links), form)
+      const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
+      const task = pdfjs.getDocument({ data: file.slice() })
+      const doc = await task.promise
+      const annots = (await (await doc.getPage(1)).getAnnotations()).filter((a) => a.subtype === 'Link' && a.dest)
+      const got = await Promise.all(
+        annots.map(async (a) => [a.dest, ((await doc.getDestination(a.dest as string)) ?? [null])[1]?.name ?? null]),
+      )
+      await task.destroy()
+      expect(got.sort()).toEqual(names.map(([, name]) => [name, 'Fit']).sort())
+      // (byte for byte the tree's key, as a viewer that compares bytes looks a destination up: #686, 4705748922)
+      const X = openObjects(file, { PL: L, objectsMax: 1e5, decodedMax: 1 << 24 })
+      const annots2 = look(X, X.pages()[0]!.node.get(N('Annots'))) as PdfArray
+      const written = annots2
+        .asArray()
+        .map((a) => (look(X, a) as PdfDict).get(N('Dest')))
+        .filter((d) => !!d && !(d instanceof L.PDFArray))
+        .map((d) => hexOfToken(String(d)))
+      expect(written.sort()).toEqual(names.map(([k]) => hexOfToken(k)).sort())
+    })
+})
+
+/** a PDF string token's bytes, as hex: a hexadecimal string's digits, a literal string's bytes with its escapes undone */
+function hexOfToken(tok: string): string {
+  if (tok.startsWith('<')) return tok.slice(1, -1).replace(/\s/g, '').toUpperCase()
+  const out: number[] = []
+  const body = tok.slice(1, -1)
+  for (let i = 0; i < body.length; i++) {
+    const c = body[i]!
+    if (c !== '\\') {
+      out.push(c.charCodeAt(0) & 255)
+      continue
+    }
+    const o = /^[0-7]{1,3}/.exec(body.slice(i + 1))
+    if (o) {
+      out.push(Number.parseInt(o[0], 8) & 255)
+      i += o[0].length
+    } else {
+      const e = body[++i]!
+      out.push({ n: 10, r: 13, t: 9, b: 8, f: 12 }[e] ?? e.charCodeAt(0))
+    }
+  }
+  return out.map((b) => b.toString(16).toUpperCase().padStart(2, '0')).join('')
+}
+
+describe('a destination tree that is no tree is read at once, each node once (#686: 4706206050)', () => {
+  // (a node whose /Kids names itself twice, Codex's 440-byte shape: walked by its depth alone, 2^64 visits; and a cycle of two)
+  const link: Page['links'] = [[[72, 600, 100, 620], { dest: JSON.stringify('x') }]]
+  for (const [what, more] of [
+    ['a node that is its own kid, twice', { 8: '<< /Kids [8 0 R 8 0 R] >>' }],
+    [
+      "two nodes each the other's kid",
+      { 8: '<< /Kids [9 0 R] >>', 9: '<< /Kids [8 0 R] /Names [(x) [3 0 R /Fit]] >>' },
+    ],
+  ] as const)
+    it(what, async () => {
+      const t0 = performance.now()
+      const { X } = await made(
+        plain({ catalogExtra: '/Names << /Dests 8 0 R >>', more }),
+        laid([run('\u6587')], link),
+        'translation',
+      )
+      expect(performance.now() - t0).toBeLessThan(2000)
+      const annots = look(X, X.pages()[0]!.node.get(N('Annots'))) as PdfArray
+      expect(String((look(X, annots.get(0)) as PdfDict).get(N('Dest')))).toBe('(x)')
+    }, 10_000)
 })
 
 describe("the left half of a side-by-side page is arXiv's own drawing (#685: 4703877261, 4703881297)", () => {
@@ -253,4 +342,107 @@ describe("a formula's crop is drawn between the words it stands among (#685: 470
       z = text.indexOf('<0514>')
     expect(a >= 0 && b > a && z > b).toBe(true)
   })
+})
+
+describe('a turned page set side by side in its upright frame (#685: 4704125905)', () => {
+  // (the paper's own link on the page, a URI; the reader's laid link, a destination)
+  const own =
+    '/Annots [<< /Type /Annot /Subtype /Link /Rect [72 600 100 620] /Border [0 0 0] /A << /S /URI /URI (https://example.org/) >> >>]'
+  const turned = (rotate: number) => plain({ pageExtra: `/Rotate ${rotate} ${own}` })
+  const view = async (file: Uint8Array) => {
+    const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
+    const task = pdfjs.getDocument({ data: file.slice() })
+    const page = await (await task.promise).getPage(1)
+    const vp = page.getViewport({ scale: 1 })
+    const words = (await page.getTextContent()).items
+      .filter((i) => 'str' in i && i.str.includes('World'))
+      // (where the word ends: the item that holds it begins at Hello in a copy that draws it, after it in one that bakes it out)
+      .map((i) => {
+        const t = i as { transform: number[]; width: number }
+        return vp.convertToViewportPoint(t.transform[4]! + t.width, t.transform[5]!)
+      })
+      .sort((a, b) => a[0]! - b[0]!)
+    const annots = (await page.getAnnotations())
+      .filter((a) => a.subtype === 'Link')
+      .map((a) => {
+        const r = a.rect as number[]
+        const [x0] = vp.convertToViewportPoint(r[0]!, r[1]!)
+        const [x1] = vp.convertToViewportPoint(r[2]!, r[3]!)
+        return [
+          a.url ? 'own' : 'laid',
+          Math.min(x0!, x1!) >= vp.width / 2 ? 'right' : Math.max(x0!, x1!) <= vp.width / 2 ? 'left' : 'across',
+        ] as const
+      })
+      .sort()
+    await task.destroy()
+    return { size: [vp.width, vp.height], words, annots }
+  }
+  for (const rotate of [0, 90, 180, 270])
+    for (const laidPage of [true, false])
+      it(`/Rotate ${rotate}, ${laidPage ? 'a laid page' : 'a page with nothing laid'}: twice as wide as it shows, the original on the left`, async () => {
+        const [w, h] = rotate % 180 ? [792, 612] : [612, 792]
+        const page = laidPage
+          ? laid([run('\u6587')], [[[72, 690, 100, 710], { dest: JSON.stringify('x') }]])
+          : { ...laid([]), members: [] }
+        const { file } = await made(turned(rotate), page, 'side-by-side')
+        const v = await view(file)
+        expect(v.size).toEqual([2 * w, h])
+        // (the same word of each copy: one page's width apart, on one line)
+        expect(v.words).toHaveLength(2)
+        expect(v.words[1]![0]! - v.words[0]![0]!).toBeCloseTo(w, 2)
+        expect(v.words[1]![1]!).toBeCloseTo(v.words[0]![1]!, 2)
+        expect(v.annots).toEqual(
+          laidPage
+            ? [
+                ['laid', 'right'],
+                ['own', 'left'],
+              ]
+            : [
+                ['own', 'left'],
+                ['own', 'right'],
+              ],
+        )
+      })
+})
+
+describe('two characters one glyph draws are each read back as themselves (#686: 4705748606)', () => {
+  // (a face whose small capitals draw i and dotless i with one glyph, I.sc: Computer Modern Unicode's; and a hyphen its cmap
+  // gives two code points: the text a PDF reader takes back of each is its own, in either order)
+  const shared: Glyphs = {
+    glyph: (face, cp) =>
+      face === FACE && [0x69, 0x131, 0x2d, 0x2010].includes(cp)
+        ? { font, gid: cp === 0x2d || cp === 0x2010 ? 2 : 1 }
+        : null,
+    offsets: (_face, text) => [...text].map((_, i) => i * 100),
+  }
+  for (const order of [
+    ['iı', 'ıi'],
+    ['ıi', 'iı'],
+  ])
+    it(`reads back ${JSON.stringify(order)} as written, and both hyphens`, async () => {
+      const page = laid([run(order[0]!, 72), run(order[1]!, 200), run('-‐', 300)])
+      const c = plain()
+      const r = await exportPdf({
+        composed: c.bytes,
+        seam: c.seam,
+        pages: new Map([[1, page]]),
+        glyphs: shared,
+        PL: L,
+        form: 'translation',
+      })
+      const file = new Uint8Array(r.parts.reduce((n, p) => n + p.length, 0))
+      let at = 0
+      for (const p of r.parts) {
+        file.set(p, at)
+        at += p.length
+      }
+      const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
+      const task = pdfjs.getDocument({ data: file.slice() })
+      const tc = await (await (await task.promise).getPage(1)).getTextContent()
+      await task.destroy()
+      const text = tc.items.map((i) => ('str' in i ? i.str : '')).join('')
+      expect(text).toContain(order[0])
+      expect(text).toContain(order[1])
+      expect(text).toContain('-‐')
+    })
 })

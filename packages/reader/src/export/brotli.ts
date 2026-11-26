@@ -1,14 +1,16 @@
 // Brotli streams decoded by the reader's own PDF.js, for the served slices' WOFF2 (export/woff2.ts): no decoder of ours is
 // shipped. A browser's DecompressionStream has no brotli (Chromium 153, probed), and PDF.js (6.3.289, both hosts' pin) carries
 // one for PDF's /BrotliDecode filter: each stream is an embedded file of a small document of ours with that filter, read back
-// through PDF.js's public API (getAttachments, getAttachmentContent), decoded in PDF.js's worker. One document for every
-// stream of a file. A stream that does not decode refuses the whole call: its slice would otherwise come back short.
+// through PDF.js's public API (getAttachments, getAttachmentContent), decoded in PDF.js's worker: the worker the caller gives
+// in getDocument's options (the reader's export worker, made over its own port: PDF.js's global worker is never set, and a
+// document asked of PDF.js without one fails in a browser, #686). One document for every stream of a file. A stream that does
+// not decode refuses the whole call: its slice would otherwise come back short. A cancel destroys the document at once.
 
 import { cat } from './cff.ts'
 
-/** the part of PDF.js this reads: its getDocument over bytes */
+/** the part of PDF.js this reads: its getDocument over bytes (and the options given: the worker) */
 export interface PdfJsLike {
-  getDocument(src: { data: Uint8Array }): {
+  getDocument(src: { data: Uint8Array; [option: string]: unknown }): {
     promise: Promise<{
       getAttachments(): Promise<unknown>
       getAttachmentContent?(id: string): Promise<Uint8Array | null | undefined>
@@ -58,24 +60,43 @@ export function brotliDocument(streams: Uint8Array[]): Uint8Array {
   return cat(parts)
 }
 
-/** a decoder of brotli streams by `pdfjs`: each stream's bytes, in order; it throws where one does not decode */
-export function brotliByPdfJs(pdfjs: PdfJsLike): (streams: Uint8Array[]) => Promise<Uint8Array[]> {
+/** a decoder of brotli streams by `pdfjs`, its document asked with `options` (getDocument's: the worker it runs on) and let
+ *  go at `signal`'s abort: each stream's bytes, in order; it throws where one does not decode, or where it is cancelled */
+export function brotliByPdfJs(
+  pdfjs: PdfJsLike,
+  o: { options?: Record<string, unknown>; signal?: AbortSignal } = {},
+): (streams: Uint8Array[]) => Promise<Uint8Array[]> {
   return async (streams) => {
     if (!streams.length) return []
-    const task = pdfjs.getDocument({ data: brotliDocument(streams) })
-    const doc = await task.promise
+    const { signal } = o
+    signal?.throwIfAborted()
+    const task = pdfjs.getDocument({ ...o.options, data: brotliDocument(streams) })
+    // (a cancel settles this call itself: PDF.js 6.3.289 leaves its loading promise pending when its task is destroyed once its
+    // transport is set up, so a call waiting on it would never end, nor its worker be closed, nor the next file begin: #686,
+    // 4706206031. Every wait is raced against the cancel, and the task let go without waiting on it)
+    let cancel = () => {}
+    const cancelled = new Promise<never>((_, reject) => {
+      cancel = () => reject(signal?.reason ?? new DOMException('the decoding was cancelled', 'AbortError'))
+    })
+    cancelled.catch(() => {})
+    task.promise.catch(() => {})
+    signal?.addEventListener('abort', cancel, { once: true })
+    if (signal?.aborted) cancel()
+    const until = <T>(p: Promise<T>): Promise<T> => (signal ? Promise.race([p, cancelled]) : p)
     try {
-      await doc.getAttachments()
+      const doc = await until(task.promise)
+      await until(doc.getAttachments())
       const out: Uint8Array[] = []
       for (let k = 0; k < streams.length; k++) {
-        const got = await doc.getAttachmentContent?.(nameOf(k))
+        const got = await until(doc.getAttachmentContent?.(nameOf(k)) ?? Promise.resolve(undefined))
         // (PDF.js gives an empty stream for one its filter refuses, with a warning): a brotli stream of data decodes to bytes
         if (!got?.length) throw new Error(`brotli stream ${k} did not decode`)
         out.push(got)
       }
       return out
     } finally {
-      await (task.destroy?.() ?? doc.destroy?.())
+      signal?.removeEventListener('abort', cancel)
+      void Promise.resolve(task.destroy?.()).catch(() => {})
     }
   }
 }

@@ -108,6 +108,25 @@ describe("the reader's PDF.js", () => {
     expect(kit.options('composed').worker).not.toBe(first)
     expect(w.ports.map((p) => p.ended)).toEqual([true, false])
   })
+  it("the PDF download's worker: one of its own role, made at its ask and ended at its release, twice leaving none (#686)", async () => {
+    const f = fakeModules(),
+      w = fakeWorker()
+    const kit = await loadKit({ load: async () => f.modules, makeWorker: w.make })
+    kit.options('composed')
+    for (const _ of [1, 2]) {
+      const o = kit.options('export')
+      expect(o.worker).not.toBe(kit.options('composed').worker)
+      expect(kit.workers).toBe(2)
+      kit.release('export')
+      expect(kit.workers).toBe(1)
+      expect((o.worker as { destroyed: boolean }).destroyed).toBe(true)
+    }
+    expect(w.ports.map((p) => [p.name, p.ended])).toEqual([
+      ['axt-composed', false],
+      ['axt-export', true],
+      ['axt-export', true],
+    ])
+  })
   it('a text layer cancelled drops its mappings, patched once a class', () => {
     const f = fakeModules()
     forgetCancelledText(f.TextLayerBuilder as never)
