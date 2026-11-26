@@ -701,6 +701,51 @@ export function ownedOf(
         continue
       }
       let { glyphs, boxes } = takeTo([pb, qb])
+      // (another unit TeX shipped whole between its two points, in its region — a class that sets a column's notes inside the
+      // body it brackets, REVTeX's grid, at the column's end its opening point stands before, an inline formula TeX moved whole
+      // to the next column —, with its label, the glyphs before its start on that start's line, is no ink of the piece's, as at a
+      // later unit's start (toStart, pastUnit): 2611.16683v1 p25's note was its formula's element, the note a unit of no text)
+      const cuts: [page: number, g0: number, g1: number, b0: number, b1: number][] = []
+      const rb = rank.get(`${pb}|${qb}`) ?? -1
+      for (let r = (rank.get(`${pa}|${qa}`) ?? -2) + 1; r >= 1 && r < rb; r++) {
+        const [p, q] = seq[r]!
+        if (regions[p - 1]!.at[q] !== rA) continue
+        const P = pages[p - 1]!,
+          N = P.points[q]!,
+          s = START.exec(N.name)
+        if (!s || s[1] === m[2]) continue
+        const E = [`${s[1]}e`, `t${s[1]}e`, `h${s[1]}e`]
+          .flatMap((n) => where.get(n) ?? [])
+          .find(([e, x]) => e === p && x > q && (rank.get(`${e}|${x}`) ?? Infinity) < rb)
+        if (!E) continue
+        const G = P.glyphs,
+          low = p === pa ? A.glyph : 0
+        let g0 = N.glyph
+        while (
+          g0 > low &&
+          N.glyph < G.n &&
+          Math.abs(G.y[g0 - 1]! - G.y[N.glyph]!) < 0.5 * Math.max(G.size[g0 - 1]!, G.size[N.glyph]!)
+        )
+          g0--
+        // (a unit TeX shipped there carries its label, a note's number, a float's name and number: one with none before its start
+        // on its line is what the piece itself sets — a paper's macro whose definition is a unit of its own, 2610.39068v1's
+        // \\LawStrongNames{} —, its ink the piece's)
+        const label = Array.from({ length: N.glyph - g0 }, (_, j) => G.u[g0 + j] ?? '').join('')
+        if (!labelText(label) || !isLabelForm(label)) continue
+        const T = P.points[E[1]]!
+        // (where the piece set no glyph of its own before the first of them, TeX set the piece whole after them — a formula moved
+        // whole to the next column —, and what it painted from the piece's opening point to that label is what it shipped with
+        // them: the rule a class sets above a column's notes, the formula's element one box from it to the next column's head)
+        const bare = !cuts.length && !glyphs.some(([q, g]) => q < p || (q === p && g < g0))
+        cuts.push([p, g0, T.glyph, bare ? (p === pa ? A.box : 0) : g0 < G.n ? P.boxAt[g0]! : N.box, T.box])
+        r = rank.get(`${E[0]}|${E[1]}`)!
+      }
+      if (cuts.length) {
+        const out = ([p, i]: Place, glyph: boolean) =>
+          cuts.some(([c, g0, g1, b0, b1]) => c === p && (glyph ? i >= g0 && i < g1 : i >= b0 && i < b1))
+        glyphs = glyphs.filter((x) => !out(x, true))
+        boxes = boxes.filter((x) => !out(x, false))
+      }
       // (a punctuation mark its command set before its own ink, moved from after it (marks/marks.ts followsOf `moved`, TeX's 3: the
       // closing mark after that mark), the text's, not the piece's: its first glyph where that is the mark, more follow, and no such
       // mark stands right after the closing point — TeX's own output telling the moved mark from a piece's own ink that opens
@@ -1016,8 +1061,88 @@ export function ownedOf(
       const end = textEnd(glyphs, pages[pa - 1]!.points[stop[1]]!.name)
       return end > 0 ? cut(HOW['open, to the text after it'], glyphs, boxes, end) : null
     }
+    /** an opening point alone whose next mark is another unit's start in its own region: units TeX shipped into the body
+     *  between the piece and the text after it (a class that sets a column's footnotes inside the body it brackets, REVTeX's
+     *  ltxgrid), each whole (its start, then its end mark, on its page), the glyphs before each start on that start's line its
+     *  label (a note's number), the text after it right after the last of them, on its page or at the head of its region on a
+     *  later one. Its ink is what its region holds from it to the first such start, that unit's label left out, as at a later
+     *  unit's start (toStart); or null where it is not so */
+    const pastUnit = (): Owned | null => {
+      if (!f.want) return null
+      const first = seq[(rank.get(`${pa}|${qa}`) ?? -2) + 1]
+      if (!first || first[0] !== pa || regions[pa - 1]!.at[first[1]] !== rA) return null
+      /** what A's region holds from the point `from` to the point `to` (null: the paper's end), page by page */
+      const between = (from: Place, to: Place | null): Place[] => {
+        const out: Place[] = []
+        for (let p = from[0]; p <= (to ? to[0] : pages.length); p++) {
+          const P = pages[p - 1]!
+          take(
+            out,
+            [],
+            p,
+            p === from[0] ? P.points[from[1]]!.glyph : 0,
+            to && p === to[0] ? P.points[to[1]]!.glyph : P.glyphs.n,
+            0,
+            0,
+          )
+        }
+        return out
+      }
+      /** the next mark in A's region after the point at rank r, on any page */
+      const nextIn = (r: number): Place | null => {
+        for (let x = r + 1; x >= 1 && x < seq.length; x++)
+          if (regions[seq[x]![0] - 1]!.at[seq[x]![1]] === rA) return seq[x]!
+        return null
+      }
+      let at: Place = [pa, qa],
+        nx: Place | null = first
+      for (let passed = 0; ; passed++) {
+        const glyphs = between(at, nx)
+        const N = nx ? pages[nx[0] - 1]!.points[nx[1]]! : null,
+          s = N ? START.exec(N.name) : null
+        const E =
+          s && s[1] !== m[2]
+            ? [`${s[1]}e`, `t${s[1]}e`, `h${s[1]}e`]
+                .flatMap((n) => where.get(n) ?? [])
+                .find(([p, q]) => p === nx![0] && q > nx![1])
+            : undefined
+        if (!E) return null
+        if (passed > 0) {
+          // (between the units: their labels alone, each on its start's line)
+          const G = pages[nx![0] - 1]!.glyphs,
+            y = G.y[N!.glyph]
+          if (y === undefined || glyphs.some(([p, g]) => p !== nx![0] || Math.abs(G.y[g]! - y) > 0.5 * G.size[g]!))
+            return null
+        }
+        at = E
+        nx = nextIn(rank.get(`${E[0]}|${E[1]}`) ?? -2)
+        const N2 = nx ? pages[nx[0] - 1]!.points[nx[1]]! : null,
+          s2 = N2 ? START.exec(N2.name) : null
+        if (s2 && s2[1] !== m[2]) continue
+        if (textAt(pages, between(at, nx), f.want, erasure) !== 0) return null
+        const { glyphs: own, boxes } = takeTo(first)
+        if (jumps(own)) return null
+        // (what stands before the first start on its line is that unit's label — a note's number — only where it is a label's form:
+        // the piece's own words there say nothing tells the units after them its ink's, as for an earlier unit's marks set again)
+        const F = pages[pa - 1]!.points[first[1]]!,
+          G = pages[pa - 1]!.glyphs
+        let k = own.length
+        while (
+          k > 0 &&
+          F.glyph < G.n &&
+          Math.abs(G.y[own[k - 1]![1]]! - G.y[F.glyph]!) < 0.5 * Math.max(G.size[own[k - 1]![1]]!, G.size[F.glyph]!)
+        )
+          k--
+        const label = own
+          .slice(k)
+          .map(([p, g]) => pages[p - 1]!.glyphs.u[g] ?? '')
+          .join('')
+        if (labelText(label) && !isLabelForm(label)) return null
+        return toStart(own, boxes, F)
+      }
+    }
     let e = alone()
-    if (e.how === HOW['open, the text after it not found']) e = pastOther() ?? e
+    if (e.how === HOW['open, the text after it not found']) e = pastOther() ?? pastUnit() ?? e
     if (e.how === HOW['open, the next mark on another page'] || e.how === HOW['open, the text after it not found'])
       e = pastColumn() ?? e
     if (e.how === HOW['open, the next mark on another page']) e = footEnd() ?? e
@@ -1059,6 +1184,8 @@ interface OpenPiece {
   needPage: number | null
   stop: boolean
   r: number
+  /** the unit's text after it (Follow.want): only a piece with text after it reads past a unit shipped whole (pastUnit) */
+  want: boolean
 }
 /** a piece's closing point: a placeholder's (p) or a footnote call's (n) */
 const CLOSING = /^[pn]\d+\.\d+b$/
@@ -1116,13 +1243,23 @@ export function ownedPages({
     }
     return true
   }
-  /** the first point after (p, q) in region r on the pages held from p to the last: found where one is */
-  const stopFrom = (p: number, q: number, r: number) => {
+  /** the first point after (p, q) in region r on the pages held from p to the last: found where one is. Another unit's start
+   *  whose end TeX set after it on its page is no stop: a unit shipped whole into the region (a note a class sets inside the
+   *  body), which ownedOf reads past to the text after it (pastUnit), on whatever page that text resumes; the stop is the
+   *  first point after the units so shipped, for a piece with text after it (`want`: pastUnit reads none past them for another).
+   *  `unit` the piece's own unit's id */
+  const stopFrom = (p: number, q: number, r: number, unit: string | undefined, want: boolean) => {
     for (let s = p; s <= last; s++) {
       const P = held.get(s)!,
         at = regions.get(s)!.at
-      for (let k = s === p ? q + 1 : 0; k < P.points.length; k++)
-        if (seqPoint(P.points[k]!.name) && at[k] === r) return true
+      for (let k = s === p ? q + 1 : 0; k < P.points.length; k++) {
+        if (!seqPoint(P.points[k]!.name) || at[k] !== r) continue
+        const u = START.exec(P.points[k]!.name)?.[1]
+        const ends = want && u && u !== unit ? [`${u}e`, `t${u}e`, `h${u}e`] : null
+        const e = ends ? P.points.findIndex((pt, j) => j > k && ends.includes(pt.name)) : -1
+        if (e < 0) return true
+        k = e
+      }
     }
     return false
   }
@@ -1177,11 +1314,13 @@ export function ownedPages({
           needPage: f.closing ? (Number.isInteger(at) ? at : Infinity) : null,
           stop: f.closing || R.at[q]! % 2 !== 1,
           r: R.at[q]!,
+          want: !!f.want,
         })
       })
       // the stops looked for again with each page: the pieces' pages' and this one's
       for (const entry of [...queue, { p, pieces }])
-        for (const x of entry.pieces) if (x.stop === false && stopFrom(entry.p, x.q, x.r)) x.stop = true
+        for (const x of entry.pieces)
+          if (x.stop === false && stopFrom(entry.p, x.q, x.r, OPENING.exec(x.name)?.[2], x.want)) x.stop = true
       queue.push({ p, pieces })
       drain(take)
       // (a display its unit opens with, by the start mark: its own page alone, so found with it; a start mark read again later is
