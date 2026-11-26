@@ -10,26 +10,36 @@
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
-import { openObjects } from '../../packages/engine/src/index.ts'
+import { lex, openObjects } from '../../packages/engine/src/index.ts'
 import { withPageInForm } from './lib/page-in-form.mjs'
 
 const PL = createRequire(import.meta.url)('@cantoo/pdf-lib')
-/** each crop a saved file draws on page `n` (its crop forms, AXTC…), and whether it draws ink: a show of a string in its form or
- *  in a form it draws, down the copies the export bakes (AXTB…); the per-crop presence the lab's crops-pixels.py reads by pixel */
+/** each crop a saved file draws on page `n` (its crop forms, AXTC…), and whether it draws ink: a show of a string, in a render
+ *  mode that paints (neither 3, invisible, nor 7, a clip alone), in its form or in a form it draws, down the copies the export
+ *  bakes (AXTB…), the mode carried through q and Q and into a form; the per-crop presence the lab reads by pixel */
 function cropsIn(path, n) {
   const X = openObjects(new Uint8Array(readFileSync(path)), { PL, objectsMax: 1e6, decodedMax: 1 << 26 })
   const N = (k) => PL.PDFName.of(k)
   const look = (v) => (v instanceof PL.PDFRef ? X.lookup(v) : v)
   const text = (st) => new TextDecoder('latin1').decode(PL.decodePDFRawStream(st).decode())
   const xobj = (res, name) => look(look(look(res)?.get(N('XObject')))?.get(N(name)))
-  const shows = /\((?:[^()\\]|\\.)+\)\s*Tj|\[[^\]]*\((?:[^()\\]|\\.)+\)[^\]]*\]\s*TJ/
-  const ink = (form, depth = 0) => {
-    const body = text(form)
-    if (shows.test(body)) return true
-    return depth < 12 && [...body.matchAll(/\/(AXTB\d+) Do/g)].some((m) => {
-      const f = xobj(form.dict.get(N('Resources')), m[1])
-      return f instanceof PL.PDFRawStream && ink(f, depth + 1)
-    })
+  const SHOW = new Set(['Tj', 'TJ', "'", '"'])
+  const string = (a) => a?.t === 'str' && a.b.length > 0
+  const ink = (form, tr0 = 0, depth = 0) => {
+    let tr = tr0
+    const saved = []
+    for (const o of lex(PL.decodePDFRawStream(form).decode())) {
+      if (o.op === 'q') saved.push(tr)
+      else if (o.op === 'Q') tr = saved.pop() ?? tr
+      else if (o.op === 'Tr') tr = Number(o.args[0])
+      else if (SHOW.has(o.op) && tr !== 3 && tr !== 7 && o.args.some((a) => string(a) || (Array.isArray(a) && a.some(string))))
+        return true
+      else if (o.op === 'Do' && depth < 12 && /^AXTB\d+$/.test(o.args[0]?.v ?? '')) {
+        const f = xobj(form.dict.get(N('Resources')), o.args[0].v)
+        if (f instanceof PL.PDFRawStream && ink(f, tr, depth + 1)) return true
+      }
+    }
+    return false
   }
   const page = X.pages()[n - 1]
   return [...text(look(page.node.get(N('Contents')))).matchAll(/\/(AXTC\d+_\d+) Do/g)].map((m) => {
