@@ -666,8 +666,11 @@ export function makeBaker(R: Walker): Baker {
         if (op === 'Do' || op === 'BI') {
           const child = op === 'Do' ? forms?.get(`${pi}:${o.e}`) : undefined
           const b = child ? formBox(child, geo.ctm) : boxOf(geo.ctm, [0, 0, 1, 1, 0, 1, 1, 0])
-          if (!b || mine(b)) copy(o)
-          else st.inkOut++
+          if (!b || mine(b)) {
+            // (a form kept draws its text in the text state it inherits: written here first; #690, 4712685183)
+            if (child) sync(geo, true)
+            copy(o)
+          } else st.inkOut++
           return
         }
         copy(o)

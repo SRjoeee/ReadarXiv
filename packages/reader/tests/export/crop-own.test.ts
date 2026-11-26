@@ -266,6 +266,43 @@ describe("a crop's cut against #690's second review", () => {
   })
 })
 
+describe("a crop's cut against #690's third review", () => {
+  it('a form the crop keeps is drawn with the text state its caller set, written before it (4712685183)', async () => {
+    // (the page sets F1 at 10, then draws a form whose text inherits it, inside the member's element group)
+    const objects: Obj[] = [
+      '<< /Type /Catalog /Pages 2 0 R >>',
+      '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+      '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> /XObject << /Fm 6 0 R >> >> /Contents 4 0 R >>',
+      { dict: '', data: '/F1 10 Tf q /Fm Do Q' },
+      F1,
+      {
+        dict: '/Type /XObject /Subtype /Form /BBox [100 690 120 712] /Resources << /Font << /F1 5 0 R >> >>',
+        data: 'BT 102 700 Td (x=1) Tj ET',
+      },
+    ]
+    const a = pdf(objects)
+    const addOn: Record<number, Obj> = {
+      1: '<< /Type /Catalog /Pages 2 0 R /OCProperties << /OCGs [7 0 R 8 0 R 9 0 R] /D << /BaseState /ON /ON [7 0 R 8 0 R 9 0 R] >> >> >>',
+      3: '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> /XObject << /Fm 6 0 R >> /Properties << /E 7 0 R >> >> /Contents 10 0 R >>',
+      7: '<< /Type /OCG /Name (axt:1.1.e) >>',
+      8: '<< /Type /OCG /Name (axt:1.1.t) >>',
+      9: '<< /Type /OCG /Name (axt:1.1.l) >>',
+      10: { dict: '', data: '/F1 10 Tf /OC /E BDC q /Fm Do Q EMC' },
+    }
+    const file = await fileOf(
+      { bytes: update(a, addOn, 11), seam: a.length },
+      page([[101.6, 117.4, 'p0']]),
+      'translation',
+    )
+    const X = openObjects(file, { PL: L, objectsMax: 1e5, decodedMax: 1 << 24 })
+    const look = (v: unknown) => (v instanceof L.PDFRef ? X.lookup(v as PdfRef) : v)
+    const node = X.pages()[0]!.node
+    const xo = look((look(node.get(N('Resources'))) as PdfDict).get(N('XObject'))) as PdfDict
+    const crop = latin1(L.decodePDFRawStream(look(xo.get(N('AXTC1_1_0'))) as PdfRawStream).decode())
+    expect(crop).toMatch(/\/F1 10 Tf[\s\S]*\/Fm Do/)
+  })
+})
+
 describe.skipIf(!poppler)('a paragraph of two formulas and a label, exported: what poppler reads stands on ink', () => {
   const content = 'BT /F1 10 Tf 72 700 Td (Hello x=1 and y=2) Tj 228 0 Td ((1)) Tj ET'
   const wrapped =

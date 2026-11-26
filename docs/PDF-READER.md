@@ -2274,7 +2274,9 @@ in the page, after the slices' decoding (0.13 to 0.24 s); each file arXiv's size
   written again exactly as they stand there (to a millionth, the way along the line a `TJ` number), a graphics state saved
   and restored keeping whether they differ; a font a graphics state chooses (`gs` with `/Font`, written as it stands) is
   never written over by the content's `Tf`, and a font's name is written only in the resources it was chosen in: the text
-  state a form inherits is written by its caller before the form is drawn (#690's review). The crops' forms of a page name one resources object of the page (its resources
+  state a form inherits, baked or kept whole, is written by its caller before the form is drawn (#690's review). A path
+  object holding a graphics state operator between its construction and its painting (out of ISO 32000-1 §8.2's contract,
+  which allows the clip operators alone there) is bounded and written with its painting's CTM. The crops' forms of a page name one resources object of the page (its resources
   inline were 371 of the 453 KB of the paper's crop forms). On 2611.34872v1's side-by-side file: 8,392 characters with no ink
   under them to 9 (commas, hyphens, a bar and `\not`'s combining slash: a pixel of ink or none at 100 dpi; BabelDOC's file 0
   to 9 a page); on the four pairs 12,065 to 1,292, the rest mostly the figures' own text (Not yet, below); the files 0.04 to 5 %
