@@ -544,7 +544,7 @@ describe("a crop's Type 3 glyphs drawn through a font of its own (#688: poppler'
   // (the member laid: its element, the square, drawn as a crop at x 120 on the line at 700)
   const crop: Item = { s: 'a', x: 120, src: [1, 249, 599, 265, 615, 600], k: 1, piece: '1' }
   const page = (): Page => {
-    const p = laid([run('文', 72), crop])
+    const p = laid([run('\u6587', 72), crop])
     p.members[0]!.off = 3
     return p
   }
