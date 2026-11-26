@@ -96,6 +96,9 @@ export interface LedgerLine {
   x0: number
   x1: number
   letters: number
+  /** the first and the last glyph of TeX's line it is part of (texLinesOf: the walk's law over every glyph, owned or not), which
+   *  its scripts are read against (ink-units.ts scriptsOf); none from a ledger made before */
+  tex?: readonly [number, number]
 }
 /** an orphan line as listed: its page, text, letters and place */
 export interface Orphan {
@@ -185,6 +188,95 @@ type Family = ReturnType<typeof classifyFont>['fam']
 const LINE_DY = 0.6
 /** two glyphs on one line: the second no more than this many of its sizes right of the line's end (a word space, a tab stop) */
 const LINE_GAP = 4
+
+/** a line of the page's walk as its law reads it: its region, zone and entry, its baseline (its first glyph's), its largest size,
+ *  its start and its end */
+interface LineLaw {
+  region: number
+  zone: unknown
+  entry: unknown
+  y: number
+  size: number
+  x0: number
+  x1: number
+}
+/** a glyph's size as the walk reads it (none read as next to nothing) */
+const walkSize = (x: { size: number }) => Math.max(x.size || 0, 1e-6)
+/** whether a glyph goes on a line of the walk: in its region, zone and entry, its baseline within LINE_DY of the larger size
+ *  (a superscript, a subscript), not starting more than its size left of the line's start, no more than LINE_GAP of its sizes
+ *  right of the line's end */
+function goesOn(l: LineLaw, x: { y: number; x0: number; size: number }, region: number, zone: unknown, entry: unknown): boolean {
+  const size = walkSize(x)
+  return (
+    l.region === region &&
+    l.zone === zone &&
+    l.entry === entry &&
+    Math.abs(x.y - l.y) <= LINE_DY * Math.max(size, l.size) &&
+    x.x0 >= l.x0 - size &&
+    x.x0 - l.x1 <= LINE_GAP * size
+  )
+}
+/** whether a glyph where a biblatex entry's point stands (`entryAt`) takes the line before it into its entry: the entry's label,
+ *  a numeric style's [n], which the list's \item set right before the entry's point, on the line in its region */
+function entryTakes(l: LineLaw, x: { y: number; x0: number; size: number }, region: number, entry: unknown): boolean {
+  const size = walkSize(x)
+  return (
+    l.entry !== entry &&
+    l.region === region &&
+    Math.abs(x.y - l.y) <= LINE_DY * Math.max(size, l.size) &&
+    x.x0 - l.x1 <= LINE_GAP * size
+  )
+}
+
+/**
+ * TeX's line each glyph of a page stands in, as [its first glyph, its last]: the page's walk (ledgerOf: goesOn, entryTakes)
+ * over every glyph whoever owns it. A ledger line is the part of such a line no unit owns, cut where a unit's glyph stands;
+ * a script is set smaller than its LINE's text and off its baseline (ink-units.ts scriptsOf), and read over that part alone
+ * the text size is the scripts' own where they outnumber its letters (REVTeX's names: "Jens Eisert,¹,²,³ and Ravi", the
+ * part "1,2,3 and" no unit owns, five glyphs of the marks' size to three of the text's): none of them is found, and they were
+ * sent as text and drawn on the baseline at their size. `key`: each glyph's region, zone and entry, and where an entry's point
+ * stands, as the walk reads them
+ */
+export function texLinesOf(
+  G: readonly { y: number; x0: number; x1: number; size: number }[],
+  key: {
+    region: ArrayLike<number>
+    zones: readonly unknown[]
+    entries: readonly unknown[]
+    entryAt?: ArrayLike<unknown>
+  },
+): { from: Int32Array; to: Int32Array } {
+  const n = G.length,
+    from = new Int32Array(n),
+    to = new Int32Array(n)
+  let l: LineLaw | null = null,
+    start = 0
+  const end = (g: number) => to.fill(g - 1, start, g)
+  // (`!`: g in range by the loop's test; each key an entry a glyph)
+  for (let g = 0; g < n; g++) {
+    const x = G[g]!,
+      region = key.region[g]!,
+      zone = key.zones[g],
+      entry = key.entries[g]
+    if (l && key.entryAt?.[g] && entryTakes(l, x, region, entry)) {
+      l.entry = entry
+      l.zone = zone
+    }
+    if (l && !goesOn(l, x, region, zone, entry)) {
+      end(g)
+      l = null
+    }
+    if (!l) {
+      l = { region, zone, entry, y: x.y, size: walkSize(x), x0: x.x0, x1: x.x1 }
+      start = g
+    }
+    l.x1 = Math.max(l.x1, x.x1)
+    l.size = Math.max(l.size, walkSize(x))
+    from[g] = start
+  }
+  end(n)
+  return { from, to }
+}
 /** the foot stands this many of its sizes below every other glyph of its page, at least (own/stream.ts FOLIO_GAP's: \\footskip) */
 const FOOT_GAP = 1.5
 /** a formula's line: a math face's glyph, fewer than MATH_WORDS words of three letters in the text faces, and math faces this
@@ -583,32 +675,14 @@ export function ledgerOf(
         continue
       }
       const region = R.glyph[g]!,
-        size = Math.max(x.size || 0, 1e-6)
+        size = walkSize(x)
       // (a biblatex entry's label, a numeric style's [n], which the list's \item set right before the entry's point: the entry's
       // first line, the label before its point, `entryFrom`)
-      if (
-        line &&
-        entryAt[g] &&
-        line.entry !== entries[g] &&
-        line.region === region &&
-        Math.abs(x.y - line.y) <= LINE_DY * Math.max(size, line.size) &&
-        x.x0 - line.x1 <= LINE_GAP * size
-      ) {
+      if (line && entryAt[g] && entryTakes(line, x, region, entries[g])) {
         line.entry = entries[g] as number | null
         line.zone = zones[g] as Zone | null
       }
-      if (
-        line &&
-        !(
-          line.region === region &&
-          line.zone === zones[g] &&
-          line.entry === entries[g] &&
-          Math.abs(x.y - line.y) <= LINE_DY * Math.max(size, line.size) &&
-          x.x0 >= line.x0 - size &&
-          x.x0 - line.x1 <= LINE_GAP * size
-        )
-      )
-        close()
+      if (line && !goesOn(line, x, region, zones[g], entries[g])) close()
       if (!line) {
         const depth = Math.max(0, (region >> 1) - uncounted[g]!),
           body: boolean = (region & 1) === 1
@@ -731,9 +805,19 @@ export function ledgerOf(
         })
       }
     }
+    // (each line's TeX line, texLinesOf: the walk's law over every glyph of the page, a unit's too)
+    const tex = made.length ? texLinesOf(G, { region: R.glyph, zones, entries, entryAt }) : null
     for (const [l, rule] of made) {
       for (const g of l.gs) out[g] = rule.code
+      // (`!`: a line holds a glyph; `tex` read where a line was made)
+      let lo = tex!.from[l.gs[0]!]!,
+        hi = tex!.to[l.gs[0]!]!
+      for (const g of l.gs) {
+        lo = Math.min(lo, tex!.from[g]!)
+        hi = Math.max(hi, tex!.to[g]!)
+      }
       lines.push({
+        tex: [lo, hi],
         page: pi + 1,
         cls: rule.cls,
         gs: l.gs,
