@@ -816,6 +816,13 @@ describe('figure-lines: a path’s rows whose paragraphs a blank line ends, as t
     // (2610.37668v1's overlays, words of our own, two groups a blank line apart: no row goes on from the one above)
     expect(panel(['PSNR 29.49 dB', 'LPIPS 0.1086', null, 'FPS 69.7', 'SSIM 0.912'], 40)).toEqual([])
   })
+  it('joins no rows of a script without letter case, a blank line shown or not: no break shows its text going on', () => {
+    // (Hebrew words of our own, ragged, two paragraphs a blank line apart, and the same rows with no blank line: no row opens in
+    // lower case and none ends in a hyphen, so no run shows running text, as before the blank line was read)
+    const he = ['כל תמונה מסוננת', 'בשלושה קני מידה', 'והתוצאות נאספות']
+    expect(panel([he[0]!, he[1]!, null, he[2]!, he[0]!], 40)).toEqual([])
+    expect(panel([he[0]!, he[1]!, he[2]!], 40)).toEqual([])
+  })
   it('reads a row set apart for its taller ink as no blank line: its paragraph goes on across it', () => {
     // (row 1 holds a glyph of size 16: at the leading its ink would stand 3.2 into row 0's, so it is set 1 under it as the rows
     // at the leading are (TeX's push); a blank line later in the path. Row 0 to row 1 is one paragraph's break)
