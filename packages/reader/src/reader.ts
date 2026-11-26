@@ -680,6 +680,7 @@ export function openReader(
         fetch: host.fetch,
         paper,
         target: spec.target,
+        held: rt.state.doc,
         signal,
         wake: () => {
           if (!w.due) return new Promise<void>((go) => (w.go = go))
