@@ -94,6 +94,54 @@ export function shownAsOriginal(part: string | null | undefined, page: Page | nu
   if (part === null) return true
   return !!page && committed(page) && !page.members.some((m) => m.state === 'laid')
 }
+/** a member's state that is no translation held drawn as the original: laid; the reader's toggle (`left`); the paper's own keep
+ *  (`kept`); a page still waiting; `none`, no row, or a member another page lays (a paragraph's lines past its page's end) */
+const NOT_HELD: ReadonlySet<string> = new Set(['laid', 'left', 'kept', 'waiting', 'none'])
+/**
+ * The units a committed page draws as arXiv's though their row was accepted (PDF-READER §18.117), counted once each by the cause
+ * its member states: the prepare's (`unlocated`, `unwrapped`, `page`) or the lay's (`unfit`, `unproven`, a face, …). The rows'
+ * count (viewOf) calls them got and the page count (shownAsOriginal) only sees whole pages: told beside `lost`, state alone.
+ * `member` the part's member by ord (its unit id, `text`); a row that is none or failed is lost, counted there, not here
+ */
+export function heldAsOriginal(
+  pages: Iterable<Page>,
+  member: (ord: number) => { text?: unknown } | null,
+  held: ReadonlyMap<string, Row>,
+): Record<string, number> {
+  const seen = new Set<string>(),
+    out: Record<string, number> = {}
+  for (const page of pages) {
+    if (!committed(page)) continue
+    for (const m of page.members) {
+      if (NOT_HELD.has(m.state)) continue
+      const id = member(m.ord)?.text
+      if (typeof id !== 'string' || seen.has(id) || !held.get(id)?.ok) continue
+      seen.add(id)
+      out[m.state] = (out[m.state] ?? 0) + 1
+    }
+  }
+  return out
+}
+/** heldAsOriginal over the pages the composer laid in its generation now, pages 1..`pages`, read from the composer itself: a
+ *  page settled as arXiv's (nothing of its own hidden) is laid and never committed, so no event of commits holds it; a commit of
+ *  the generation before, shown muted until this one's, is not what the reader shows of this generation */
+export function heldOn(
+  composer: {
+    page(n: number): Page | null
+    laid(n: number): Page | null
+    muted(n: number): boolean
+    member(ord: number): { text?: unknown } | null
+  },
+  pages: number,
+  held: ReadonlyMap<string, Row>,
+): Record<string, number> {
+  const now: Page[] = []
+  for (let n = 1; n <= pages; n++) {
+    const p = composer.page(n)
+    if (p && !(composer.muted(n) && p === composer.laid(n))) now.push(p)
+  }
+  return heldAsOriginal(now, (o) => composer.member(o), held)
+}
 /** the run the view's rows come from, as the session states it: `own`, one that may bring rows is under way (the host's translate;
  *  our server's run of the target running or to start, as the document read for it says; one that failed and is asked again now,
  *  its open under way or due at once: `asking`); `ahead`, none of these, rows that arrive or ended while our server still has work

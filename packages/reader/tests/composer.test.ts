@@ -465,6 +465,23 @@ describe("what stays the original's", () => {
     expect(p3.members.map((m) => m.state)).toEqual(['laid', 'unwrapped'])
     expect(w.settled()(3)).toBe(false)
   })
+  it('a page whose every translated member is held as the original is told settled, its Page read by page(n) (Codex on #689)', async () => {
+    // (both rows accepted, both members' groups missing from the composed document: each member unwrapped, the page hides
+    // nothing and stays arXiv's; no commit, so no `laid`: what the reader counts as held reads it by `settled` and page(n))
+    const w = world({ pages: new Map([[1, partOf(1, [member(10, 1, 0), member(11, 1, 1)])]]), holds: () => false })
+    const told: { n: number }[] = []
+    const laid: number[] = []
+    w.composer.on('settled', (e) => told.push(e))
+    w.composer.on('laid', (e) => laid.push(e.n))
+    w.stack.setNear([1])
+    open(w, rowsOf('de', ['u10', 'u11'], true))
+    await settle()
+    expect(w.composer.laid(1)).toBeNull()
+    expect(w.settled()(1)).toBe(true)
+    expect(laid).toEqual([])
+    expect(told).toEqual([{ n: 1 }])
+    expect(w.composer.page(1)?.members.map((m) => m.state)).toEqual(['unwrapped', 'unwrapped'])
+  })
   it('a member left unwrapped keeps its links at A’s boxes, over the original’s text (Codex on #626)', async () => {
     // (Page.links held the unwrapped member's links where its translation, now not drawn, had moved them: over the original's
     // text, opening from words they are not on; the laid member's stay moved, a link of no member's at its box; each with its
