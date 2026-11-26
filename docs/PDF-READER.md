@@ -2194,8 +2194,9 @@ in the page, after the slices' decoding (0.13 to 0.24 s); each file arXiv's size
   PDFDocEncoding's 0x80 to 0xA0 resolved nowhere or to another name; each resolves through PDF.js now. None of the 245
   papers' 34,255 destination names is outside ASCII, whose bytes are as before).
 - **The bake** (`bake.ts`), on the engine's walk (`walkPage`: each show's codes and text state as the remover reads them),
-  read through the file's own `openObjects` view of the composed document (`openWalker`: each object parsed when asked,
-  nothing of the document loaded whole; the prepare's `openRemover` is the same walk over the object layer's whole load). A group turned off in the default view hides its ink, and PDF.js and poppler still read its text: on
+  read through the file's own `openObjects` view of the composed document (`openRemover` given the objects in place of the
+  bytes: each object parsed when asked, nothing of the document loaded whole; the prepare's, given the bytes, is the same walk
+  over the object layer's whole load). A group turned off in the default view hides its ink, and PDF.js and poppler still read its text: on
   1706.03762v7-zh, 1,408 of 1,408 words of the units laid were read on the translated pages. Baked, a show in a group the page
   turns off becomes the advance it made (a `TJ` of one number at the text state of the moment), a painted path and an image go,
   a clip stays a clip, state stays (a group off hides painting, never state: ISO 32000-1 §8.11.3.1), our own marks go; 62 of the
@@ -2239,7 +2240,7 @@ in the page, after the slices' decoding (0.13 to 0.24 s); each file arXiv's size
   this module alone (`scripts/check-boundary.mjs` `PACKAGE_WITHIN`).
 - **Memory**: one translated file of the 46 MB paper (2608.16117v1) in Chromium 153 with V8's heap capped at 256 MB
   (`--js-flags=--max-old-space-size=256`, a phone's heap stood in; the browser's own process tree sampled): made, its JS heap
-  at most 122 MB (158 MB while the walk loaded the document whole: `openWalker`, round 3), its renderer's resident memory at
+  at most 122 MB (158 MB while the walk loaded the document whole, before round 3), its renderer's resident memory at
   most 457 MB (457 before: the composed document's and the file's bytes, which the walk does not hold, are most of it). Both
   files of each of the four papers, heap uncapped: the JS heap's peak 88 to 166 MB (97 to 249 before).
 - **Not yet** (counted where it occurs): a file made with our server out of reach: it needs the original and the add-on read

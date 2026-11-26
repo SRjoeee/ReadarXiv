@@ -16,7 +16,7 @@
 import {
   appendSection,
   openObjects,
-  openWalker,
+  openRemover,
   type PdfArray,
   type PdfDict,
   type PdfLib,
@@ -196,8 +196,9 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
   const bound = { PL, objectsMax: 5_000_000, decodedMax: 1 << 30 }
   const X = openObjects(composed, bound)
   const XO = openObjects(composed.subarray(0, seam), bound)
-  // (the walk reads the composed document through X, as the file does: nothing of it loaded whole, engine openWalker)
-  const baker = makeBaker(openWalker(X, { PL }))
+  // (the walk reads the composed document through X, as the file does: nothing of it loaded whole, engine openRemover's
+  // walk over a document's objects)
+  const baker = makeBaker(await openRemover(X, { PL }))
   lap('objects')
   const { PDFRef, PDFDict, PDFArray, PDFName, PDFNumber, PDFRawStream } = PL
   const N = (n: string) => PDFName.of(n)

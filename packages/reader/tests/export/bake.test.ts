@@ -3,7 +3,7 @@
 // engine's walk (each show's codes and text state as the remover reads them): a show becomes the advance it made, a painted
 // path and an image go, a clip stays a clip, our own marks go. A document of our own (pdf-build.ts).
 import * as PL from '@cantoo/pdf-lib'
-import { openObjects, openRemover, openWalker, type PdfLib } from '@readarxiv/engine'
+import { openObjects, openRemover, type PdfLib } from '@readarxiv/engine'
 import { describe, expect, it } from 'vitest'
 import { type BakeStats, makeBaker, newBakeStats } from '../../src/export/bake.ts'
 import { latin1, pdf } from './pdf-build.ts'
@@ -92,7 +92,7 @@ describe("the bake reads the page through the export's own objects, nothing of t
       },
     } as unknown as PdfLib
     const X = openObjects(doc(), { PL: NoLoad, objectsMax: 1e5, decodedMax: 1 << 24 })
-    const W = openWalker(X, { PL: NoLoad })
+    const W = await openRemover(X, { PL: NoLoad })
     const st = newBakeStats()
     const out = makeBaker(W).bake(0, offG0, st)
     expect(out && latin1(out)).toBe(over)

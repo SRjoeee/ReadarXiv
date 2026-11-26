@@ -822,7 +822,7 @@ export interface RemoverOptions {
   heldMax?: number
   bytesMax?: number
 }
-/** the walk over one document (openWalker's, and the remover's): its pages walked and aligned, its objects read */
+/** the walk over one document (openRemover's, given the document's objects or its bytes): its pages walked and aligned, its objects read */
 export interface Walker {
   PL: PdfLib
   numPages: number
@@ -844,14 +844,12 @@ export interface Remover extends Walker {
   doc: PdfDocument
   ctx: PdfContext
 }
-/** what the walk reads a document through: an object by reference, each page (its reference and its dictionary, which
- *  answers its resources, its own or inherited), whether the document is encrypted */
-interface WalkSource {
-  lookup(ref: PdfObject): PdfObject | undefined
-  pages: PdfPage[]
-  encrypted: boolean
-}
 
+/** a document's objects read already (the engine's openObjects: each object parsed when it is asked, kept by its number) */
+export interface WalkObjects {
+  lookup(ref: PdfRef): PdfObject | undefined
+  pages(): { ref: PdfRef; node: PdfDict; inherited: { Resources?: PdfObject } }[]
+}
 /**
  * The remover over one document: arXiv's bytes, read by `PL` (@cantoo/pdf-lib's exports), `inflate` (bytes, limit -> bytes,
  * no more than limit + 1 of them, or a throw: Node's zlib.inflateSync with maxOutputLength, a browser's inflater stopped
@@ -859,58 +857,60 @@ interface WalkSource {
  * tolerant of a damaged zlib stream, as PDF.js reads one; null: none), `walkMax` (WALK_MAX), `heldMax` and `bytesMax`
  * (HELD_MAX, BYTES_MAX). Returns { numPages, encrypted, walkPage,
  * alignPage, decode }.
+ *
+ * Given the document's objects read already (`WalkObjects`) in place of its bytes, the walk alone (a Walker: no object layer's
+ * document, nothing loaded whole): the PDF download's bake reads the composed document so, through the view the file is
+ * written from (the reader package's export/chain.ts), where the whole load held a second copy of every object of a paper of
+ * 46 MB at once. The same walk over the same pages, resources and streams; openObjects refuses an encrypted document.
  */
-export async function openRemover(bytes: Uint8Array, o: RemoverOptions): Promise<Remover> {
-  const { PDFDocument, ParseSpeeds } = o.PL
-  // (parsed in one go: the object layer's default, ParseSpeeds.Slow, waits for a timer every 100 objects, a yield that keeps a
-  // page's events going; a child process that wraps our pages has none to keep, and only waited, 50 to 320 ms a paper on one core)
-  const doc = await PDFDocument.load(bytes, {
-    ignoreEncryption: true,
-    updateMetadata: false,
-    throwOnInvalidObject: false,
-    parseSpeed: ParseSpeeds.Fastest,
-  })
-  const ctx = doc.context
-  return {
-    doc,
-    ctx,
-    ...walkOver({ lookup: (r) => ctx.lookup(r), pages: doc.getPages(), encrypted: !!ctx.trailerInfo.Encrypt }, o),
-  }
-}
-
-/**
- * The walk over a document whose objects are read already (openObjects': each object parsed when it is asked, kept by its
- * number), nothing of it loaded whole: the PDF download's bake reads the composed document so, which openObjects has opened
- * for the file (the reader package's export/chain.ts), where openRemover's whole load held a second copy of every object
- * of a paper of 46 MB at once. The walk is openRemover's, over the same pages, resources and streams; openObjects refuses an
- * encrypted document. `o` as openRemover's.
- */
-export function openWalker(
-  objects: {
-    lookup(ref: PdfRef): PdfObject | undefined
-    pages(): { ref: PdfRef; node: PdfDict; inherited: { Resources?: PdfObject } }[]
-  },
-  o: RemoverOptions,
-): Walker {
-  const { PDFRef, PDFDict } = o.PL
-  const lookup = (v: PdfObject) => (v instanceof PDFRef ? objects.lookup(v as PdfRef) : v)
-  // (each page's dictionary as the walk reads a page's: itself, through its prototype, answering its resources as inherited)
-  const pages = objects.pages().map((p): PdfPage => {
-    const r = p.inherited.Resources === undefined ? undefined : lookup(p.inherited.Resources)
-    const node = Object.create(p.node) as PdfPageLeaf
-    node.Resources = () => (r instanceof PDFDict ? (r as PdfDict) : undefined)
-    return { ref: p.ref, node }
-  })
-  return walkOver({ lookup, pages, encrypted: false }, o)
-}
-
-function walkOver(
-  src: WalkSource,
+export async function openRemover(bytes: Uint8Array, o: RemoverOptions): Promise<Remover>
+export async function openRemover(objects: WalkObjects, o: RemoverOptions): Promise<Walker>
+export async function openRemover(
+  from: Uint8Array | WalkObjects,
   { PL, inflate = null, walkMax = WALK_MAX, heldMax = HELD_MAX, bytesMax = BYTES_MAX }: RemoverOptions,
-): Walker {
-  const { PDFName, PDFRef, PDFArray, PDFDict, PDFRawStream, PDFNumber, PDFStream, decodePDFRawStream } = PL
-  const { encrypted } = src
-  const look = (v: PdfObject | undefined) => (v instanceof PDFRef ? src.lookup(v) : v)
+): Promise<Remover | Walker> {
+  const {
+    PDFDocument,
+    PDFName,
+    PDFRef,
+    PDFArray,
+    PDFDict,
+    PDFRawStream,
+    PDFNumber,
+    PDFStream,
+    decodePDFRawStream,
+    ParseSpeeds,
+  } = PL
+  let loaded: { doc: PdfDocument; ctx: PdfContext } | null = null
+  let lookup: (ref: PdfObject) => PdfObject | undefined
+  let pages: PdfPage[]
+  let encrypted = false
+  if (from instanceof Uint8Array) {
+    // (parsed in one go: the object layer's default, ParseSpeeds.Slow, waits for a timer every 100 objects, a yield that keeps a
+    // page's events going; a child process that wraps our pages has none to keep, and only waited, 50 to 320 ms a paper on one
+    // core)
+    const doc = await PDFDocument.load(from, {
+      ignoreEncryption: true,
+      updateMetadata: false,
+      throwOnInvalidObject: false,
+      parseSpeed: ParseSpeeds.Fastest,
+    })
+    const ctx = doc.context
+    loaded = { doc, ctx }
+    encrypted = !!ctx.trailerInfo.Encrypt
+    lookup = (r) => ctx.lookup(r)
+    pages = doc.getPages()
+  } else {
+    lookup = (v) => (v instanceof PDFRef ? from.lookup(v as PdfRef) : v)
+    // (each page's dictionary as the walk reads a page's: itself, through its prototype, answering its resources as inherited)
+    pages = from.pages().map((p): PdfPage => {
+      const r = p.inherited.Resources === undefined ? undefined : lookup(p.inherited.Resources)
+      const node = Object.create(p.node) as PdfPageLeaf
+      node.Resources = () => (r instanceof PDFDict ? (r as PdfDict) : undefined)
+      return { ref: p.ref, node }
+    })
+  }
+  const look = (v: PdfObject | undefined) => (v instanceof PDFRef ? lookup(v) : v)
   const get = (d: PdfObject | undefined, k: string) => {
     if (!(d instanceof PDFDict) && !(d instanceof PDFStream)) return undefined
     const dict = d instanceof PDFStream ? d.dict : d
@@ -962,8 +962,6 @@ function walkOver(
     if ((decodedBytes += out.buffer.byteLength) <= 4 * bytesMax) decoded.set(st, out)
     return out
   }
-  const { pages } = src
-
   // ---- fonts: how a string splits into codes, and each code's width
   const fontCache = new Map<string | PdfObject | undefined, FontInfo>()
   function fontInfo(key: string | PdfObject | undefined, dict: PdfObject | undefined): FontInfo {
@@ -1427,7 +1425,19 @@ function walkOver(
     fontCache.clear()
   }
 
-  return { PL, numPages: pages.length, encrypted, walkPage, alignPage, decode, look, get, nameOf, release }
+  const walker: Walker = {
+    PL,
+    numPages: pages.length,
+    encrypted,
+    walkPage,
+    alignPage,
+    decode,
+    look,
+    get,
+    nameOf,
+    release,
+  }
+  return loaded ? { ...loaded, ...walker } : walker
 }
 
 /**
