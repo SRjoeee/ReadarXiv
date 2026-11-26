@@ -13,7 +13,19 @@ function run(text: string, x: number, y: number, size = 10): G[] {
   const out: G[] = []
   for (const ch of text) {
     if (ch !== ' ')
-      out.push({ u: ch, x0: x, x1: x + 5, ix0: x, ix1: x + 5, y, top: y + 0.7 * size, bottom: y - 0.2 * size, size, font: 'CMR10', fill: 0 })
+      out.push({
+        u: ch,
+        x0: x,
+        x1: x + 5,
+        ix0: x,
+        ix1: x + 5,
+        y,
+        top: y + 0.7 * size,
+        bottom: y - 0.2 * size,
+        size,
+        font: 'CMR10',
+        fill: 0,
+      })
     x += 5
   }
   return out
@@ -57,32 +69,68 @@ const shape = (u: { pieces: { t: string; s?: string; src?: string }[] } | undefi
 
 describe('a script read against TeX’s line, not against the part of it no unit owns', () => {
   it('marks raised and small outnumbering the word after them: the marks a raised script, the word the text', () => {
-    const [u] = line([['Ann Lee,', true], ['1,2,3', false, 3.6, 7], ['and', false], ['Bo Ray', true]])
+    const [u] = line([
+      ['Ann Lee,', true],
+      ['1,2,3', false, 3.6, 7],
+      ['and', false],
+      ['Bo Ray', true],
+    ])
     expect(shape(u)).toBe('<$^{1,2,3}$> and')
   })
   it('a lowered run outnumbering the word after it: a lowered script', () => {
-    const [u] = line([['Ann Lee,', true], ['i,j,k', false, -2, 7], ['and', false], ['Bo Ray', true]])
+    const [u] = line([
+      ['Ann Lee,', true],
+      ['i,j,k', false, -2, 7],
+      ['and', false],
+      ['Bo Ray', true],
+    ])
     expect(shape(u)).toBe('<$_{i,j,k}$> and')
   })
   it('a part of no script between owned words: its text, as before', () => {
-    const [u] = line([['Ann Lee,', true], ['and so on', false], ['Bo Ray', true]])
+    const [u] = line([
+      ['Ann Lee,', true],
+      ['and so on', false],
+      ['Bo Ray', true],
+    ])
     expect(shape(u)).toBe('and so on')
   })
   it('a part that is all scripts: no unit, as before (no text word)', () => {
-    expect(line([['Ann Lee', true], ['1,2', false, 3.6, 7], ['Bo Ray', true]])).toEqual([])
+    expect(
+      line([
+        ['Ann Lee', true],
+        ['1,2', false, 3.6, 7],
+        ['Bo Ray', true],
+      ]),
+    ).toEqual([])
   })
   it('a whole line no unit owns: its own text size, as before', () => {
-    const [u] = line([['Some text', false], ['1', false, 3.6, 7], ['here', false]])
+    const [u] = line([
+      ['Some text', false],
+      ['1', false, 3.6, 7],
+      ['here', false],
+    ])
     expect(shape(u)).toBe('Some text <$^{1}$> here')
   })
   it('a ledger of before, its line stated with no range: the part read alone, as before', () => {
-    const [u] = line([['Ann Lee,', true], ['1,2,3', false, 3.6, 7], ['and', false], ['Bo Ray', true]], false)
+    const [u] = line(
+      [
+        ['Ann Lee,', true],
+        ['1,2,3', false, 3.6, 7],
+        ['and', false],
+        ['Bo Ray', true],
+      ],
+      false,
+    )
     expect(shape(u)).toBe('1,2,3 and')
   })
 })
 
 describe('TeX’s line each glyph stands in (ledger.ts texLinesOf): the walk’s own law over every glyph, owned or not', () => {
-  const at = (n: number) => ({ region: new Array(n).fill(1), zones: new Array(n).fill(null), entries: new Array(n).fill(null) })
+  const at = (n: number) => ({
+    region: new Array(n).fill(1),
+    zones: new Array(n).fill(null),
+    entries: new Array(n).fill(null),
+  })
   it('one line through raised scripts and back to the baseline', () => {
     const G = [...run('Ann,', 100, 700), ...run('1,2', 125, 703.6, 7), ...run('and Bo', 145, 700)]
     const { from, to } = texLinesOf(G as never, at(G.length))

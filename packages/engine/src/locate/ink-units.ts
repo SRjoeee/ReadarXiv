@@ -1012,7 +1012,10 @@ export function inkUnitsOf(
   // (CHANGED: every line's words read first, a group of addresses over lines TeX set one after the other one kept run,
   // groupedAddresses)
   const lineWords = new Map(
-    (ledger.lines ?? []).map((L): [LedgerLine, Word[]] => [L, wordsOf(pages[L.page - 1]?.glyphs ?? [], L.gs, fams, L.tex)]),
+    (ledger.lines ?? []).map((L): [LedgerLine, Word[]] => [
+      L,
+      wordsOf(pages[L.page - 1]?.glyphs ?? [], L.gs, fams, L.tex),
+    ]),
   )
   groupedAddresses(pages, ledger.lines ?? [], lineWords)
   // (a running head's folio: a number at its line's end or start where the line's other words recur on another page with

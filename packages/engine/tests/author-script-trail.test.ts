@@ -181,7 +181,11 @@ describe('a page read as readPdf reads it (its coordinates read by getters, Page
       },
     ])
     lowComma(B, [7])
-    const L = locate(instrumentOf(paged(B), [author('Bob Ray,'), author('Cy Day')], [[0, -1, -1, -1, 1]]), B, align(B, B))
+    const L = locate(
+      instrumentOf(paged(B), [author('Bob Ray,'), author('Cy Day')], [[0, -1, -1, -1, 1]]),
+      B,
+      align(B, B),
+    )
     expect(trailOf(L, 0)).toEqual(['1,2,3'])
   })
 })

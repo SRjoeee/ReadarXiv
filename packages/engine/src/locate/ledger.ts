@@ -208,7 +208,13 @@ function walkSize(x: { size: number }): number {
 /** whether a glyph goes on a line of the walk: in its region, zone and entry, its baseline within LINE_DY of the larger size
  *  (a superscript, a subscript), not starting more than its size left of the line's start, no more than LINE_GAP of its sizes
  *  right of the line's end */
-function goesOn(l: LineLaw, x: { y: number; x0: number; size: number }, region: number, zone: unknown, entry: unknown): boolean {
+function goesOn(
+  l: LineLaw,
+  x: { y: number; x0: number; size: number },
+  region: number,
+  zone: unknown,
+  entry: unknown,
+): boolean {
   const size = walkSize(x)
   return (
     l.region === region &&
