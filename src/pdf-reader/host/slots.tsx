@@ -84,7 +84,7 @@ export function DownloadMenu({ controller, wide = false }: { controller: ReaderC
         <Icon node={Download} />
       </ToolbarButton>
       <Popover {...pop.popover} role="menu" label={R.download.name} className="!min-w-[160px]">
-        <MenuList key={pop.generation} kind="items" label={R.download.name} items={items} onClose={() => shut(pop.popover.id)} onAction={() => {}} onPick={which => { if (making) return; shut(pop.popover.id); void controller.download(which as 'translation' | 'side-by-side' | 'original') }} />
+        <MenuList key={pop.generation} kind="items" label={R.download.name} items={items} onClose={() => shut(pop.popover.id)} onAction={() => {}} onPick={which => { if (making && which !== 'original') return; shut(pop.popover.id); void controller.download(which as 'translation' | 'side-by-side' | 'original') }} />
       </Popover>
     </>
   )

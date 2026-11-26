@@ -193,6 +193,11 @@ describe('the download menu (the reader\'s design, §6.1)', () => {
     translation!.click()
     sideBySide!.click()
     expect(controller.download).not.toHaveBeenCalled()
+    // (arXiv's own PDF is no file made here: it opens while one is made, #685)
+    const original = [...container.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(r => r.textContent === R.download.original)
+    expect(original!.hasAttribute('aria-disabled')).toBe(false)
+    original!.click()
+    expect(controller.download.mock.calls).toEqual([['original']])
   })
 })
 

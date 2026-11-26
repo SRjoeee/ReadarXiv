@@ -31,7 +31,7 @@ const aborted = () => new ExportRefusal('aborted', 'the export was cancelled')
 
 /** an object read whole into `out` at `at` (its share told as it comes), held to its size and its digest */
 async function readWhole(
-  h: ReaderHandles,
+  h: Pick<ReaderHandles, 'fetch'>,
   o: { url: string; bytes: number; sha256: string },
   into: { out: Uint8Array<ArrayBuffer>; at: number },
   signal: AbortSignal,
@@ -42,17 +42,50 @@ async function readWhole(
   const out = into.out.subarray(into.at, into.at + o.bytes)
   let at = 0
   const reader = r.body.getReader()
-  for (;;) {
-    const { done, value } = await reader.read()
-    if (done) break
-    if (at + value.length > out.length) throw new Error(`${o.url}: more than its ${o.bytes} bytes`)
-    out.set(value, at)
-    at += value.length
-    told(value.length)
+  try {
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      if (at + value.length > out.length) throw new Error(`${o.url}: more than its ${o.bytes} bytes`)
+      out.set(value, at)
+      at += value.length
+      told(value.length)
+    }
+  } catch (e) {
+    reader.cancel().catch(() => {})
+    throw e
   }
   if (at !== out.length) throw new Error(`${o.url}: ${at} of its ${o.bytes} bytes`)
   if (hex(await crypto.subtle.digest('SHA-256', out)) !== o.sha256)
     throw new Error(`${o.url}: not the bytes its digest names`)
+}
+
+/** the original and the add-on read whole into one composed document, the add-on after arXiv's bytes (no copy of either is
+ *  made), as one operation: a read that fails lets the other go (the operation's own controller, which the export's signal
+ *  also stops), and its failure is told only once both reads have stopped, so that nothing is left reading after it (#685) */
+export async function readComposed(
+  h: Pick<ReaderHandles, 'fetch' | 'original' | 'addOn'>,
+  signal: AbortSignal,
+  told: (got: number) => void,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const op = new AbortController()
+  const stop = () => op.abort(signal.reason)
+  if (signal.aborted) stop()
+  else signal.addEventListener('abort', stop, { once: true })
+  const composed = new Uint8Array(h.original.bytes + h.addOn.bytes)
+  let failure: { e: unknown } | null = null
+  const read = (o: ReaderHandles['original'], at: number) =>
+    readWhole(h, o, { out: composed, at }, op.signal, told).catch((e: unknown) => {
+      failure ??= { e }
+      op.abort(e)
+    })
+  try {
+    await Promise.allSettled([read(h.original, 0), read(h.addOn, h.original.bytes)])
+  } finally {
+    signal.removeEventListener('abort', stop)
+  }
+  if (failure) throw (failure as { e: unknown }).e
+  return composed
 }
 
 /** the Latin ligatures a face may hold at their compatibility code points, which the chain draws for their letters */
@@ -73,12 +106,10 @@ export async function exportFromReader(
     got += n
     bytesShare(got / total)
   }
-  // (both read into the one composed document, the add-on after arXiv's bytes: no copy of either is made)
-  const composed = new Uint8Array(total)
-  await Promise.all([
-    readWhole(h, h.original, { out: composed, at: 0 }, signal, told),
-    readWhole(h, h.addOn, { out: composed, at: h.original.bytes }, signal, told),
-  ])
+  const composed = await readComposed(h, signal, told).catch((e: unknown) => {
+    if (signal.aborted) throw aborted()
+    throw e
+  })
   if (signal.aborted) throw aborted()
   // ---- the pages
   const pagesShare = share(0.45, 0.75)
