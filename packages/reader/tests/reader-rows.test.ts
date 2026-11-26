@@ -101,9 +101,12 @@ function server(...layers: Layer[]) {
   const held = new Map<string, () => void>()
   const refused = new Set<string>()
   const asked: string[] = []
+  /** the follows' whole addresses, in order */
+  const followed: string[] = []
   const fetch = async (url: string, init?: RequestInit): Promise<Response> => {
     const path = url.split('?')[0] as string
     asked.push(path)
+    if (path.startsWith('/api/v2/papers/')) followed.push(url)
     if (path.startsWith('/api/v2/o/arxiv/')) return original.fetch(url, init)
     if (path.startsWith('/api/v2/papers/'))
       return new Response(
@@ -125,6 +128,7 @@ function server(...layers: Layer[]) {
   return {
     fetch,
     asked,
+    followed,
     serve(o: { bytes: Uint8Array; ref: { path: string } }) {
       objects.set(o.ref.path, o.bytes)
     },
@@ -466,5 +470,21 @@ describe("R3's pace: the session's own for asking again, a second doubled to thi
     s.tell(docOf(4, { state: 'done', attempt: 2, rows: [next.ref], done: N, total: N }), { end: true })
     await pass()
     expect(r.state().rows).toMatchObject({ s: 'complete', got: N, total: N, lost: 0 })
+  })
+})
+
+describe("the follow names the target's translation the session holds (`c`)", () => {
+  it('a follow begun for a target the held document names a translation for asks for that one; for a target it names none for, none', async () => {
+    const s = server()
+    const r = await opened(s)
+    expect(s.followed[0]).not.toContain('c=')
+    r.do({ do: 'set', prefs: { target: 'ja' } })
+    await pass()
+    r.do({ do: 'set', prefs: { target: TARGET } })
+    await pass()
+    const [toOther, back] = s.followed.slice(-2)
+    expect(toOther).toContain('t=ja')
+    expect(toOther).not.toContain('c=')
+    expect(back).toMatch(new RegExp(`[?&]t=${TARGET}&c=0e2e00000000$`))
   })
 })
