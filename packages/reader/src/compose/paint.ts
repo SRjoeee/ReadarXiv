@@ -599,6 +599,24 @@ export function holeOf(area: DetailArea, vp: Pick<PageViewport, 'width' | 'heigh
   return `polygon(evenodd, 0% 0%, 100% 0%, 100% 100%, 0% 100%, 0% 0%, ${p(l, t)}, ${p(r, t)}, ${p(r, b)}, ${p(l, b)}, ${p(l, t)})`
 }
 
+/** a canvas taken out of the document and its bitmap let go */
+export function dropCanvas(c: HTMLCanvasElement) {
+  c.remove()
+  c.width = 0
+  c.height = 0
+}
+/** a page's detail crops let go (`over` its overlay), its base's crops whole again */
+export function detailAway(over: HTMLElement) {
+  const det = over.querySelector<HTMLCanvasElement>(':scope > canvas.axt-crops-detail')
+  if (det) dropCanvas(det)
+  over.querySelector<HTMLCanvasElement>(':scope > canvas.axt-crops')?.style.removeProperty('clip-path')
+}
+/** the pixels a page's detail crops hold */
+export function detailPixels(over: HTMLElement): number {
+  const det = over.querySelector<HTMLCanvasElement>(':scope > canvas.axt-crops-detail')
+  return det ? det.width * det.height : 0
+}
+
 /** a box of device pixels on a crops' grid */
 interface PxBox {
   x: number

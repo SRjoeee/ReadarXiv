@@ -54,10 +54,13 @@ import {
   cropsAway,
   cropsBack,
   cropsFor,
+  cropsFree,
+  detailAway,
   detailBoxOf,
   detailCropsFor,
+  detailPixels,
+  dropCanvas,
   holeOf,
-  cropsFree,
   type Rounding,
   svgOf,
   turned,
@@ -395,7 +398,7 @@ export function createComposer(o: ComposerOptions): Composer {
         detail: (el, at, area) => cropsDetail(page, doc, g, el, at, area),
         // (a far page's crops kept as a copy of their box, back in the task it returns: docs/PDF-READER.md §11.8; its detail's,
         // cut to their box already, kept as they are with the page view's detail canvas they match, and counted)
-        away: (el) => cropsAway(el) + detailPixelsOf(el),
+        away: (el) => cropsAway(el) + detailPixels(el),
         back: (el, at) => cropsBack(el, cropGridOf(at).px),
         free: (el) => {
           releaseText(el)
@@ -512,22 +515,6 @@ export function createComposer(o: ComposerOptions): Composer {
     if (was && was !== next) dropCanvas(was)
     details.push({ n: at.n, ms: performance.now() - t0, px: next ? next.width * next.height : 0, srcPx: told.srcPx })
     if (details.length > 64) details.shift()
-  }
-  /** a page's detail crops let go, its base's crops whole again */
-  function detailAway(el: HTMLElement) {
-    const det = el.querySelector<HTMLCanvasElement>(':scope > canvas.axt-crops-detail')
-    if (det) dropCanvas(det)
-    el.querySelector<HTMLCanvasElement>(':scope > canvas.axt-crops')?.style.removeProperty('clip-path')
-  }
-  /** the pixels a page's detail crops hold */
-  function detailPixelsOf(el: HTMLElement): number {
-    const det = el.querySelector<HTMLCanvasElement>(':scope > canvas.axt-crops-detail')
-    return det ? det.width * det.height : 0
-  }
-  function dropCanvas(c: HTMLCanvasElement) {
-    c.remove()
-    c.width = 0
-    c.height = 0
   }
 
   // ---------------------------------------------------------------- laying, one page at a time

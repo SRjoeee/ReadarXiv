@@ -373,6 +373,15 @@ export interface Stack {
   dispose(): void
 }
 
+/** drawing d's crops cut for its page view's detail canvas, standing over `area`, or let go (null): its overlay's `detail`
+ *  (docs/PDF-READER.md §11.8); nothing where it has none */
+function detailCut(d: Drawing, n: number, area: DetailArea | null): Promise<void> | undefined {
+  const c = d.content
+  if (!d.view || !d.over || !c || !(c.kind === undefined || c.kind === 'view') || !c.detail) return
+  d.detailCrops = area !== null
+  return c.detail(d.over, { n, view: d.view, viewport: d.view.viewport, signal: d.ac.signal }, area)
+}
+
 export function createStack(o: StackOptions): Stack {
   const { scroller, kit, scheduler, clock } = o
   // (a scroller the host's chrome renders holds its own `.pdfViewer`: taken, and left in place, emptied, at the end)
@@ -1029,37 +1038,23 @@ export function createStack(o: StackOptions): Stack {
           maxY = (Math.min(view.bottom, r.bottom) - r.top) / k
         const whole = minX <= 0 && minY <= 0 && maxX >= r.width / k - 0.5 && maxY >= r.height / k - 0.5
         pv.updateVisibleArea(whole ? null : ({ minX, minY, maxX, maxY } as never))
-        const c = d.content
         // (no detail canvas now, the page in view whole or under the cap: the crops cut for one go with it)
-        if (!pv.detailView && d.detailCrops && d.over && c && isView(c) && c.detail) {
-          d.detailCrops = false
-          void c.detail(d.over, { n: s.n, view: pv, viewport: pv.viewport, signal: d.ac.signal }, null)
-        }
+        if (!pv.detailView && d.detailCrops) void detailCut(d, s.n, null)
         const detail = pv.detailView as unknown as {
           renderingState: number
           canvas?: HTMLCanvasElement | null
           draw(): Promise<unknown>
         } | null
         if (detail && detail.renderingState === INITIAL) {
+          const stands = () => s.shown === d && pv.detailView === (detail as never)
           const job: Job = {
-            rank: () => (s.shown === d && pv.detailView === (detail as never) && s.inView ? 0 : null),
+            rank: () => (stands() && s.inView ? 0 : null),
             order: () => s.n + 0.5,
             run: async () => {
               await detail.draw()
               // (the crops in view cut at the detail canvas's resolution, as it stands: docs/PDF-READER.md §11.8)
               const area = detail.canvas ? detailAreaOf(detail.canvas, pv.viewport) : null
-              if (
-                s.shown === d &&
-                pv.detailView === (detail as never) &&
-                area &&
-                d.over &&
-                c &&
-                isView(c) &&
-                c.detail
-              ) {
-                await c.detail(d.over, { n: s.n, view: pv, viewport: pv.viewport, signal: d.ac.signal }, area)
-                d.detailCrops = true
-              }
+              if (stands() && area) await detailCut(d, s.n, area)
               if (s.shown === d) tell('drawn', { n: s.n, scale, key: d.key, detail: true })
             },
           }
