@@ -440,6 +440,17 @@ export function makeBaker(R: Walker): Baker {
    *  Kept for one page's crops at a time: a form's container is its page's walk's, and a figure's form can be megabytes */
   const lexed = new Map<Container, Piece[]>()
   let lexedPage = -1
+  /** each show's place in a container (codesAt's) and the state before it, by its piece and its operator's end: one page's at
+   *  a time, as `lexed` (the text matrix is then moved by no later pass: what reads it reads these) */
+  const places = new Map<Container, Map<string, { pre: Geo; at: { seg: Box; box: Box | null }[] | null }>>()
+  const placesOf = (c: Container) => {
+    let m = places.get(c)
+    if (!m) {
+      m = new Map()
+      places.set(c, m)
+    }
+    return m
+  }
   const piecesOf = (c: Container): Piece[] => {
     const had = lexed.get(c)
     if (had) return had
@@ -655,8 +666,12 @@ export function makeBaker(R: Walker): Baker {
         // (the place state, where a crop is cut by place: every operator's, whatever group it stands in)
         let at: { seg: Box; box: Box | null }[] | null = null
         const cut = !!within && !dropping() && op !== 'BDC' && op !== 'BMC' && op !== 'EMC'
-        // (the state before the operator, which a left-out state is written again from)
-        const pre: Geo = within && SHOW.has(op) ? { ...geo } : geo
+        // (a show's place, and the state before it, which a left-out state is written again from: read by the page's first
+        // crop's pass, every show's, and kept for its other crops' (a page of 2,195 crops walked each show's codes 2,195 times))
+        const placed = within && SHOW.has(op) ? placesOf(cont) : null
+        const key = placed ? `${pi}:${o.e}` : ''
+        let had = placed?.get(key)
+        let pre: Geo = within && SHOW.has(op) && !had ? { ...geo } : geo
         if (within) {
           if (!SHOW.has(op) || op === "'" || op === '"') track(geo, o)
           // (the lean form writes no text state and no line of the content's own: each show it writes is preceded by them, as
@@ -676,8 +691,14 @@ export function makeBaker(R: Walker): Baker {
           if (op === 'q') saved.push(dirty.state)
           if (op === 'Q') dirty.state = saved.pop() ?? dirty.state
           if (op === 'BT') dirty.pos = false
-          if (SHOW.has(op))
-            at = codesAt(geo, shows.get(`${pi}:${o.e}`), arrayOf(o), cut ? fontBox(geo.font, res) : null, cut)
+          if (placed) {
+            if (!had) {
+              had = { pre, at: codesAt(geo, shows.get(key), arrayOf(o), fontBox(geo.font, res), true) }
+              placed.set(key, had)
+            }
+            pre = had.pre
+            at = had.at
+          }
         }
         if (cut) {
           bakeCut(o, at, pre)
@@ -840,6 +861,7 @@ export function makeBaker(R: Walker): Baker {
       st.pages++
       if (pageIndex !== lexedPage) {
         lexed.clear()
+        places.clear()
         lexedPage = pageIndex
       }
       const forms: BakedForm[] = []
