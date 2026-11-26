@@ -2240,9 +2240,10 @@ in the page, after the slices' decoding (0.13 to 0.24 s); each file arXiv's size
   this module alone (`scripts/check-boundary.mjs` `PACKAGE_WITHIN`).
 - **Memory**: one translated file of the 46 MB paper (2608.16117v1) in Chromium 153 with V8's heap capped at 256 MB
   (`--js-flags=--max-old-space-size=256`, a phone's heap stood in; the browser's own process tree sampled): made, its JS heap
-  at most 122 MB (158 MB while the walk loaded the document whole, before round 3), its renderer's resident memory at
-  most 457 MB (457 before: the composed document's and the file's bytes, which the walk does not hold, are most of it). Both
-  files of each of the four papers, heap uncapped: the JS heap's peak 88 to 166 MB (97 to 249 before).
+  at most 121 MB (158 MB while the walk loaded the document whole, before round 3), its renderer's resident memory at
+  most 458 MB (457 before: the composed document's and the file's bytes, which the walk does not hold, are most of it). Both
+  files of each of the four papers, heap uncapped: the JS heap's peak 97 to 161 MB (97 to 249 before), the renderer's 341 to
+  471 MB (335 to 616 before); each file byte for byte the one made before round 3.
 - **Not yet** (counted where it occurs): a file made with our server out of reach: it needs the original and the add-on read
   whole, and the machine's store keeps what the reader read, by ranges (`src/pdf-reader/host/stored-fetch.ts`): a whole copy
   only of an object a file was made of before, and none of arXiv's own address; the file fails, its retry offered. Ligatures
