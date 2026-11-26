@@ -37,8 +37,27 @@ vi.mock('../src/panes/panes.ts', async (real) => ({
       },
     ),
 }))
-// (the reader's composing code never comes in: nothing is laid here, and its composer would read the stood-in panes)
-vi.mock('../src/compose/composer.ts', () => new Promise(() => {}))
+// (the reader's composer and highlight stood in for too: nothing is laid here, and the real ones would read the stood-in panes)
+let composers = 0
+vi.mock('../src/compose/composer.ts', () => ({
+  createComposer: () => {
+    composers++
+    return {
+      on: () => () => {},
+      probe: () => ({ laidPages: 0 }),
+      page: () => null,
+      member: () => null,
+      setDocuments: () => {},
+      setLayer: () => {},
+      setShown: () => {},
+      setClasses: () => {},
+      dispose: () => {},
+    }
+  },
+}))
+vi.mock('../src/compose/highlight.ts', () => ({
+  createHighlight: () => ({ on: () => () => {}, lit: () => null, setOn: () => {}, dispose: () => {} }),
+}))
 const { openReader } = await import('../src/reader.ts')
 
 const SEG = '2600_00001v1'
@@ -104,6 +123,7 @@ async function pass(ms = 0) {
 }
 beforeEach(() => {
   asked.length = 0
+  composers = 0
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] })
 })
 afterEach(() => {
@@ -139,6 +159,10 @@ async function opened(s: ReturnType<typeof server>) {
     }),
   )
   await pass(2000)
+  // (the reader's code in, its composer the stand-in: what the reader does after it is done before the test goes on)
+  for (let i = 0; i < 20_000 && composers === 0; i++) await new Promise<void>((r) => setImmediate(r))
+  expect(composers).toBe(1)
+  await pass()
   return reader
 }
 
