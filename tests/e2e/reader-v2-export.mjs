@@ -4,10 +4,49 @@
 // made's share in the capsule with its cancel; a cancel saving nothing; a failure (the add-on not read whole) with its retry,
 // which makes the file; and the same from the reading options in a window too narrow for the bar's own menu. The stand-in
 // serves its face as WOFF2, as our server serves its slices, so that each file decodes them as a host's reader does (PDF.js's
-// worker over the reader's own port, no global worker set: #686), and two files in a row leave the page's workers as they were.
+// worker over the reader's own port, no global worker set: #686), and two files in a row leave the page's workers as they were;
+// and a page whose crops' ink sits inside a form (page-in-form.mjs) gives a file that draws every crop's ink (#crops-sharp).
 // Called by reader-v2.mjs with its context, its stand-in and its reporting.
 import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { join } from 'node:path'
+import { lex, openObjects } from '../../packages/engine/src/index.ts'
+import { withPageInForm } from './lib/page-in-form.mjs'
+
+const PL = createRequire(import.meta.url)('@cantoo/pdf-lib')
+/** each crop a saved file draws on page `n` (its crop forms, AXTC…), and whether it draws ink: a show of a string, in a render
+ *  mode that paints (neither 3, invisible, nor 7, a clip alone), in its form or in a form it draws, down the copies the export
+ *  bakes (AXTB…), the mode carried through q and Q and into a form; the per-crop presence the lab reads by pixel */
+function cropsIn(path, n) {
+  const X = openObjects(new Uint8Array(readFileSync(path)), { PL, objectsMax: 1e6, decodedMax: 1 << 26 })
+  const N = (k) => PL.PDFName.of(k)
+  const look = (v) => (v instanceof PL.PDFRef ? X.lookup(v) : v)
+  const text = (st) => new TextDecoder('latin1').decode(PL.decodePDFRawStream(st).decode())
+  const xobj = (res, name) => look(look(look(res)?.get(N('XObject')))?.get(N(name)))
+  const SHOW = new Set(['Tj', 'TJ', "'", '"'])
+  const string = (a) => a?.t === 'str' && a.b.length > 0
+  const ink = (form, tr0 = 0, depth = 0) => {
+    let tr = tr0
+    const saved = []
+    for (const o of lex(PL.decodePDFRawStream(form).decode())) {
+      if (o.op === 'q') saved.push(tr)
+      else if (o.op === 'Q') tr = saved.pop() ?? tr
+      else if (o.op === 'Tr') tr = Number(o.args[0])
+      else if (SHOW.has(o.op) && tr !== 3 && tr !== 7 && o.args.some((a) => string(a) || (Array.isArray(a) && a.some(string))))
+        return true
+      else if (o.op === 'Do' && depth < 12 && /^AXTB\d+$/.test(o.args[0]?.v ?? '')) {
+        const f = xobj(form.dict.get(N('Resources')), o.args[0].v)
+        if (f instanceof PL.PDFRawStream && ink(f, tr, depth + 1)) return true
+      }
+    }
+    return false
+  }
+  const page = X.pages()[n - 1]
+  return [...text(look(page.node.get(N('Contents')))).matchAll(/\/(AXTC\d+_\d+) Do/g)].map((m) => {
+    const f = xobj(page.node.get(N('Resources')), m[1])
+    return { name: m[1], ink: f instanceof PL.PDFRawStream && ink(f) }
+  })
+}
 
 /** the menu's words in the interface's language the run uses (zh-CN): the button, the rows, the capsule's chips */
 const W = { menu: '下载', translation: '译文 PDF', sideBySide: '对照 PDF', cancel: '取消', retry: '重试', options: '阅读选项' }
@@ -48,9 +87,9 @@ export async function exportChecks(t) {
         await page.waitForTimeout(200)
         return { failed: said.join(' | ') || r.why }
       }
-      const path = join(SHOTS, `export-${r.d.suggestedFilename()}`)
+      const path = join(SHOTS, `export-${o.tag ?? ''}${r.d.suggestedFilename()}`)
       await r.d.saveAs(path)
-      return { name: r.d.suggestedFilename(), ...(await readBack(path)) }
+      return { name: r.d.suggestedFilename(), path, ...(await readBack(path)) }
     } finally {
       page.off('console', heard)
     }
@@ -99,6 +138,8 @@ export async function exportChecks(t) {
     const s = await readerState(page)
     check('the translation\'s file: saved as <id>.<target>.pdf, its translation read as text (the echo\'s), arXiv\'s page width',
       !!tr && tr.name === `${PAPER}v${t.fixture.version}.${s.prefs?.target}.pdf` && /\[echo\]/.test(tr.text) && tr.width < 700, JSON.stringify(tr && (tr.failed ? tr : { name: tr.name, pages: tr.pages, width: tr.width, text: tr.text.slice(0, 80) })))
+    // (every crop of the file's page 1 drawn with its ink: the original fixture's, whose crops' groups are marked in the page)
+    const cropsHere = tr?.path ? cropsIn(tr.path, 1) : []
     const sbs = await press(page, barMenu(page), W.sideBySide)
     check('the side-by-side file: saved as <id>.<target>.side-by-side.pdf, as many pages, each twice as wide, the translation read on it',
       !!sbs?.name && !!tr?.name && sbs.name.endsWith(`.${s.prefs?.target}.side-by-side.pdf`) && sbs.pages === tr.pages && Math.abs(sbs.width - 2 * tr.width) <= 1 && /\[echo\]/.test(sbs.text), JSON.stringify(sbs && (sbs.failed ? sbs : { name: sbs.name, pages: sbs.pages, width: sbs.width })))
@@ -161,6 +202,23 @@ export async function exportChecks(t) {
     }, W.sideBySide)
     check('below 500 px: the reading options\' download row offers both files, and the side-by-side one is saved from it', !!viaOptions?.name && viaOptions.name.endsWith('.side-by-side.pdf'), JSON.stringify(viaOptions && (viaOptions.failed ? viaOptions : { name: viaOptions.name, width: viaOptions.width })))
     await narrow.close()
+
+    // a page whose crops' ink sits inside a form (the add-on's figure forms: 2611.18114v1 p26's 7×7, 1,015 crops of the 245):
+    // every crop the file draws there draws its ink, as many as where the same crops' ink sits in the page itself
+    await clearPaperStore()
+    api.use(withPageInForm(t.fixture, 1))
+    const inForm = await openReader({ mode: 'bilingual' })
+    await translated(inForm)
+    const formFile = await press(inForm, barMenu(inForm), W.translation, { tag: 'in-form-' })
+    const cropsThere = formFile?.path ? cropsIn(formFile.path, 1) : []
+    check(
+      'a page whose crops\' ink sits inside a form: the file draws every crop with its ink, as many as where it sits in the page',
+      cropsHere.length > 0 && cropsHere.every((c) => c.ink) && cropsThere.length === cropsHere.length && cropsThere.every((c) => c.ink),
+      JSON.stringify({ inThePage: cropsHere, inAForm: cropsThere, failed: formFile?.failed }),
+    )
+    await inForm.close()
+    api.use(t.fixture)
+    await clearPaperStore()
   }
   api.set({ whole: null })
 }

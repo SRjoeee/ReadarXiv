@@ -318,6 +318,13 @@ export function v2Api({ fixtures = [loadFixture()], base = 'https://readarxiv.co
     release,
     /** an object put where GET /api/v2/o/ reads it (the contract's `put`: `v2/` + path) */
     async put(path, bytes) { objects.set(path.replace(/^v2\//, ''), bytes) },
+    /** a fixture of a paper served from now in place of the one of its id (page-in-form.mjs's stand-ins): its objects under
+     *  its own prepare's paths, its catalog the document's from its next answer */
+    use(f) {
+      papers.set(f.paper, f)
+      const pv = segOf(f.paper, f.version)
+      for (const [sha, bytes] of f.objects) objects.set(`p/${pv}/${prepOf(f)}/${sha}`, bytes)
+    },
     /** the contract's papers: one the gateway knows, at its latest version, and another; one it does not */
     known: { paper: fixtures[0].paper, latest: fixtures[0].version, also: fixtures[1]?.paper ?? fixtures[0].paper },
     unknown: '2699.99999',

@@ -215,3 +215,80 @@ describe("a stream's decoding parameters named by reference, read through the ex
     }
   })
 })
+
+describe("a show that clips stays a clip (#688's review, Devin 4709451136)", () => {
+  // (render modes 4 to 7 add the glyphs' outlines to the clip: a group off hides painting, never the clip, and a crop's free ink
+  // dropped keeps the clip its own ink is drawn through. As an advance, or invisible (mode 3), the clip was lost)
+  const clipDoc = () =>
+    pdf([
+      '<< /Type /Catalog /Pages 2 0 R /OCProperties << /OCGs [6 0 R 7 0 R] /D << /BaseState /ON >> >> >>',
+      '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+      '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> /Properties << /G0 6 0 R /G1 7 0 R >> >> /Contents 4 0 R >>',
+      {
+        dict: '',
+        data: [
+          'BT /F1 50 Tf 4 Tr 72 600 Td /OC /G0 BDC (Mask) Tj EMC ET',
+          'BT /F1 50 Tf 7 Tr 72 500 Td (Free) Tj ET',
+          '/OC /G1 BDC 0 g 60 490 300 160 re f EMC',
+        ].join('\n'),
+      },
+      `<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /FirstChar 32 /LastChar 126 /Widths [${widths.join(' ')}] >>`,
+      '<< /Type /OCG /Name (axt:1.1.t) >>',
+      '<< /Type /OCG /Name (axt:2.1.e) >>',
+    ])
+  const bakedClip = async (ours: (p: string) => boolean | null, dropFree: boolean) => {
+    const R = await openRemover(clipDoc(), { PL: PL as unknown as PdfLib })
+    const st = newBakeStats()
+    const out = makeBaker(R).bake(0, ours, st, dropFree)
+    return latin1(out as Uint8Array)
+  }
+  it('in a group turned off: its outlines clip, nothing painted, the mode restored after it', async () => {
+    const s = await bakedClip(offG0, false)
+    expect(s).toMatch(/7 Tr\s+\(Mask\) Tj\s+4 Tr/)
+  })
+  it("in a crop's free ink: the clip its own ink is drawn through kept", async () => {
+    const s = await bakedClip((p) => (p === 'G1' ? false : p === 'G0' ? true : null), true)
+    expect(s).toMatch(/7 Tr\s+\(Mask\) Tj\s+4 Tr/)
+    expect(s).toMatch(/7 Tr\s+\(Free\) Tj\s+7 Tr/)
+    expect(s).toContain('60 490 300 160 re')
+  })
+})
+
+describe("a page's forms are kept for its own crops alone (#688's review, Devin 4709451498)", () => {
+  // (two pages; each crop's source reads its page's forms: kept for the page read last, let go once another page is read, a
+  // page's own shows kept for its bake)
+  const twoPages = () =>
+    pdf([
+      '<< /Type /Catalog /Pages 2 0 R /OCProperties << /OCGs [6 0 R] /D << /BaseState /ON >> >> >>',
+      '<< /Type /Pages /Kids [3 0 R 7 0 R] /Count 2 >>',
+      '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> /Properties << /G0 6 0 R >> /XObject << /Fm 8 0 R >> >> /Contents 4 0 R >>',
+      { dict: '', data: 'q /Fm Do Q' },
+      `<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /FirstChar 32 /LastChar 126 /Widths [${widths.join(' ')}] >>`,
+      '<< /Type /OCG /Name (axt:1.1.e) >>',
+      '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> /Properties << /G0 6 0 R >> /XObject << /Fm 8 0 R >> >> /Contents 4 0 R >>',
+      {
+        dict: '/Type /XObject /Subtype /Form /BBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> /Properties << /G0 6 0 R >> >>',
+        data: 'BT /F1 10 Tf 72 700 Td (Hello) Tj /OC /G0 BDC ( x=1 ) Tj EMC ET',
+      },
+    ])
+  it('reads a page again for a crop once another page was read, and bakes it the same', async () => {
+    const R = await openRemover(twoPages(), { PL: PL as unknown as PdfLib })
+    let walks = 0
+    const walkPage = R.walkPage.bind(R)
+    R.walkPage = (i: number) => {
+      walks++
+      return walkPage(i)
+    }
+    const baker = makeBaker(R)
+    const ours = (p: string) => (p === 'G0' ? false : null)
+    const first = baker.bakeCrop(0, ours, newBakeStats())
+    baker.bakeCrop(1, ours, newBakeStats())
+    // (the page's own bake needs no forms: page 1's shows kept)
+    baker.bake(0, (p) => (p === 'G0' ? true : null), newBakeStats())
+    expect(walks).toBe(2)
+    const again = baker.bakeCrop(0, ours, newBakeStats())
+    expect(walks).toBe(3)
+    expect(latin1(again!.forms[0]!.bytes)).toBe(latin1(first!.forms[0]!.bytes))
+    expect(latin1(again!.forms[0]!.bytes)).toContain('( x=1 ) Tj')
+  })
+})
