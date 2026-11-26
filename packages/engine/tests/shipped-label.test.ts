@@ -24,7 +24,7 @@ type G = {
 function page(o: { inline?: boolean } = {}) {
   const glyphs: G[] = []
   const points: { name: string; glyph: number; box: number }[] = []
-  // (TeX's paragraph starts, `q<n>`: the paragraph's, then the note's, which \@makefntext opens before its label)
+  // (TeX's paragraph starts, `q<n>`: the paragraph's alone; REVTeX's notes state none of their own)
   const paras: { name: string; glyph: number; box: number }[] = [{ name: 'q1', glyph: 0, box: 0 }]
   const run = (s: string, x: number, y: number, size: number) => {
     const w = 0.5 * size
@@ -52,7 +52,6 @@ function page(o: { inline?: boolean } = {}) {
     run('Inner', 135, 688, 10)
     points.push({ name: '0e', glyph: glyphs.length, box: 0 })
   } else {
-    paras.push({ name: 'q2', glyph: glyphs.length, box: 0 })
     run('2', 56, 95, 6)
     points.push({ name: '0s', glyph: glyphs.length, box: 0 })
     run('Anoteofours.', 62, 92, 8)
