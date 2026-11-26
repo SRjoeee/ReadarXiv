@@ -549,11 +549,13 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
     const n = take()
     cropForms.set(key, n)
     const copies = await writeBaked(kept.forms)
+    // (the page's resources as they are where the source draws no copy, else with the copies named)
+    const res = pages[i]!.inherited.Resources
     objs.push([
       n,
       objStream(
         n,
-        ` /Type /XObject /Subtype /Form /BBox [${box(i).map(f2).join(' ')}] /Resources ${merged(pages[i]!.inherited.Resources, new Set(), copies)} /Filter /FlateDecode`,
+        ` /Type /XObject /Subtype /Form /BBox [${box(i).map(f2).join(' ')}] /Resources ${copies.size ? merged(res, new Set(), copies) : res ? lit(res) : '<< >>'} /Filter /FlateDecode`,
         await deflate(kept.bytes),
       ),
     ])
