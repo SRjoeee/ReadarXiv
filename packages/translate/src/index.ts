@@ -1,6 +1,7 @@
 // @readarxiv/translate: the translator contract, its adapters and the chain that falls back between them
 // (DESIGN §8). A host makes one chain, `chainOf(ports)`, and translates through it; a row is keyed
-// by `identityOf(translators)` besides unit id and target.
+// by `identityOf(translators)` besides unit id and target. A host that chooses among producers reads its translation policy
+// with `parsePolicy`, asks `plan` what to translate next and `select` what to serve.
 
 /** What `@readarxiv/translate` is for: the translator contract, its adapters and the chain that falls back between them */
 export const TRANSLATE_PURPOSE =
@@ -10,6 +11,24 @@ export { ACCEPT_DIGEST, accept, asOut, projectionOf, type Refusal, validSentence
 export { askedOf, NESTED_KIND, unitInOf } from './bundle.ts'
 export { chainOf, identityOf, keyOf, realClock, rowContextOf } from './chain.ts'
 export { sha256Hex } from './sha256.ts'
+export { plan, type Step } from './plan.ts'
+export {
+  type Dropped,
+  effectiveOf,
+  type FreeEntry,
+  type KeyEntry,
+  type ModelCheck,
+  type ModelEntry,
+  type Policy,
+  PolicySchema,
+  parsePolicy,
+  type QuotaGroup,
+  type QuotaLimit,
+  type TargetPolicy,
+  targetPolicyOf,
+} from './policy.ts'
+export { type Generation, type ProducerId, producerIdentityOf, producerKindOf } from './producers.ts'
+export { select } from './select.ts'
 export {
   type Adapter,
   adapterOf,

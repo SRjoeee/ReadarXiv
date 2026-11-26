@@ -414,6 +414,52 @@ describe('the client: the follow and the open', () => {
     ac.abort()
     await expect(p).rejects.toBeDefined()
   })
+  it("names the translation the session holds for the target followed (`c`): the held document's, then the last heard", async () => {
+    const zh = paperDoc({ targets: { zh: runOf({ translator: '064ad25e3aad' }) } })
+    const both = paperDoc({
+      targets: { zh: runOf({ translator: '064ad25e3aad' }), ja: runOf({ translator: 'a1b2c3d4e5f6' }) },
+    })
+    /** the address of each of a follow's first `n` asks, each answered by `answer` */
+    const asks = async (o: { held: Doc | null; target: string | null; answer?: Doc }, n = 1) => {
+      const timers = manualTimers()
+      const ac = new AbortController()
+      const asked: string[] = []
+      const p = follow({
+        fetch: async (u) => {
+          asked.push(u)
+          return new Response(JSON.stringify(o.answer ?? DOC), { headers: { 'content-type': 'application/json' } })
+        },
+        timers,
+        signal: ac.signal,
+        paper: { id: '2401.01234', version: 2 },
+        target: o.target,
+        held: o.held,
+        onDoc: () => {},
+        pollMs: 2000,
+      })
+      p.catch(() => {})
+      for (let i = 1; i < n; i++) {
+        await settle(12)
+        timers.advance(2000)
+      }
+      await settle(12)
+      ac.abort()
+      return asked
+    }
+    expect(await asks({ held: zh, target: 'zh' })).toEqual(['/api/v2/papers/2401_01234v2?f=1&t=zh&c=064ad25e3aad'])
+    // (none held, a target none is held for, no target: no `c`)
+    expect(await asks({ held: null, target: 'zh' })).toEqual(['/api/v2/papers/2401_01234v2?f=1&t=zh'])
+    expect(await asks({ held: zh, target: 'ja' })).toEqual(['/api/v2/papers/2401_01234v2?f=1&t=ja'])
+    expect(await asks({ held: zh, target: null })).toEqual(['/api/v2/papers/2401_01234v2?f=1'])
+    // (the target changed: the new target's)
+    expect(await asks({ held: both, target: 'ja' })).toEqual(['/api/v2/papers/2401_01234v2?f=1&t=ja&c=a1b2c3d4e5f6'])
+    // (a follow that held none names, from its next ask on, the translation it was told: a document in which the prepare
+    // runs, so that the next ask is a poll's)
+    expect(await asks({ held: null, target: 'zh', answer: { ...DOC, targets: zh.targets } }, 2)).toEqual([
+      '/api/v2/papers/2401_01234v2?f=1&t=zh',
+      '/api/v2/papers/2401_01234v2?f=1&t=zh&c=064ad25e3aad',
+    ])
+  })
   it('tells the stream lost before it asks again, never for a poll', async () => {
     const timers = manualTimers()
     const ac = new AbortController()

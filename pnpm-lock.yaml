@@ -164,6 +164,9 @@ importers:
       '@readarxiv/text':
         specifier: workspace:*
         version: link:../text
+      zod:
+        specifier: ^4.5.4
+        version: 4.5.4
 
   packages/typeset:
     dependencies:
