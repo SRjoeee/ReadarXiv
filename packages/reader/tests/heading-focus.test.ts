@@ -37,6 +37,8 @@ vi.mock('../src/panes/panes.ts', async (real) => ({
       },
     ),
 }))
+// (the reader's composing code never comes in: nothing is laid here, and its composer would read the stood-in panes)
+vi.mock('../src/compose/composer.ts', () => new Promise(() => {}))
 const { openReader } = await import('../src/reader.ts')
 
 const SEG = '2600_00001v1'
