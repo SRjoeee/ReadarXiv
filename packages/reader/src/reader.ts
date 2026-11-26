@@ -1318,6 +1318,11 @@ export function openReader(
         clockDue: clock.due,
         laidPages: (composer?.probe().laidPages as number) ?? 0,
         lays: (composer?.probe().lays as number) ?? 0,
+        // (the crops cut for a detail canvas: how many, and the last one's page, ms, pixels and its sources' pixels: §11.8)
+        'detail.cuts': composer?.details().length ?? 0,
+        ...Object.fromEntries(
+          Object.entries(composer?.details().at(-1) ?? {}).map(([k, v]) => [`detail.${k}`, Math.round(v * 10) / 10]),
+        ),
         lit: highlight?.lit?.id ?? null,
         crashed,
         // (the moments, ms from the open; the open itself, ms from performance's origin, to place them on the page's clock)

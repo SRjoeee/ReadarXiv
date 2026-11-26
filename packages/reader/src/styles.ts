@@ -134,6 +134,7 @@ ${DIMMED} .axt-hl-layer { mix-blend-mode: screen; }
 .axt-reader [data-axt-turn="270"] { transform: rotate(270deg) translateX(-100%); }
 .axt-reader .axt-hl-layer[data-axt-turn] { inset: auto; left: 0; top: 0; width: var(--axt-frame-w); height: var(--axt-frame-h); }
 .axt-reader .axt-over > canvas.axt-crops { position: absolute; left: 0; top: 0; width: var(--axt-crops-w, 100%); height: var(--axt-crops-h, 100%); mix-blend-mode: darken; pointer-events: none; }
+.axt-reader .axt-over > canvas.axt-crops-detail { position: absolute; mix-blend-mode: darken; pointer-events: none; }
 .axt-reader .axt-over > .textLayer { contain: strict; }
 .axt-reader .axt-over > .textLayer[data-axt-frame] { width: var(--axt-frame-w, 100%) !important; height: var(--axt-frame-h, 100%) !important; }
 /* every text layer off screen skipped by style and layout (docs/PDF-READER.md §11.11, "Off screen, skipped"): PDF.js's on the
@@ -155,8 +156,8 @@ ${DIMMED} .axt-hl-layer { mix-blend-mode: screen; }
    page canvas's white through the same filter) and its ink light, so darken, which keeps a crop's ink over a white page,
    would keep the ground over it (the website's staging, 2026-11-12: every inline formula of a translated paragraph a blank
    gap); lighten keeps the ink and lays the crop's paper on its equal */
-${DIMMED} .axt-over > svg, ${DIMMED} .axt-over > canvas.axt-crops { filter: invert(88.8%) hue-rotate(180deg); }
-${DIMMED} .axt-over > canvas.axt-crops { mix-blend-mode: lighten; }
+${DIMMED} .axt-over > svg, ${DIMMED} .axt-over > canvas.axt-crops, ${DIMMED} .axt-over > canvas.axt-crops-detail { filter: invert(88.8%) hue-rotate(180deg); }
+${DIMMED} .axt-over > canvas.axt-crops, ${DIMMED} .axt-over > canvas.axt-crops-detail { mix-blend-mode: lighten; }
 /* the links over a laid page: one anchor a link, each box a span of its own, sizes a share of the page's frame */
 .axt-reader .axt-links { position: absolute; left: 0; top: 0; width: var(--axt-frame-w, 100%); height: var(--axt-frame-h, 100%); z-index: 1; pointer-events: none; }
 .axt-reader .axt-link { position: absolute; display: block; pointer-events: none; outline: none; }

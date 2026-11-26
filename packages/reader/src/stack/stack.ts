@@ -151,6 +151,9 @@ export interface ViewContent {
   over: ((at: SlotAt) => Promise<HTMLElement | null> | HTMLElement | null) | null
   /** what is laid over drawn again at a new scale, RECOPY_MS after a zoom (the crops), in the slot's turn of the scheduler */
   again?: ((over: HTMLElement, at: SlotAt) => Promise<void>) | null
+  /** what is laid over cut again for the area its page view's detail canvas draws (the crops at that canvas's resolution),
+   *  once that canvas is drawn; `area` null where the page view draws none any more */
+  detail?: ((over: HTMLElement, at: SlotAt, area: DetailArea | null) => Promise<void>) | null
   /** what is laid over let go while the drawing is kept off the view, a small copy kept of it (the crops' page-sized bitmap: a
    *  far page holds one bitmap, its page view's): the device pixels the copy holds */
   away?: ((over: HTMLElement) => number) | null
@@ -173,6 +176,32 @@ interface SkeletonContent {
   key: string
 }
 export type PageContent = ViewContent | LeftContent | SkeletonContent
+/** where a page view's detail canvas stands (PDF.js's detail view, past its canvas cap): its box in the page view's viewport
+ *  (CSS px) and its pixels */
+export type DetailArea = { left: number; top: number; width: number; height: number; px: readonly [number, number] }
+/** a detail canvas's area read off it: its box (PDF.js stands it by shares of the page's frame, PDFPageDetailView.draw) and its
+ *  pixels; null where it states none */
+export function detailAreaOf(
+  canvas: { width: number; height: number; style: { left: string; top: string; width: string; height: string } },
+  vp: { width: number; height: number },
+): DetailArea | null {
+  const share = (v: string) => (v.endsWith('%') ? Number.parseFloat(v) / 100 : Number.NaN)
+  const [l, t, w, h] = [canvas.style.left, canvas.style.top, canvas.style.width, canvas.style.height].map(share) as [
+    number,
+    number,
+    number,
+    number,
+  ]
+  if (![l, t, w, h].every(Number.isFinite) || !(w > 0) || !(h > 0) || !canvas.width || !canvas.height) return null
+  return {
+    left: l * vp.width,
+    top: t * vp.height,
+    width: w * vp.width,
+    height: h * vp.height,
+    px: [canvas.width, canvas.height],
+  }
+}
+
 /** a slot as `over` is given it: its page, the page view drawn, its viewport, aborted once that drawing goes */
 export interface SlotAt {
   n: number
@@ -274,6 +303,8 @@ interface Drawing {
   drawnAt: number
   job: Job | null
   detailJob: Job | null
+  /** whether its overlay holds crops cut for its page view's detail canvas */
+  detailCrops: boolean
   againJob: Job | null
   /** its page view's drawing, ms */
   drawMs: number
@@ -508,6 +539,7 @@ export function createStack(o: StackOptions): Stack {
     drawnAt: 0,
     job: null,
     detailJob: null,
+    detailCrops: false,
     againJob: null,
     drawMs: 0,
     ac: new AbortController(),
@@ -997,13 +1029,37 @@ export function createStack(o: StackOptions): Stack {
           maxY = (Math.min(view.bottom, r.bottom) - r.top) / k
         const whole = minX <= 0 && minY <= 0 && maxX >= r.width / k - 0.5 && maxY >= r.height / k - 0.5
         pv.updateVisibleArea(whole ? null : ({ minX, minY, maxX, maxY } as never))
-        const detail = pv.detailView as unknown as { renderingState: number; draw(): Promise<unknown> } | null
+        const c = d.content
+        // (no detail canvas now, the page in view whole or under the cap: the crops cut for one go with it)
+        if (!pv.detailView && d.detailCrops && d.over && c && isView(c) && c.detail) {
+          d.detailCrops = false
+          void c.detail(d.over, { n: s.n, view: pv, viewport: pv.viewport, signal: d.ac.signal }, null)
+        }
+        const detail = pv.detailView as unknown as {
+          renderingState: number
+          canvas?: HTMLCanvasElement | null
+          draw(): Promise<unknown>
+        } | null
         if (detail && detail.renderingState === INITIAL) {
           const job: Job = {
             rank: () => (s.shown === d && pv.detailView === (detail as never) && s.inView ? 0 : null),
             order: () => s.n + 0.5,
             run: async () => {
               await detail.draw()
+              // (the crops in view cut at the detail canvas's resolution, as it stands: docs/PDF-READER.md §11.8)
+              const area = detail.canvas ? detailAreaOf(detail.canvas, pv.viewport) : null
+              if (
+                s.shown === d &&
+                pv.detailView === (detail as never) &&
+                area &&
+                d.over &&
+                c &&
+                isView(c) &&
+                c.detail
+              ) {
+                await c.detail(d.over, { n: s.n, view: pv, viewport: pv.viewport, signal: d.ac.signal }, area)
+                d.detailCrops = true
+              }
               if (s.shown === d) tell('drawn', { n: s.n, scale, key: d.key, detail: true })
             },
           }
