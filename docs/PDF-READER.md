@@ -1588,7 +1588,8 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
   shown so (lane reader-perf's C) is not taken: Chromium composites a layer of another size differently, 14 of the harness's 37
   shots unlike though the canvas's own pixels were identical (lane crops-probe). Where no copy fits (the scale moved while the
   page was far) the crops are drawn anew (`cropsAgain`) and the page goes back into the layout tree once they are in: never
-  shown without them, nor with the old scale's. The budget counts what a kept page holds: its page view and its copy.
+  shown without them, nor with the old scale's. The budget counts what a kept page holds: its page view (past PDF.js's cap its
+  detail canvas too, which PDF.js keeps with it: #688's review) and its copy.
   Held by the same check (the crops canvas 0 × 0 while far, the budget, the canvas in the jump's frame equal to what it held,
   no crop drawn again; after a zoom while far, the crops at the new grid as the page goes back) and paint.test.ts.
 - **Crops past the canvas cap.** PDF.js draws a page view in one canvas up to a cap (PDF.js 6.3: `maxCanvasPixels`, 2^25,
@@ -1607,7 +1608,10 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
   under the cap, or after a later cut, is dropped (the harness's zoom back found one put back, 1 run in 3). A detail
   canvas let go (the page whole in view, or under the cap again) lets its crops go and the base whole again; a zoom keeps them
   where they are of its scale, else lets them go in the task the base's crops are drawn again (`cropsAgain`); a kept page
-  keeps them as they are, with the page view's detail canvas they match, their pixels counted in the budget. **The cost**
+  keeps them as they are, with the page view's detail canvas they match, their pixels counted in the budget. A cut under way
+  as the page is kept is dropped when done (`detailKept`: its pixels would come after the page was counted, outside the
+  budget), and a page back with its detail canvas drawn and no crops standing for it has them cut (the stack's cut job: #688's
+  review). **The cost**
   (Chromium 153, a 2x screen of 1,512 × 982, the lab's bundles, two runs): 2611.18114v1 p26 at 300 % 0.10 million pixels
   (0.4 MB) and 106 to 127 ms its first cut, cold; at 600 % 0.40 million (1.6 MB), 19 to 22 ms; 2608.16117v1 (46 MB) p15 at
   300 % 9,600 pixels, 16 to 26 ms; at 600 % 54,000, 19 to 21 ms; the sources rendered for a cut of their own size, let go with
@@ -2235,7 +2239,8 @@ in the page, after the slices' decoding (0.13 to 0.24 s); each file arXiv's size
   none of the 245 papers' 87,461 streams holds one so). A group turned off in the default view hides its ink, and PDF.js and poppler still read its text: on
   1706.03762v7-zh, 1,408 of 1,408 words of the units laid were read on the translated pages. Baked, a show in a group the page
   turns off becomes the advance it made (a `TJ` of one number at the text state of the moment), a painted path and an image go,
-  a clip stays a clip, state stays (a group off hides painting, never state: ISO 32000-1 §8.11.3.1), our own marks go; 62 of the
+  a clip stays a clip (a show that clips, render modes 4 to 7, in mode 7: its outlines clip, nothing painted; #688's review),
+  state stays (a group off hides painting, never state: ISO 32000-1 §8.11.3.1), our own marks go; 62 of the
   1,408 words remain, words the translation keeps and formula text in the crops. A show whose widths the walk cannot read stays,
   drawn invisibly (render mode 3), counted (0 of 9,890 on the four papers; 1 of 46,455 in the crops' sources). A form the add-on
   wrapped inside keeps its groups, which the default view turns off.
@@ -2244,13 +2249,19 @@ in the page, after the slices' decoding (0.13 to 0.24 s); each file arXiv's size
   the crop drew nothing: 1,015 of the 245's 99,115 crops, in 75 papers. A form that holds one of the crop's groups, or a form
   within it to the walk's depth, is now drawn as a copy baked the same way (`bakeCrop`: the form's dictionary and resources,
   its content with those groups' ink alone, a name in it read in its own resources' Properties), one copy a crop
-  (2610.37668v1: 19 copies, 80 KB; a crop that draws no copy is written byte for byte as before). Each crop is looked for in the
-  file by the lane's check: its ink's mass at its place against its source's on arXiv's page, drawn by poppler's Splash and
-  Cairo, PDF.js and CoreGraphics. Of the 99,115, one is absent in all four, laid past its page's right edge (2610.38516v1
-  p98, the lay's, not the export's). Splash alone misses 38 more, all on pages with Type 3 fonts. Splash keeps a Type 3 glyph's
-  drawing by its font and size, and the page draws that glyph first inside the original form, under a group turned off, so it
-  keeps a blank one (2610.20030v1 p10: the crop drawn alone shows; drawn after the original form, blank; drawn after that form
-  at another size, shown).
+  (2610.37668v1: 19 copies, 80 KB; a crop that draws no copy is written byte for byte as before). A page's forms, which its
+  crops read, are kept for the page read last alone; the pages before keep their own shows, which their bake reads (#688's
+  review: every page's forms were kept to the export's end). **A Type 3 font a crop draws** goes through a dictionary of its
+  own, the font's own entries, one for every crop (in a copy, and in the page's resources where a crop form names one). Poppler's
+  Splash (Okular, pdftoppm) keeps a Type 3 glyph's drawing by its font and size, and the translated page draws the glyph first
+  inside the original form, under the crop's group turned off: through the same font the crop got the blank back (38 of the
+  245's crops, all on pages with Type 3 fonts; 2610.20030v1 p10: the crop drawn alone shows; after the original form, blank;
+  after that form drawn at another size, shown). Each crop is looked for in the file by the lane's check: its ink's mass at
+  its place against its source's on arXiv's page, drawn by poppler's Splash and Cairo, PDF.js and CoreGraphics (100 dpi, the first 32 papers at
+  200, each crop not found present weighed again at 200). Of the 99,115, one is absent in all four, laid past its page's
+  right edge (2610.38516v1 p98, the lay's, not the export's), and none other in any; 4 to 10 a renderer are partial, a glyph
+  of 1.3 to 2.4 pt whose antialiased fringe its box cuts (2609.19644v1's labels). The aliases: 179 fonts in 18 papers, 143 KB in
+  all, 2.9 KB at the median of those papers, 55 KB at most (2609.19644v1, 38 fonts); the four pairs hold none.
 - **The fonts** (`woff2.ts`, `brotli.ts`, `fonts.ts`, `cff.ts`, `ttf.ts`). Each served slice drawn is a Type0 font
   (Identity-H, a CIDFontType0 over its CFF, `/CIDFontType0C`, or a CIDFontType2 over a TrueType one, FontFile2, its CIDs its
   glyph ids) with a ToUnicode of exactly the glyphs drawn, so that selection, search and copy give the translation's characters.
