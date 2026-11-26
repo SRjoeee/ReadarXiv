@@ -220,8 +220,12 @@ export function readSfnt(key: string, b: Uint8Array): SfntFont | null {
     cff: cff ?? new Uint8Array(0),
     sfnt: b,
     cidKeyed,
-    ascent: i16(hhea, 4),
-    descent: i16(hhea, 6),
+    // (the face's typographic ascender and descender, OS/2's sTypo*: the line its designer set, the ideographic em box of a CJK
+    // face (880 and -120 in Source Han's 1000); what a viewer draws a selection's line from and what ISO 32000-1 §9.8.1's
+    // Ascent and Descent state. hhea's are a platform's clipping extent (1151 and -286 there: a line 1.44 em tall, each one
+    // overlapping the next). Every served face holds them (83 faces); a font with no OS/2 table, its hhea's)
+    ascent: os2 && os2.length >= 72 ? i16(os2, 68) : i16(hhea, 4),
+    descent: os2 && os2.length >= 72 ? i16(os2, 70) : i16(hhea, 6),
     capHeight: os2 && u16(os2, 0) >= 2 && os2.length >= 90 ? i16(os2, 88) : i16(hhea, 4),
     bbox: [i16(head, 36), i16(head, 38), i16(head, 40), i16(head, 42)],
     italicAngle: post ? i16(post, 4) + u16(post, 6) / 65536 : 0,

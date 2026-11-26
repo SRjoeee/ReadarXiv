@@ -495,9 +495,9 @@ describe("a crop whose ink the add-on wrapped inside a figure's form (#crops-sha
     it(`draws the element's ink and none of its neighbour's${nested ? ', the form within a form' : ''}`, async () => {
       const { X } = await made(doc(nested), page(), 'translation')
       const pageNode = X.pages()[0]!.node
-      expect(decoded(X, pageNode.get(N('Contents')))).toContain('/AXTC1_1 Do')
+      expect(decoded(X, pageNode.get(N('Contents')))).toContain('/AXTC1_1_0 Do')
       // (the crop's form, then the copies it draws down to the element)
-      let form = xobj(X, pageNode, 'AXTC1_1')
+      let form = xobj(X, pageNode, 'AXTC1_1_0')
       let text = latin1(L.decodePDFRawStream(form).decode())
       for (const name of nested ? ['AXTB1', 'AXTB0'] : ['AXTB0']) {
         expect(text).toContain(`/${name} Do`)
@@ -554,7 +554,7 @@ describe("a crop's Type 3 glyphs drawn through a font of its own (#688: poppler'
   }
   it("names the font through a dictionary of its own, the font's own entries, one for every crop that draws it", async () => {
     const { X } = await made(doc(), page(), 'translation')
-    const copy = xobj(X, xobj(X, X.pages()[0]!.node, 'AXTC1_1').dict, 'AXTB0')
+    const copy = xobj(X, xobj(X, X.pages()[0]!.node, 'AXTC1_1_0').dict, 'AXTB0')
     const fonts = look(X, (look(X, copy.dict.get(N('Resources'))) as PdfDict).get(N('Font'))) as PdfDict
     const alias = fonts.get(N('F3')) as PdfRef
     expect(alias).toBeInstanceOf(L.PDFRef)

@@ -498,14 +498,22 @@ const leftOf = (a: number, b: number) =>
 /** a line's words, left to right: { gs (glyph indices), ts (each glyph's text), text, fam (math, mono, or text) }. A glyph's text
  *  is its character, a spacing accent TeX set over its letter joined to it (accents.ts: "F´ısica" read Física, "Cande`s"
  *  Candès, a capital's raised accent's "PE´REZ" PÉREZ) */
-function wordsOf(G: readonly InkGlyph[], gs: readonly number[], fams: Map<string | undefined, Family>): Word[] {
+function wordsOf(
+  G: readonly InkGlyph[],
+  gs: readonly number[],
+  fams: Map<string | undefined, Family>,
+  tex?: readonly [number, number],
+): Word[] {
   // (`!`: the glyphs the filter kept, and the one before, the page's)
-  const order = [...gs]
-    .filter((g) => G[g] && !G[g].blank && /\S/u.test(G[g].u ?? ''))
-    .sort((a, b) => leftOf(G[a]!.x0, G[b]!.x0))
+  const seen = (g: number) => !!G[g] && !G[g].blank && /\S/u.test(G[g].u ?? '')
+  const order = [...gs].filter(seen).sort((a, b) => leftOf(G[a]!.x0, G[b]!.x0))
   const joined = accentTexts(G, gs)
   const out: Word[] = []
-  const scripts = scriptsOf(G, order)
+  // (CHANGED: the scripts read against TeX's line the glyphs are part of, `tex` (ledger.ts texLinesOf), whoever owns its other
+  // glyphs: read against the part alone, marks outnumbering its letters were its text size, and none a script)
+  const line: number[] = []
+  if (tex) for (let g = tex[0]; g <= tex[1]; g++) if (seen(g)) line.push(g)
+  const scripts = scriptsOf(G, line.length ? line : order)
   let cur: Word | null = null,
     prev: number | null = null
   for (const g of order) {
@@ -531,7 +539,8 @@ function wordsOf(G: readonly InkGlyph[], gs: readonly number[], fams: Map<string
 }
 
 /** a line's scripts (rule 4), each raised (1) or lowered (-1): of its glyphs `order`, those TeX set smaller than the line's text
- *  and off its baseline — the line's text size the one most of its glyphs have, its baseline the one most of those at that size stand on,
+ *  and off its baseline — the line TeX's whole line, owned glyphs and all, where a ledger line is read (wordsOf's `tex`, CHANGED),
+ *  the line's text size the one most of its glyphs have, its baseline the one most of those at that size stand on,
  *  each read on the engine's hundredth of a point, as locate reads a box's glyphs on one baseline (TeX sets one box's glyphs at
  *  one size on one baseline: equal, no threshold). A script is no text of the line's but its formula's, or a mark TeX set over
  *  or under it, whatever its face: C_n²'s "2" in a text face (2610.19274v1), an affiliation's `$^{1,2}$` under Times, whose
@@ -548,12 +557,35 @@ export function scriptsOf(
   order: readonly number[],
   largest = false,
 ): Map<number, 1 | -1> {
-  // (`!`: the order's glyphs are the line's; its text size and baseline read where the order holds a glyph, inside its loop)
-  const body = largest ? Math.max(...order.map((g) => r2(G[g]!.size))) : modeOf(order.map((g) => r2(G[g]!.size)))
-  const base = modeOf(order.filter((g) => r2(G[g]!.size) === body).map((g) => r2(G[g]!.y)))
+  // (`!`: the order's glyphs are the line's)
+  const text = lineTextOf(
+    order.map((g) => G[g]!),
+    largest,
+  )
   const out = new Map<number, 1 | -1>()
-  for (const g of order) if (r2(G[g]!.size) < body! && r2(G[g]!.y) !== base) out.set(g, r2(G[g]!.y) > base! ? 1 : -1)
+  for (const g of order) {
+    const s = scriptOn(text, G[g]!)
+    if (s) out.set(g, s)
+  }
   return out
+}
+
+/** a line's text size and baseline as scriptsOf reads them over the line's glyphs `gs`: the size most of them have (`largest`:
+ *  the largest), the baseline most of those at that size stand on, each on the engine's hundredth */
+export function lineTextOf(
+  gs: readonly { size: number; y: number }[],
+  largest = false,
+): { size?: number; base?: number } {
+  const size = largest ? Math.max(...gs.map((g) => r2(g.size))) : modeOf(gs.map((g) => r2(g.size)))
+  return { size, base: modeOf(gs.filter((g) => r2(g.size) === size).map((g) => r2(g.y))) }
+}
+
+/** whether TeX set glyph `g` as a script of a line whose text is `text` (lineTextOf): smaller than its text and off its
+ *  baseline, raised (1) or lowered (-1); 0 none, and none where the line states no text */
+export function scriptOn(text: { size?: number; base?: number }, g: { size: number; y: number }): 1 | -1 | 0 {
+  if (text.size === undefined || text.base === undefined) return 0
+  if (r2(g.size) >= text.size || r2(g.y) === text.base) return 0
+  return r2(g.y) > text.base ? 1 : -1
 }
 
 /** each e-mail address in a word: a kept run of its own (fam `mono`, rule 4), the address alone, the word's characters around it
@@ -980,7 +1012,10 @@ export function inkUnitsOf(
   // (CHANGED: every line's words read first, a group of addresses over lines TeX set one after the other one kept run,
   // groupedAddresses)
   const lineWords = new Map(
-    (ledger.lines ?? []).map((L): [LedgerLine, Word[]] => [L, wordsOf(pages[L.page - 1]?.glyphs ?? [], L.gs, fams)]),
+    (ledger.lines ?? []).map((L): [LedgerLine, Word[]] => [
+      L,
+      wordsOf(pages[L.page - 1]?.glyphs ?? [], L.gs, fams, L.tex),
+    ]),
   )
   groupedAddresses(pages, ledger.lines ?? [], lineWords)
   // (a running head's folio: a number at its line's end or start where the line's other words recur on another page with

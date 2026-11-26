@@ -3,24 +3,24 @@
 // the brotli given, and the sfnt read for its cmap, advances, units and CIDs. Fonts of our own (sfnt-build.ts).
 import { brotliCompressSync, brotliDecompressSync } from 'node:zlib'
 import { describe, expect, it } from 'vitest'
-import { readSfnt } from '../../src/export/fonts.ts'
+import { fontBodies, readSfnt } from '../../src/export/fonts.ts'
 import { glyphsOf, subsetTrueType, tablesOf } from '../../src/export/ttf.ts'
 import { sfntOfWoff2, woff2Payload } from '../../src/export/woff2.ts'
 import { cs } from './cff-build.ts'
-import { buildSfnt, buildTrueTypeWoff2, buildWoff2 } from './sfnt-build.ts'
+import { buildSfnt, buildTrueTypeWoff2, buildWoff2, type SfntParts } from './sfnt-build.ts'
 
-const font = () =>
-  buildSfnt({
-    glyphs: [cs('endchar'), cs(500, 0, 0, 'rmoveto', 'endchar'), cs(600, 0, 0, 'rmoveto', 'endchar')],
-    gsubrs: [],
-    lsubrs: [[]],
-    cid: { fdOf: [0, 0, 0], cids: [0, 1200, 1300] },
-    cmap: [
-      [0x6587, 1],
-      [0x5b57, 2],
-    ],
-    advances: [0, 1000, 920],
-  })
+const parts: SfntParts = {
+  glyphs: [cs('endchar'), cs(500, 0, 0, 'rmoveto', 'endchar'), cs(600, 0, 0, 'rmoveto', 'endchar')],
+  gsubrs: [],
+  lsubrs: [[]],
+  cid: { fdOf: [0, 0, 0], cids: [0, 1200, 1300] },
+  cmap: [
+    [0x6587, 1],
+    [0x5b57, 2],
+  ],
+  advances: [0, 1000, 920],
+}
+const font = Object.assign(() => buildSfnt(parts), { parts })
 const brotli = async (parts: Uint8Array[]) => parts.map((b) => new Uint8Array(brotliDecompressSync(b)))
 
 describe("a served slice's sfnt", () => {
@@ -132,6 +132,27 @@ describe("a served slice's sfnt", () => {
     expect(f?.cid(1)).toBe(1200)
     expect(f?.cid(2)).toBe(1300)
     expect(f?.cidKeyed).toBe(true)
+  })
+
+  it("writes its descriptor's Ascent and Descent from its typographic metrics (OS/2), else its hhea's", () => {
+    // (a face's line as its designer set it: OS/2's sTypoAscender and sTypoDescender, the ideographic em box of a CJK face;
+    // hhea's are the clipping extent a platform lays lines by, 1.44 em for Source Han's, which a viewer draws a selection's
+    // line box from)
+    const os2 = new Uint8Array(78)
+    os2.set([0, 4], 0)
+    os2.set([0x03, 0x20, 0xff, 0x38, 0, 0], 68)
+    const bodies = (extra?: Record<string, Uint8Array>) => {
+      const f = readSfnt('k', buildSfnt({ ...font.parts, extra }).sfnt)!
+      return fontBodies(f, new Map([[1200, [1, '\u6587'] as const]]), {
+        type0: 1,
+        cidFont: 2,
+        desc: 3,
+        file: 4,
+        toUni: 5,
+      }).desc
+    }
+    expect(bodies({ 'OS/2': os2 })).toMatch(/\/Ascent 800 \/Descent -200 /)
+    expect(bodies()).toMatch(/\/Ascent 880 \/Descent -120 /)
   })
 })
 
