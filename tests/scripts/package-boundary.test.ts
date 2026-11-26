@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
+  PACKAGE_WITHIN,
   PACKAGES,
   packageFiles,
   packageViolations,
@@ -85,10 +86,29 @@ describe('the directions between packages', () => {
   const allowed = Object.entries(PACKAGES as Record<string, string[]>)
   const names = Object.keys(PACKAGES)
 
-  it('lets each package import the packages the table names, by their entry', () => {
+  it('lets each package import the packages the table names, by their entry (under the directories PACKAGE_WITHIN names)', () => {
+    const within = PACKAGE_WITHIN as Record<string, Record<string, string[]>>
     for (const [pkg, deps] of allowed) {
-      for (const dep of deps) expect(refused(pkg, `import { a } from '@readarxiv/${dep}'\n`)).toEqual([])
+      for (const dep of deps) {
+        const under = within[pkg]?.[dep]?.[0]
+        const file = under ? `${under}x.ts` : `packages/${pkg}/src/x.ts`
+        expect(violations({ [file]: `import { a } from '@readarxiv/${dep}'\n` })).toEqual([])
+      }
     }
+  })
+  it('lets the reader import the engine in its PDF download alone, and its tests', () => {
+    const imp = "import { openObjects } from '@readarxiv/engine'\n"
+    expect(violations({ 'packages/reader/src/export/chain.ts': imp })).toEqual([])
+    expect(violations({ 'packages/reader/tests/export/chain.test.ts': imp })).toEqual([])
+    expect(violations({ 'packages/reader/src/session/paper.ts': imp })).toEqual([
+      { file: 'packages/reader/src/session/paper.ts', spec: '@readarxiv/engine' },
+    ])
+    expect(violations({ 'packages/reader/src/exporter.ts': imp })).toEqual([
+      { file: 'packages/reader/src/exporter.ts', spec: '@readarxiv/engine' },
+    ])
+    expect(violations({ 'packages/reader/tests/chain.test.ts': `import type { Remover } from '@readarxiv/engine'\n` })).toEqual([
+      { file: 'packages/reader/tests/chain.test.ts', spec: '@readarxiv/engine' },
+    ])
   })
   it('refuses every pair the table does not name, and a package importing itself by name', () => {
     for (const [pkg, deps] of allowed) {
