@@ -3,8 +3,8 @@
 // column's footnotes inside the body it brackets, REVTeX's grid): the note's whole unit stands inside the paragraph's range, and
 // the note's text is the note's (an earlier unit's text first), but its label, the number before its start on the note's own
 // line, fell to the paragraph's text. The paragraph laid a line of its translation there, over the note (2611.16683v1 p3).
-// The glyphs before such a unit's start on its start's line, where that line holds nothing of the paragraph's before them, are
-// that unit's label, no text of the enclosing unit's. Content of our own: a page as a stream of points and glyphs.
+// The glyphs right before such a unit's start on its start's line, a label's form, the paragraph setting nothing more on that
+// line, are that unit's label, no text of the enclosing unit's. Content of our own: a page as a stream of points and glyphs.
 import { describe, expect, it } from 'vitest'
 import { ownOf } from '../src/own/own.ts'
 

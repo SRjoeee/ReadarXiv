@@ -10419,9 +10419,10 @@ point to that label went with them too: the rule the class sets above a column's
 box from the rule to the next column's head, its crop the page between. And a paragraph that crosses the column holds the
 column's notes inside its own range: their text is theirs (an earlier unit's text first), but a note's number, set in the paragraph
 TeX began for the note before its start, was the crossing paragraph's text, and that paragraph laid a line of its translation over
-the note. The glyphs of a unit's range from a paragraph start TeX made inside it to another unit's start shipped whole there, on
-that start's line, are that unit's label (own.ts withoutShippedLabels); a unit TeX set inline in the range's own paragraph has no
-such start before it, and the words before it stay the range's.
+the note. The range's glyphs right before another unit's start shipped whole inside it, on that start's line, are that unit's
+label where they are a label's form and the range sets nothing more on that line after the unit's end (own.ts
+withoutShippedLabels; REVTeX's notes state no paragraph start of their own, so the line, not a point, tells it); a unit set
+inline after the range's words keeps them the range's (no label's form), as does a line the range goes on with after it.
 
 **Two placeholders TeX joined are one ink.** `(\=A\=T)`: the marking asks TeX, for a paper's macro and the placeholder right
 after it, whether a mark between them moves anything (the look-ahead probe, aheadSamples). TeX answers 2 where the mark changes
