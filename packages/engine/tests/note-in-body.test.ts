@@ -76,7 +76,14 @@ const para = (displays: number) =>
 const NOTE = unit('footnote', [{ t: 'text', s: 'A note of ours.' }])
 /** the body as B ships it: the paragraph's start, its line, the display's opening point and its rows, then the note's label
  *  and the note at the column's foot (`note`: its unit's id), then the text after the display at the next column's head */
-const STREAM = (o: { note: number; displays?: number; closes?: boolean; region?: 'body' | 'other' }): Item[] => {
+const STREAM = (o: {
+  note: number
+  displays?: number
+  closes?: boolean
+  region?: 'body' | 'other'
+  notes?: number
+  page?: boolean
+}): Item[] => {
   const d = o.displays ?? 1
   const rows: Item[] = []
   for (let i = 0; i < d; i++) {
@@ -88,6 +95,10 @@ const STREAM = (o: { note: number; displays?: number; closes?: boolean; region?:
     { at: `${o.note}s` },
     'Anoteofours.',
     ...(o.closes === false ? [] : [{ at: `${o.note}e` }]),
+    // (a second note shipped right after the first: its label, its marks)
+    ...(o.notes === 2 ? ['\n4', { at: '4s' }, 'Another.', { at: '4e' }] : []),
+    // (the page's end: the text after it at the head of the next page's body)
+    ...(o.page ? [{ at: 'be1' }, { at: '\f' }, { at: 'bs1' }] : []),
   ]
   return [
     { at: 'bs1' },
@@ -100,14 +111,23 @@ const STREAM = (o: { note: number; displays?: number; closes?: boolean; region?:
     { at: o.region === 'other' ? 'be2' : 'be1' },
   ]
 }
+/** the items as pages: a `{ at: '\f' }` item ends one */
+const pagesOf = (items: readonly Item[]): StreamPage[] => {
+  const out: Item[][] = [[]]
+  for (const it of items) {
+    if (typeof it !== 'string' && it.at === '\f') out.push([])
+    else out.at(-1)!.push(it)
+  }
+  return out.map(pageOf)
+}
 /** what the display owns, as the marking and the stream read it: its glyphs, or its how */
 function display(o: Parameters<typeof STREAM>[0]): string | null {
   const units = o.note === 0 ? [NOTE, para(o.displays ?? 1)] : [unit('para', []), para(o.displays ?? 1), NOTE]
-  const page = pageOf(STREAM(o))
-  const follows = followsOf(units as never, new Set(page.points.map((p) => p.name)))
-  const e = ownedOf([page], { follows, erasure: true }).get('p1.1a')
+  const pages = pagesOf(STREAM(o))
+  const follows = followsOf(units as never, new Set(pages.flatMap((pg) => pg.points.map((p) => p.name))))
+  const e = ownedOf(pages, { follows, erasure: true }).get('p1.1a')
   if (!e) return null
-  return e.how < OWNED ? e.glyphs.map(([, g]) => page.glyphs.u[g]).join('') : (OWNED_HOW[e.how] as string)
+  return e.how < OWNED ? e.glyphs.map(([p, g]) => pages[p - 1]!.glyphs.u[g]).join('') : (OWNED_HOW[e.how] as string)
 }
 
 describe("a display before a note TeX ships into its own body region, the text after it past the note's marks", () => {
@@ -117,6 +137,14 @@ describe("a display before a note TeX ships into its own body region, the text a
 
   it("the same where the note's unit is an earlier one (its unit ends before the paragraph's in the source)", () => {
     expect(display({ note: 0 })).toBe('a=b0(1)')
+  })
+
+  it("two notes shipped one after the other, the second's label between them", () => {
+    expect(display({ note: 2, notes: 2 })).toBe('a=b0(1)')
+  })
+
+  it("the page's end after the note, the text after it at the head of the next page's body", () => {
+    expect(display({ note: 2, page: true })).toBe('a=b0(1)')
   })
 
   it("two displays, the later with no point of its own: the first owns both, up to the note's start", () => {
