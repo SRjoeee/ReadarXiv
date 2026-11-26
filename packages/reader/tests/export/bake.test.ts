@@ -135,3 +135,83 @@ describe("a stream whose filters are named by reference, read through the export
     expect(whole && latin1(whole)).toBe(plainBake)
   })
 })
+
+/** `text` LZW-coded as PDF's LZWDecode reads it with `early` its EarlyChange: codes from 9 bits, a clear first and an end last */
+function lzw(text: string, early: 0 | 1): Uint8Array {
+  const out: number[] = []
+  let acc = 0,
+    bits = 0,
+    width = 9
+  const put = (code: number) => {
+    acc = (acc << width) | code
+    bits += width
+    while (bits >= 8) {
+      out.push((acc >> (bits - 8)) & 255)
+      bits -= 8
+    }
+    acc &= (1 << bits) - 1
+  }
+  const dict = new Map<string, number>()
+  for (let c = 0; c < 256; c++) dict.set(String.fromCharCode(c), c)
+  let next = 258
+  put(256)
+  let w = ''
+  for (const c of text) {
+    if (dict.has(w + c)) {
+      w += c
+      continue
+    }
+    put(dict.get(w)!)
+    dict.set(w + c, next++)
+    // (the reader adds an entry a code later than the writer: it reads the next code wider once its own next entry and the
+    // early change reach a power of two)
+    const t = next - 1 + early
+    if ((t & (t - 1)) === 0 && width < 12) width++
+    w = c
+  }
+  put(dict.get(w)!)
+  put(257)
+  if (bits) out.push((acc << (8 - bits)) & 255)
+  return new Uint8Array(out)
+}
+
+describe("a stream's decoding parameters named by reference, read through the export's objects (#686: 4706206060)", () => {
+  // (the page's content LZW-coded with an early change of 0, which its parameters name by reference: read as 1, the default,
+  // the codes go wrong where they widen and the text after is lost)
+  const long = `${content}\n${Array.from({ length: 120 }, (_, i) => `q 1 0 0 1 ${i * 7} ${i * 13 + 5} cm Q`).join('\n')}`
+  const lzwDoc = (parms: string) =>
+    pdf([
+      '<< /Type /Catalog /Pages 2 0 R /OCProperties << /OCGs [6 0 R 7 0 R] /D << /BaseState /ON >> >> >>',
+      '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+      '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R /F2 8 0 R >> /Properties << /G0 6 0 R /G1 7 0 R >> /XObject << /Im 9 0 R >> >> /Contents 4 0 R >>',
+      { dict: `/Filter /LZWDecode /DecodeParms ${parms}`, data: lzw(long, 0) },
+      `<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /FirstChar 32 /LastChar 126 /Widths [${widths.join(' ')}] >>`,
+      '<< /Type /OCG /Name (axt:1.1.t) >>',
+      '<< /Type /OCG /Name (axt:2.1.t) >>',
+      '<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>',
+      {
+        dict: '/Type /XObject /Subtype /Image /Width 1 /Height 1 /ColorSpace /DeviceGray /BitsPerComponent 8',
+        data: '\x80',
+      },
+      '0',
+    ])
+  const L2 = PL as unknown as PdfLib
+  const stOf = (R: { look(v: unknown): unknown }, X: ReturnType<typeof openObjects>) =>
+    R.look(X.pages()[0]!.node.get(L2.PDFName.of('Contents')) as never)
+  it('decodes it through the objects as the whole load does, and the whole load as it always has', async () => {
+    // (the code, checked first where the parameter is direct: both readings give the content back)
+    for (const parms of ['<< /EarlyChange 0 >>', '<< /EarlyChange 10 0 R >>']) {
+      const bytes = lzwDoc(parms)
+      const X = openObjects(bytes, { PL: L2, objectsMax: 1e5, decodedMax: 1 << 24 })
+      const W = await openRemover(X, { PL: L2 })
+      const R = await openRemover(bytes, { PL: L2 })
+      const whole = R.decode(R.look(R.doc.getPages()[0]!.node.get(L2.PDFName.of('Contents')))!)
+      expect(latin1(whole), `the whole load, ${parms}`).toBe(long)
+      // (the prepare's own path: the object layer's decoder itself, on the loaded document's stream, byte for byte)
+      const st = R.look(R.doc.getPages()[0]!.node.get(L2.PDFName.of('Contents'))) as never
+      const own = L2.decodePDFRawStream(st).decode()
+      expect(latin1(own), `the object layer's own decoder, ${parms}`).toBe(latin1(whole))
+      expect(latin1(W.decode(stOf(W, X) as never)), `through the objects, ${parms}`).toBe(long)
+    }
+  })
+})

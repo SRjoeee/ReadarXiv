@@ -68,25 +68,35 @@ export function brotliByPdfJs(
 ): (streams: Uint8Array[]) => Promise<Uint8Array[]> {
   return async (streams) => {
     if (!streams.length) return []
-    o.signal?.throwIfAborted()
+    const { signal } = o
+    signal?.throwIfAborted()
     const task = pdfjs.getDocument({ ...o.options, data: brotliDocument(streams) })
-    const stop = () => void (task.destroy?.() ?? Promise.resolve()).catch(() => {})
-    o.signal?.addEventListener('abort', stop, { once: true })
+    // (a cancel settles this call itself: PDF.js 6.3.289 leaves its loading promise pending when its task is destroyed once its
+    // transport is set up, so a call waiting on it would never end, nor its worker be closed, nor the next file begin: #686,
+    // 4706206031. Every wait is raced against the cancel, and the task let go without waiting on it)
+    let cancel = () => {}
+    const cancelled = new Promise<never>((_, reject) => {
+      cancel = () => reject(signal?.reason ?? new DOMException('the decoding was cancelled', 'AbortError'))
+    })
+    cancelled.catch(() => {})
+    task.promise.catch(() => {})
+    signal?.addEventListener('abort', cancel, { once: true })
+    if (signal?.aborted) cancel()
+    const until = <T>(p: Promise<T>): Promise<T> => (signal ? Promise.race([p, cancelled]) : p)
     try {
-      const doc = await task.promise
-      o.signal?.throwIfAborted()
-      await doc.getAttachments()
+      const doc = await until(task.promise)
+      await until(doc.getAttachments())
       const out: Uint8Array[] = []
       for (let k = 0; k < streams.length; k++) {
-        const got = await doc.getAttachmentContent?.(nameOf(k))
+        const got = await until(doc.getAttachmentContent?.(nameOf(k)) ?? Promise.resolve(undefined))
         // (PDF.js gives an empty stream for one its filter refuses, with a warning): a brotli stream of data decodes to bytes
         if (!got?.length) throw new Error(`brotli stream ${k} did not decode`)
         out.push(got)
       }
       return out
     } finally {
-      o.signal?.removeEventListener('abort', stop)
-      await (task.destroy?.() ?? Promise.resolve()).catch(() => {})
+      signal?.removeEventListener('abort', cancel)
+      void Promise.resolve(task.destroy?.()).catch(() => {})
     }
   }
 }

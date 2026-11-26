@@ -543,9 +543,14 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
   const destKeyOf = (name: string): string | undefined => {
     if (!destKeys) {
       const keys = new Map<string, string>()
+      // (each node once: the paper's tree may be no tree, a node its own kid or two nodes each the other's, which a walk by
+      // depth alone walks exponentially, the page frozen (#686, 4706206050); every node is an object of the document or held
+      // by one, so the walk visits no more nodes than the document holds)
+      const seen = new Set<PdfObject>()
       const walk = (node: PdfObject | undefined, depth: number) => {
         const d = dictOf(node)
-        if (!d || depth > 64) return
+        if (!d || depth > 64 || seen.has(d)) return
+        seen.add(d)
         const ns = look(d.get(N('Names')))
         if (ns instanceof PDFArray)
           for (let i = 0; i + 1 < (ns as PdfArray).size(); i += 2) {

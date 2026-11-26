@@ -117,3 +117,23 @@ describe("the slices decoded on the export's own PDF.js worker (#686: no global 
     expect(c.log).toEqual(['open', 'close', 'open', 'close'])
   })
 })
+
+describe("a cancel at PDF.js's loading, against the pinned PDF.js (#686: 4706206031)", () => {
+  it('settles the cancelled decoding at once, ends its worker, and lets the next one through', async () => {
+    const { spawnSync } = await import('node:child_process')
+    const { fileURLToPath } = await import('node:url')
+    const child = spawnSync(process.execPath, [fileURLToPath(new URL('./cancel-child.mts', import.meta.url))], {
+      encoding: 'utf8',
+      timeout: 60_000,
+      cwd: fileURLToPath(new URL('../..', import.meta.url)),
+    })
+    const line = child.stdout.trim().split('\n').pop() ?? ''
+    expect(JSON.parse(line || '{}')).toEqual({
+      transportSet: true,
+      first: 'cancelled',
+      second: 'made',
+      log: ['open', 'close', 'open', 'close'],
+      allEnded: true,
+    })
+  }, 90_000)
+})

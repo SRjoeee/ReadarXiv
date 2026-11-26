@@ -913,22 +913,37 @@ export async function openRemover(
   const look = (v: PdfObject | undefined) => (v instanceof PDFRef ? lookup(v) : v)
   // (a stream the object view gives: its dictionary was parsed where no object is held, and the object layer's decoder looks
   // its /Filter and /DecodeParms up there, so that an entry named by reference reads as none; given them through the view,
-  // as the whole load's own context resolves them. #686: none of the 245 papers' 87,461 streams names one so)
+  // as the whole load's own context resolves them, the parameters' own entries too. #686: none of the 245 papers' 87,461
+  // streams names one so)
   const FILTERS = [PDFName.of('Filter'), PDFName.of('DecodeParms')]
-  const byRef = (v: PdfObject | undefined) =>
-    v instanceof PDFRef || (v instanceof PDFArray && v.asArray().some((x) => x instanceof PDFRef))
+  // (whether a direct value holds a reference anywhere: its arrays' entries and its dictionaries' values, a parameter
+  // dictionary's /EarlyChange among them, #686, 4706206060; a direct value is a tree, read once)
+  const holdsRef = (v: PdfObject | undefined): boolean =>
+    v instanceof PDFRef ||
+    (v instanceof PDFArray && v.asArray().some(holdsRef)) ||
+    (v instanceof PDFDict && v.entries().some(([, x]) => holdsRef(x)))
   const viewed = (st: PdfRawStream): PdfRawStream => {
-    if (loaded || !FILTERS.some((k) => byRef(st.dict.get(k)))) return st
+    if (loaded || !FILTERS.some((k) => holdsRef(st.dict.get(k)))) return st
+    // (a value as the decoder reads it: resolved through the view, an array's entries and a dictionary's values as it looks
+    // each up, when it looks it up)
     const through = (v: PdfObject | undefined): PdfObject | undefined => {
       const x = look(v)
-      if (!(x instanceof PDFArray)) return x
-      const a: PdfArray & { lookup?: unknown; lookupMaybe?: unknown } = Object.create(x)
-      a.lookup = (i: number) => look(x.get(i))
-      a.lookupMaybe = (i: number) => {
-        const y = look(x.get(i))
-        return y instanceof PDFDict ? y : undefined
+      if (x instanceof PDFArray) {
+        const a: PdfArray & { lookup?: unknown; lookupMaybe?: unknown } = Object.create(x)
+        a.lookup = (i: number) => through(x.get(i))
+        a.lookupMaybe = (i: number) => {
+          const y = through(x.get(i))
+          return y instanceof PDFDict ? y : undefined
+        }
+        return a
       }
-      return a
+      if (x instanceof PDFDict) {
+        const d: PdfDict & { lookup?: unknown; lookupMaybe?: unknown } = Object.create(x)
+        d.lookup = (k: PdfObject) => through(x.get(k as PdfName))
+        d.lookupMaybe = (k: PdfObject) => through(x.get(k as PdfName))
+        return d
+      }
+      return x
     }
     const [filter, parms] = FILTERS.map((k) => through(st.dict.get(k)))
     const dict: PdfDict & { lookup?: unknown } = Object.create(st.dict)

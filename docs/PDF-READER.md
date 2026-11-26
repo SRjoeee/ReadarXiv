@@ -2195,13 +2195,17 @@ in the page, after the slices' decoding (0.13 to 0.24 s); each file arXiv's size
   papers' 34,255 destination names is outside ASCII, whose bytes are as before). A name the paper holds is written as its own
   key, byte for byte (the name tree's string, the catalog's `/Dests` name, found by its text as PDF.js decodes it): poppler
   looks a destination up by its key's bytes, and a key in UTF-16BE of a name PDFDocEncoding holds was missed (#686's review,
-  4705748922).
+  4705748922). The tree is walked each node once (a tree that is no tree, a node its own kid twice, froze the page walked by
+  depth alone: 4706206050); the export's other walks over the paper's objects are each bounded: the page tree (openObjects:
+  each page node once, a depth bound), the objects the left half copies (each reached once, each copied once), the bake's
+  walk (the engine's: no form within itself, a form depth, an operator budget), the outline (not walked: kept as it is).
 - **The bake** (`bake.ts`), on the engine's walk (`walkPage`: each show's codes and text state as the remover reads them),
   read through the file's own `openObjects` view of the composed document (`openRemover` given the objects in place of the
   bytes: each object parsed when asked, nothing of the document loaded whole; the prepare's, given the bytes, is the same walk
-  over the object layer's whole load). Through the view, a stream whose `/Filter` or `/DecodeParms` names an entry by
-  reference is decoded with it resolved, as the whole load's context resolves it (#686's review, 4705748788: the view parses a
-  dictionary where no object is held; none of the 245 papers' 87,461 streams names one so). A group turned off in the default view hides its ink, and PDF.js and poppler still read its text: on
+  over the object layer's whole load). Through the view, a stream whose `/Filter` or `/DecodeParms` holds a reference anywhere
+  (an entry of either, a parameter dictionary's value such as LZW's `/EarlyChange`) is decoded with it resolved, as the whole
+  load's context resolves it (#686's review, 4705748788 and 4706206060: the view parses a dictionary where no object is held;
+  none of the 245 papers' 87,461 streams holds one so). A group turned off in the default view hides its ink, and PDF.js and poppler still read its text: on
   1706.03762v7-zh, 1,408 of 1,408 words of the units laid were read on the translated pages. Baked, a show in a group the page
   turns off becomes the advance it made (a `TJ` of one number at the text state of the moment), a painted path and an image go,
   a clip stays a clip, state stays (a group off hides painting, never state: ISO 32000-1 §8.11.3.1), our own marks go; 62 of the
@@ -2229,8 +2233,9 @@ in the page, after the slices' decoding (0.13 to 0.24 s); each file arXiv's size
   tables are brotli: a browser's `DecompressionStream` has none (Chromium 153), and PDF.js (6.3.289, both hosts' pin) decodes
   PDF's `/BrotliDecode`, so the slices' streams are the embedded files of a document of ours read back through PDF.js's public
   API: no decoder shipped. They are decoded on a PDF.js worker of the export's own, the reader's kit's `export` role over a
-  port of the reader's, opened for them and released after, however the decoding ends (a cancel destroys its document at
-  once): the reader never sets PDF.js's global worker, and a document asked of PDF.js with no worker fails in a browser, which
+  port of the reader's, opened for them and released after, however the decoding ends (a cancel settles the decoding at once
+  and lets its document go without waiting on it: PDF.js 6.3.289 leaves a loading promise pending when its task is destroyed
+  once its transport is set up, which held the next file back for good until #686's 4706206031): the reader never sets PDF.js's global worker, and a document asked of PDF.js with no worker fails in a browser, which
   every file did on the website's page until #686 (the e2e's stand-in served its face as a bare TrueType, which never reached
   this decoding; it serves WOFF2 now). The CFF is subset (`subsetCff`): every
   glyph not drawn and every subroutine no kept glyph reaches made empty, glyph ids and CIDs kept (the text's codes need no

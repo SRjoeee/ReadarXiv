@@ -80,7 +80,9 @@ const decoded = (X: ReturnType<typeof openObjects>, v: unknown) =>
   latin1(L.decodePDFRawStream(look(X, v) as PdfRawStream).decode())
 
 /** the plain document: a page of Helvetica text, its first word wrapped by the add-on in group 7 (axt:1.1.t) */
-const plain = (o: { pageExtra?: string; pagesExtra?: string; catalogExtra?: string } = {}) =>
+const plain = (
+  o: { pageExtra?: string; pagesExtra?: string; catalogExtra?: string; more?: Record<number, Obj> } = {},
+) =>
   composedOf(
     [
       `<< /Type /Catalog /Pages 2 0 R ${o.catalogExtra ?? ''} >>`,
@@ -94,8 +96,9 @@ const plain = (o: { pageExtra?: string; pagesExtra?: string; catalogExtra?: stri
       3: `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] ${o.pageExtra ?? ''} /Resources << /Font << /F1 5 0 R >> /Properties << /G0 7 0 R >> >> /Contents 6 0 R >>`,
       6: { dict: '', data: 'BT /F1 10 Tf 72 700 Td /OC /G0 BDC (Hello) Tj EMC ( World) Tj ET' },
       7: '<< /Type /OCG /Name (axt:1.1.t) >>',
+      ...o.more,
     },
-    8,
+    Math.max(8, ...Object.keys(o.more ?? {}).map((n) => Number(n) + 1)),
   )
 
 describe('what the paper says is written as PDF strings and names, never as PDF syntax (#685: 4703881927)', () => {
@@ -182,6 +185,29 @@ function hexOfToken(tok: string): string {
   }
   return out.map((b) => b.toString(16).toUpperCase().padStart(2, '0')).join('')
 }
+
+describe('a destination tree that is no tree is read at once, each node once (#686: 4706206050)', () => {
+  // (a node whose /Kids names itself twice, Codex's 440-byte shape: walked by its depth alone, 2^64 visits; and a cycle of two)
+  const link: Page['links'] = [[[72, 600, 100, 620], { dest: JSON.stringify('x') }]]
+  for (const [what, more] of [
+    ['a node that is its own kid, twice', { 8: '<< /Kids [8 0 R 8 0 R] >>' }],
+    [
+      "two nodes each the other's kid",
+      { 8: '<< /Kids [9 0 R] >>', 9: '<< /Kids [8 0 R] /Names [(x) [3 0 R /Fit]] >>' },
+    ],
+  ] as const)
+    it(what, async () => {
+      const t0 = performance.now()
+      const { X } = await made(
+        plain({ catalogExtra: '/Names << /Dests 8 0 R >>', more }),
+        laid([run('\u6587')], link),
+        'translation',
+      )
+      expect(performance.now() - t0).toBeLessThan(2000)
+      const annots = look(X, X.pages()[0]!.node.get(N('Annots'))) as PdfArray
+      expect(String((look(X, annots.get(0)) as PdfDict).get(N('Dest')))).toBe('(x)')
+    }, 10_000)
+})
 
 describe("the left half of a side-by-side page is arXiv's own drawing (#685: 4703877261, 4703881297)", () => {
   it("draws a figure form the add-on wrote again from arXiv's own revision of it, under a number of its own", async () => {
