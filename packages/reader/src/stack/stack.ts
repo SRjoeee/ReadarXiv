@@ -151,6 +151,9 @@ export interface ViewContent {
   over: ((at: SlotAt) => Promise<HTMLElement | null> | HTMLElement | null) | null
   /** what is laid over drawn again at a new scale, RECOPY_MS after a zoom (the crops), in the slot's turn of the scheduler */
   again?: ((over: HTMLElement, at: SlotAt) => Promise<void>) | null
+  /** what is laid over cut again for the area its page view's detail canvas draws (the crops at that canvas's resolution),
+   *  once that canvas is drawn; `area` null where the page view draws none any more. Whether they stand for it once done */
+  detail?: ((over: HTMLElement, at: SlotAt, area: DetailArea | null) => Promise<boolean>) | null
   /** what is laid over let go while the drawing is kept off the view, a small copy kept of it (the crops' page-sized bitmap: a
    *  far page holds one bitmap, its page view's): the device pixels the copy holds */
   away?: ((over: HTMLElement) => number) | null
@@ -173,6 +176,32 @@ interface SkeletonContent {
   key: string
 }
 export type PageContent = ViewContent | LeftContent | SkeletonContent
+/** where a page view's detail canvas stands (PDF.js's detail view, past its canvas cap): its box in the page view's viewport
+ *  (CSS px) and its pixels */
+export type DetailArea = { left: number; top: number; width: number; height: number; px: readonly [number, number] }
+/** a detail canvas's area read off it: its box (PDF.js stands it by shares of the page's frame, PDFPageDetailView.draw) and its
+ *  pixels; null where it states none */
+export function detailAreaOf(
+  canvas: { width: number; height: number; style: { left: string; top: string; width: string; height: string } },
+  vp: { width: number; height: number },
+): DetailArea | null {
+  const share = (v: string) => (v.endsWith('%') ? Number.parseFloat(v) / 100 : Number.NaN)
+  const [l, t, w, h] = [canvas.style.left, canvas.style.top, canvas.style.width, canvas.style.height].map(share) as [
+    number,
+    number,
+    number,
+    number,
+  ]
+  if (![l, t, w, h].every(Number.isFinite) || !(w > 0) || !(h > 0) || !canvas.width || !canvas.height) return null
+  return {
+    left: l * vp.width,
+    top: t * vp.height,
+    width: w * vp.width,
+    height: h * vp.height,
+    px: [canvas.width, canvas.height],
+  }
+}
+
 /** a slot as `over` is given it: its page, the page view drawn, its viewport, aborted once that drawing goes */
 export interface SlotAt {
   n: number
@@ -274,6 +303,8 @@ interface Drawing {
   drawnAt: number
   job: Job | null
   detailJob: Job | null
+  /** whether its overlay holds crops cut for its page view's detail canvas */
+  detailCrops: boolean
   againJob: Job | null
   /** its page view's drawing, ms */
   drawMs: number
@@ -340,6 +371,50 @@ export interface Stack {
   on<K extends keyof StackEvents>(type: K, f: Listener<K>): () => void
   probe(): Record<string, number>
   dispose(): void
+}
+
+/** what the stack reads of a page view's detail view (PDF.js's PDFPageDetailView): its state, its canvas once drawn, its draw */
+type DetailView = { renderingState: number; canvas?: HTMLCanvasElement | null; draw(): Promise<unknown> }
+/** a page view's detail view, as the stack reads it */
+const detailViewOf = (pv: PDFPageView | null | undefined) => (pv?.detailView ?? null) as unknown as DetailView | null
+/** drawing d's crops cut for its page view's detail canvas, standing over `area`, or let go (null): its overlay's `detail`
+ *  (docs/PDF-READER.md §11.8); nothing where it has none. `detailCrops` says whether they stand once it is done */
+async function detailCut(d: Drawing, n: number, area: DetailArea | null): Promise<void> {
+  const c = d.content
+  if (!d.view || !d.over || !c || !(c.kind === undefined || c.kind === 'view') || !c.detail) return
+  if (area === null) d.detailCrops = false
+  const stand = await c.detail(d.over, { n, view: d.view, viewport: d.view.viewport, signal: d.ac.signal }, area)
+  if (area !== null) d.detailCrops = stand
+}
+/** the job that cuts drawing d's crops for `detail`, its page view's detail canvas, once `first` is done (the canvas's draw, or
+ *  nothing where it is drawn), while it still stands and the page is in view; `after` once it is done */
+function detailJob(
+  d: Drawing,
+  n: number,
+  detail: DetailView,
+  o: { stands: () => boolean; inView: () => boolean; first: () => Promise<unknown>; after: () => void },
+): Job {
+  const job: Job = {
+    rank: () => (o.stands() && o.inView() ? 0 : null),
+    order: () => n + 0.5,
+    run: async () => {
+      try {
+        await o.first()
+        // (the crops in view cut at the detail canvas's resolution, as it stands: docs/PDF-READER.md §11.8)
+        const area = detail.canvas && d.view ? detailAreaOf(detail.canvas, d.view.viewport) : null
+        if (o.stands() && area) await detailCut(d, n, area)
+      } finally {
+        // (done, or given up: its canvas's draw cancelled, a cut that throws)
+        if (d.detailJob === job) d.detailJob = null
+      }
+      o.after()
+    },
+    // (dropped unrun, its page out of view at its turn: the page back asks its cut again)
+    dropped: () => {
+      if (d.detailJob === job) d.detailJob = null
+    },
+  }
+  return job
 }
 
 export function createStack(o: StackOptions): Stack {
@@ -508,6 +583,7 @@ export function createStack(o: StackOptions): Stack {
     drawnAt: 0,
     job: null,
     detailJob: null,
+    detailCrops: false,
     againJob: null,
     drawMs: 0,
     ac: new AbortController(),
@@ -950,9 +1026,11 @@ export function createStack(o: StackOptions): Stack {
     counts.keptDropped++
     name(s)
   }
+  /** a drawing's bitmaps: its page view's canvas and, past PDF.js's cap, the detail canvas PDF.js keeps with it */
   const pixelsOf = (d: Drawing) => {
     const c = d.view?.canvas as unknown as HTMLCanvasElement | undefined
-    return c ? c.width * c.height : 0
+    const dc = detailViewOf(d.view)?.canvas
+    return (c ? c.width * c.height : 0) + (dc ? dc.width * dc.height : 0)
   }
   // The focus's move read a task later, never in a microtask: on a native Tab Chromium clears the focus, tells focusout and
   // runs its microtasks before the focus arrives at the next element
@@ -997,16 +1075,22 @@ export function createStack(o: StackOptions): Stack {
           maxY = (Math.min(view.bottom, r.bottom) - r.top) / k
         const whole = minX <= 0 && minY <= 0 && maxX >= r.width / k - 0.5 && maxY >= r.height / k - 0.5
         pv.updateVisibleArea(whole ? null : ({ minX, minY, maxX, maxY } as never))
-        const detail = pv.detailView as unknown as { renderingState: number; draw(): Promise<unknown> } | null
-        if (detail && detail.renderingState === INITIAL) {
-          const job: Job = {
-            rank: () => (s.shown === d && pv.detailView === (detail as never) && s.inView ? 0 : null),
-            order: () => s.n + 0.5,
-            run: async () => {
-              await detail.draw()
-              if (s.shown === d) tell('drawn', { n: s.n, scale, key: d.key, detail: true })
-            },
-          }
+        // (no detail canvas now, the page in view whole or under the cap: the crops cut for one go with it)
+        if (!pv.detailView && d.detailCrops) void detailCut(d, s.n, null)
+        const detail = detailViewOf(pv)
+        const stands = () => s.shown === d && detailViewOf(pv) === detail
+        // (a detail canvas to draw, then its crops cut; or one drawn with no crops standing for it, a cut dropped as the page
+        // was kept far and the page back: its crops cut)
+        const draw = detail?.renderingState === INITIAL
+        const bare =
+          detail?.renderingState === FINISHED && !!detail.canvas && !!d.over && !d.detailCrops && !d.detailJob
+        if (detail && (draw || bare)) {
+          const job = detailJob(d, s.n, detail, {
+            stands,
+            inView: () => s.inView,
+            first: draw ? () => detail.draw() : async () => {},
+            after: () => draw && s.shown === d && tell('drawn', { n: s.n, scale, key: d.key, detail: true }),
+          })
           if (d.detailJob) scheduler.forget(d.detailJob)
           d.detailJob = job
           scheduler.want(job)

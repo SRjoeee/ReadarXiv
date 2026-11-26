@@ -41,7 +41,7 @@ import type { ClassName } from '../prefs.ts'
 import type { Kit } from '../pdfjs/kit.ts'
 import type { Clock } from '../stack/clock.ts'
 import { onOf } from '../listeners.ts'
-import type { PageContent, SlotAt, Stack } from '../stack/stack.ts'
+import type { DetailArea, PageContent, SlotAt, Stack } from '../stack/stack.ts'
 import { kindShown, sameClasses } from './classes.ts'
 import type { Faces } from './faces.ts'
 import type { Groups } from './groups.ts'
@@ -50,11 +50,19 @@ import { createMarks, type MarkBox } from './marks.ts'
 import { committed, type Lay, type Laid, type Page, type Rows } from './page.ts'
 import { membersOnPage } from './turn.ts'
 import {
+  askDetail,
   cropGrid,
   cropsAway,
   cropsBack,
   cropsFor,
   cropsFree,
+  detailAway,
+  detailBoxOf,
+  detailCropsFor,
+  detailKept,
+  detailPixels,
+  dropCanvas,
+  holeOf,
   type Rounding,
   svgOf,
   turned,
@@ -156,6 +164,8 @@ export interface Composer {
   probe(): Record<string, number | string>
   /** the last overlays' timings (ms) */
   timings(): readonly { n: number; svgMs: number; cropsMs: number; textMs: number; overlayMs: number }[]
+  /** the last detail crops' cuts (docs/PDF-READER.md §11.8): their page, ms, their canvas's pixels and their sources' */
+  details(): readonly { n: number; ms: number; px: number; srcPx: number }[]
   dispose(): void
 }
 
@@ -259,6 +269,8 @@ export function createComposer(o: ComposerOptions): Composer {
     firstTold = false
   const counts = { lays: 0, commits: 0, uncommits: 0, overlays: 0, stalls: 0, failures: 0, ahead: 0, aheadKept: 0 }
   const timings: { n: number; svgMs: number; cropsMs: number; textMs: number; overlayMs: number }[] = []
+  /** the last detail crops' cuts: their page, ms, the pixels their canvas holds and those of the sources rendered for it */
+  const details: { n: number; ms: number; px: number; srcPx: number }[] = []
   const measure = canvasMeasure()
   const listeners = new Map<keyof ComposerEvents, Set<(e: unknown) => void>>()
   const tell = <K extends keyof ComposerEvents>(type: K, e: ComposerEvents[K]) => {
@@ -385,11 +397,17 @@ export function createComposer(o: ComposerOptions): Composer {
         own: false,
         over: (at) => overlay(n, page, doc, g, at),
         again: (el, at) => cropsAgain(page, doc, g, el, at),
-        // (a far page's crops kept as a copy of their box, back in the task it returns: docs/PDF-READER.md §11.8)
-        away: cropsAway,
+        detail: (el, at, area) => cropsDetail(page, doc, g, el, at, area),
+        // (a far page's crops kept as a copy of their box, back in the task it returns: docs/PDF-READER.md §11.8; its detail's,
+        // cut to their box already, kept as they are with the page view's detail canvas they match, and counted)
+        away: (el) => {
+          detailKept(el)
+          return cropsAway(el) + detailPixels(el)
+        },
         back: (el, at) => cropsBack(el, cropGridOf(at).px),
         free: (el) => {
           releaseText(el)
+          detailAway(el)
           cropsFree(el)
         },
       }
@@ -451,7 +469,8 @@ export function createComposer(o: ComposerOptions): Composer {
     return el
   }
   /** a laid page's crops drawn again at its page view's new resolution (a zoom): kept where it is at the resolution a crop
-   *  render now would be at */
+   *  render now would be at. Its detail's crops of another scale go with the old crops, in the same task (the base's own drawn
+   *  there until the next detail draw cuts them again); those of this scale stay, the new base cut away under them */
   async function cropsAgain(page: Page, doc: PDFDocumentProxy, g: Groups, el: HTMLElement, at: SlotAt) {
     const was = el.querySelector<HTMLCanvasElement>(':scope > canvas.axt-crops')
     if (!was) return
@@ -460,9 +479,52 @@ export function createComposer(o: ComposerOptions): Composer {
     if (was.width === cropGridOf(at).px[0]) return
     const next = await cropsFor(page, (k) => doc.getPage(k), at.viewport, g.crops, out, at.signal, round)
     if (!next || at.signal.aborted || was.parentNode !== el) return
+    const det = el.querySelector<HTMLCanvasElement>(':scope > canvas.axt-crops-detail')
+    if (det && det.dataset.axtScale === String(at.viewport.scale)) next.style.clipPath = was.style.clipPath
+    else if (det) detailAway(el)
     was.replaceWith(next)
     was.width = 0
     was.height = 0
+  }
+  /** a laid page's crops cut again for the area its page view's detail canvas draws, at that canvas's resolution (past PDF.js's
+   *  canvas cap); `area` null where it draws none any more. Whether its crops for that area stand once it is done (false: let
+   *  go, or the cut dropped). The hand-over in one task, once the new crops are cut: the base's
+   *  crops cut away under the area and the new canvas in the old one's place, so that no frame shows a crop twice or none */
+  async function cropsDetail(
+    page: Page,
+    doc: PDFDocumentProxy,
+    g: Groups,
+    el: HTMLElement,
+    at: SlotAt,
+    area: DetailArea | null,
+  ): Promise<boolean> {
+    const base = el.querySelector<HTMLCanvasElement>(':scope > canvas.axt-crops')
+    if (!area) {
+      detailAway(el)
+      return false
+    }
+    // (a page with no crops: none to cut, its detail done)
+    if (!base) return true
+    // (the last cut asked of this overlay, still, once cut, at the scale it was cut for: else dropped)
+    const mine = askDetail(el)
+    const t0 = performance.now()
+    const told = { srcPx: 0 }
+    const next = await detailCropsFor(page, (k) => doc.getPage(k), at.viewport, g.crops, area, at.signal, told)
+    if (at.signal.aborted || base.parentNode !== el || !mine() || at.view.viewport.scale !== at.viewport.scale) {
+      if (next) dropCanvas(next)
+      return false
+    }
+    const was = el.querySelector<HTMLCanvasElement>(':scope > canvas.axt-crops-detail')
+    const box = next && detailBoxOf(next)
+    base.style.clipPath = box ? holeOf(box, at.viewport) : ''
+    if (next) {
+      if (was) was.replaceWith(next)
+      else base.after(next)
+    }
+    if (was && was !== next) dropCanvas(was)
+    details.push({ n: at.n, ms: performance.now() - t0, px: next ? next.width * next.height : 0, srcPx: told.srcPx })
+    if (details.length > 64) details.shift()
+    return true
   }
 
   // ---------------------------------------------------------------- laying, one page at a time
@@ -1143,6 +1205,7 @@ export function createComposer(o: ComposerOptions): Composer {
     },
     on: onOf<ComposerEvents>(listeners),
     timings: () => timings,
+    details: () => details,
     probe() {
       return {
         laidPages: commits.size,

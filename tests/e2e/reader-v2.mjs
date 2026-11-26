@@ -640,6 +640,9 @@ try {
   // ------------------------------------------------------------------------------------------------- the PDF download
   await settles('the PDF download\'s checks loaded', () => import('./reader-v2-export.mjs')).then(m => m.exportChecks({ api, fixture, PAPER, openReader, laid, readerState, setConfig, clearPaperStore, section, check, SHOTS }))
 
+  // ------------------------------------------------------------------------------------- the crops past the canvas cap
+  await settles('the crops\' checks loaded', () => import('./reader-v2-crops.mjs')).then(m => m.cropsChecks({ openReader, laid, section, check, sleep }))
+
   // -------------------------------------------------------------------------------------------- what the run did not do
   section('what the run did not do')
   check('no request left the route table', guard.violations.length === 0, guard.violations.length ? guard.violations.map(v => `${v.method} ${v.url} from ${v.from}`).join('; ') : `${guard.hosts.length} hosts answered`)

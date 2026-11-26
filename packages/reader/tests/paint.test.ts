@@ -3,7 +3,20 @@
 // (triage-1 B: 2608.16117v1-de t11, its p3 element on p4's line): its pixels are its own page's, as today's crops were.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Item, Page } from '../src/compose/page.ts'
-import { cropsAway, cropsBack, cropsBox, cropsFor, cropsOf } from '../src/compose/paint.ts'
+import {
+  askDetail,
+  cropsAway,
+  cropsBack,
+  cropsBox,
+  cropsFor,
+  cropsOf,
+  detailAway,
+  detailBoxOf,
+  detailKept,
+  detailCropsFor,
+  holeOf,
+} from '../src/compose/paint.ts'
+import { type DetailArea, detailAreaOf } from '../src/stack/stack.ts'
 
 /** a viewport of a page `h` points high at `scale`, upright: PDF units to CSS px, y down */
 const viewportOf = (h: number, scale: number) => ({
@@ -491,5 +504,142 @@ describe('a crop of a line laid in a frame (a unit TeX set turned, docs/PDF-READ
     const [c] = cropsOf(pageOf([[1, 64, 440, 70, 470, 440]]), { x: 0.5, y: 0.5 })
     expect(covers(c!.clip!, [143, 448, 153.4, 460])).toBe(true)
     expect(reaches(c!.clip!, [153.5, 440, 160, 470], [143, 448, 153.4, 460])).toBe(false)
+  })
+})
+
+describe("crops past PDF.js's canvas cap, cut at its detail canvas's resolution (#crops-sharp: 2611.18114v1 p26 at 600 %)", () => {
+  afterEach(() => vi.restoreAllMocks())
+  // (a formula drawn at 100 pt across, 702 up; the page at 600 %: 6 CSS px a point)
+  const page: Page = {
+    page: 1,
+    wait: { rows: [], faces: [] },
+    links: [],
+    members: [
+      {
+        ord: 3,
+        page: 1,
+        state: 'laid',
+        off: 2,
+        lit: { left: [], right: [], own: [] },
+        lines: [[702, 72, 300, [{ s: 'x', x: 100, src: [1, 100, 700, 120, 710, 702], k: 1, piece: '1' }]]],
+      },
+    ],
+  }
+  const vp = viewportOf(792, 6)
+  /** the page's render, recorded: its canvas's pixels and the transform it was drawn with */
+  const recorded = () => {
+    const renders: { px: [number, number]; transform: number[] | undefined }[] = []
+    const draws: number[][] = []
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(
+      () =>
+        ({
+          drawImage: (_c: unknown, ...a: number[]) => draws.push(a),
+          save() {},
+          restore() {},
+          beginPath() {},
+          rect() {},
+          clip() {},
+        }) as never,
+    )
+    const pdfPage = {
+      getViewport: () => vp,
+      render: ({ canvas, transform }: { canvas: HTMLCanvasElement; transform?: number[] }) => {
+        renders.push({ px: [canvas.width, canvas.height], transform })
+        return { promise: Promise.resolve(), cancel: () => {} }
+      },
+    }
+    return { renders, draws, pageOf: async () => pdfPage as never }
+  }
+  it("cuts the crops in view at the detail canvas's own pixels a CSS px, stood where it stands, its sources rendered so", async () => {
+    // (the detail canvas: 800 x 600 CSS px of the frame at 2 device px each, as PDF.js draws it at a device's ratio of 2; the
+    // page's own canvas past the cap at 0.379)
+    const area: DetailArea = { left: 500, top: 400, width: 800, height: 600, px: [1600, 1200] }
+    const r = recorded()
+    const out = await detailCropsFor(page, r.pageOf, vp as never, Promise.resolve({} as never), area)
+    expect(out).not.toBeNull()
+    // (its canvas on the detail's grid, 2 device px a CSS px, over the box of the crops' places alone, within the area)
+    const box = detailBoxOf(out!)!
+    expect([out!.width / box.width, out!.height / box.height]).toEqual([2, 2])
+    expect(box.left >= area.left && box.top >= area.top).toBe(true)
+    expect(box.left + box.width <= area.left + area.width && box.top + box.height <= area.top + area.height).toBe(true)
+    expect(out!.width * out!.height).toBeLessThan((area.px[0] * area.px[1]) / 50)
+    // (the crop's place, 100 to 120 pt across and 702 down to the line's foot at 6 CSS px a point, is in the box)
+    expect(box.left).toBeLessThanOrEqual(600)
+    expect(box.left + box.width).toBeGreaterThanOrEqual(720)
+    expect([out!.style.left, out!.style.top, out!.style.width, out!.style.height]).toEqual(
+      [
+        [box.left, 3600],
+        [box.top, 4752],
+        [box.width, 3600],
+        [box.height, 4752],
+      ].map(([v, of]) => `${(v! * 100) / of!}%`),
+    )
+    // (its source rendered at the detail's 2 a CSS px, the region of its source alone, not the page whole)
+    expect(r.renders).toHaveLength(1)
+    expect(r.renders[0]!.transform?.slice(0, 4)).toEqual([2, 0, 0, 2])
+    expect(r.renders[0]!.px[0] * r.renders[0]!.px[1]).toBeLessThan(area.px[0] * area.px[1])
+    // (drawn at its place in the box: 100 pt across is 600 CSS px, from the box's left)
+    expect(r.draws[0]![4]).toBeCloseTo((600 - box.left) * 2, 0)
+  })
+  it('makes none where no crop stands in the area', async () => {
+    const r = recorded()
+    const far: DetailArea = { left: 2000, top: 3000, width: 800, height: 600, px: [1600, 1200] }
+    expect(await detailCropsFor(page, r.pageOf, vp as never, Promise.resolve({} as never), far)).toBeNull()
+    expect(r.renders).toHaveLength(0)
+  })
+  it("reads the detail canvas's area off it, as PDF.js stands it (shares of the frame) and its pixels", () => {
+    const canvas = {
+      width: 1600,
+      height: 1200,
+      style: { left: '13.8889%', top: '8.4175%', width: '22.2222%', height: '12.6263%' },
+    }
+    const a = detailAreaOf(canvas, { width: 3600, height: 4752 })!
+    expect([a.left, a.top, a.width, a.height].map((v) => Math.round(v))).toEqual([500, 400, 800, 600])
+    expect(a.px).toEqual([1600, 1200])
+    expect(detailAreaOf({ ...canvas, style: { ...canvas.style, left: '' } }, { width: 3600, height: 4752 })).toBeNull()
+  })
+  it("cuts the page's own crops away under the area, so that none is drawn twice", () => {
+    const hole = holeOf({ left: 900, top: 1188, width: 1800, height: 2376, px: [1, 1] }, { width: 3600, height: 4752 })
+    expect(hole).toBe(
+      'polygon(evenodd, 0% 0%, 100% 0%, 100% 100%, 0% 100%, 0% 0%, 25% 25%, 75% 25%, 75% 75%, 25% 75%, 25% 25%)',
+    )
+  })
+  it('drops a cut that finishes after the crops were let go or a later cut was asked (a zoom back while one was cut)', () => {
+    const over = document.createElement('div')
+    const base = document.createElement('canvas')
+    base.className = 'axt-crops'
+    base.style.clipPath = 'polygon(evenodd, 0% 0%)'
+    over.append(base)
+    const first = askDetail(over)
+    expect(first()).toBe(true)
+    // (let go while it was cut: the zoom back under the cap)
+    detailAway(over)
+    expect(first()).toBe(false)
+    expect(base.style.clipPath).toBe('')
+    // (a later cut asked: the earlier one's result is no longer its overlay's)
+    const second = askDetail(over)
+    const third = askDetail(over)
+    expect(second()).toBe(false)
+    expect(third()).toBe(true)
+    // (each overlay its own)
+    expect(askDetail(document.createElement('div'))()).toBe(true)
+    expect(third()).toBe(true)
+  })
+  it("drops a cut under way as its page is kept far, the crops cut before kept (their pixels counted then: #688's review)", () => {
+    const over = document.createElement('div')
+    const base = Object.assign(document.createElement('canvas'), { className: 'axt-crops' })
+    const det = Object.assign(document.createElement('canvas'), {
+      className: 'axt-crops-detail',
+      width: 40,
+      height: 30,
+    })
+    base.style.clipPath = 'polygon(evenodd, 0% 0%)'
+    over.append(base, det)
+    const pending = askDetail(over)
+    detailKept(over)
+    expect(pending()).toBe(false)
+    expect(over.querySelector('canvas.axt-crops-detail')).toBe(det)
+    expect([det.width, det.height]).toEqual([40, 30])
+    expect(base.style.clipPath).not.toBe('')
   })
 })
