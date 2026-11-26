@@ -2225,9 +2225,11 @@ in the page, after the slices' decoding (0.13 to 0.24 s); each file arXiv's size
   at most 158 MB, its renderer's resident memory at most 450 MB.
 - **Not yet** (counted where it occurs): a paper this machine keeps, opened with our server out of reach: its file needs the
   original and the add-on read whole, which the machine holds only where a file was made of it before (else the file fails, its
-  retry offered); small capitals (smcp) not substituted, ligatures only at U+FB00 to U+FB04; a page turned
-  (`/Rotate`) set side by side in its upright frame; a non-CID-keyed CFF under `/CIDFontType0C` (poppler warns, every renderer
-  tried draws it).
+  retry offered); small capitals (smcp) not substituted (a face's own by its GSUB feature, asked by 20 units in 2 of the 245
+  papers: their lower-case Latin letters would be drawn in lower case), ligatures only at U+FB00 to U+FB04; a page turned
+  (`/Rotate`, 3 pages of 1 of the 245, all 90) set side by side in its upright frame, its two copies stacked; a non-CID-keyed
+  CFF under `/CIDFontType0C` (poppler warns, every renderer tried draws it). The small capitals and the turned page land in
+  the PR after #685, before the download reaches any release.
 
 The rows: `packages/reader/tests/export/` (the subset on CFF fonts of our own, the WOFF2 path and its transformed TrueType,
 brotli by PDF.js, the bake, the chain on a document of our own, read back by the object layer and PDF.js),
