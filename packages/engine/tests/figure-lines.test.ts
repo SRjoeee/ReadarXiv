@@ -832,6 +832,24 @@ describe('figure-lines: a path’s rows whose paragraphs a blank line ends, as t
     fig.holds = [{ p: 1, b: 9, ks: fig.units.map((u) => u.k), shape: rect(75, 650, x1, 712) }]
     expect(figureLinesOf([page], fig, () => false, null).filter((t) => t.ks.length > 1)).toEqual([])
   })
+  it('reads each face’s rows against their own leading: a tighter heading’s leading is no measure of the body’s (Codex on #693)', () => {
+    // (a two-row bold heading at a leading of 10 over three rows of body at 14, all size 10, the box forcing every break: read
+    // against the heading's 10, every body step would be a blank line and the body rows singletons; against their own 14 they
+    // show none, and the wrap test joins them)
+    const rows: [string, string, number][] = [
+      ['Changes made to the', 'Arial-BoldMT', 0],
+      ['restart rule', 'Arial-BoldMT', 10],
+      ['Update the core', T, 24],
+      ['import validation', T, 38],
+      ['logic to accept', T, 52],
+    ]
+    const { page, fig } = pageOf(rows.map(([text, font, d], li) => [{ text, font, x: 80, dy: 14 * li - d }]))
+    const g = page.glyphs as Glyph[]
+    const x1 = Math.max(...g.map((x) => x.x1)) + 5
+    fig.holds = [{ p: 1, b: 9, ks: fig.units.map((u) => u.k), shape: rect(75, 630, x1, 712) }]
+    const texts = figureLinesOf([page], fig, () => false, null).filter((t) => t.ks.length > 1)
+    expect(texts.map((t) => t.ks)).toContainEqual([2, 3, 4])
+  })
   it('joins no rows of a script without letter case, a blank line shown or not: no break shows its text going on', () => {
     // (Hebrew words of our own, ragged, two paragraphs a blank line apart, and the same rows with no blank line: no row opens in
     // lower case and none ends in a hyphen, so no run shows running text, as before the blank line was read)

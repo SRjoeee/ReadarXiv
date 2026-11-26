@@ -5682,7 +5682,8 @@ lines a node holds, each one text, by facts of the text and of the figure's stru
   by 8.4 pt) or that opened with a capital or a digit ("…coarse Gabors." | "Each pathway …"), and the one-line remnant, its
   room on its row ending at the descender of the row above, stood as the original. A path whose rows show no blank line is
   read by the wrap test as before. A step to a row of another face (a heading set apart over its rows) is a change of face and
-  tells no blank line: read so, 2608.17019v1 p3's bulleted statements under their bold heading were joined. **Flush rows join so whether or not a row
+  tells no blank line: read so, 2608.17019v1 p3's bulleted statements under their bold heading were joined. Each face's rows are read
+  against their own leading: a heading's tighter leading is no measure of its body's (Codex on #693). **Flush rows join so whether or not a row
   opens an item** (lane fig-rows, 2026-11-14): "no line an item's" limits the centred rows alone; a row that opens one (its
   first glyphs the marker of a line a list holds, `listed`, as outside a path) begins a text of its own, its marker its label and
   never sent, and the rows under it join it by the wrap rule (2608.06701v1 p1's plan box: its items 1 and 4, ragged at their

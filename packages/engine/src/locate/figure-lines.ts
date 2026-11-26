@@ -756,9 +756,14 @@ function linesOf(
         clear: F[k]!.bottom - b.top,
         one: sameFace(F[k]!, b),
       }))
-      const lead = Math.min(...steps.filter((s) => s.one).map((s) => s.pitch))
-      const clear0 = Math.min(...steps.filter((s) => s.one && s.pitch <= lead + tol).map((s) => s.clear))
-      const blank = steps.map((s) => s.one && s.pitch > lead + tol && s.clear - (s.pitch - lead) >= clear0 - tol)
+      // (each face's rows against their own leading: a bold heading's tighter leading is no measure of its body's, Codex on #693)
+      const blank = steps.map((s, k) => {
+        if (!s.one) return false
+        const mine = steps.filter((t, j) => t.one && sameFace(F[j]!, F[k]!))
+        const lead = Math.min(...mine.map((t) => t.pitch))
+        const clear0 = Math.min(...mine.filter((t) => t.pitch <= lead + tol).map((t) => t.clear))
+        return s.pitch > lead + tol && s.clear - (s.pitch - lead) >= clear0 - tol
+      })
       if (blank.some(Boolean)) {
         const runs: number[][] = [[0]]
         steps.forEach((_, k) => {
