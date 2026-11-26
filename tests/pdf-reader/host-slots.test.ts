@@ -158,7 +158,8 @@ describe('the download menu (the reader\'s design, §6.1)', () => {
   it('the original greyed until its document is open — loading, or a fetch that failed (Codex on #301)', async () => {
     const { controller } = fakeController({ sides: { left: { page: 0, pages: 0 }, right: { page: 0, pages: 0 } } })
     const { container } = await openMenu(createElement(DownloadMenu, { controller }))
-    const [, original] = [...container.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+    // (the original's row by its words: the files' rows stand before it, #685)
+    const original = [...container.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(r => r.textContent === R.download.original)
     expect(original!.getAttribute('aria-disabled')).toBe('true')
     original!.click()
     expect(controller.download).not.toHaveBeenCalled()

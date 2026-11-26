@@ -2161,11 +2161,20 @@ in the page, after the slices' decoding (0.13 to 0.24 s); each file arXiv's size
   them (the engine's `openObjects` and `appendSection`): nothing of the original is parsed whole or written again. The
   translation: each laid page's dict written again under its number, its content the add-on's with the groups the page turns off
   baked out, then the translation as real text, each crop the original's element ink (a form of the page's content with that
-  member's element and label groups alone, clipped as the reader cuts it), each link where the reader draws it; the catalog's
-  default view lists the groups turned off. The side by side: every page's dict written again under its number (every
-  destination and outline entry still points at it), twice as wide, a form of the original page's own content streams on the
-  left with its own annotations, the translated page as a form on the right with its links moved by the page's width; a page
-  with nothing laid shows the original on both sides.
+  member's element and label groups alone, clipped as the reader cuts it) drawn where it stands in its line, between the words
+  before and after it (so that text read in the stream's order reads a formula in its sentence), each link where the reader
+  draws it; the catalog's default view lists our groups turned off, out of the ON list the add-on put them in, the paper's own
+  default view kept as it set it (its base state, its groups on and off: a group the paper's own catalog lists is the paper's,
+  whatever its name). The side by side: every page's dict written again under its number (every destination and outline entry
+  still points at it), twice as wide — its media box and its crop box written on it whatever it inherits, and its own bleed,
+  trim and art boxes —, a form of the original page's own content streams on the left with its own annotations, the
+  translated page as a form on the right with its links moved by the page's width; a page with nothing laid shows the original
+  on both sides. The left is arXiv's own drawing: the add-on writes some of arXiv's objects again under their numbers (a form
+  whose figure text it wraps in our groups: 1,062 forms in 146 of the corpus's 245 papers), so each object the left's drawing
+  reaches that reaches one of those is arXiv's revision of it (an incremental update keeps every revision), copied under a
+  number of ours. An object of the document written again keeps its generation. What the paper says that our section writes —
+  a link's destination, its address — is written as a PDF string or name, its delimiters escaped, a number as a number and
+  anything else null, never as PDF syntax (16 of the 245 papers name a destination with a character a name escapes).
 - **The bake** (`bake.ts`), on the engine's walk (`openRemover`'s `walkPage`: each show's codes and text state as the remover
   reads them). A group turned off in the default view hides its ink, and PDF.js and poppler still read its text: on
   1706.03762v7-zh, 1,408 of 1,408 words of the units laid were read on the translated pages. Baked, a show in a group the page
@@ -2189,6 +2198,11 @@ in the page, after the slices' decoding (0.13 to 0.24 s); each file arXiv's size
   slice of its face draws refuses the file (`ExportRefusal` 'glyphs': a file with a hole where the reader shows a letter is
   not written; none on the four papers measured). A paper's fonts came to 243 to 379 KB, two thirds of it the outlines drawn themselves (2610.37668v1-zh: 1,423
   glyphs, 261 KB deflated).
+- **The file is of what the reader showed at the press**: a target or a toggle changed while it is made starts the composer's
+  next generation, which stops the file (composer `layAll`, `GenerationChanged`): it fails, and its retry makes the file of
+  what the reader shows then (stopping it rather than holding the earlier generation's rows, parts and faces, which the reader
+  lets go). A cancel lets the file go at once, and the next file waits for the cancelled one's work to end (a slice's fetch, its
+  decoding). A session that makes no file (the rollback build's, a host not wired: no `exportPdf`) never offers one.
 - **From the reader** (`run.ts`, `Reader.export`, the session's `exportPdf`): the original and the add-on read whole, once
   each (one ask of each object, never the store's ranges), into one buffer, each held to its digest; every page laid by the
   composer (`layAll`: a page's commit, else its part laid now over the rows as ended, its faces waited for, nothing drawn); the
@@ -2200,7 +2214,9 @@ in the page, after the slices' decoding (0.13 to 0.24 s); each file arXiv's size
 - **Memory**: one translated file of the 46 MB paper (2608.16117v1) in Chromium 153 with V8's heap capped at 256 MB
   (`--js-flags=--max-old-space-size=256`, a phone's heap stood in; the browser's own process tree sampled): made, its JS heap
   at most 158 MB, its renderer's resident memory at most 450 MB.
-- **Not yet** (counted where it occurs): small capitals (smcp) not substituted, ligatures only at U+FB00 to U+FB04; a page turned
+- **Not yet** (counted where it occurs): a paper this machine keeps, opened with our server out of reach: its file needs the
+  original and the add-on read whole, which the machine holds only where a file was made of it before (else the file fails, its
+  retry offered); small capitals (smcp) not substituted, ligatures only at U+FB00 to U+FB04; a page turned
   (`/Rotate`) set side by side in its upright frame; a non-CID-keyed CFF under `/CIDFontType0C` (poppler warns, every renderer
   tried draws it).
 

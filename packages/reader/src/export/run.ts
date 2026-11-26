@@ -17,6 +17,8 @@ export interface ReaderHandles {
   original: { url: string; bytes: number; sha256: string }
   addOn: { url: string; bytes: number; sha256: string }
   composer: Composer
+  /** the composer's generation at the press: the file is of it, and stops where another comes (composer.ts layAll) */
+  gen: number
   served: Served
   pdfjs: PdfJsLike
   /** the object layer, loaded on the press (the host's @cantoo/pdf-lib) */
@@ -81,7 +83,7 @@ export async function exportFromReader(
   const pagesShare = share(0.45, 0.75)
   let pages: Map<number, Page> | null
   try {
-    pages = await h.composer.layAll({ signal, progress: (d, n) => pagesShare(d / n) })
+    pages = await h.composer.layAll({ signal, gen: h.gen, progress: (d, n) => pagesShare(d / n) })
   } catch (e) {
     if (signal.aborted) throw aborted()
     throw e
@@ -105,10 +107,14 @@ export async function exportFromReader(
             }
           }
   const files = await Promise.all(
-    [...paths.keys()].map(async (path) => ({ key: path, woff2: await h.served.sliceBytes(path) })),
-  )
+    [...paths.keys()].map(async (path) => ({ key: path, woff2: await h.served.sliceBytes(path, signal) })),
+  ).catch((e) => {
+    if (signal.aborted) throw aborted()
+    throw e
+  })
   if (signal.aborted) throw aborted()
   const fonts: Map<string, SfntFont | null> = await fontsByPdfJs(files, h.pdfjs)
+  if (signal.aborted) throw aborted()
   share(0.75, 0.85)(1)
   // ---- how a run's characters are drawn: the slice of each, its glyph; the browser's own measure of a run's prefixes
   let ctx: CanvasRenderingContext2D | null = null

@@ -676,11 +676,20 @@ export function createController({
   }
   const listeners = new Set<() => void>()
   let session: Promise<Session> | null = null
+  /** whether the session makes the PDF download's files (its exportPdf: a session of before, the rollback build's or a host not
+   *  wired, has none), known once it is open; and the download the session's events give, which the state shows gated by it:
+   *  the files are never offered where nothing makes them (#685) */
+  let exportable = false
+  let told: ReaderState['download'] = state.download
+  const gated = (d: ReaderState['download']) => (d === 'translation' && !exportable ? 'original' : d)
   const emit = (event: SessionEvent) => {
     // (a face lost: the chrome's own words in the toast's place, as a host's are shown, nothing of the state's; S-R-28)
     if (event.type === 'faces') return toast({ words: R.status.facesLost, icon: 'info', ms: FACES_LOST_MS })
-    const next = reduce(state, event)
-    if (next === state) return
+    const base = state.download === told ? state : { ...state, download: told }
+    const folded = reduce(base, event)
+    if (folded === base) return
+    told = folded.download
+    const next = folded.download === gated(told) ? folded : { ...folded, download: gated(told) }
     state = next
     for (const listener of listeners) listener()
   }
@@ -718,8 +727,10 @@ export function createController({
     toasts.push({ t, until: Date.now() + (t.ms ?? TOAST_MS) })
     showToast()
   }
-  /** the PDF download being made: its cancel */
+  /** the PDF download being made: its cancel; and its work, which a cancel does not end at once (a slice's fetch, its decoding):
+   *  the next file waits for it, so that no two run (#685) */
   let exportAc: AbortController | null = null
+  let working: Promise<unknown> | null = null
   const controller: ReaderController = {
     getState: () => state,
     subscribe(listener) {
@@ -730,10 +741,17 @@ export function createController({
     },
     attach(panes) {
       // a session that cannot be opened (its module not loaded) is a failure the interface shows, as a crash is
-      session ??= open({ ...panes, emit }).catch((e: unknown) => {
-        emit({ type: 'fail', event: 'crashed', text: String((e as Error)?.message ?? e) })
-        throw e
-      })
+      session ??= open({ ...panes, emit }).then(
+        (s) => {
+          exportable = !!s.exportPdf
+          set({ download: gated(told) })
+          return s
+        },
+        (e: unknown) => {
+          emit({ type: 'fail', event: 'crashed', text: String((e as Error)?.message ?? e) })
+          throw e
+        },
+      )
       return session
     },
     // (the reader's own choice: a host's hold for the narrow window is theirs to end)
@@ -800,7 +818,9 @@ export function createController({
       exportAc = ac
       set({ exporting: { form: which, percent: 0 }, exportFailed: null })
       try {
-        const parts = await s.exportPdf(which, {
+        while (working) await working.catch(() => {})
+        if (ac.signal.aborted) return
+        const made = s.exportPdf(which, {
           signal: ac.signal,
           progress: (share) => {
             const percent = Math.max(0, Math.min(99, Math.floor(share * 100)))
@@ -808,6 +828,16 @@ export function createController({
               set({ exporting: { form: which, percent } })
           },
         })
+        working = made
+        void made.then(
+          () => {
+            if (working === made) working = null
+          },
+          () => {
+            if (working === made) working = null
+          },
+        )
+        const parts = await made
         if (ac.signal.aborted) return
         save(parts)
         exportAc = null

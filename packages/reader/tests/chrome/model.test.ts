@@ -632,6 +632,42 @@ describe('createController', () => {
       }
     })
 
+    it('offers no file where the session makes none (a session of before: the rollback build, a host not wired), #685', async () => {
+      let host: SessionHost | null = null
+      const controller = createController({
+        open: async (h: SessionHost) => {
+          host = h
+          return fakeSession()
+        },
+        paper: '2609.40181v2',
+        defaults: DEFAULTS,
+      })
+      await controller.attach(panes())
+      ;(host as unknown as SessionHost).emit(opened)
+      ;(host as unknown as SessionHost).emit({ type: 'translated', got: 4, total: 4, lost: 0, stopped: null })
+      expect(controller.getState().download).toBe('original')
+    })
+
+    it("holds a cancelled file's slot until its work has stopped: a press meanwhile starts the next once it has (#685)", async () => {
+      const { session, calls } = exporting()
+      const s = saving()
+      try {
+        const controller = await open(session)
+        void controller.download('translation')
+        await tick()
+        controller.cancelExport()
+        void controller.download('side-by-side')
+        await tick()
+        expect(calls).toHaveLength(1)
+        calls[0]?.fail(new DOMException('cancelled', 'AbortError'))
+        await tick()
+        await tick()
+        expect(calls.map((c) => c.form)).toEqual(['translation', 'side-by-side'])
+      } finally {
+        s.restore()
+      }
+    })
+
     it('a cancel lets the file go: nothing saved, nothing said', async () => {
       const { session, calls } = exporting()
       const s = saving()

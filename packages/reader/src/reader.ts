@@ -1275,6 +1275,8 @@ export function openReader(
       if (!o.pdfLib) throw new Error('the host gives no object layer to write a file with')
       if (!h?.addOn || !c || !composed || !cmp || !sv || !k || !original)
         throw new Error('no translation to make a file of yet')
+      // (the generation the file is of: the reader's at the press, before any wait)
+      const gen = cmp.generation()
       const { exportFromReader } = await import('./export/run.ts')
       return exportFromReader(
         {
@@ -1282,6 +1284,7 @@ export function openReader(
           original: { url: original.url, bytes: h.original.bytes, sha256: h.original.sha256 },
           addOn: { url: `/api/v2/o/${dirOf(c)}/${h.addOn.digest}`, bytes: h.addOn.bytes, sha256: h.addOn.digest },
           composer: cmp,
+          gen,
           served: sv,
           pdfjs: k.lib as never,
           pdfLib: o.pdfLib,

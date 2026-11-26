@@ -117,11 +117,32 @@ const f2 = (v: number) => {
   const r = Math.round(v * 1000) / 1000
   return Object.is(r, -0) ? '0' : String(r)
 }
-/** a PDF literal string of `s` (Latin-1 bytes; anything else escaped by its octal code) */
+/** the bytes of a text from the paper as PDF writes a string's or a name's: Latin-1 where every character is, else UTF-8 */
+const bytesOf = (s: string): number[] =>
+  [...s].every((c) => c.charCodeAt(0) <= 0xff) ? [...s].map((c) => c.charCodeAt(0)) : [...new TextEncoder().encode(s)]
+/** a PDF literal string of `s`: its bytes, a parenthesis and the backslash escaped, any byte outside ' ' to '~' by its octal
+ *  code (ISO 32000-1 §7.3.4.2) — text of the paper's never written as PDF syntax */
 const pdfStr = (s: string) =>
-  `(${s
-    .replace(/[\\()]/g, (c) => `\\${c}`)
-    .replace(/[^\x20-\x7e]/g, (c) => `\\${c.charCodeAt(0).toString(8).padStart(3, '0')}`)})`
+  `(${bytesOf(s)
+    .map((b) =>
+      b === 0x28 || b === 0x29 || b === 0x5c
+        ? `\\${String.fromCharCode(b)}`
+        : b < 0x20 || b > 0x7e
+          ? `\\${b.toString(8).padStart(3, '0')}`
+          : String.fromCharCode(b),
+    )
+    .join('')})`
+/** a PDF name of `s`: its bytes, every one outside '!' to '~', a delimiter or '#' written #xx (ISO 32000-1 §7.3.5) */
+const pdfName = (s: string) =>
+  `/${bytesOf(s)
+    .map((b) =>
+      b < 0x21 || b > 0x7e || '()<>[]{}/%#'.includes(String.fromCharCode(b))
+        ? `#${b.toString(16).toUpperCase().padStart(2, '0')}`
+        : String.fromCharCode(b),
+    )
+    .join('')}`
+/** a number of the paper's as PDF writes one, null where it is none */
+const pdfNum = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? f2(v) : 'null')
 const hex4 = (n: number) => n.toString(16).toUpperCase().padStart(4, '0')
 /** the Latin ligatures a face may hold at their compatibility code points, longest first */
 const LIGS: [string, number][] = [
@@ -188,16 +209,26 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
   // (the walk's pages are the object layer's own: each page's number checked, a page the two read apart left unbaked)
   const walkRefs = (R.doc.getPages() as { ref: PdfRef }[]).map((p) => p.ref.objectNumber)
 
-  // ---- the groups: each optional content group of ours by its name
+  // ---- the groups: each optional content group of ours by its name. Ours are those the add-on brought: a group the paper's
+  // own catalog lists is the paper's, whatever its name, and stays as the paper set it
   const root = X.lookup(X.trailer.root as PdfRef) as PdfDict
+  const rootRef = X.trailer.root as PdfRef
   const ocpV = root.get(N('OCProperties'))
   const ocp = dictOf(ocpV)
+  const groupsOf = (D: typeof X, ocProps: PdfDict | undefined): PdfObject[] => {
+    const a = ocProps ? look(ocProps.get(N('OCGs')), D) : undefined
+    return a instanceof PDFArray ? (a as PdfArray).asArray() : []
+  }
+  const paperGroups = new Set(
+    groupsOf(XO, dictOf((XO.lookup(XO.trailer.root as PdfRef) as PdfDict | undefined)?.get(N('OCProperties')), XO)).map(
+      (r) => lit(r),
+    ),
+  )
   const groupRef = new Map<string, string>()
   const groupName = new Map<string, string>()
-  const ocgs = ocp ? look(ocp.get(N('OCGs'))) : undefined
-  for (const r of ocgs instanceof PDFArray ? (ocgs as PdfArray).asArray() : []) {
+  for (const r of groupsOf(X, ocp)) {
     const s = dictOf(r)?.get(N('Name'))?.decodeText?.()
-    if (s && r instanceof PDFRef) {
+    if (s && r instanceof PDFRef && !paperGroups.has(lit(r))) {
       groupRef.set(s, lit(r))
       groupName.set(lit(r), s)
     }
@@ -206,9 +237,10 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
   // ---- the objects written, numbered from the document's size on
   let next = X.size
   const take = () => next++
-  type W = [number, Uint8Array]
+  /** an object written: its number, its bytes, its generation (an object of the document's written again keeps its own) */
+  type W = [number, Uint8Array] | [number, Uint8Array, number]
   const objs: W[] = []
-  const objText = (n: number, body: string) => enc(`${n} 0 obj\n${body}\nendobj\n`)
+  const objText = (n: number, body: string, g = 0) => enc(`${n} ${g} obj\n${body}\nendobj\n`)
   const objStream = (n: number, dict: string, data: Uint8Array) =>
     cat([enc(`${n} 0 obj\n<<${dict} /Length ${data.length} >>\nstream\n`), data, enc('\nendstream\nendobj\n')])
   const stats: ExportStats = {
@@ -273,6 +305,90 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
     return ok
   }
 
+  // ---- arXiv's own objects, for the left half of a side-by-side page. The add-on writes some of them again under their numbers
+  // (a page, its resources, a form it wraps the figure text of in our groups), which the default view then turns off: the left
+  // half names, for each object its drawing reaches that reaches one the add-on wrote again, a copy of arXiv's revision of it
+  // under a number of ours (an incremental update keeps every earlier revision: XO reads arXiv's bytes alone), and every other
+  // object by its own number, the same in both revisions
+  const keyOf = (r: PdfRef) => `${r.objectNumber} ${r.generationNumber}`
+  const rewritten = (r: PdfRef) => {
+    const e = X.entryOf(r.objectNumber)
+    return !!e && e.t === 1 && e.off >= seam
+  }
+  /** each object of arXiv's reached so far: the references it holds */
+  const edges = new Map<string, PdfRef[]>()
+  const refsIn = (v: PdfObject | undefined, out: PdfRef[]) => {
+    if (v instanceof PDFRef) out.push(v as PdfRef)
+    else if (v instanceof PDFArray) for (const x of (v as PdfArray).asArray()) refsIn(x, out)
+    else if (v instanceof PDFDict) for (const [, x] of (v as PdfDict).entries()) refsIn(x, out)
+    else if (v instanceof PDFRawStream) refsIn((v as PdfRawStream).dict, out)
+  }
+  const reach = (start: PdfObject | undefined) => {
+    const todo: PdfRef[] = []
+    refsIn(start, todo)
+    while (todo.length) {
+      const r = todo.pop()!
+      const k = keyOf(r)
+      if (edges.has(k)) continue
+      const out: PdfRef[] = []
+      refsIn(XO.lookup(r), out)
+      edges.set(k, out)
+      todo.push(...out)
+    }
+  }
+  /** the objects reached that reach one the add-on wrote again (themselves included): copied */
+  let copied = new Set<string>()
+  const taint = () => {
+    const back = new Map<string, string[]>()
+    for (const [k, out] of edges) for (const r of out) back.set(keyOf(r), [...(back.get(keyOf(r)) ?? []), k])
+    const seen = new Set<string>()
+    const todo = [...edges.keys()].filter((k) => {
+      const [n, g] = k.split(' ').map(Number) as [number, number]
+      return rewritten(PDFRef.of(n, g) as PdfRef)
+    })
+    while (todo.length) {
+      const k = todo.pop()!
+      if (seen.has(k)) continue
+      seen.add(k)
+      todo.push(...(back.get(k) ?? []))
+    }
+    copied = seen
+  }
+  const copyNum = new Map<string, number>()
+  /** `v` written as arXiv's: a reference to an object copied names its copy */
+  const litA = (v: PdfObject): string =>
+    v instanceof PDFRef
+      ? copied.has(keyOf(v as PdfRef))
+        ? `${copyOf(v as PdfRef)} 0 R`
+        : lit(v)
+      : v instanceof PDFDict
+        ? `<<${(v as PdfDict)
+            .entries()
+            .map(([k, x]) => ` ${k.toString()} ${litA(x)}`)
+            .join('')} >>`
+        : v instanceof PDFArray
+          ? `[${(v as PdfArray).asArray().map(litA).join(' ')}]`
+          : v.toString()
+  /** arXiv's revision of `r` under a number of ours (its references to other copies remapped; a stream's bytes as they are) */
+  function copyOf(r: PdfRef): number {
+    const k = keyOf(r)
+    const had = copyNum.get(k)
+    if (had) return had
+    const m = take()
+    copyNum.set(k, m)
+    const v = XO.lookup(r)
+    if (v instanceof PDFRawStream) {
+      const st = v as PdfRawStream
+      const dict = st.dict
+        .entries()
+        .filter(([key]) => key.toString() !== '/Length')
+        .map(([key, x]) => ` ${key.toString()} ${litA(x)}`)
+        .join('')
+      objs.push([m, objStream(m, dict, st.contents)])
+    } else objs.push([m, objText(m, v ? litA(v) : 'null')])
+    return m
+  }
+
   // ---- the original pages as forms: their own content streams (raw where there is one)
   const formOf = new Map<number, number>()
   const originalForm = async (i: number): Promise<number> => {
@@ -282,7 +398,9 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
     formOf.set(i, n)
     const op = opages[i]!
     const res = op.inherited.Resources
-    const head = ` /Type /XObject /Subtype /Form /BBox [${box(i).map(f2).join(' ')}] /Resources ${res ? lit(res) : '<< >>'}`
+    reach(res)
+    taint()
+    const head = ` /Type /XObject /Subtype /Form /BBox [${box(i).map(f2).join(' ')}] /Resources ${res ? litA(res) : '<< >>'}`
     const ss = streamsOf(op.node.get(N('Contents')), XO)
     if (ss.length === 1) {
       const d = ss[0]!.dict
@@ -292,7 +410,7 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
         n,
         objStream(
           n,
-          `${head}${filt ? ` /Filter ${lit(filt)}` : ''}${parms ? ` /DecodeParms ${lit(parms)}` : ''}`,
+          `${head}${filt ? ` /Filter ${litA(filt)}` : ''}${parms ? ` /DecodeParms ${litA(parms)}` : ''}`,
           ss[0]!.contents,
         ),
       ])
@@ -348,20 +466,24 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
     let target: string
     if ('url' in to) target = `/A << /S /URI /URI ${pdfStr(encodeURI(to.url).replace(/%25/g, '%'))} >>`
     else if (to.dest.startsWith('[')) {
+      // (an explicit destination: a page's reference, its fit's name, its numbers; anything else null)
       const d = JSON.parse(to.dest) as unknown[]
-      const items = d.map((x) =>
-        x && typeof x === 'object' && 'num' in x
-          ? `${(x as { num: number; gen?: number }).num} ${(x as { num: number; gen?: number }).gen ?? 0} R`
-          : x && typeof x === 'object' && 'name' in x
-            ? `/${(x as { name: string }).name}`
-            : x === null
-              ? 'null'
-              : String(x),
-      )
+      const items = (Array.isArray(d) ? d : []).map((x) => {
+        if (x && typeof x === 'object' && 'num' in x) {
+          const { num, gen } = x as { num: unknown; gen?: unknown }
+          return Number.isInteger(num) && (num as number) > 0
+            ? `${num} ${Number.isInteger(gen) && (gen as number) >= 0 ? gen : 0} R`
+            : 'null'
+        }
+        if (x && typeof x === 'object' && 'name' in x && typeof (x as { name: unknown }).name === 'string')
+          return pdfName((x as { name: string }).name)
+        return pdfNum(x)
+      })
       target = `/Dest [${items.join(' ')}]`
     } else {
-      const name = JSON.parse(to.dest) as string
-      target = destsByName ? `/Dest ${pdfStr(name)}` : `/Dest /${name}`
+      const name = JSON.parse(to.dest) as unknown
+      const s = typeof name === 'string' ? name : String(to.dest)
+      target = destsByName ? `/Dest ${pdfStr(s)}` : `/Dest ${pdfName(s)}`
     }
     const bd = border
       ? ` /C [${[16, 8, 0].map((s) => f2(((border[1] >> s) & 255) / 255)).join(' ')}] /BS << /W ${f2(border[0])}${border[2] === 'dashed' ? ' /S /D' : border[2] === 'underline' ? ' /S /U' : ''} >>`
@@ -374,11 +496,34 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
     const out: string[] = []
     const xobj = new Map<string, number>()
     const fontsUsed = new Set<string>()
+    // (each crop drawn where it stands in its line, between the words before and after it, so that a reader that reads a page's
+    // text in its stream's order reads a formula's own glyphs in their sentence: cropsOf gives one a crop item, in the same
+    // order the lines hold them)
+    const px = o.px ?? 0.375
+    const crops = cropsOf(page, { x: px, y: px })
+    let nextCrop = 0
+    const drawCrop = async (c: (typeof crops)[number]) => {
+      stats.crops++
+      const fn = await cropForm(c.from - 1, c.ord)
+      const nm = `AXTC${c.from}_${c.ord}`
+      xobj.set(nm, fn)
+      const k = (c.at[2] - c.at[0]) / (c.src[2] - c.src[0] || 1)
+      const tx = c.at[0] - k * c.src[0],
+        ty = c.at[1] - k * c.src[1]
+      const clip = (c.clip ?? [c.at])
+        .map((r) => `${f2(r[0])} ${f2(r[1])} ${f2(r[2] - r[0])} ${f2(r[3] - r[1])} re`)
+        .join(' ')
+      out.push(`q ${clip} W n ${f2(k)} 0 0 ${f2(k)} ${f2(tx)} ${f2(ty)} cm /${nm} Do Q`)
+    }
     for (const m of page.members) {
       if (m.state !== 'laid') continue
       for (const [y, x0, , items] of m.lines)
         for (const it of items as Item[]) {
-          if ('src' in it) continue
+          if ('src' in it) {
+            const c = crops[nextCrop++]
+            if (c) await drawCrop(c)
+            continue
+          }
           stats.runs++
           const size = it.size * faceScale(it.face)
           const track = it.track ?? 0
@@ -453,21 +598,8 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
           out.push('ET')
         }
     }
-    // (each crop: its source form, clipped to the crop's own ink as the reader cuts it, moved and scaled)
-    const px = o.px ?? 0.375
-    for (const c of cropsOf(page, { x: px, y: px })) {
-      stats.crops++
-      const fn = await cropForm(c.from - 1, c.ord)
-      const nm = `AXTC${c.from}_${c.ord}`
-      xobj.set(nm, fn)
-      const k = (c.at[2] - c.at[0]) / (c.src[2] - c.src[0] || 1)
-      const tx = c.at[0] - k * c.src[0],
-        ty = c.at[1] - k * c.src[1]
-      const clip = (c.clip ?? [c.at])
-        .map((r) => `${f2(r[0])} ${f2(r[1])} ${f2(r[2] - r[0])} ${f2(r[3] - r[1])} re`)
-        .join(' ')
-      out.push(`q ${clip} W n ${f2(k)} 0 0 ${f2(k)} ${f2(tx)} ${f2(ty)} cm /${nm} Do Q`)
-    }
+    // (a crop the lines do not reach in their order, none expected: drawn after them)
+    for (; nextCrop < crops.length; nextCrop++) await drawCrop(crops[nextCrop]!)
     return { ops: out.join('\n'), xobj, fontsUsed }
   }
 
@@ -498,16 +630,34 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
     return { others, links }
   }
   /** a side-by-side page: its box twice as wide, the left form and the right form, their annotations */
-  const writeSide = (num: number, node: PdfDict, b: number[], left: number, right: number, ann: string[]) => {
+  const writeSide = (
+    num: number,
+    g: number,
+    node: PdfDict,
+    b: number[],
+    left: number,
+    right: number,
+    ann: string[],
+  ) => {
     const W = b[2]! - b[0]!
     const c = take()
     objs.push([c, objStream(c, '', enc(`q /AXTL Do Q q 1 0 0 1 ${f2(W)} 0 cm /AXTR Do Q\n`))])
+    // (every box the page shows by written on it, twice as wide: its media and crop boxes, whatever it inherits, and its own
+    // bleed, trim and art boxes where it has them)
+    const wide = (r: number[]) => `[${f2(r[0]!)} ${f2(r[1]!)} ${f2(r[2]! + W)} ${f2(r[3]!)}]`
+    const own = ['BleedBox', 'TrimBox', 'ArtBox']
+      .map((k) => [k, nums(node.get(N(k)))] as const)
+      .filter((x): x is readonly [string, number[]] => !!x[1] && x[1].length === 4)
+      .map(([k, r]) => ` /${k} ${wide(r)}`)
+      .join('')
     objs.push([
       num,
       objText(
         num,
-        `<<${pageEntries(node, ['/Contents', '/Resources', '/Annots', '/MediaBox', '/CropBox', '/TrimBox', '/BleedBox', '/ArtBox'])} /MediaBox [${f2(b[0]!)} ${f2(b[1]!)} ${f2(b[2]! + W)} ${f2(b[3]!)}] /Contents ${c} 0 R /Resources << /XObject << /AXTL ${left} 0 R /AXTR ${right} 0 R >> >>${ann.length ? ` /Annots [${ann.join(' ')}]` : ''} >>`,
+        `<<${pageEntries(node, ['/Contents', '/Resources', '/Annots', '/MediaBox', '/CropBox', '/TrimBox', '/BleedBox', '/ArtBox'])} /MediaBox ${wide(b)} /CropBox ${wide(b)}${own} /Contents ${c} 0 R /Resources << /XObject << /AXTL ${left} 0 R /AXTR ${right} 0 R >> >>${ann.length ? ` /Annots [${ann.join(' ')}]` : ''} >>`,
+        g,
       ),
+      g,
     ])
   }
 
@@ -522,6 +672,7 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
     const pn = pages[i]!
     const node = pn.node
     const num = pn.ref.objectNumber
+    const gen = pn.ref.generationNumber
     const b = box(i)
     const W = b[2]! - b[0]!
     if ((nums(pn.inherited.Rotate) ?? [0])[0]) stats.rotated++
@@ -579,7 +730,9 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
           objText(
             num,
             `<<${pageEntries(node, ['/Contents', '/Resources', '/Annots'])} /Contents ${mine} 0 R /Resources ${res}${ann.length ? ` /Annots [${ann.join(' ')}]` : ''} >>`,
+            gen,
           ),
+          gen,
         ])
       } else {
         const left = await originalForm(i)
@@ -599,7 +752,7 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
           sl.push(`${an} 0 R`)
           stats.links++
         }
-        writeSide(num, node, b, left, tf, [...[...oLinks, ...others].map(lit), ...sl])
+        writeSide(num, gen, node, b, left, tf, [...[...oLinks, ...others].map(lit), ...sl])
       }
     } else if (side) {
       // the original on both sides, its links copied onto the right
@@ -622,7 +775,7 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
         sl.push(`${an} 0 R`)
         stats.links++
       }
-      writeSide(num, node, b, left, left, [...[...oLinks, ...others].map(lit), ...sl])
+      writeSide(num, gen, node, b, left, left, [...[...oLinks, ...others].map(lit), ...sl])
     }
     o.progress?.(i + 1, pages.length + 1)
   }
@@ -656,25 +809,41 @@ export async function exportPdf(o: ExportInput): Promise<{ parts: Uint8Array[]; 
   // ---- the catalog: the laid units' groups off in the default view
   stats.groupsOff = off.length
   if (ocp) {
+    // (the paper's own default view kept as it set it — its base state, its groups on and off —, ours turned off and out of the
+    // ON list the add-on put them in)
     const d = dictOf(ocp.get(N('D')))
-    const dKeep = (d?.entries() ?? []).filter(([k]) => !['/ON', '/OFF', '/BaseState'].includes(k.toString()))
+    const refs = (k: string) => {
+      const a = d ? look(d.get(N(k))) : undefined
+      return a instanceof PDFArray ? (a as PdfArray).asArray().map((r) => lit(r)) : []
+    }
+    const offSet = new Set(off)
+    const on = refs('ON').filter((r) => !offSet.has(r))
+    const offAll = [...refs('OFF').filter((r) => !offSet.has(r)), ...off]
+    const dKeep = (d?.entries() ?? []).filter(([k]) => !['/ON', '/OFF'].includes(k.toString()))
     const ocpBody = `<<${ocp
       .entries()
       .filter(([k]) => k.toString() !== '/D')
       .map(([k, v]) => ` ${k.toString()} ${lit(v)}`)
       .join(
         '',
-      )} /D <<${dKeep.map(([k, v]) => ` ${k.toString()} ${lit(v)}`).join('')} /BaseState /ON /OFF [${off.join(' ')}] >> >>`
-    if (ocpV instanceof PDFRef)
-      objs.push([(ocpV as PdfRef).objectNumber, objText((ocpV as PdfRef).objectNumber, ocpBody)])
-    else {
-      const rn = (X.trailer.root as PdfRef).objectNumber
-      objs.push([rn, objText(rn, `<<${pageEntries(root, ['/OCProperties'])} /OCProperties ${ocpBody} >>`)])
-    }
+      )} /D <<${dKeep.map(([k, v]) => ` ${k.toString()} ${lit(v)}`).join('')}${on.length ? ` /ON [${on.join(' ')}]` : ''} /OFF [${offAll.join(' ')}] >> >>`
+    if (ocpV instanceof PDFRef) {
+      const r = ocpV as PdfRef
+      objs.push([r.objectNumber, objText(r.objectNumber, ocpBody, r.generationNumber), r.generationNumber])
+    } else
+      objs.push([
+        rootRef.objectNumber,
+        objText(
+          rootRef.objectNumber,
+          `<<${pageEntries(root, ['/OCProperties'])} /OCProperties ${ocpBody} >>`,
+          rootRef.generationNumber,
+        ),
+        rootRef.generationNumber,
+      ])
   }
   const section = appendSection({
     end: composed.length,
-    objects: objs.map(([n, b]) => [n, 0, b]),
+    objects: objs.map(([n, b, g]) => [n, g ?? 0, b]),
     kind: X.kind,
     prev: X.startxref,
     size: next,
