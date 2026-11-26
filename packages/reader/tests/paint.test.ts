@@ -4,11 +4,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Item, Page } from '../src/compose/page.ts'
 import {
+  askDetail,
   cropsAway,
   cropsBack,
   cropsBox,
   cropsFor,
   cropsOf,
+  detailAway,
   detailBoxOf,
   detailCropsFor,
   holeOf,
@@ -600,5 +602,26 @@ describe("crops past PDF.js's canvas cap, cut at its detail canvas's resolution 
     expect(hole).toBe(
       'polygon(evenodd, 0% 0%, 100% 0%, 100% 100%, 0% 100%, 0% 0%, 25% 25%, 75% 25%, 75% 75%, 25% 75%, 25% 25%)',
     )
+  })
+  it('drops a cut that finishes after the crops were let go or a later cut was asked (a zoom back while one was cut)', () => {
+    const over = document.createElement('div')
+    const base = document.createElement('canvas')
+    base.className = 'axt-crops'
+    base.style.clipPath = 'polygon(evenodd, 0% 0%)'
+    over.append(base)
+    const first = askDetail(over)
+    expect(first()).toBe(true)
+    // (let go while it was cut: the zoom back under the cap)
+    detailAway(over)
+    expect(first()).toBe(false)
+    expect(base.style.clipPath).toBe('')
+    // (a later cut asked: the earlier one's result is no longer its overlay's)
+    const second = askDetail(over)
+    const third = askDetail(over)
+    expect(second()).toBe(false)
+    expect(third()).toBe(true)
+    // (each overlay its own)
+    expect(askDetail(document.createElement('div'))()).toBe(true)
+    expect(third()).toBe(true)
   })
 })

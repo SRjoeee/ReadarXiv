@@ -605,8 +605,19 @@ export function dropCanvas(c: HTMLCanvasElement) {
   c.width = 0
   c.height = 0
 }
-/** a page's detail crops let go (`over` its overlay), its base's crops whole again */
+/** each overlay's last detail cut asked (a count): a cut is its overlay's only while no later one is asked and its crops are
+ *  not let go */
+const detailTurns = new WeakMap<HTMLElement, number>()
+/** a detail cut asked for an overlay: whether it is still the last asked, once it is cut (a cut that finishes after a zoom
+ *  back let its crops go, or after a later cut was asked, is dropped: it would put back crops of another area or scale) */
+export function askDetail(over: HTMLElement): () => boolean {
+  const n = (detailTurns.get(over) ?? 0) + 1
+  detailTurns.set(over, n)
+  return () => detailTurns.get(over) === n
+}
+/** a page's detail crops let go (`over` its overlay), its base's crops whole again, a cut under way dropped when it is done */
 export function detailAway(over: HTMLElement) {
+  detailTurns.set(over, (detailTurns.get(over) ?? 0) + 1)
   const det = over.querySelector<HTMLCanvasElement>(':scope > canvas.axt-crops-detail')
   if (det) dropCanvas(det)
   over.querySelector<HTMLCanvasElement>(':scope > canvas.axt-crops')?.style.removeProperty('clip-path')

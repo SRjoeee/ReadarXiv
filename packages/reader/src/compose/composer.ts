@@ -50,6 +50,7 @@ import { createMarks, type MarkBox } from './marks.ts'
 import { committed, type Lay, type Laid, type Page, type Rows } from './page.ts'
 import { membersOnPage } from './turn.ts'
 import {
+  askDetail,
   cropGrid,
   cropsAway,
   cropsBack,
@@ -476,7 +477,7 @@ export function createComposer(o: ComposerOptions): Composer {
     if (!next || at.signal.aborted || was.parentNode !== el) return
     const det = el.querySelector<HTMLCanvasElement>(':scope > canvas.axt-crops-detail')
     if (det && det.dataset.axtScale === String(at.viewport.scale)) next.style.clipPath = was.style.clipPath
-    else if (det) dropCanvas(det)
+    else if (det) detailAway(el)
     was.replaceWith(next)
     was.width = 0
     was.height = 0
@@ -498,10 +499,12 @@ export function createComposer(o: ComposerOptions): Composer {
       return
     }
     if (!base) return
+    // (the last cut asked of this overlay, still, once cut, at the scale it was cut for: else dropped)
+    const mine = askDetail(el)
     const t0 = performance.now()
     const told = { srcPx: 0 }
     const next = await detailCropsFor(page, (k) => doc.getPage(k), at.viewport, g.crops, area, at.signal, told)
-    if (at.signal.aborted || base.parentNode !== el) {
+    if (at.signal.aborted || base.parentNode !== el || !mine() || at.view.viewport.scale !== at.viewport.scale) {
       if (next) dropCanvas(next)
       return
     }
