@@ -62,3 +62,6 @@ export { type LanguageItem, type Languages, PARTS, type Parts, type Slots, type 
 export { useSettingsLock } from './chrome/settings-lock.ts'
 export { ToolbarButton } from './chrome/ToolbarButton.tsx'
 export { useReader } from './chrome/use-reader.ts'
+// the PDF download's module, loaded on the reader's press alone (its chunk, with the engine's object layer it reads with)
+export const loadExport = () => import('./export/index.ts')
+export type { ExportForm, ExportInput, ExportStats, Glyphs, SfntFont } from './export/index.ts'

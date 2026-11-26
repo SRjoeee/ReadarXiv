@@ -1,0 +1,88 @@
+// Brotli streams decoded by the reader's own PDF.js, for the served slices' WOFF2 (export/woff2.ts): no decoder of ours is
+// shipped. A browser's DecompressionStream has no brotli (Chromium 153, probed), and PDF.js (6.3.289, both hosts' pin) carries
+// one for PDF's /BrotliDecode filter: each stream is an embedded file of a small document of ours with that filter, read back
+// through PDF.js's public API (getAttachments, getAttachmentContent), decoded in PDF.js's worker. One document for every
+// stream of a file. A stream that does not decode refuses the whole call: its slice would otherwise come back short.
+
+/** the part of PDF.js this reads: its getDocument over bytes */
+export interface PdfJsLike {
+  getDocument(src: { data: Uint8Array }): {
+    promise: Promise<{
+      getAttachments(): Promise<unknown>
+      getAttachmentContent?(id: string): Promise<Uint8Array | null | undefined>
+      destroy?(): Promise<void>
+    }>
+    destroy?(): Promise<void>
+  }
+}
+
+const enc = (s: string) => {
+  const b = new Uint8Array(s.length)
+  for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i) & 255
+  return b
+}
+const cat = (parts: Uint8Array[]) => {
+  const out = new Uint8Array(parts.reduce((n, b) => n + b.length, 0))
+  let at = 0
+  for (const p of parts) {
+    out.set(p, at)
+    at += p.length
+  }
+  return out
+}
+const nameOf = (k: number) => `s${String(k).padStart(6, '0')}`
+
+/** a document holding each stream as the embedded file `s000000`, `s000001`, … (names in order: a name tree's are sorted) */
+export function brotliDocument(streams: Uint8Array[]): Uint8Array {
+  const parts: Uint8Array[] = [enc('%PDF-2.0\n%\xe2\xe3\xcf\xd3\n')]
+  const offs: number[] = []
+  let at = parts[0]!.length
+  const obj = (n: number, body: Uint8Array[]) => {
+    offs[n] = at
+    const b = cat([enc(`${n} 0 obj\n`), ...body, enc('\nendobj\n')])
+    parts.push(b)
+    at += b.length
+  }
+  const first = 4
+  const names = streams.map((_, k) => `(${nameOf(k)}) ${first + 2 * k} 0 R`).join(' ')
+  obj(1, [enc('<< /Type /Catalog /Pages 2 0 R /Names << /EmbeddedFiles 3 0 R >> >>')])
+  obj(2, [enc('<< /Type /Pages /Kids [] /Count 0 >>')])
+  obj(3, [enc(`<< /Names [${names}] >>`)])
+  streams.forEach((s, k) => {
+    const n = first + 2 * k
+    obj(n, [enc(`<< /Type /Filespec /F (${nameOf(k)}) /UF (${nameOf(k)}) /EF << /F ${n + 1} 0 R >> >>`)])
+    obj(n + 1, [
+      enc(`<< /Type /EmbeddedFile /Filter /BrotliDecode /Length ${s.length} >>\nstream\n`),
+      s,
+      enc('\nendstream'),
+    ])
+  })
+  const size = first + 2 * streams.length
+  const xref = at
+  let x = `xref\n0 ${size}\n0000000000 65535 f\r\n`
+  for (let n = 1; n < size; n++) x += `${String(offs[n]).padStart(10, '0')} 00000 n\r\n`
+  parts.push(enc(`${x}trailer\n<< /Size ${size} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`))
+  return cat(parts)
+}
+
+/** a decoder of brotli streams by `pdfjs`: each stream's bytes, in order; it throws where one does not decode */
+export function brotliByPdfJs(pdfjs: PdfJsLike): (streams: Uint8Array[]) => Promise<Uint8Array[]> {
+  return async (streams) => {
+    if (!streams.length) return []
+    const task = pdfjs.getDocument({ data: brotliDocument(streams) })
+    const doc = await task.promise
+    try {
+      await doc.getAttachments()
+      const out: Uint8Array[] = []
+      for (let k = 0; k < streams.length; k++) {
+        const got = await doc.getAttachmentContent?.(nameOf(k))
+        // (PDF.js gives an empty stream for one its filter refuses, with a warning): a brotli stream of data decodes to bytes
+        if (!got?.length) throw new Error(`brotli stream ${k} did not decode`)
+        out.push(got)
+      }
+      return out
+    } finally {
+      await (task.destroy?.() ?? doc.destroy?.())
+    }
+  }
+}

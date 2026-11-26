@@ -2137,6 +2137,50 @@ formula's text where its crop is drawn; find of a translated and of a kept phras
 taken once the place is still (two alike in a row: the steps before it leave paints after them), with its control; one copy of each text in the accessibility tree; the hover over it; let go far from the view) and the web's own
 end-to-end check of the layer.
 
+### 11.12 The PDF download's module: the translated and the side-by-side files, made in the page
+
+The reader makes both files itself from what it already holds, with no work on our server
+(the owner, 2026-11-26: 「尽可能不要让服务器开销增大」): arXiv's bytes and the add-on (the composed document), each page's laid `Page`, and the served slices. The
+module is `packages/reader/src/export/`, loaded on the press alone (`loadExport` in the package's entry: its own chunk, 56 KB,
+22 KB gzipped, with the engine's object layer, section writer and walk it reads with; the object layer, `@cantoo/pdf-lib`, and
+PDF.js are the host's, given). Measured on four papers of 15 to 40 pages (one of 46 MB) in Chromium 153: 0.18 to 0.32 s a file
+in the page, after the slices' decoding (0.13 to 0.24 s); each file arXiv's size and 0.55 to 1.5 MB more.
+
+- **One section of ours** (`chain.ts`). Each file is the composed document's bytes as they are and one incremental section after
+  them (the engine's `openObjects` and `appendSection`): nothing of the original is parsed whole or written again. The
+  translation: each laid page's dict written again under its number, its content the add-on's with the groups the page turns off
+  baked out, then the translation as real text, each crop the original's element ink (a form of the page's content with that
+  member's element and label groups alone, clipped as the reader cuts it), each link where the reader draws it; the catalog's
+  default view lists the groups turned off. The side by side: every page's dict written again under its number (every
+  destination and outline entry still points at it), twice as wide, a form of the original page's own content streams on the
+  left with its own annotations, the translated page as a form on the right with its links moved by the page's width; a page
+  with nothing laid shows the original on both sides.
+- **The bake** (`bake.ts`), on the engine's walk (`openRemover`'s `walkPage`: each show's codes and text state as the remover
+  reads them). A group turned off in the default view hides its ink, and PDF.js and poppler still read its text: on
+  1706.03762v7-zh, 1,408 of 1,408 words of the units laid were read on the translated pages. Baked, a show in a group the page
+  turns off becomes the advance it made (a `TJ` of one number at the text state of the moment), a painted path and an image go,
+  a clip stays a clip, state stays (a group off hides painting, never state: ISO 32000-1 §8.11.3.1), our own marks go; 62 of the
+  1,408 words remain, words the translation keeps and formula text in the crops. A show whose widths the walk cannot read stays,
+  drawn invisibly (render mode 3), counted (0 of 9,890 on the four papers; 1 of 46,455 in the crops' sources). A form the add-on
+  wrapped inside keeps its groups, which the default view turns off.
+- **The fonts** (`woff2.ts`, `brotli.ts`, `fonts.ts`, `cff.ts`). Each served slice drawn is a Type0 font (Identity-H, a
+  CIDFontType0 over its CFF, `/CIDFontType0C`) with a ToUnicode of exactly the glyphs drawn, so that selection, search and copy
+  give the translation's characters. A slice is WOFF2, whose tables are brotli: a browser's `DecompressionStream` has none
+  (Chromium 153), and PDF.js (6.3.289, both hosts' pin) decodes PDF's `/BrotliDecode`, so the slices' streams are the embedded
+  files of a document of ours read back through PDF.js's public API: no decoder shipped. The CFF is subset (`subsetCff`): every
+  glyph not drawn and every subroutine no kept glyph reaches made empty, glyph ids and CIDs kept (the text's codes need no
+  renumbering), the table written again with every offset five bytes wide; the walk of a Type 2 charstring that tells which
+  subroutines a glyph reaches refuses what it cannot tell (a computed call, `seac`), and that font goes whole, counted. All 3,705
+  CFF-flavoured slices served are read and subset; the 134 TrueType-flavoured ones (their outlines stored transformed) are not
+  drawn, counted. A paper's fonts came to 243 to 379 KB, two thirds of it the outlines drawn themselves (2610.37668v1-zh: 1,423
+  glyphs, 261 KB deflated).
+- **Not yet** (counted where it occurs): small capitals (smcp) not substituted, ligatures only at U+FB00 to U+FB04; a page turned
+  (`/Rotate`) set side by side in its upright frame; a non-CID-keyed CFF under `/CIDFontType0C` (poppler warns, every renderer
+  tried draws it).
+
+The rows: `packages/reader/tests/export/` (the subset on CFF fonts of our own, the WOFF2 and brotli path, the bake, the chain
+on a document of our own, read back by the object layer and PDF.js).
+
 ## 12. Performance gates
 
 Each before the stage's pull request, on the heaviest demo paper, in a real window:

@@ -104,7 +104,7 @@ describe('the directions between packages', () => {
       engine: ['format', 'text'],
       typeset: ['format', 'text'],
       translate: ['format', 'text'],
-      reader: ['format', 'typeset', 'text', 'ui'],
+      reader: ['format', 'typeset', 'text', 'ui', 'engine'],
       ui: [],
     })
   })
