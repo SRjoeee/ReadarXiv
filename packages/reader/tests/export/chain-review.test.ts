@@ -479,7 +479,7 @@ describe("a crop whose ink the add-on wrapped inside a figure's form (#crops-sha
   // (the member laid: its text and its element off on the page, its element drawn as a crop of " x=1 ")
   const crop: Item = { s: 'x=1', x: 120, src: [1, 245, 598, 270, 608, 600], k: 1, piece: '1' }
   const page = (): Page => {
-    const p = laid([run('文', 72), crop])
+    const p = laid([run('\u6587', 72), crop])
     p.members[0]!.off = 3
     return p
   }
