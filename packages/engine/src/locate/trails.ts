@@ -7,6 +7,7 @@
 import type { Piece } from '@readarxiv/format'
 import { isImage, isPath } from '../doc.ts'
 import { TRAIL } from './facts.ts'
+import { lineTextOf, scriptOn } from './ink-units.ts'
 import { isInk, r2 } from './lines.ts'
 import type { Claims } from './ownership.ts'
 import {
@@ -108,7 +109,9 @@ export function claimTrails(w: Work, claims: Claims): void {
       continue
     const end = m.bToA[mem.bLast] as number
     if (end < 0) continue
-    const last = gA(end)
+    // (CHANGED: the member's last line is its own glyphs on its last glyph's baseline (lineOf), its band and its text, not its
+    // last glyph's ink: a comma after a name stands at the baseline, and a mark TeX raised right after it read off the line)
+    const { last, text } = lineOf(w, mem, end)
     // (an author's ink ends where its element boxes on its last glyph's band end, an ORCID icon after the name, no glyph: what
     // TeX set right after the icon is glued to the member, and a gap is read from there, as the crop it travels in ends there)
     let boxEnd = last.x1
@@ -124,6 +127,8 @@ export function claimTrails(w: Work, claims: Claims): void {
     const trail: number[] = []
     let apart = false
     let glued = 0
+    // (the scripts the trail opens with, one after the other)
+    let scripts = 0
     let sep: number | undefined
     const run = runEndOf(mem)
     let call = run ? run.at : -1
@@ -159,12 +164,19 @@ export function claimTrails(w: Work, claims: Claims): void {
       // is the paragraph's own text going on (acmart's reference format: "Ru Huang. 2027. ABNAT", the year the sentence's): none of
       // what stands past the gap is the member's then, as the end mark's walk reads text no unit owns after a unit's end)
       const wide = g.x0 - prev.x1 > WORD_GAP * Math.max(g.size, prev.size)
+      // (CHANGED: a script of the member's line (smaller than its text and off its baseline, ink-units.ts scriptOn) that TeX set
+      // right after it, and every one after that before any other glyph: a run of marks, whole past a thin space inside it)
+      const script = scriptOn(text, g) !== 0
+      if (script && scripts === trail.length) scripts++
       if (wide || apart) {
         if (!AUTHOR_KINDS.has(mem.kind)) break
         if (!apart) glued = trail.length
-        if (lettersIn(g.u) > 0) {
+        if (!script && lettersIn(g.u) > 0) {
+          // (CHANGED: cut back to the glued part, or to the run of scripts, whichever is longer: marks TeX set as a script are
+          // no text of the sentence that goes on after them, whatever follows: REVTeX's "Bob Ray,¹,²,³ and Cy Day⁴")
+          if (scripts > glued) glued = scripts
+          else sep = undefined
           trail.length = glued
-          sep = undefined
           break
         }
         if (wide && !trail.length) sep = r2(g.x0 - prev.x1)
@@ -226,6 +238,28 @@ export function claimTrails(w: Work, claims: Claims): void {
   }
   assign(w, 'trailSep', trailSep)
   assign(w, 'runShared', runShared)
+}
+
+/** a member's last glyph `end` (A's) and its last line: the band across every glyph of its own text on that glyph's baseline on
+ *  its page (TeX sets one line's text on one baseline, read on the engine's hundredth), and that text's size and baseline as a
+ *  line's scripts are read against (ink-units.ts lineTextOf). Read off the last glyph alone, a comma after a name, whose ink
+ *  stands at the baseline, left the marks TeX raised right after it off the line: REVTeX's "Ann Lee,¹,*", kept where TeX set
+ *  them, which fenced the next name's join and its row's run (a blank before the last name) */
+function lineOf(w: Work, mem: Member, end: number) {
+  const { gA, pageA } = w.ix
+  const g = gA(end)
+  let top = g.top,
+    bottom = g.bottom
+  const own: { size: number; y: number }[] = []
+  for (const a of mem.text) {
+    if (pageA[a] !== pageA[end]) continue
+    const x = gA(a)
+    if (r2(x.y) !== r2(g.y) || !isInk(x)) continue
+    top = Math.max(top, x.top)
+    bottom = Math.min(bottom, x.bottom)
+    own.push(x)
+  }
+  return { last: { ...g, top, bottom }, text: lineTextOf(own) }
 }
 
 /**

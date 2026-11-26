@@ -557,12 +557,35 @@ export function scriptsOf(
   order: readonly number[],
   largest = false,
 ): Map<number, 1 | -1> {
-  // (`!`: the order's glyphs are the line's; its text size and baseline read where the order holds a glyph, inside its loop)
-  const body = largest ? Math.max(...order.map((g) => r2(G[g]!.size))) : modeOf(order.map((g) => r2(G[g]!.size)))
-  const base = modeOf(order.filter((g) => r2(G[g]!.size) === body).map((g) => r2(G[g]!.y)))
+  // (`!`: the order's glyphs are the line's)
+  const text = lineTextOf(
+    order.map((g) => G[g]!),
+    largest,
+  )
   const out = new Map<number, 1 | -1>()
-  for (const g of order) if (r2(G[g]!.size) < body! && r2(G[g]!.y) !== base) out.set(g, r2(G[g]!.y) > base! ? 1 : -1)
+  for (const g of order) {
+    const s = scriptOn(text, G[g]!)
+    if (s) out.set(g, s)
+  }
   return out
+}
+
+/** a line's text size and baseline as scriptsOf reads them over the line's glyphs `gs`: the size most of them have (`largest`:
+ *  the largest), the baseline most of those at that size stand on, each on the engine's hundredth */
+export function lineTextOf(
+  gs: readonly { size: number; y: number }[],
+  largest = false,
+): { size?: number; base?: number } {
+  const size = largest ? Math.max(...gs.map((g) => r2(g.size))) : modeOf(gs.map((g) => r2(g.size)))
+  return { size, base: modeOf(gs.filter((g) => r2(g.size) === size).map((g) => r2(g.y))) }
+}
+
+/** whether TeX set glyph `g` as a script of a line whose text is `text` (lineTextOf): smaller than its text and off its
+ *  baseline, raised (1) or lowered (-1); 0 none, and none where the line states no text */
+export function scriptOn(text: { size?: number; base?: number }, g: { size: number; y: number }): 1 | -1 | 0 {
+  if (text.size === undefined || text.base === undefined) return 0
+  if (r2(g.size) >= text.size || r2(g.y) === text.base) return 0
+  return r2(g.y) > text.base ? 1 : -1
 }
 
 /** each e-mail address in a word: a kept run of its own (fam `mono`, rule 4), the address alone, the word's characters around it
