@@ -750,6 +750,98 @@ describe('figure-lines: a path’s flush rows joined where the sentence goes on 
   })
 })
 
+describe('figure-lines: a path’s rows whose paragraphs a blank line ends, as the rows themselves show it (§18.36)', () => {
+  const T = 'ArialMT'
+  /** rows set flush left at 80 at a leading of 10 (size 10), `null` a blank line, in a box `pad` right of its widest row; `space`
+   *  each row's word space where given (a row stretched to an edge) */
+  const panel = (rows: (string | null)[], pad: number, space: (number | undefined)[] = []) => {
+    const { page, fig } = pageOf(
+      rows.map((text, li) => (text === null ? [] : [{ text, font: T, x: 80, dy: 4 * li, space: space[li] }])),
+    )
+    const g = page.glyphs as Glyph[]
+    const x1 = Math.max(...g.map((x) => x.x1)) + pad
+    fig.holds = [{ p: 1, b: 9, ks: fig.units.map((u) => u.k), shape: rect(75, 700 - 10 * rows.length - 5, x1, 712) }]
+    return figureLinesOf([page], fig, () => false, null)
+      .filter((t) => t.ks.length > 1)
+      .map((t) => [t.ks, t.para?.align])
+  }
+  /** a row's word space that sets its text from 80 to `x1` (glyphsOf's advances at size 10) */
+  const spaceTo = (text: string, x1: number) => {
+    const n = [...text].filter((u) => u === ' ').length
+    const w = [...text].filter((u) => u !== ' ').reduce((s, u) => s + 5 + (u.codePointAt(0)! % 3), 0)
+    return (x1 - 80 - w) / n
+  }
+  it('reads each paragraph of a ragged block a blank line ends as one text: a short row, a capital or a digit ends none', () => {
+    // (2611.18114v1 p26's shape, words of our own: rows wrapped short of the box's measure, so the next row's first word would
+    // have stood on the row above; a sentence that opens a row; a number that opens one)
+    const rows = [
+      'Each image is filtered at three',
+      'scales with a bank of oriented',
+      'filters weighted by',
+      '0.5 at the coarse end.',
+      null,
+      'Responses are pooled on grids of',
+      'four sizes and the means kept.',
+      'Each pool is scaled by its mean',
+      'energy and then compressed.',
+      null,
+      'Last of all the maps are joined',
+      'and weighted.',
+    ]
+    expect(panel(rows, 40)).toEqual([
+      [[0, 1, 2, 3], 'l'],
+      [[4, 5, 6, 7], 'l'],
+      [[8, 9], 'l'],
+    ])
+  })
+  it('ends a paragraph at a short row where the block’s full rows end at one edge, the next at the same leading', () => {
+    // (rows stretched to one right edge, TeX's justified paragraph: its last row short (\parfillskip); the next paragraph at the
+    // same leading, no blank line: two texts, whether or not a blank line ends another paragraph in the path)
+    const full = ['Each image is filtered at three', 'scales with a bank of oriented', 'Responses are pooled on grids']
+    const sp = full.map((t) => spaceTo(t, 260))
+    const one = [full[0]!, full[1]!, 'filters in turn.', full[2]!, 'of four sizes.']
+    expect(panel(one, 5, [sp[0], sp[1], undefined, sp[2]])).toEqual([
+      [[0, 1, 2], 'l'],
+      [[3, 4], 'l'],
+    ])
+    expect(
+      panel([...one, null, 'Last of all the maps are joined', 'and weighted.'], 5, [sp[0], sp[1], undefined, sp[2]]),
+    ).toEqual([
+      [[0, 1, 2], 'l'],
+      [[3, 4], 'l'],
+      [[5, 6], 'l'],
+    ])
+  })
+  it('joins no rows between blank lines where no break goes on: values over values stay rows', () => {
+    // (2610.37668v1's overlays, words of our own, two groups a blank line apart: no row goes on from the one above)
+    expect(panel(['PSNR 29.49 dB', 'LPIPS 0.1086', null, 'FPS 69.7', 'SSIM 0.912'], 40)).toEqual([])
+  })
+  it('reads a row set apart for its taller ink as no blank line: its paragraph goes on across it', () => {
+    // (row 1 holds a glyph of size 16: at the leading its ink would stand 3.2 into row 0's, so it is set 1 under it as the rows
+    // at the leading are (TeX's push); a blank line later in the path. Row 0 to row 1 is one paragraph's break)
+    const ys = [700, 685.8, 675.8, 655.8, 645.8]
+    const at = (li: number) => ys[li]! - (700 - 14 * li)
+    const { page, fig } = pageOf([
+      [{ text: 'Each image is filtered at three', font: T, x: 80, dy: at(0) }],
+      [
+        { text: 'scales with a bank of ', font: T, x: 80, dy: at(1) },
+        { text: 'Q', font: T, size: 16, dy: at(1) },
+      ],
+      [{ text: 'filters in turn.', font: T, x: 80, dy: at(2) }],
+      [{ text: 'Last of all the maps are joined', font: T, x: 80, dy: at(3) }],
+      [{ text: 'and weighted.', font: T, x: 80, dy: at(4) }],
+    ])
+    const g = page.glyphs as Glyph[]
+    const x1 = Math.max(...g.map((x) => x.x1)) + 40
+    fig.holds = [{ p: 1, b: 9, ks: fig.units.map((u) => u.k), shape: rect(75, 640, x1, 712) }]
+    const texts = figureLinesOf([page], fig, () => false, null).filter((t) => t.ks.length > 1)
+    expect(texts.map((t) => [t.ks, t.para?.align])).toEqual([
+      [[0, 1, 2, 3], 'l'],
+      [[4, 5], 'l'],
+    ])
+  })
+})
+
 describe('figure-lines: a path’s flush rows that make a list, whose a glyph inside it is, and the hold over a held item (§18.36, §18.61)', () => {
   const T = 'ArialMT'
   /** a box round rows set flush left at 80, 5 to the right of its widest row and 5 to the left of them all; `free`, glyphs no run

@@ -5595,7 +5595,20 @@ lines a node holds, each one text, by facts of the text and of the figure's stru
   wrap's (no blank line, one face, not each led by ink of its own, and forced: the next row's first word cannot stand on the row
   above within the measure the path's inside gives it there, its inset on the flush side mirrored) and the sentence goes on (the
   row above ends in a hyphen, or this row's first letter, after any punctuation it opens with, is lower case); a capital, a
-  digit or a symbol begins a row of its own, and a script without case never joins. **Flush rows join so whether or not a row
+  digit or a symbol begins a row of its own, and a script without case never joins. **Where the rows show a blank line, it
+  is what ends their paragraphs** (lane fig-para, 2026-11-27): a step between two rows larger than the rows' own leading (their
+  smallest step, within the tolerance) that is no push (at the leading the two rows' ink would have come no closer than the
+  rows at the leading do: a taller row TeX set apart is no blank line) tells how the path ends a paragraph, and the rows tell
+  it: a run of rows between two such steps, one under the other in one face, not each led by ink of its own, none opening an
+  item but its first, is one text where its text goes on at one break or more (a hyphen, or a row that opens in lower case:
+  running text, not values over values, which stay rows). A row short of the run's far edge ends a paragraph only where two
+  of the run's rows or more end at that edge (a justified paragraph's last row, TeX's `\parfillskip`); in a ragged run neither
+  a short row nor a capital or a digit at a row's start ends one. 2611.18114v1 p26's panel holds five paragraphs a blank line
+  apart, wrapped short of the box's measure (its rows end 305.6 to 330.9 in a measure of 257.9 from 78.5): the wrap test
+  above cut four of them before a row whose first word would have stood on the row above ("…weights 1.5" | "down to 0.35, …"
+  by 8.4 pt) or that opened with a capital or a digit ("…coarse Gabors." | "Each pathway …"), and the one-line remnant, its
+  room on its row ending at the descender of the row above, stood as the original. A path whose rows show no blank line is
+  read by the wrap test as before. **Flush rows join so whether or not a row
   opens an item** (lane fig-rows, 2026-11-14): "no line an item's" limits the centred rows alone; a row that opens one (its
   first glyphs the marker of a line a list holds, `listed`, as outside a path) begins a text of its own, its marker its label and
   never sent, and the rows under it join it by the wrap rule (2608.06701v1 p1's plan box: its items 1 and 4, ragged at their
