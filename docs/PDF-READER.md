@@ -338,8 +338,8 @@ the extension's reader passes none (its narrow window keeps §5's rule).
 - **Nothing is marked as the section being read** (2026-11-26: 「选中状态是跟随页面滑动的，这个跟随效果我们可以去掉，也不需要一直保持选中状态，用户点击直接跳转就可以了」):
   a row is one link, named by its number, its translation and its original in that order, each title in its own `lang`
   (WCAG 2.5.3, 3.1.2), and jumps both sides to the heading; hover and the focus ring alone. The reader no longer tracks the
-  heading being read (its view's `heading` is gone; today's session still tells it for its own contents, and the extension's
-  host drops it). Keyboard order is reading order.
+  heading being read (its view's `heading` is gone; today's session, the released extension's, still tells it for its own
+  contents). Keyboard order is reading order.
 - **Narrow windows**: under 720 px (240 and 480: pushed, the document would fall under 480 px, a letter page at its width
   under 0.8 of its size) the contents lay over the document, min(240 px, 100vw − 48 px) wide with the pop shadow, the document
   keeping its width. A jump closes them, the focus going to the heading's page where the side read holds a target for it (the
