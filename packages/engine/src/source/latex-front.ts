@@ -250,7 +250,8 @@ type Ctx = {
   displayEnvs: Set<string>
   fits: Fit[]
   lineEnvs: Set<string>
-  ownAccents: Set<string>
+  /** the accents the paper defines anew, each with whether its definition takes an argument (ownAccents) */
+  ownAccents: ReadonlyMap<string, boolean>
   ownLetters: Set<string>
   macros: Map<string, Macro>
   /** the paper's macros of no argument that end a paragraph and set no text (parNamesOf) */
@@ -1021,6 +1022,26 @@ const ACCENT_MARKS: Readonly<Record<string, string>> = {
 const SETTABLE = new Set(
   'ÀÁÂÃÄÇÈÉÊËÌÍÎÏÑÒÓÔÕÖÙÚÛÜÝàáâãäçèéêëìíîïñòóôõöùúûüýÿĂăĆćĈĉĊċČčĎďĔĕĖėĚěĜĝĞğĠġĤĥĨĩĬĭİĴĵĹĺĽľŃńŇňŎŏŐőŔŕŘřŚśŜŝŞşŠšŢţŤťŨũŬŭŰűŴŵŶŷŸŹźŻżŽžǍǎǏǐǑǒǓǔǦǧǰǴǵṅỲỳ',
 )
+/** where the character at s[k] ends, the scanner's view of a source (its bytes read latin1, one code unit a byte): in a UTF-8
+ *  file a lead byte with its continuation bytes, one code point, and the combining marks after it (Unicode's \\p{M}) with it,
+ *  the base letter and its marks one character as they are drawn; in a file of an 8-bit encoding (`utf8` false) a byte is a
+ *  character, as pdfTeX reads it. Cut after its first byte, a letter of UTF-8's two to four bytes decodes to U+FFFD on both
+ *  sides of the cut */
+function characterEnd(s: string, k: number, to: number, utf8: boolean): number {
+  if (!utf8) return k + 1
+  const one = (j: number) => {
+    let e = j + 1
+    if (s.charCodeAt(j) >= 0xc0) while (e < to && (s.charCodeAt(e) & 0xc0) === 0x80) e++
+    return e
+  }
+  let e = one(k)
+  while (e < to) {
+    const n = one(e)
+    if (!/^\p{M}$/u.test(UTF8_LAX.decode(latin1Bytes(s.slice(e, n))))) break
+    e = n
+  }
+  return e
+}
 /** the letter an accent's argument at s[k] names, as TeX reads it after the accent (spaces skipped): an ASCII letter, or
  *  \\i or \\j — its control word's spaces, and an empty group ending it, with it —, bare or alone in braces; with where
  *  its source ends, or null */
@@ -1050,7 +1071,7 @@ function accentLetter(
   end: number,
   name: string,
   to: number,
-  own: ReadonlySet<string> | null | undefined,
+  own: ReadonlyMap<string, boolean> | null | undefined,
 ): Letter | null {
   const mark = ACCENT_MARKS[name]
   if (!mark || own?.has(name)) return null
@@ -1145,18 +1166,23 @@ const ownLetters = (texts: readonly string[]) => {
   return out
 }
 /** the accents a paper's own files define anew (\\def\\v{\\varphi}, \\renewcommand{\\H}{\\mathcal{H}}, a package's
- *  \\let\\'…): there the command is the paper's, and no letter is made of it */
+ *  \\let\\'…): there the command is the paper's, and no letter is made of it. Each with whether its definition takes an
+ *  argument: false where it declares none (\\renewcommand{\\=}{\\textemdash}, \\def\\={…}), true where it declares one or
+ *  does not say (\\let, a document command's argument specification) */
 const ownAccents = (texts: readonly string[]) => {
-  const out = new Set<string>()
+  const out = new Map<string, boolean>()
   // (latex.ltx's \newcommand, \renewcommand, \providecommand, \DeclareRobustCommand and \New…, \Renew…, \Provide…,
   // \Declare…DocumentCommand; TeX's \def, \gdef, \edef, \xdef, \let)
   for (const m of texts
     .map(uncommented)
     .join('\n')
     .matchAll(
-      /\\(?:(?:(?:re)?newcommand|providecommand)\*?|DeclareRobustCommand\*?|(?:New|Renew|Provide|Declare)DocumentCommand|[gex]?def|let)\s*\{?\s*\\([cvuH]|[.'`^~"])(?![A-Za-z@])/g,
-    ))
-    out.add(m[1]!)
+      /\\((?:re)?newcommand\*?|providecommand\*?|DeclareRobustCommand\*?|(?:New|Renew|Provide|Declare)DocumentCommand|[gex]?def|let)\s*\{?\s*\\([cvuH]|[.'`^~"=])(?![A-Za-z@])\s*\}?\s*(?:\[\s*(\d)\s*\]|(#\d))?/g,
+    )) {
+    const how = m[1]!
+    const takes = /def$/.test(how) ? !!m[4] : /command\*?$/i.test(how) && !/Document/.test(how) ? Number(m[3] ?? 0) > 0 : true
+    out.set(m[2]!, takes)
+  }
   return out
 }
 // a number with an optional unit; spaces and tabs only, never a line end — the next line is not the command's
@@ -5950,11 +5976,15 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
       continue
     }
     // (its argument past white space whatever the accent's name: TeX skips spaces before an undelimited argument, `\\= T` is
-    // `\\=T`, as accentBase reads it; after a control symbol the space is a token, skipped there all the same)
+    // `\\=T`, as accentBase reads it; after a control symbol the space is a token, skipped there all the same. An accent the
+    // paper defines anew as a macro of no parameter (`\\renewcommand{\\=}{\\textemdash}`) has no argument to skip spaces
+    // for: after a control symbol TeX keeps the space a token, and the word after it is the text's whole, read as before)
     if (ACCENTS.has(name)) {
-      let k = skipSpaces(s, end)
+      const bare = ctx.ownAccents.get(name) === false && !/^[A-Za-z]$/.test(name)
+      let k = bare ? end : skipSpaces(s, end)
       if (s[k] === '{') k = matchGroup(s, k)
       else if (s[k] === '\\') k = commandAt(s, k).end
+      else if (k < to) k = characterEnd(s, k, to, !decoders.has(b.file))
       else k = k + 1
       if (k > 0 && k <= to) {
         endText()

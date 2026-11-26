@@ -10442,7 +10442,11 @@ both. No answer, an answer 0 or 1, or an error in the probe's box (`x`) is no jo
 **An accent's argument past white space.** `\= T` is `\=T`: TeX skips spaces before an undelimited argument, and the source
 reader read a control symbol's argument with no space skipped, so the space was the argument and the T text, the accent's piece a
 bare macro of no ink (`unproven` in the lay: the caption of FIG. 1). Now every accent's argument is read past white space,
-whatever its name (`source/latex-front.ts`, as accentBase reads it).
+whatever its name (`source/latex-front.ts`, as accentBase reads it). The argument is a whole character: in a UTF-8 file a code
+point with its bytes and the combining marks after it (characterEnd; cut after its first byte, `\= α` sent the translator a
+U+FFFD on both sides of the cut), in a file of an 8-bit encoding a byte. An accent the paper defines anew as a macro of no
+parameter (`\renewcommand{\=}{\textemdash}`: ownAccents states whether its definition takes an argument) has none to skip
+spaces for: after a control symbol TeX keeps the space a token, and the word after it stays whole in the text.
 
 **Why the count said nothing was lost.** The rows' count (`session/rows.ts` viewOf) counts rows: got, an accepted row held;
 lost, a row that is none. Every unit above held an accepted row, so the reader said 507 of 507 with none lost (staging's view,
