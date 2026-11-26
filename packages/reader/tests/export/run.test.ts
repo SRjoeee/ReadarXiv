@@ -125,7 +125,6 @@ describe("a cancel at PDF.js's loading, against the pinned PDF.js (#686: 4706206
     const child = spawnSync(process.execPath, [fileURLToPath(new URL('./cancel-child.mts', import.meta.url))], {
       encoding: 'utf8',
       timeout: 60_000,
-      cwd: fileURLToPath(new URL('../..', import.meta.url)),
     })
     const line = child.stdout.trim().split('\n').pop() ?? ''
     expect(JSON.parse(line || '{}')).toEqual({
