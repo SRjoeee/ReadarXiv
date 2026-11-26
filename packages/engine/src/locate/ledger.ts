@@ -200,8 +200,11 @@ interface LineLaw {
   x0: number
   x1: number
 }
-/** a glyph's size as the walk reads it (none read as next to nothing) */
-const walkSize = (x: { size: number }) => Math.max(x.size || 0, 1e-6)
+/** a glyph's size as the walk reads it: a glyph the PDF's text matrix sets at no size read as next to nothing, any positive
+ *  number, so that the walk's multiples of a size compare as numbers (the value read inline in the walk before, unchanged) */
+function walkSize(x: { size: number }): number {
+  return Math.max(x.size || 0, 1e-6)
+}
 /** whether a glyph goes on a line of the walk: in its region, zone and entry, its baseline within LINE_DY of the larger size
  *  (a superscript, a subscript), not starting more than its size left of the line's start, no more than LINE_GAP of its sizes
  *  right of the line's end */
