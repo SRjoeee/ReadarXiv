@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import {
+  BOUNDS,
   canonical,
   chunkDigests,
   chunkMatches,
@@ -301,11 +302,11 @@ describe('read and write', () => {
   it('refuses before parsing: a wrong digest, too many bytes, values or levels', () => {
     const { bytes } = write('part', part())
     expect(() => read('part', bytes, '0'.repeat(64))).toThrow(FormatError)
-    const big = new Uint8Array(64 * 1024 + 1).fill(0x20)
-    expect(() => read('head', big)).toThrow(/past 65536/)
+    const big = new Uint8Array(BOUNDS.head.bytes + 1).fill(0x20)
+    expect(() => read('head', big)).toThrow(`past ${BOUNDS.head.bytes}`)
     const deep = utf8(`${'['.repeat(40)}${']'.repeat(40)}`)
     expect(() => read('part', deep)).toThrow(/deeper/)
-    const many = utf8(`[${Array.from({ length: 20000 }, () => '1').join(',')}]`)
+    const many = utf8(`[${Array.from({ length: BOUNDS.head.values + 1 }, () => '1').join(',')}]`)
     expect(() => read('head', many)).toThrow(/values/)
   })
   it('refuses what its schema does not take, and bytes that are not UTF-8', () => {

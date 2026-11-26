@@ -15,7 +15,13 @@ export type Obj<K extends ObjKind> = z.infer<(typeof SCHEMAS)[K]>
 
 /** each kind's bounds: bytes, JSON values (every string, number, literal, array and object counted) and nesting depth */
 export const BOUNDS: Readonly<Record<ObjKind, { bytes: number; values: number; depth: number }>> = Object.freeze({
-  head: { bytes: 64 * 1024, values: 16 * 1024, depth: 8 },
+  // (the head grows with the paper it names: a part's digest a page, a refused page's entry, 22 characters an ORIGINAL_CHUNK of
+  // arXiv's PDF, an outline entry and a printed number a heading. A head past its bound is a paper with no layer at all, so the
+  // bound is the part's, the largest object a reader already reads whole: a head at the prepare's page bound (the engine's
+  // PAGES_MAX, 10,000), every page's part named, holds some 0.7 MB of them, the room left for over 30,000 numbered headings.
+  // The bound was 64 KiB, which a paper of some 970 pages filled with its parts' digests alone; the largest head of the lab's
+  // papers is some 27,000 bytes)
+  head: { bytes: 4 * 1024 * 1024, values: 1024 * 1024, depth: 8 },
   units: { bytes: 1024 * 1024, values: 256 * 1024, depth: 48 },
   part: { bytes: 4 * 1024 * 1024, values: 1024 * 1024, depth: 16 },
   row: { bytes: 256 * 1024, values: 32 * 1024, depth: 48 },
