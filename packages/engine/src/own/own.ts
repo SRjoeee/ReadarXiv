@@ -230,6 +230,66 @@ function paraStartOf(paras: readonly InkPoint[], at: number, region: ArrayLike<n
 const JOINT = /^[.:;,\u2013\u2014-]{1,2}$/u
 
 /**
+ * The labels of the units TeX shipped whole inside a unit's range (ownOf's text, from its start `s` to `e`): each other unit
+ * whose start and end stand between them in the range's region, the range's glyphs right before that start on the start's line
+ * (half the larger size apart across at most, own/stream.ts toStart's line), where they are a label's form (a note's number) and
+ * the range sets nothing more on that line after the unit's end: the line is the shipped unit's. A unit TeX set inline in the
+ * range's own line keeps the words before it the range's (no label's form), and so does a line the range goes on with after it.
+ * (REVTeX's grid sets a column's notes inside the body, between the two parts of a paragraph that crosses the column:
+ * 2611.16683v1 p3's note number was the paragraph's, which laid a line of its translation over the note.) The range without
+ * them, and the work counted on from `work0`
+ */
+function shippedLabels(
+  pages: readonly OwnPage[],
+  regions: readonly { at: ArrayLike<number> }[],
+  where: ReadonlyMap<string, Place[]>,
+  list: Taken,
+  s: Place,
+  e: Place,
+  id: number,
+  form: RegExp,
+  work0: number,
+): { list: Taken; work: number } {
+  const glyphs = new Set<string>()
+  let work = work0
+  const before = (a: Place, b: Place): boolean => a[0] < b[0] || (a[0] === b[0] && a[1] < b[1])
+  const r = regions[s[0] - 1]!.at[s[1]]
+  for (let p = s[0]; p <= e[0]; p++) {
+    const pg = pages[p - 1]!,
+      q1 = p === e[0] ? e[1] : pg.points.length
+    for (let q = p === s[0] ? s[1] + 1 : 0; q < q1; q++) {
+      const x = pg.points[q]!,
+        m = START.exec(x.name)
+      work += 1
+      if (!m || Number(m[2]) === id || regions[p - 1]!.at[q] !== r) continue
+      const end = [`${m[2]}e`, `t${m[2]}e`, `h${m[2]}e`]
+        .flatMap((n) => where.get(n) ?? [])
+        .find((y) => before([p, q], y) && before(y, e))
+      const G = pg.glyphs,
+        N = G[x.glyph]
+      if (!end || !N) continue
+      const onLine = (g: number) => Math.abs(G[g]!.y - N.y) < 0.5 * Math.max(G[g]!.size, N.size)
+      const mine = list.glyphs.filter(([q2]) => q2 === p).map(([, g]) => g)
+      work += mine.length
+      let k = mine.findIndex((g) => g >= x.glyph)
+      if (k < 0) k = mine.length
+      let a = k
+      while (a > 0 && onLine(mine[a - 1]!)) a--
+      if (a === k) continue
+      const label = mine.slice(a, k)
+      const text = label.map((g) => G[g]!.u ?? '').join('')
+      if (!labelText(text) || !isLabelForm(text, false, form)) continue
+      const after = end[0] === p ? pages[p - 1]!.points[end[1]]!.glyph : G.length
+      if (mine.some((g) => g >= after && onLine(g))) continue
+      for (const g of label) glyphs.add(`${p}|${g}`)
+    }
+  }
+  return {
+    list: glyphs.size ? { glyphs: list.glyphs.filter(([p, g]) => !glyphs.has(`${p}|${g}`)), boxes: list.boxes } : list,
+    work,
+  }
+}
+/**
  * Each unit's own ink of a document, by its marks. `pages` (page p at index p - 1): what pageInk read of each page with
  * `indices` — `glyphs` ({ n, k, u, x0, x1, y, size, top, bottom }, stream order), `boxes` (stride 4), `paths` (each box's
  * painted path's place, or its kind: < 0), `points` ({ name, glyph, box }), `boxAt` — and its `view`; a page that was not read
@@ -451,12 +511,8 @@ export function ownOf(
     // as a letter (an icon), a rule past its lines — is the page's, left standing; a placeholder's are its own, `.p`, claimed
     // over the text's below. A title of an end mark alone takes no box: `list.boxes` is empty there. Their search past
     // OWN_WORK: the unit not owned, as any past it)
-    // (another unit TeX shipped whole inside the range, in its region, its start opening a line of its own — a class that sets a
-    // column's notes inside the body it brackets, REVTeX's grid, between the two parts of a paragraph that crosses the column —:
-    // the glyphs right before its start on that line, a label's form, the range setting nothing more on that line, are its label,
-    // no text of this unit's, as at a later unit's start (stream.ts toStart). 2611.16683v1 p3: a note's number was the paragraph's,
-    // which laid a line of its translation over the note. One set inline after the range's words keeps them: they are its text)
-    list = withoutShippedLabels(list, s, e, id)
+    // (the labels of the units TeX shipped whole inside the range are theirs, no text of this unit's: shippedLabels)
+    if (s) ({ list, work } = shippedLabels(pages, regions, where, list, s, e, id, form, work))
     const rules = lineRules(list)
     if (!rules) {
       u.unhidden = 'marks'
@@ -464,45 +520,6 @@ export function ownOf(
     }
     textOf.set(id, { s, e })
     claim({ glyphs: list.glyphs, boxes: rules }, `u${id}`, 'u')
-  }
-  /** a unit's range without the labels of the units TeX shipped whole inside it (from its start `s` to `e`): each other unit
-   *  whose start and end stand between them in the range's region, the range's glyphs right before that start on the start's line
-   *  (half the larger size apart across at most, toStart's line), where they are a label's form (a note's number) and the range
-   *  sets nothing more on that line after the unit's end: the line is the shipped unit's. A unit TeX set inline in the range's
-   *  own line keeps the words before it the range's (no label's form), and so does a line the range goes on with after it */
-  function withoutShippedLabels(list: Taken, s: Place | null, e: Place, id: number): Taken {
-    if (!s || !list.glyphs.length) return list
-    const r = at(s),
-      cut = new Set<string>()
-    for (let p = s[0]; p <= e[0]; p++) {
-      const pg = pages[p - 1]!
-      for (const [x, q] of pointsOn(p, p === s[0] ? s[1] + 1 : 0, p === e[0] ? e[1] : pg.points.length)) {
-        const m = START.exec(x.name)
-        if (!m || Number(m[2]) === id || regions[p - 1]!.at[q] !== r) continue
-        work += 1
-        const end = [`${m[2]}e`, `t${m[2]}e`, `h${m[2]}e`]
-          .flatMap((n) => where.get(n) ?? [])
-          .find((y) => before([p, q], y) && before(y, e))
-        const G = pg.glyphs,
-          N = G[x.glyph]
-        if (!end || !N) continue
-        const onLine = (g: number) => Math.abs(G[g]!.y - N.y) < 0.5 * Math.max(G[g]!.size, N.size)
-        const mine = list.glyphs.filter(([q2]) => q2 === p).map(([, g]) => g)
-        work += mine.length
-        let k = mine.findIndex((g) => g >= x.glyph)
-        if (k < 0) k = mine.length
-        let a = k
-        while (a > 0 && onLine(mine[a - 1]!)) a--
-        if (a === k) continue
-        const label = mine.slice(a, k)
-        const text = label.map((g) => G[g]!.u ?? '').join('')
-        if (!labelText(text) || !isLabelForm(text, false, form)) continue
-        const after = end[0] === p ? pt(end).glyph : G.length
-        if (mine.some((g) => g >= after && onLine(g))) continue
-        for (const g of label) cut.add(`${p}|${g}`)
-      }
-    }
-    return cut.size ? { glyphs: list.glyphs.filter(([p, g]) => !cut.has(`${p}|${g}`)), boxes: list.boxes } : list
   }
   /** the rules TeX painted on the text's own lines: lineRulesOf over the range's glyphs and boxes, its work counted;
    *  null where it would pass OWN_WORK */
