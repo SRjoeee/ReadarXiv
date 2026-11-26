@@ -600,6 +600,9 @@ export function openReader(
     if (!signal.aborted && title) rt.input({ i: 'paper.title', title })
   }
 
+  /** the runtime once made: a resource its first step acquires (the link, where the visit names a target) is acquired while
+   *  `rt` is being made, when the session holds no document yet */
+  let made: Runtime | null = null
   const handlers: Handlers = {
     original(spec, t, emit, signal) {
       const url = spec.pin
@@ -680,6 +683,7 @@ export function openReader(
         fetch: host.fetch,
         paper,
         target: spec.target,
+        held: made?.state.doc ?? null,
         signal,
         wake: () => {
           if (!w.due) return new Promise<void>((go) => (w.go = go))
@@ -1042,6 +1046,7 @@ export function openReader(
       tellSoon()
     },
   })
+  made = rt
   // ---- the objects wanted (the head), and the view following the state
   const fetching = new Set<string>()
   /** what laying the target reads first, asked ahead (warmTypeset) once a composed translation is to be shown (the display

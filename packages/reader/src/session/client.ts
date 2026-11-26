@@ -1,6 +1,7 @@
-// The reader's client of our server's v2 routes (`GET /api/v2/papers/<seg>?t=&f=` follows, a whole document an
-// answer or a stream frame, never starting work; `POST /api/v2/open` starts what is missing; `GET /api/v2/o/<path>` immutable
-// bytes), over the host's fetch alone: one implementation for both hosts (`follow`, `object` and the
+// The reader's client of our server's v2 routes (`GET /api/v2/papers/<seg>?t=&f=&c=` follows, a whole document an
+// answer or a stream frame, never starting work, `c` the target's translation the session holds, which our server serves
+// while it keeps it; `POST /api/v2/open` starts what is missing; `GET /api/v2/o/<path>` immutable bytes), over the host's
+// fetch alone: one implementation for both hosts (`follow`, `object` and the
 // server's rows are the reader's, over `fetch`).
 //
 // Every ask is bounded by the network's silence (docs/PDF-READER.md §8.1): REQUEST_MS with
@@ -297,18 +298,28 @@ export async function follow(
      * minute, 60 asks an hour). Asked each time the follow settles; the follow's signal ends the wait. Absent: IDLE_MS
      */
     wake?(): Promise<void>
+    /** the document the session holds as the follow starts: the translation it names for the target is asked for */
+    held?: Doc | null
   },
 ): Promise<never> {
   const timers = a.timers ?? realTimers
-  const q = new URLSearchParams({ f: FORMATS.join(',') })
-  if (a.target) q.set('t', a.target)
-  const url = `/api/v2/papers/${followSegOf(a.paper)}?${q}`
   const pollMs = a.pollMs ?? 2000
   let quiet = 0
   /** the reconnection time our server named (`retry:`), at most WAIT_MAX_MS: none until it names one */
   let named = 0
   /** the last document heard: whether anything runs in it sets the pace */
   let last: Doc | null = null
+  /** the address of the next ask: the target's translation the session holds named (`c`), the last document's heard, else
+   *  the held one's, so that every document of a session is of one translation while our server keeps it */
+  const urlOf = () => {
+    const q = new URLSearchParams({ f: FORMATS.join(',') })
+    if (a.target) {
+      q.set('t', a.target)
+      const translator = (last ?? a.held)?.targets[a.target]?.translator
+      if (translator) q.set('c', translator)
+    }
+    return `/api/v2/papers/${followSegOf(a.paper)}?${q}`
+  }
   const tell = (d: Doc) => {
     last = d
     a.onDoc(d)
@@ -318,7 +329,7 @@ export async function follow(
   const rest = (ms: number) => (a.wake ? woken(a, a.wake) : sleep(Math.max(IDLE_MS, ms), a))
   for (;;) {
     let told = false
-    const outcome = await request(a, url, { headers: { accept: 'text/event-stream' } }, async (r) => {
+    const outcome = await request(a, urlOf(), { headers: { accept: 'text/event-stream' } }, async (r) => {
       if (r.status === 404) throw new Refused(await missOf(r))
       if (r.status === 426) throw new Refused('update')
       if (r.status === 429) {
