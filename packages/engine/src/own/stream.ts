@@ -1016,8 +1016,37 @@ export function ownedOf(
       const end = textEnd(glyphs, pages[pa - 1]!.points[stop[1]]!.name)
       return end > 0 ? cut(HOW['open, to the text after it'], glyphs, boxes, end) : null
     }
+    /** an opening point alone whose next mark is another unit's start in its own region, that unit's end mark after it on its
+     *  page, and the text after it right where that end mark stands: a unit TeX shipped into the body between the piece and the
+     *  text after it (a class that sets a column's footnotes inside the body it brackets, REVTeX's ltxgrid). Its ink is what
+     *  its region holds from it to that unit's start, the glyphs on that start's line before it (the unit's label: a note's
+     *  number) left out, as at a later unit's start (toStart); or null where it is not so */
+    const pastUnit = (): Owned | null => {
+      if (!f.want) return null
+      const next = seq[(rank.get(`${pa}|${qa}`) ?? -2) + 1]
+      if (!next || next[0] !== pa || regions[pa - 1]!.at[next[1]] !== rA) return null
+      const P = pages[pa - 1]!,
+        N = P.points[next[1]]!,
+        s = START.exec(N.name)
+      if (!s || s[1] === m[2]) return null
+      const E = [`${s[1]}e`, `t${s[1]}e`, `h${s[1]}e`]
+        .flatMap((n) => where.get(n) ?? [])
+        .find(([p, q]) => p === pa && q > next[1])
+      if (!E) return null
+      // (the text after it from that end mark on, in its region, to the next mark there)
+      let stop: Place | null = null
+      for (let r = (rank.get(`${E[0]}|${E[1]}`) ?? -2) + 1; r >= 1 && r < seq.length && !stop; r++)
+        if (seq[r]![0] === pa && regions[pa - 1]!.at[seq[r]![1]] === rA) stop = seq[r]!
+      const T = stop ? P.points[stop[1]]! : null,
+        after: Place[] = []
+      take(after, [], pa, P.points[E[1]]!.glyph, T ? T.glyph : P.glyphs.n, 0, 0)
+      if (textAt(pages, after, f.want, erasure) !== 0) return null
+      const { glyphs, boxes } = takeTo(next)
+      if (jumps(glyphs)) return null
+      return toStart(glyphs, boxes, N)
+    }
     let e = alone()
-    if (e.how === HOW['open, the text after it not found']) e = pastOther() ?? e
+    if (e.how === HOW['open, the text after it not found']) e = pastOther() ?? pastUnit() ?? e
     if (e.how === HOW['open, the next mark on another page'] || e.how === HOW['open, the text after it not found'])
       e = pastColumn() ?? e
     if (e.how === HOW['open, the next mark on another page']) e = footEnd() ?? e
