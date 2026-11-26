@@ -10414,7 +10414,9 @@ an inline formula TeX moved whole to the next column leaves its opening point at
 stand between it and its closing point, and the formula's element owned the note's label and text (p25's note a unit of no text,
 'unwrapped', English). Another unit shipped whole between a piece's points in its region (its start, then its end mark, before
 the closing point), with its label, the glyphs before its start on that start's line, is no ink of the piece's (ownedOf's closed
-reading).
+reading); where the piece set no glyph before the first of them (TeX set it whole after them), what was painted from its opening
+point to that label went with them too: the rule the class sets above a column's notes, which had made the formula's element one
+box from the rule to the next column's head, its crop the page between.
 
 **Two placeholders TeX joined are one ink.** `(\=A\=T)`: the marking asks TeX, for a paper's macro and the placeholder right
 after it, whether a mark between them moves anything (the look-ahead probe, aheadSamples). TeX answers 2 where the mark changes

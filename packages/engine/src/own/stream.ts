@@ -728,7 +728,11 @@ export function ownedOf(
         )
           g0--
         const T = P.points[E[1]]!
-        cuts.push([p, g0, T.glyph, g0 < G.n ? P.boxAt[g0]! : N.box, T.box])
+        // (where the piece set no glyph of its own before the first of them, TeX set the piece whole after them — a formula moved
+        // whole to the next column —, and what it painted from the piece's opening point to that label is what it shipped with
+        // them: the rule a class sets above a column's notes, the formula's element one box from it to the next column's head)
+        const bare = !cuts.length && !glyphs.some(([q, g]) => q < p || (q === p && g < g0))
+        cuts.push([p, g0, T.glyph, bare ? (p === pa ? A.box : 0) : g0 < G.n ? P.boxAt[g0]! : N.box, T.box])
         r = rank.get(`${E[0]}|${E[1]}`)!
       }
       if (cuts.length) {
