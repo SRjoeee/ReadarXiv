@@ -2192,11 +2192,16 @@ in the page, after the slices' decoding (0.13 to 0.24 s); each file arXiv's size
   is written in the encoding a reader decodes back to it: PDFDocEncoding where every character has a byte there, else UTF-16BE
   with its byte order mark (#685's review, 4704253033: written as Latin-1 or UTF-8, a CJK name and one with a character of
   PDFDocEncoding's 0x80 to 0xA0 resolved nowhere or to another name; each resolves through PDF.js now. None of the 245
-  papers' 34,255 destination names is outside ASCII, whose bytes are as before).
+  papers' 34,255 destination names is outside ASCII, whose bytes are as before). A name the paper holds is written as its own
+  key, byte for byte (the name tree's string, the catalog's `/Dests` name, found by its text as PDF.js decodes it): poppler
+  looks a destination up by its key's bytes, and a key in UTF-16BE of a name PDFDocEncoding holds was missed (#686's review,
+  4705748922).
 - **The bake** (`bake.ts`), on the engine's walk (`walkPage`: each show's codes and text state as the remover reads them),
   read through the file's own `openObjects` view of the composed document (`openRemover` given the objects in place of the
   bytes: each object parsed when asked, nothing of the document loaded whole; the prepare's, given the bytes, is the same walk
-  over the object layer's whole load). A group turned off in the default view hides its ink, and PDF.js and poppler still read its text: on
+  over the object layer's whole load). Through the view, a stream whose `/Filter` or `/DecodeParms` names an entry by
+  reference is decoded with it resolved, as the whole load's context resolves it (#686's review, 4705748788: the view parses a
+  dictionary where no object is held; none of the 245 papers' 87,461 streams names one so). A group turned off in the default view hides its ink, and PDF.js and poppler still read its text: on
   1706.03762v7-zh, 1,408 of 1,408 words of the units laid were read on the translated pages. Baked, a show in a group the page
   turns off becomes the advance it made (a `TJ` of one number at the text state of the moment), a painted path and an image go,
   a clip stays a clip, state stays (a group off hides painting, never state: ISO 32000-1 §8.11.3.1), our own marks go; 62 of the
@@ -2207,14 +2212,27 @@ in the page, after the slices' decoding (0.13 to 0.24 s); each file arXiv's size
   (Identity-H, a CIDFontType0 over its CFF, `/CIDFontType0C`, or a CIDFontType2 over a TrueType one, FontFile2, its CIDs its
   glyph ids) with a ToUnicode of exactly the glyphs drawn, so that selection, search and copy give the translation's characters.
   A run the reader draws in a face's own small capitals (its class's `font-variant-caps` over the face's `smcp` feature) is
-  drawn with the glyphs that feature substitutes, read from the slice's GSUB (its single substitutions, lookup after lookup),
-  and placed as the reader measures it: cut where the face that holds a character turns from one with its own small capitals
+  drawn with the glyphs that feature substitutes, read from the slice's GSUB (its single substitutions, lookup after lookup)
+  in the language system the reader's drawing is shaped in: the reader draws the translation in its target's `lang`
+  (`svgOf`), so a browser takes the character's script, the target's OpenType language system where the face has one, else
+  the default one (#686's review, 4705749063: Chrome draws `i` so in each of the 21 targets in the served Libertine, Domitian
+  and CMU Serif, and the file the same: Libertine's Turkish small capital is dotted, and Domitian's German, CMU Serif's Dutch
+  and Turkish systems have no small capitals, drawn in lower case; the union of every `smcp` feature drew the default small
+  capital in those four), and placed as the reader measures it, in a canvas of the target's `lang`: cut where the face that holds a character turns from one with its own small capitals
   to one with none, each piece measured alone in small capitals or in lower case (`partsOf`'s rule; #685's review,
   4704125899). On the corpus's 15 such runs with text of their own (2608.00812v1, Domitian, its English laid as its row: no
   rows of it are held), 744 letters were drawn in lower case and are drawn in small capitals, each glyph the one fontTools reads
-  through the slice's feature, each run's end 0.0001 em from the run the reader draws (6.6 em at worst before). A slice is WOFF2, whose tables are brotli: a browser's `DecompressionStream` has none
-  (Chromium 153), and PDF.js (6.3.289, both hosts' pin) decodes PDF's `/BrotliDecode`, so the slices' streams are the embedded
-  files of a document of ours read back through PDF.js's public API: no decoder shipped. The CFF is subset (`subsetCff`): every
+  through the slice's feature, each run's end 0.0001 em from the run the reader draws (6.6 em at worst before). A glyph two
+  texts are drawn with (small-cap `i` and dotless `i` share one in CMU Serif; a cmap may give a hyphen two code points) is
+  drawn, for each text after the first, through another Type0 font over the same font program, whose ToUnicode reads it as
+  that text, so that copy and search give each character the reader holds (#686's review, 4705748606). A slice is WOFF2, whose
+  tables are brotli: a browser's `DecompressionStream` has none (Chromium 153), and PDF.js (6.3.289, both hosts' pin) decodes
+  PDF's `/BrotliDecode`, so the slices' streams are the embedded files of a document of ours read back through PDF.js's public
+  API: no decoder shipped. They are decoded on a PDF.js worker of the export's own, the reader's kit's `export` role over a
+  port of the reader's, opened for them and released after, however the decoding ends (a cancel destroys its document at
+  once): the reader never sets PDF.js's global worker, and a document asked of PDF.js with no worker fails in a browser, which
+  every file did on the website's page until #686 (the e2e's stand-in served its face as a bare TrueType, which never reached
+  this decoding; it serves WOFF2 now). The CFF is subset (`subsetCff`): every
   glyph not drawn and every subroutine no kept glyph reaches made empty, glyph ids and CIDs kept (the text's codes need no
   renumbering), the table written again with every offset five bytes wide; the walk of a Type 2 charstring that tells which
   subroutines a glyph reaches refuses what it cannot tell (a computed call, `seac`), and that font goes whole, counted. All 3,705
@@ -2255,7 +2273,10 @@ and PDF.js: its turned pages, its destination names; a face's small capitals, `s
 `run.test.ts`),
 `packages/reader/tests/chrome/model.test.ts` and `capsule-export.test.ts` (the controller's file, its share, cancel, failure
 and retry, the capsule), and in a real browser `pnpm e2e:reader` (`tests/e2e/reader-v2-export.mjs`: both files saved and read
-back, one at a time, a cancel, a failure and its retry, the reading options' row in a narrow window).
+back, their faces served as WOFF2 and decoded on the export's own worker, each file starting one and ending it; one at a
+time, a cancel, a failure and its retry, the reading options' row in a narrow window). What only the lab's proofs reach: the
+served slices themselves (CFF-flavoured, 3,705 of 3,839; TrueType's glyf transform), on the four papers through the same
+module in Chromium with no global worker set.
 
 ## 12. Performance gates
 
