@@ -188,6 +188,19 @@ describe('a placeholder TeX answered inseparable from the macro before it is rea
     ).toEqual([])
   })
 
+  it('an error in the box with the two openings or the one asking how the list ends proves no joining; the marking still sets no mark (Devin on #689)', () => {
+    // (each pair's box `d`, then `g`, logged an error before TeX's answer 0: the marking reads no mark there, as before, and
+    // the error states nothing of what TeX joins)
+    const samples = aheadSamples(UNITS as never)
+    for (const box of ['d', 'g']) {
+      const log = samples
+        .map((_, n) => `LAYOUT-PROBE 1 ahead-at ${n} ${box}\n! Undefined control sequence.\nLAYOUT-PROBE 1 ahead ${n} 0`)
+        .join('\n')
+      expect(Object.values(readMarkProbe(log, samples))).toEqual(samples.map(() => '2'))
+      expect(probeFactsOf(log, UNITS as never).joined).toEqual([])
+    }
+  })
+
   it('the other side: a joined piece with an opening mark of its own, or after a macro with none, is not read through', () => {
     const joined = [
       { unit: 0, piece: '2' },
