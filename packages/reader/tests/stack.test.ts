@@ -296,3 +296,53 @@ describe('the stack: a page view reset by a new scale while it draws (staging, 2
     expect(viewIn(1)?.painted).toBe(0.75)
   })
 })
+
+describe("a kept page's pixels: its page view's, its detail canvas's past PDF.js's cap (#688's review, Devin 4709451334)", () => {
+  let stack: Stack
+  afterEach(() => {
+    stack.dispose()
+    vi.unstubAllGlobals()
+  })
+  it('counts the detail canvas PDF.js keeps with the page view in the keep budget', async () => {
+    PageView.all = []
+    Observer.all = []
+    vi.stubGlobal('IntersectionObserver', Observer)
+    const scroller = document.createElement('div')
+    document.body.append(scroller)
+    stack = createStack({
+      scroller,
+      kit,
+      scheduler: createScheduler(),
+      clock: handClock(),
+      name: (n) => `page ${n}`,
+      links: null,
+      keepPixels: 1e9,
+    })
+    stack.contentOf = (n) => (n === 1 ? laid('t') : view('original'))
+    await stack.layout(doc as never, 1)
+    const [near, inView] = Observer.all as [Observer, Observer]
+    const slots = [stack.page(1), stack.page(2)] as HTMLElement[]
+    near.cb(slots.map((target) => ({ target, isIntersecting: true })))
+    inView.cb(slots.map((target, i) => ({ target, isIntersecting: i === 0 })))
+    for (let i = 0; i < 20; i++) {
+      await settle()
+      const busy = PageView.all.filter((v) => v.task)
+      if (!busy.length && stack.showing(1) === 't') break
+      for (const v of busy) v.task?.done(true)
+    }
+    expect(stack.showing(1)).toBe('t')
+    // (page 1's page view: a canvas of 100 x 100 and, past the cap, a detail canvas of 30 x 20)
+    const pv = PageView.all.find((v) => v.div === stack.page(1)?.querySelector(':scope > .axt-slot-view > .page'))!
+    pv.canvas = { width: 100, height: 100 }
+    ;(pv as unknown as { detailView: unknown }).detailView = {
+      renderingState: FINISHED,
+      canvas: { width: 30, height: 20 },
+    }
+    // (page 1 far: kept)
+    inView.cb([{ target: slots[0] as HTMLElement, isIntersecting: false }])
+    near.cb([{ target: slots[0] as HTMLElement, isIntersecting: false }])
+    await settle()
+    expect(stack.probe().kept).toBe(1)
+    expect(stack.probe().keptPixels).toBe(100 * 100 + 30 * 20)
+  })
+})

@@ -59,6 +59,7 @@ import {
   detailAway,
   detailBoxOf,
   detailCropsFor,
+  detailKept,
   detailPixels,
   dropCanvas,
   holeOf,
@@ -399,7 +400,10 @@ export function createComposer(o: ComposerOptions): Composer {
         detail: (el, at, area) => cropsDetail(page, doc, g, el, at, area),
         // (a far page's crops kept as a copy of their box, back in the task it returns: docs/PDF-READER.md §11.8; its detail's,
         // cut to their box already, kept as they are with the page view's detail canvas they match, and counted)
-        away: (el) => cropsAway(el) + detailPixels(el),
+        away: (el) => {
+          detailKept(el)
+          return cropsAway(el) + detailPixels(el)
+        },
         back: (el, at) => cropsBack(el, cropGridOf(at).px),
         free: (el) => {
           releaseText(el)
@@ -483,7 +487,8 @@ export function createComposer(o: ComposerOptions): Composer {
     was.height = 0
   }
   /** a laid page's crops cut again for the area its page view's detail canvas draws, at that canvas's resolution (past PDF.js's
-   *  canvas cap); `area` null where it draws none any more. The hand-over in one task, once the new crops are cut: the base's
+   *  canvas cap); `area` null where it draws none any more. Whether its crops for that area stand once it is done (false: let
+   *  go, or the cut dropped). The hand-over in one task, once the new crops are cut: the base's
    *  crops cut away under the area and the new canvas in the old one's place, so that no frame shows a crop twice or none */
   async function cropsDetail(
     page: Page,
@@ -492,13 +497,14 @@ export function createComposer(o: ComposerOptions): Composer {
     el: HTMLElement,
     at: SlotAt,
     area: DetailArea | null,
-  ) {
+  ): Promise<boolean> {
     const base = el.querySelector<HTMLCanvasElement>(':scope > canvas.axt-crops')
     if (!area) {
       detailAway(el)
-      return
+      return false
     }
-    if (!base) return
+    // (a page with no crops: none to cut, its detail done)
+    if (!base) return true
     // (the last cut asked of this overlay, still, once cut, at the scale it was cut for: else dropped)
     const mine = askDetail(el)
     const t0 = performance.now()
@@ -506,7 +512,7 @@ export function createComposer(o: ComposerOptions): Composer {
     const next = await detailCropsFor(page, (k) => doc.getPage(k), at.viewport, g.crops, area, at.signal, told)
     if (at.signal.aborted || base.parentNode !== el || !mine() || at.view.viewport.scale !== at.viewport.scale) {
       if (next) dropCanvas(next)
-      return
+      return false
     }
     const was = el.querySelector<HTMLCanvasElement>(':scope > canvas.axt-crops-detail')
     const box = next && detailBoxOf(next)
@@ -518,6 +524,7 @@ export function createComposer(o: ComposerOptions): Composer {
     if (was && was !== next) dropCanvas(was)
     details.push({ n: at.n, ms: performance.now() - t0, px: next ? next.width * next.height : 0, srcPx: told.srcPx })
     if (details.length > 64) details.shift()
+    return true
   }
 
   // ---------------------------------------------------------------- laying, one page at a time

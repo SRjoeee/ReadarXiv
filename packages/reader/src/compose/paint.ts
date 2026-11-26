@@ -615,9 +615,14 @@ export function askDetail(over: HTMLElement): () => boolean {
   detailTurns.set(over, n)
   return () => detailTurns.get(over) === n
 }
+/** a page kept far (`over` its overlay): a detail cut under way for it dropped when it is done (the page's pixels were counted as
+ *  it was kept, #688's review), the crops cut before kept as they are */
+export function detailKept(over: HTMLElement) {
+  detailTurns.set(over, (detailTurns.get(over) ?? 0) + 1)
+}
 /** a page's detail crops let go (`over` its overlay), its base's crops whole again, a cut under way dropped when it is done */
 export function detailAway(over: HTMLElement) {
-  detailTurns.set(over, (detailTurns.get(over) ?? 0) + 1)
+  detailKept(over)
   const det = over.querySelector<HTMLCanvasElement>(':scope > canvas.axt-crops-detail')
   if (det) dropCanvas(det)
   over.querySelector<HTMLCanvasElement>(':scope > canvas.axt-crops')?.style.removeProperty('clip-path')

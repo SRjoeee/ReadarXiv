@@ -12,6 +12,7 @@ import {
   cropsOf,
   detailAway,
   detailBoxOf,
+  detailKept,
   detailCropsFor,
   holeOf,
 } from '../src/compose/paint.ts'
@@ -623,5 +624,22 @@ describe("crops past PDF.js's canvas cap, cut at its detail canvas's resolution 
     // (each overlay its own)
     expect(askDetail(document.createElement('div'))()).toBe(true)
     expect(third()).toBe(true)
+  })
+  it("drops a cut under way as its page is kept far, the crops cut before kept (their pixels counted then: #688's review)", () => {
+    const over = document.createElement('div')
+    const base = Object.assign(document.createElement('canvas'), { className: 'axt-crops' })
+    const det = Object.assign(document.createElement('canvas'), {
+      className: 'axt-crops-detail',
+      width: 40,
+      height: 30,
+    })
+    base.style.clipPath = 'polygon(evenodd, 0% 0%)'
+    over.append(base, det)
+    const pending = askDetail(over)
+    detailKept(over)
+    expect(pending()).toBe(false)
+    expect(over.querySelector('canvas.axt-crops-detail')).toBe(det)
+    expect([det.width, det.height]).toEqual([40, 30])
+    expect(base.style.clipPath).not.toBe('')
   })
 })
