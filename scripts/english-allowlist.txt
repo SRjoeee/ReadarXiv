@@ -203,3 +203,4 @@ packages/translate/tests/chain-cases.ts 1  # 2026-11-13: an ideographic full sto
 packages/translate/tests/chain-owned.test.ts 5  # 2026-11-12: Chinese replies of a scripted markers-wire translator (a unit's, its phrase group's reference, a second unit's), the inputs and expectations of a call that owns every request it starts (the review of round B11)
 packages/translate/tests/names-wire.test.ts 14  # 2026-11-10: Chinese replies of the tags wire to a block's names line and to a variant's person element, and the pieces read back from them (lane name-terms)
 tests/scripts/rules.test.ts 1  # 2026-11-13: a test's Japanese name, the test input the rule ledger's tracked form must hold no byte of (it names a test by file and ordinal; lane r4-ledger)
+tests/e2e/reader-v2-export.mjs 4  # 2026-11-26: the Chinese labels the PDF download's checks find its menu rows, chips and capsule words by (lane pdf-export-build, UI.md S-R-09)

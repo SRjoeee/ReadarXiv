@@ -25,6 +25,9 @@ export interface ChromeOpen {
   engine?: Engine
   /** the PDF.js build this browser reads with; none: the modern */
   pdfjs?: PdfBuild
+  /** the PDF object layer the PDF download writes with, loaded on its press (`() => import('@cantoo/pdf-lib')`): the host's, as
+   *  PDF.js is; none, no file is made */
+  pdfLib?: () => Promise<unknown>
   /** the events the chrome is told at a change, from those the reader's state gives (eventsOf): a host's own words for some */
   tell?: (events: readonly SessionEvent[], state: ReaderState, before: ReaderState | null) => SessionEvent[]
   /** the reader once open, and each state it comes to */
@@ -47,6 +50,7 @@ export function openSession(o: ChromeOpen): (chrome: SessionHost) => Promise<Ses
       ...(o.visit ? { visit: o.visit } : {}),
       ...(o.engine ? { engine: o.engine } : {}),
       ...(o.pdfjs ? { pdfjs: o.pdfjs } : {}),
+      ...(o.pdfLib ? { pdfLib: o.pdfLib } : {}),
       panes: { left: chrome.left, right: chrome.right },
     })
     let told: ReaderState | null = null

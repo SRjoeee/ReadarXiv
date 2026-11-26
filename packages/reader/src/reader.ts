@@ -231,6 +231,9 @@ export function openReader(
     /** the PDF.js build the host serves this browser (its modules and its worker: `LEGACY` of `@readarxiv/reader/pdfjs-legacy`
      *  below the modern build's floor, builds.ts `buildFor`); none: the modern build. The choice is the host's */
     pdfjs?: PdfBuild
+    /** the PDF object layer the PDF download writes with (`@cantoo/pdf-lib`'s exports), loaded on its press: the host's, as PDF.js
+     *  is (both hosts' root manifests pin it); none, no file is made (`export` rejects) */
+    pdfLib?: () => Promise<unknown>
   },
 ): Reader {
   const words = (): Words => o.words ?? CATALOGUE_WORDS
@@ -1269,6 +1272,7 @@ export function openReader(
       const cmp = composer,
         sv = served,
         k = kit
+      if (!o.pdfLib) throw new Error('the host gives no object layer to write a file with')
       if (!h?.addOn || !c || !composed || !cmp || !sv || !k || !original)
         throw new Error('no translation to make a file of yet')
       const { exportFromReader } = await import('./export/run.ts')
@@ -1280,7 +1284,7 @@ export function openReader(
           composer: cmp,
           served: sv,
           pdfjs: k.lib as never,
-          pdfLib: () => import('@cantoo/pdf-lib'),
+          pdfLib: o.pdfLib,
         },
         form,
         x,

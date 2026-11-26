@@ -2193,7 +2193,8 @@ in the page, after the slices' decoding (0.13 to 0.24 s); each file arXiv's size
   each (one ask of each object, never the store's ranges), into one buffer, each held to its digest; every page laid by the
   composer (`layAll`: a page's commit, else its part laid now over the rows as ended, its faces waited for, nothing drawn); the
   slices the runs are drawn in fetched (the browser's cache holds those the page drew); the object layer, `@cantoo/pdf-lib`,
-  loaded on the press as PDF.js is the host's (both hosts' root manifests pin it; its own chunk, 578 KB, 249 KB gzipped). The
+  the host's as PDF.js is (`openReader`'s and `openSession`'s `pdfLib`: the extension gives `() => import('@cantoo/pdf-lib')`;
+  both hosts' root manifests pin it), loaded on the press (its own chunk, 578 KB, 249 KB gzipped). The
   share told: the bytes to 45 %, the pages to 75 %, the fonts to 85 %, the file the rest. The engine reaches the reader in
   this module alone (`scripts/check-boundary.mjs` `PACKAGE_WITHIN`).
 - **Memory**: one translated file of the 46 MB paper (2608.16117v1) in Chromium 153 with V8's heap capped at 256 MB

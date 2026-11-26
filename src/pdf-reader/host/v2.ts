@@ -131,7 +131,8 @@ export function v2Open(o: { host: Host; paper: string; visit: Parameters<typeof 
   return async chrome => {
     if (!o.paper) return noPaper(o.host.prefs)
     const { openSession } = await import('@readarxiv/reader')
-    return openSession({ host: o.host, paper: o.paper, ...(o.visit ? { visit: o.visit } : {}), tell: crashTold })(chrome)
+    // (the PDF download's object layer, loaded on its press: the host's, as PDF.js is)
+    return openSession({ host: o.host, paper: o.paper, ...(o.visit ? { visit: o.visit } : {}), tell: crashTold, pdfLib: () => import('@cantoo/pdf-lib') })(chrome)
   }
 }
 
