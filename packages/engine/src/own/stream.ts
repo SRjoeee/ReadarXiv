@@ -1016,34 +1016,69 @@ export function ownedOf(
       const end = textEnd(glyphs, pages[pa - 1]!.points[stop[1]]!.name)
       return end > 0 ? cut(HOW['open, to the text after it'], glyphs, boxes, end) : null
     }
-    /** an opening point alone whose next mark is another unit's start in its own region, that unit's end mark after it on its
-     *  page, and the text after it right where that end mark stands: a unit TeX shipped into the body between the piece and the
-     *  text after it (a class that sets a column's footnotes inside the body it brackets, REVTeX's ltxgrid). Its ink is what
-     *  its region holds from it to that unit's start, the glyphs on that start's line before it (the unit's label: a note's
-     *  number) left out, as at a later unit's start (toStart); or null where it is not so */
+    /** an opening point alone whose next mark is another unit's start in its own region: units TeX shipped into the body
+     *  between the piece and the text after it (a class that sets a column's footnotes inside the body it brackets, REVTeX's
+     *  ltxgrid), each whole (its start, then its end mark, on its page), the glyphs before each start on that start's line its
+     *  label (a note's number), the text after it right after the last of them, on its page or at the head of its region on a
+     *  later one. Its ink is what its region holds from it to the first such start, that unit's label left out, as at a later
+     *  unit's start (toStart); or null where it is not so */
     const pastUnit = (): Owned | null => {
       if (!f.want) return null
-      const next = seq[(rank.get(`${pa}|${qa}`) ?? -2) + 1]
-      if (!next || next[0] !== pa || regions[pa - 1]!.at[next[1]] !== rA) return null
-      const P = pages[pa - 1]!,
-        N = P.points[next[1]]!,
-        s = START.exec(N.name)
-      if (!s || s[1] === m[2]) return null
-      const E = [`${s[1]}e`, `t${s[1]}e`, `h${s[1]}e`]
-        .flatMap((n) => where.get(n) ?? [])
-        .find(([p, q]) => p === pa && q > next[1])
-      if (!E) return null
-      // (the text after it from that end mark on, in its region, to the next mark there)
-      let stop: Place | null = null
-      for (let r = (rank.get(`${E[0]}|${E[1]}`) ?? -2) + 1; r >= 1 && r < seq.length && !stop; r++)
-        if (seq[r]![0] === pa && regions[pa - 1]!.at[seq[r]![1]] === rA) stop = seq[r]!
-      const T = stop ? P.points[stop[1]]! : null,
-        after: Place[] = []
-      take(after, [], pa, P.points[E[1]]!.glyph, T ? T.glyph : P.glyphs.n, 0, 0)
-      if (textAt(pages, after, f.want, erasure) !== 0) return null
-      const { glyphs, boxes } = takeTo(next)
-      if (jumps(glyphs)) return null
-      return toStart(glyphs, boxes, N)
+      const first = seq[(rank.get(`${pa}|${qa}`) ?? -2) + 1]
+      if (!first || first[0] !== pa || regions[pa - 1]!.at[first[1]] !== rA) return null
+      /** what A's region holds from the point `from` to the point `to` (null: the paper's end), page by page */
+      const between = (from: Place, to: Place | null): Place[] => {
+        const out: Place[] = []
+        for (let p = from[0]; p <= (to ? to[0] : pages.length); p++) {
+          const P = pages[p - 1]!
+          take(
+            out,
+            [],
+            p,
+            p === from[0] ? P.points[from[1]]!.glyph : 0,
+            to && p === to[0] ? P.points[to[1]]!.glyph : P.glyphs.n,
+            0,
+            0,
+          )
+        }
+        return out
+      }
+      /** the next mark in A's region after the point at rank r, on any page */
+      const nextIn = (r: number): Place | null => {
+        for (let x = r + 1; x >= 1 && x < seq.length; x++)
+          if (regions[seq[x]![0] - 1]!.at[seq[x]![1]] === rA) return seq[x]!
+        return null
+      }
+      let at: Place = [pa, qa],
+        nx: Place | null = first
+      for (let passed = 0; ; passed++) {
+        const glyphs = between(at, nx)
+        const N = nx ? pages[nx[0] - 1]!.points[nx[1]]! : null,
+          s = N ? START.exec(N.name) : null
+        const E =
+          s && s[1] !== m[2]
+            ? [`${s[1]}e`, `t${s[1]}e`, `h${s[1]}e`]
+                .flatMap((n) => where.get(n) ?? [])
+                .find(([p, q]) => p === nx![0] && q > nx![1])
+            : undefined
+        if (!E) return null
+        if (passed > 0) {
+          // (between the units: their labels alone, each on its start's line)
+          const G = pages[nx![0] - 1]!.glyphs,
+            y = G.y[N!.glyph]
+          if (y === undefined || glyphs.some(([p, g]) => p !== nx![0] || Math.abs(G.y[g]! - y) > 0.5 * G.size[g]!))
+            return null
+        }
+        at = E
+        nx = nextIn(rank.get(`${E[0]}|${E[1]}`) ?? -2)
+        const N2 = nx ? pages[nx[0] - 1]!.points[nx[1]]! : null,
+          s2 = N2 ? START.exec(N2.name) : null
+        if (s2 && s2[1] !== m[2]) continue
+        if (textAt(pages, between(at, nx), f.want, erasure) !== 0) return null
+        const { glyphs: own, boxes } = takeTo(first)
+        if (jumps(own)) return null
+        return toStart(own, boxes, pages[pa - 1]!.points[first[1]]!)
+      }
     }
     let e = alone()
     if (e.how === HOW['open, the text after it not found']) e = pastOther() ?? pastUnit() ?? e
