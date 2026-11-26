@@ -21,7 +21,9 @@ Dependencies point one way, and `scripts/check-boundary.mjs` (part of `pnpm lint
 - `format`, `text` and `ui` import no other package.
 - `engine`, `typeset` and `translate` may import `format` and `text` (`translate`'s source format's types alone: a bundle's
   unit, which `unitInOf` gives a translator as the wires read it; its tests read format's schema).
-- `reader` may import `format`, `typeset`, `text` and `ui`.
+- `reader` may import `format`, `typeset`, `text`, `ui` and `engine` (the PDF download's module alone, `src/export/` and its tests: held by `PACKAGE_WITHIN`; in its
+  lazily loaded chunk: the engine's object layer, section writer and walk, so that the file is read and written as the prepare
+  reads and writes arXiv's).
 - A package imports another only through its entry, `@readarxiv/<name>`, declared in its `package.json` as `workspace:*`;
   never a deep path, never a relative path across packages.
 - No package imports the extension's `src/`, its aliases, `wxt` or its virtual modules.

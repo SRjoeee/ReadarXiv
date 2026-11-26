@@ -187,6 +187,13 @@ export interface Reader {
   state(): ReaderState
   subscribe(listener: () => void): () => void
   do(c: Command): void
+  /** the PDF download (export/, its own chunk): a file of `form` made from what the reader holds, its parts in order; `progress`
+   *  told its share (0–1), `signal` the reader's cancel. It rejects where the paper has no layer and rows to make one of, or a
+   *  part cannot be had (an ExportRefusal 'aborted' where cancelled) */
+  export(
+    form: 'translation' | 'side-by-side',
+    o: { signal: AbortSignal; progress: (share: number) => void },
+  ): Promise<Uint8Array[]>
   probe(): Readonly<Record<string, number | string | boolean | null>>
   close(): void
 }
@@ -224,6 +231,9 @@ export function openReader(
     /** the PDF.js build the host serves this browser (its modules and its worker: `LEGACY` of `@readarxiv/reader/pdfjs-legacy`
      *  below the modern build's floor, builds.ts `buildFor`); none: the modern build. The choice is the host's */
     pdfjs?: PdfBuild
+    /** the PDF object layer the PDF download writes with (`@cantoo/pdf-lib`'s exports), loaded on its press: the host's, as PDF.js
+     *  is (both hosts' root manifests pin it); none, no file is made (`export` rejects) */
+    pdfLib?: () => Promise<unknown>
   },
 ): Reader {
   const words = (): Words => o.words ?? CATALOGUE_WORDS
@@ -553,7 +563,7 @@ export function openReader(
     return asOriginal.size
   }
   // ---- the original's document, the composed one
-  let original: { source: OriginalSource; doc: PDFDocumentProxy | null } | null = null
+  let original: { source: OriginalSource; doc: PDFDocumentProxy | null; url: string } | null = null
   /** the composed document open, with its groups and its own lay: the engine's, made over its parts once its head is read (none
    *  lays nothing). A generation: published whole, by the ticket that made it while it lives, and read only through it */
   let composed: {
@@ -626,7 +636,7 @@ export function openReader(
                 },
           ),
       })
-      original = { source, doc: null }
+      original = { source, doc: null, url }
       // (the first range out at once, before PDF.js is in: the open's first read takes it from the store)
       source.read(0, CHUNK).catch(() => {})
       let task: ReturnType<typeof openRanged> | null = null
@@ -1258,6 +1268,33 @@ export function openReader(
         const l = composer?.member(c.id)?.lines[0]
         if (l) p.goToRect([l[0], l[2], l[6], l[3], l[5]])
       } else if (c.do === 'heading') void goToHeading(c.id, c.focus)
+    },
+    async export(form, x) {
+      const h = head,
+        c = catalogOf()
+      const cmp = composer,
+        sv = served,
+        k = kit
+      if (!o.pdfLib) throw new Error('the host gives no object layer to write a file with')
+      if (!h?.addOn || !c || !composed || !cmp || !sv || !k || !original)
+        throw new Error('no translation to make a file of yet')
+      // (the generation the file is of: the reader's at the press, before any wait)
+      const gen = cmp.generation()
+      const { exportFromReader } = await import('./export/run.ts')
+      return exportFromReader(
+        {
+          fetch: host.fetch,
+          original: { url: original.url, bytes: h.original.bytes, sha256: h.original.sha256 },
+          addOn: { url: `/api/v2/o/${dirOf(c)}/${h.addOn.digest}`, bytes: h.addOn.bytes, sha256: h.addOn.digest },
+          composer: cmp,
+          gen,
+          served: sv,
+          pdfjs: k.lib as never,
+          pdfLib: o.pdfLib,
+        },
+        form,
+        x,
+      )
     },
     probe() {
       const s = rt.state

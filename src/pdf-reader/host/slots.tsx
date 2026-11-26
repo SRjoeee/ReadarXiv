@@ -68,14 +68,23 @@ export function DownloadMenu({ controller, wide = false }: { controller: ReaderC
   // the translation once there is one to give (the layer exported, Task 20); until then the original alone
   const state = useReader(controller, s => ({ translation: s.download === 'translation', original: s.sides.left.pages > 0 }))
   const pop = usePopover('menu')
-  const items = [{ id: 'translation', name: R.download.translation, disabled: !state.translation }, { id: 'original', name: R.download.original, disabled: !state.original }]
+  // (the translation's file and the side-by-side's, made in the page: greyed until the final translation is on screen, and
+  // while one is made, one at a time; S-R-09)
+  const exporting = useReader(controller, s => s.exporting)
+  const making = exporting?.form ?? null
+  const made = (id: 'translation' | 'side-by-side') => ({ disabled: !state.translation || (making !== null && making !== id), ...(making === id ? { hint: `${exporting?.percent ?? 0}%`, action: { label: '', busy: true } } : {}) })
+  const items = [
+    { id: 'translation', name: R.download.translation, ...made('translation') },
+    { id: 'side-by-side', name: R.download.sideBySide, ...made('side-by-side') },
+    { id: 'original', name: R.download.original, disabled: !state.original },
+  ]
   return (
     <>
       <ToolbarButton label={R.download.name} anchor={pop.anchor} {...pop.trigger} data-wide={wide || undefined}>
         <Icon node={Download} />
       </ToolbarButton>
       <Popover {...pop.popover} role="menu" label={R.download.name} className="!min-w-[160px]">
-        <MenuList key={pop.generation} kind="items" label={R.download.name} items={items} onClose={() => shut(pop.popover.id)} onPick={which => { shut(pop.popover.id); void controller.download(which as 'translation' | 'original') }} />
+        <MenuList key={pop.generation} kind="items" label={R.download.name} items={items} onClose={() => shut(pop.popover.id)} onAction={() => {}} onPick={which => { if (making && which !== 'original') return; shut(pop.popover.id); void controller.download(which as 'translation' | 'side-by-side' | 'original') }} />
       </Popover>
     </>
   )

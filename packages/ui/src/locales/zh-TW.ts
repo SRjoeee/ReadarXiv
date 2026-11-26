@@ -342,7 +342,15 @@ const R: Locale['R'] = {
   zoom: { out: '縮小', in: '放大', value: '縮放比例', width: '符合寬度', page: '符合頁面', actual: '實際大小' },
   options: { name: '閱讀選項', color: '標示顏色', appearance: '外觀', light: '淺色', dark: '深色', system: '跟隨系統', dim: '深色模式下調暗頁面' },
   classes: { name: '翻譯範圍', figures: '圖中文字', tables: '表格中文字', heads: '頁首和頁尾', references: '參考文獻', names: '作者資訊' },
-  download: { name: '下載', translation: '譯文 PDF', original: '原文 PDF' },
+  download: { name: '下載', translation: '譯文 PDF', sideBySide: '對照 PDF', original: '原文 PDF' },
+  export: {
+    making: (form: 'translation' | 'sideBySide', percent: number): string =>
+      `正在產生${form === 'translation' ? '譯文' : '對照'} PDF · ${percent}%`,
+    done: (form: 'translation' | 'sideBySide'): string => `已下載${form === 'translation' ? '譯文' : '對照'} PDF`,
+    failed: (form: 'translation' | 'sideBySide'): string => `${form === 'translation' ? '譯文' : '對照'} PDF 下載失敗`,
+    cancel: '取消',
+    retry: '重試',
+  },
   leave: '在預設檢視器中開啟',
   pill: { original: '原文頁碼', translation: '譯文頁碼', previous: '上一頁', next: '下一頁' },
   fold: { expand: '展開', collapse: '收合' },

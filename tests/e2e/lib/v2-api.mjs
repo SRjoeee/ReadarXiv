@@ -81,7 +81,7 @@ export function loadFixture(name = 's1-columns') {
   const sourceBytes = text(JSON.stringify({ format: 1, units: all.filter((_, i) => i !== last) }))
   const source = sha256Hex(sourceBytes)
   objects.set(source, sourceBytes)
-  return { name, paper: head.paper.id, version: head.paper.version, pages: head.paper.pages, units: head.units, source, catalog, pdf: new Uint8Array(readFileSync(join(dir, 'arxiv.pdf'))), objects, rows: (t = 'de') => JSON.parse(readFileSync(join(dir, `${t}.rows.json`), 'utf8')) }
+  return { name, paper: head.paper.id, version: head.paper.version, pages: head.paper.pages, units: head.units, source, catalog, addOn: head.addOn?.digest ?? null, pdf: new Uint8Array(readFileSync(join(dir, 'arxiv.pdf'))), objects, rows: (t = 'de') => JSON.parse(readFileSync(join(dir, `${t}.rows.json`), 'utf8')) }
 }
 
 /** a Range header on `size` bytes: [first, last], null for none asked, 'unsatisfiable' for one that holds no byte */
@@ -267,6 +267,11 @@ export function v2Api({ fixtures = [loadFixture()], base = 'https://readarxiv.co
         return f ? objectAnswer(method, h, f.pdf, origin) : refused(404, 'not-found', origin)
       }
       const bytes = objects.get(rest)
+      // (the add-on read whole, as the PDF download reads it (the reader reads it by ranges): refused, or held, as the test says)
+      const addOnWhole = bytes && method === 'GET' && !h.range && fixtures.some(f => f.addOn && rest.endsWith(`/${f.addOn}`))
+      if (addOnWhole && options.whole === 'reset') return { fault: 'reset' }
+      if (addOnWhole && typeof options.whole === 'number')
+        return { ...objectAnswer(method, h, bytes, origin), delayMs: options.whole }
       return bytes ? objectAnswer(method, h, bytes, origin) : refused(404, 'gone', origin)
     }
     return refused(404, 'not-found', origin)
@@ -293,6 +298,7 @@ export function v2Api({ fixtures = [loadFixture()], base = 'https://readarxiv.co
     if (!done) return false
     if (done.fault === 'reset') return r.abort('connectionreset')
     if (done.fault === 'hang') { pending.add(r); return undefined }
+    if (done.delayMs) await new Promise(resolve => setTimeout(resolve, done.delayMs))
     return r.fulfill({ status: done.status, headers: done.headers, body: Buffer.from(done.body) })
   }
   async function release() {
@@ -315,8 +321,9 @@ export function v2Api({ fixtures = [loadFixture()], base = 'https://readarxiv.co
     unknown: '2699.99999',
     /** what it answers from now: `prepared` the papers prepared already (the rest are prepared for `prepareMs` from their first
      *  open), `failed` a paper's prepare that cannot be made and why (`{ [paper]: 'no-source' }`), `refuse` new work refused
-     *  (`{ why: 'quota' | 'busy', retryAfterS }`) or null, `fault` 500 to 599, 'reset', 'hang', or null; each paper's state
-     *  forgotten where `fresh` */
+     *  (`{ why: 'quota' | 'busy', retryAfterS }`) or null, `fault` 500 to 599, 'reset', 'hang', or null; `whole` the add-on of a
+     *  layer asked whole (the PDF download's read): 'reset', a number of ms it is held before its answer, or null; each paper's
+     *  state forgotten where `fresh` */
     set(o) {
       options = { ...options, ...o, ...(o.prepared ? { prepared: new Set(o.prepared) } : {}) }
       if (o.fresh) state.clear()

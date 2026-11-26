@@ -158,7 +158,8 @@ describe('the download menu (the reader\'s design, §6.1)', () => {
   it('the original greyed until its document is open — loading, or a fetch that failed (Codex on #301)', async () => {
     const { controller } = fakeController({ sides: { left: { page: 0, pages: 0 }, right: { page: 0, pages: 0 } } })
     const { container } = await openMenu(createElement(DownloadMenu, { controller }))
-    const [, original] = [...container.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+    // (the original's row by its words: the files' rows stand before it, #685)
+    const original = [...container.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(r => r.textContent === R.download.original)
     expect(original!.getAttribute('aria-disabled')).toBe('true')
     original!.click()
     expect(controller.download).not.toHaveBeenCalled()
@@ -168,16 +169,35 @@ describe('the download menu (the reader\'s design, §6.1)', () => {
     const { controller, set } = fakeController({ download: 'original', sides: { left: { page: 1, pages: 25 }, right: { page: 1, pages: 26 } } })
     const { container } = await openMenu(createElement(DownloadMenu, { controller }))
     const items = () => [...container.querySelectorAll<HTMLElement>('[role="menuitem"]')]
-    const [translation, original] = items()
-    expect([translation!.textContent, translation!.getAttribute('aria-disabled'), original!.textContent]).toEqual([R.download.translation, 'true', R.download.original])
+    const [translation, sideBySide, original] = items()
+    expect([translation, sideBySide].map(r => [r!.textContent, r!.getAttribute('aria-disabled')])).toEqual([[R.download.translation, 'true'], [R.download.sideBySide, 'true']])
+    expect(original!.textContent).toBe(R.download.original)
     translation!.click()
+    sideBySide!.click()
     original!.click()
     expect(controller.download.mock.calls).toEqual([['original']])
     await act(async () => set({ download: 'translation' }))
     await act(async () => { container.querySelector<HTMLElement>('[popover="auto"]')!.showPopover() })
     expect(items()[0]!.hasAttribute('aria-disabled')).toBe(false)
     items()[0]!.click()
-    expect(controller.download.mock.calls).toEqual([['original'], ['translation']])
+    await act(async () => { container.querySelector<HTMLElement>('[popover="auto"]')!.showPopover() })
+    items()[1]!.click()
+    expect(controller.download.mock.calls).toEqual([['original'], ['translation'], ['side-by-side']])
+  })
+
+  it('one file at a time: the row being made shows its share and turns, the other is greyed, a press does nothing (S-R-09)', async () => {
+    const { controller } = fakeController({ download: 'translation', exporting: { form: 'side-by-side', percent: 45 }, sides: { left: { page: 1, pages: 25 }, right: { page: 1, pages: 26 } } })
+    const { container } = await openMenu(createElement(DownloadMenu, { controller }))
+    const [translation, sideBySide] = [...container.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+    expect([translation!.getAttribute('aria-disabled'), sideBySide!.getAttribute('aria-busy'), sideBySide!.textContent]).toEqual(['true', 'true', `${R.download.sideBySide}45%`])
+    translation!.click()
+    sideBySide!.click()
+    expect(controller.download).not.toHaveBeenCalled()
+    // (arXiv's own PDF is no file made here: it opens while one is made, #685)
+    const original = [...container.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(r => r.textContent === R.download.original)
+    expect(original!.hasAttribute('aria-disabled')).toBe(false)
+    original!.click()
+    expect(controller.download.mock.calls).toEqual([['original']])
   })
 })
 

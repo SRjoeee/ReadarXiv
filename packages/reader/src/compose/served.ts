@@ -240,6 +240,11 @@ export interface Served {
   /** the tables these font strings' faces need read ahead (the faces' index, their groups'), no slice: so that a page's first
    *  slices wait for no table */
   warm(fonts: readonly string[]): Promise<void>
+  /** the PDF download's (export/): the slice a code point of a font string is drawn in (the first family of the string whose
+   *  face holds it, as a page's runs are cut), its key and its file's path; null where none holds it or a table is not read */
+  sliceOf(font: string, cp: number): { key: string; path: string } | null
+  /** a slice's file, asked as every slice is (the browser's cache holds it where the page drew it); `signal` lets it go */
+  sliceBytes(path: string, signal?: AbortSignal): Promise<Uint8Array>
 }
 
 class Answer extends Error {
@@ -303,9 +308,9 @@ export function createServed(o: {
   const ask = { fetch: o.fetch, signal: closed.signal, timers: o.timers ?? realTimers }
   let gone = false
   /** a file of our site's within `cap` bytes, as the header says it is asked; an Answer thrown where the last answer is not it */
-  const fileOf = async (url: string, cap: number): Promise<Uint8Array<ArrayBuffer>> => {
+  const fileOf = async (url: string, cap: number, signal?: AbortSignal): Promise<Uint8Array<ArrayBuffer>> => {
     const got = await request(
-      ask,
+      signal && typeof AbortSignal.any === 'function' ? { ...ask, signal: AbortSignal.any([ask.signal, signal]) } : ask,
       url,
       {},
       async (r) => {
@@ -833,5 +838,15 @@ export function createServed(o: {
       if (gone) return
       await Promise.all([theIndex(), ...fonts.map((f) => tablesOf(f).catch((e) => o.warn?.(`the faces of ${f}`, e)))])
     },
+    sliceOf(font, cp) {
+      const fs = facesOf(font)
+      if (!fs?.read) return null
+      for (const face of fs.faces) {
+        const slice = face.slices?.find((x) => inRanges(x.ranges, cp))
+        if (slice) return { key: slice.key, path: slice.path }
+      }
+      return null
+    },
+    sliceBytes: (path, signal) => fileOf(`/${path}`, CAPS.slice, signal),
   }
 }

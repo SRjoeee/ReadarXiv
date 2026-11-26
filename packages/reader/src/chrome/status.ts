@@ -4,7 +4,7 @@
 // language's own name drawn in that language. Every sentence is the catalogue's, or the host's for its state where it gives
 // one (parts.tsx StateWords: the website's own)
 import { O, type ProviderErrorKind, R, S } from '@readarxiv/ui'
-import { GOES_ON as GOES_ON_WHY, LASTING, type ReaderState, type Unavailable } from './model.ts'
+import { type ExportForm, GOES_ON as GOES_ON_WHY, LASTING, type ReaderState, type Unavailable } from './model.ts'
 import { type CapsuleWords, plain, withCount, withPart } from './capsule-words.ts'
 import { ARXIV_ORIGIN, linkable } from './links.ts'
 import type { Languages, Parts, StateWords } from './parts.tsx'
@@ -37,6 +37,10 @@ export type Capsule =
    *  none where the host words none (the progress line alone shows it, PDF-READER §6.6). `show`: the chip that
    *  shows the translation (StateWords `showTranslation`), where it is not on screen and some of it is there */
   | { kind: 'progress'; stage: Stage; words: CapsuleWords; show?: true }
+  /** a PDF download being made (UI.md S-R-09): its file and its share, a count of its own, with the spinner and its cancel */
+  | { kind: 'export'; words: CapsuleWords }
+  /** a PDF download that failed: the alert, its retry and its close; it stands until closed or tried again */
+  | { kind: 'exportFailed'; words: CapsuleWords }
 /** what the reader waits for while a run is under way, as a host's words say it: its turn at our server, the translation (the
  *  paper's first making included: what the reader waits for is its translation, never the making), our server heard again */
 type Stage = 'queued' | 'translating' | 'reconnecting'
@@ -163,6 +167,12 @@ export function capsuleOf(
 ): Capsule | null {
   // a host's passing words first, over whatever else stands, for their time: what the reader just did (the website's)
   if (state.toast) return { kind: 'toast', words: plain(state.toast.words), icon: state.toast.icon }
+  // a PDF download being made, or failed: what the reader just asked, over what else stands (its translation is final then)
+  if (state.exporting) {
+    const { form, percent } = state.exporting
+    return { kind: 'export', words: withCount(R.export.making(formKey(form), percent), percent) }
+  }
+  if (state.exportFailed) return { kind: 'exportFailed', words: plain(R.export.failed(formKey(state.exportFailed))) }
   // what the reader just did or cannot do, over a load too (its controls are in reach then), but not beside a failure's
   // card, which is the pane's whole answer: the unreadable settings first, since they are why a write is refused. They
   // are true of an address with no paper too, whose controls they explain, and stand beside its card
@@ -369,6 +379,10 @@ export function originalCardOf(
   return href ? { reason: words.originalLost ?? reason(state.failures.pdf), href, label: words.openOriginal } : null
 }
 
+/** a file's form as the catalogue's words name it */
+const formKey = (form: ExportForm): 'translation' | 'sideBySide' =>
+  form === 'translation' ? 'translation' : 'sideBySide'
+
 /** a capsule's or a card's sign (parts.tsx `signs`): the information sign, a run's spinner, a toast's check; a clock for a wait
  *  (a retry's time to come), the alert for a failure, the file for the original that could not be shown */
 export type Sign = 'info' | 'check' | 'spinner' | 'clock' | 'alert' | 'file'
@@ -411,7 +425,8 @@ const withheld = (state: ReaderState, rules: Rules) =>
 
 /** how a capsule is drawn: by the host's rule for the signs (parts.tsx `signs`) */
 export function capsuleLook(c: Capsule, state: ReaderState, signs: Parts['signs'], now: number): Look {
-  if (c.kind === 'progress') return { sign: 'spinner' }
+  if (c.kind === 'progress' || c.kind === 'export') return { sign: 'spinner' }
+  if (c.kind === 'exportFailed') return { sign: 'alert', tone: 'alert' }
   if (c.kind === 'toast') return { sign: c.icon }
   if (signs !== 'by-state') return { sign: 'info' }
   // (a refusal for now: the clock while its time is to come; a run stopped by a fault, not a wait: the alert)

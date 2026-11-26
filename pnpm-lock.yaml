@@ -129,6 +129,9 @@ importers:
 
   packages/reader:
     dependencies:
+      '@readarxiv/engine':
+        specifier: workspace:*
+        version: link:../engine
       '@readarxiv/format':
         specifier: workspace:*
         version: link:../format

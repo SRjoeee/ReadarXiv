@@ -380,6 +380,23 @@ afterEach(() => {
   document.body.replaceChildren()
 })
 
+describe('every page laid for the PDF download (layAll, #685)', () => {
+  it('lays every page over the rows as ended, and stops where its generation changes under it (another target, the toggles)', async () => {
+    const w = world()
+    open(w, rowsOf('de', allIds(w), true))
+    const signal = new AbortController().signal
+    const all = await w.composer.layAll({ signal, gen: w.composer.generation() })
+    expect([...(all?.keys() ?? [])]).toEqual([1, 2, 3, 4, 5])
+    const p = w.composer.layAll({ signal, gen: w.composer.generation() })
+    w.composer.setClasses({ figures: false, tables: true, heads: true, references: true, names: true })
+    await expect(p).rejects.toMatchObject({ name: 'GenerationChanged' })
+    // (a generation asked of before: refused at once)
+    await expect(w.composer.layAll({ signal, gen: w.composer.generation() - 1 })).rejects.toMatchObject({
+      name: 'GenerationChanged',
+    })
+  })
+})
+
 describe('laying, one page at a time (layer-side.mjs hold)', () => {
   it('lays the middle page first and holds the next until it is in place, HOLD_MS at most', async () => {
     const w = world()

@@ -289,8 +289,14 @@ export const PACKAGES = {
   engine: ['format', 'text'],
   typeset: ['format', 'text'],
   translate: ['format', 'text'],
-  reader: ['format', 'typeset', 'text', 'ui'],
+  reader: ['format', 'typeset', 'text', 'ui', 'engine'],
   ui: [],
+}
+/** A direction PACKAGES allows only under some directories of the importing package: `pkg -> dep -> [directory prefixes]`.
+ *  The reader may import the engine for its PDF download alone (the export module, which reads and writes the file with the
+ *  engine's object layer, section writer and walk, in its own lazily loaded chunk; PDF-READER §11.12), and its tests */
+export const PACKAGE_WITHIN = {
+  reader: { engine: ['packages/reader/src/export/', 'packages/reader/tests/export/'] },
 }
 const SCOPE = '@readarxiv/'
 const IN_PACKAGE = /^packages\/([^/]+)\/./
@@ -321,7 +327,9 @@ function whyPackageRefused(file, pkg, spec) {
   if (spec !== name) return `a deep path into ${name}: import its entry, "${name}"`
   if (dep === pkg) return 'the package itself by name: it imports its own files by relative path'
   if (!(dep in PACKAGES)) return `${name}, which PACKAGES does not list`
-  return PACKAGES[pkg].includes(dep) ? null : `${name}, a direction PACKAGES does not allow (${pkg} may import ${PACKAGES[pkg].length > 0 ? PACKAGES[pkg].map(d => SCOPE + d).join(', ') : 'no other package'})`
+  if (!PACKAGES[pkg].includes(dep)) return `${name}, a direction PACKAGES does not allow (${pkg} may import ${PACKAGES[pkg].length > 0 ? PACKAGES[pkg].map(d => SCOPE + d).join(', ') : 'no other package'})`
+  const within = PACKAGE_WITHIN[pkg]?.[dep]
+  return !within || within.some(prefix => norm(file).startsWith(prefix)) ? null : `${name}, which ${pkg} may import only under ${within.join(', ')} (PACKAGE_WITHIN)`
 }
 
 /** What the files of the workspace packages among `files` name that they may not, and what a package's manifest declares

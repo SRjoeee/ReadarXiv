@@ -103,6 +103,14 @@ export interface RowsSource extends Rows {
   on(f: () => void): () => void
 }
 
+/** the composer's generation changed while every page was laid for a file (layAll) */
+export class GenerationChanged extends Error {
+  constructor() {
+    super('what the reader shows changed while the file was made')
+    this.name = 'GenerationChanged'
+  }
+}
+
 export interface ComposerEvents {
   /** page n committed (its translation shown) or let go back to arXiv's */
   laid: { n: number; page: Page | null }
@@ -131,6 +139,19 @@ export interface Composer {
   settled(n: number): boolean
   /** every member of the layer laid so far, by ord (the parts' Placed) */
   member(ord: number): Placed | null
+  /** every page of the layer laid, for the PDF download (export/): a page's commit of this generation where it has one, else its
+   *  part laid now over the rows, its faces waited for, nothing drawn; a page with no part, or nothing of its own laid, left
+   *  out (the original's, as the reader shows it). Null where the layer or the rows are not there; it throws where a page
+   *  cannot be laid, its part not read or its faces not had (the file would not be the page the reader shows) */
+  layAll(o: {
+    signal: AbortSignal
+    /** the generation the file is of (`generation()` at its press): another under way (a target or a toggle changed) stops it,
+     *  GenerationChanged — the file would mix what the reader showed with what it shows now, and be named for the first */
+    gen: number
+    progress?: (done: number, of: number) => void
+  }): Promise<Map<number, Page> | null>
+  /** what the composer lays now: its generation, which a new target, a new layer or the toggles start anew */
+  generation(): number
   on<K extends keyof ComposerEvents>(type: K, f: (e: ComposerEvents[K]) => void): () => void
   probe(): Record<string, number | string>
   /** the last overlays' timings (ms) */
@@ -1080,6 +1101,46 @@ export function createComposer(o: ComposerOptions): Composer {
     },
     settled: (n) => settledOriginal(n),
     member: (ord) => members.get(ord) ?? null,
+    generation: () => gen,
+    async layAll({ signal, gen: asked, progress }) {
+      const l = layer
+      const same = () => {
+        if (gen !== asked || layer !== l) throw new GenerationChanged()
+      }
+      same()
+      if (!l || !rows) return null
+      const out = new Map<number, Page>()
+      for (let n = 1; n <= l.pages; n++) {
+        if (signal.aborted) throw new DOMException('the export was cancelled', 'AbortError')
+        same()
+        const c = commits.get(n)
+        let page: Page | null = c && c.gen === gen ? c.page : null
+        if (!page) {
+          const part = await partFor(n)
+          if (part) {
+            // (its faces loaded and laid again, as a page near the view waits for them: a few rounds at most, a slice a text
+            // of its own needs at each)
+            // (over the rows as ended: the files are offered once the translation the view waits for is final, chrome/model.ts
+            // `download`; a unit with no row there is the original's, as the reader shows it)
+            const lay = () => held(lostIn(() => o.lay(part, endedView))[0], part)
+            let got = lay()
+            for (let round = 0; got.wait.faces.length && round < 4; round++) {
+              await faces.ready(got.wait.faces, () => !signal.aborted)
+              got = lay()
+            }
+            if (got.wait.faces.length) throw new Error(`page ${n}: its faces could not be had`)
+            page = got
+          }
+        }
+        same()
+        if (page?.members.some((m) => m.state === 'laid' && m.off)) out.set(n, page)
+        progress?.(n, l.pages)
+        // (a turn between pages: the page stays answerable while a long paper is laid)
+        await new Promise((ok) => setTimeout(ok, 0))
+      }
+      same()
+      return out
+    },
     on: onOf<ComposerEvents>(listeners),
     timings: () => timings,
     probe() {

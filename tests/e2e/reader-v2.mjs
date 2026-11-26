@@ -17,7 +17,8 @@
 // settings, asked to translate); the reader on the layer (prepared, laid as the extension translates, the contents, a link out
 // of the paper through the host, the original's download); another target and another service; what to translate from the
 // reading options and the settings page; the states on our server's answers; arXiv's bytes not the layer's original; the
-// papers this machine keeps, opened with our server out of reach, counted and cleared on the settings page; what the run
+// papers this machine keeps, opened with our server out of reach, counted and cleared on the settings page; the PDF download
+// (reader-v2-export.mjs: both files, one at a time, a cancel, a failure and its retry, a narrow window); what the run
 // did not do.
 //
 // Usage: pnpm build && pnpm e2e:reader     (AXT_READER's default, v2; first time: npx playwright install chromium)
@@ -635,6 +636,9 @@ try {
 
   // -------------------------------------------------------------------------------- the reader on the layer (part 2)
   await settles('the layer\'s checks loaded', () => import('./reader-v2-layer.mjs')).then(m => m.layerChecks({ context, worker, id, api, fixture, PAPER, PV, TITLE, LINK, echo, guard, asked, pageErrors, track, extensionPage, readerState, sessionState, probe, openReader, paperOpened, laid, setConfig, clearPaperStore, setPdfAnswer: a => { pdfAnswer = a }, section, check, control, note, sleep, SHOTS }))
+
+  // ------------------------------------------------------------------------------------------------- the PDF download
+  await settles('the PDF download\'s checks loaded', () => import('./reader-v2-export.mjs')).then(m => m.exportChecks({ api, fixture, PAPER, openReader, laid, readerState, setConfig, clearPaperStore, section, check, SHOTS }))
 
   // -------------------------------------------------------------------------------------------- what the run did not do
   section('what the run did not do')
