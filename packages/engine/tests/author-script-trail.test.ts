@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest'
 import { align } from '../src/align/align.ts'
 import type { Doc } from '../src/doc.ts'
 import { type Instrument, type InstrumentUnit, ownersOf, ROLE } from '../src/instrument.ts'
-import { docOf } from './helpers/doc.ts'
+import { docOf, pageGlyphsOf } from './helpers/doc.ts'
 import { locate } from './helpers/locate.ts'
 
 /** an instrument over B whose units own B's glyphs line by line: `own[p][line]` the unit of that line (-1 none) */
@@ -131,5 +131,57 @@ describe('what TeX set after a name at the line’s text size on its baseline', 
       const L = locate(instrumentOf(B, [author('Ann Lee'), author('Bob Ray')], [[0, -1, -1, 1]]), B, align(B, B))
       expect(trailOf(L, 0), `size ${size} at ${y}`).toEqual([])
     }
+  })
+})
+
+describe('a page read as readPdf reads it (its coordinates read by getters, PageGlyph)', () => {
+  // (the walk built the member's line as a copy of its last glyph: a spread copies a page glyph's own fields alone, none of its
+  // coordinates, so the gap after the name read NaN and no word's gap was ever found: amsart's "AND" after a name taken as its
+  // trail, a proof's QED box after its last word, a heading's period)
+  const paged = (B: Doc) => {
+    for (const pg of B.pages) pg.glyphs = pageGlyphsOf(pg.glyphs)
+    return B
+  }
+  it('leaves a word past the gap after a name to the ink units: "ANN LEE, AND BOB RAY" (amsart)', () => {
+    const B = docOf([
+      {
+        lines: [
+          { text: 'ANN LEE,', x: 72, y: 700 },
+          { text: 'AND', x: 72 + 8 * 6 + 3.1, y: 700 },
+          { text: 'BOB RAY', x: 72 + 11 * 6 + 2 * 3.1, y: 700 },
+        ],
+        points: [
+          ['0s', 0],
+          ['0e', 8],
+          ['1s', 11],
+          ['1e', 18],
+        ],
+      },
+    ])
+    lowComma(B, [7])
+    const L = locate(instrumentOf(paged(B), [author('ANN LEE,'), author('BOB RAY')], [[0, -1, 1]]), B, align(B, B))
+    expect(trailOf(L, 0)).toEqual([])
+  })
+  it('reads the marks after a comma and a run of them as the plain glyphs do', () => {
+    const B = docOf([
+      {
+        lines: [
+          { text: 'Bob Ray,', x: 72, y: 700 },
+          { text: '1,', x: 120, y: 703.6, size: 7 },
+          { text: '2,3', x: 129.6, y: 703.6, size: 7 },
+          { text: 'and', x: 146.1, y: 700 },
+          { text: 'Cy Day', x: 167.4, y: 700 },
+        ],
+        points: [
+          ['0s', 0],
+          ['0e', 8],
+          ['1s', 16],
+          ['1e', 22],
+        ],
+      },
+    ])
+    lowComma(B, [7])
+    const L = locate(instrumentOf(paged(B), [author('Bob Ray,'), author('Cy Day')], [[0, -1, -1, -1, 1]]), B, align(B, B))
+    expect(trailOf(L, 0)).toEqual(['1,2,3'])
   })
 })
