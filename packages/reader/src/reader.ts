@@ -55,6 +55,7 @@ import {
   missingOf,
   type PaperContext,
   ranked,
+  heldOn,
   shownAsOriginal,
   stopOf,
   toldWait,
@@ -151,7 +152,13 @@ export interface ReaderState {
    *  still to come from a run under way, or from our server's work for the view (its prepare running, a need asked: rows.ts
    *  runOf), rows ended meanwhile told as arriving (none for rows read of a run done with nothing more to come, a run that
    *  restates rows held, or one on units of a layer not shown yet) */
-  rows: { target: string; from: 'server' | 'here' } & (
+  rows: {
+    target: string
+    from: 'server' | 'here'
+    /** the units a page laid so far draws as arXiv's though their row was accepted, by the cause its member states (the prepare's,
+     *  the lay's: rows.ts heldAsOriginal); none where there is none. State alone: nothing told of it */
+    original?: Record<string, number>
+  } & (
     | { s: 'none' }
     | { s: 'arriving'; got: number; total: number; lost: number; waits: boolean }
     /** `stopped`: why the units lost got no translation (the service's word: the run stopped short), null where none was */
@@ -783,6 +790,8 @@ export function openReader(
             classes: rt.state.prefs.value.classes,
           })
           composer.on('laid', () => mark('firstLaid'))
+          // (a page settled as arXiv's is told no `laid`: the units it holds as the original are told by the state read anew)
+          composer.on('settled', () => tellSoon())
           composer.on('laid', () =>
             rt.input({ i: 'panes.laid', laid: composer?.probe().laidPages as number, total: head?.paper.pages ?? 0 }),
           )
@@ -1157,17 +1166,25 @@ export function openReader(
       for (const f of [...listeners]) f()
     }, 0)
   }
+  /** the rows as told, with the units held as the original over the pages the composer laid in its generation now */
+  function withHeld(r: ReaderState['rows'], held: ReadonlyMap<string, Row>): ReaderState['rows'] {
+    const c = composer
+    if (r.s === 'none' || !c) return r
+    const original = heldOn(c, head?.paper.pages ?? 0, held)
+    return Object.keys(original).length ? { ...r, original } : r
+  }
   function stateOf(): ReaderState {
     if (told) return told
     const s = rt.state
     // (what the view shown has of the translation and waits for: the layer's units read (while a new layer's are not, those last
     // read, of the layer whose pages are on screen), counted by the rows held, as the run they come from stands and the system
     // still works for it, and our server's look over it: rows.ts toldWait)
+    // (the rows held are the target's once its rows are taken: another's before that)
+    const held = rowsTarget === s.rows.target ? rows : new Map<string, Row>()
     const wait = toldWait(s, {
       units: s.layer.s === 'ready' ? unitsRead : null,
       classes: s.prefs.value.classes,
-      // (the rows held are the target's once its rows are taken: another's before that)
-      held: rowsTarget === s.rows.target ? rows : new Map(),
+      held,
       shown: s.layer.s === 'ready',
       laid: s.panes.laid > 0,
     })
@@ -1214,7 +1231,7 @@ export function openReader(
                 : { s: 'none' },
       // (a failed run the session asks again at once, and rows ended while more comes for the view, are the run the reader waits
       // for: told as arriving, rows.ts rowsTold)
-      rows: wait.rows,
+      rows: withHeld(wait.rows, held),
       view: {
         display: displayOf(s),
         sync: { on: s.visit.sync ?? s.prefs.value.sync, available: !!p?.doc && syncAvailable },

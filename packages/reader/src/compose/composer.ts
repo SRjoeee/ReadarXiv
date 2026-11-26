@@ -123,6 +123,9 @@ export interface ComposerEvents {
   laid: { n: number; page: Page | null }
   /** the first page laid of a layer and target */
   first: { n: number }
+  /** page n settled as the original's (a failure, a stall, the rule: no part, nothing of its own hidden), told no `laid` where
+   *  nothing of it was committed: what the reader counts as held reads the page then (page(n)) */
+  settled: { n: number }
 }
 
 export interface Composer {
@@ -426,6 +429,7 @@ export function createComposer(o: ComposerOptions): Composer {
     marks.unmark(n)
     if (stack.near(n)) o.aheadGo?.()
     stack.refresh(n)
+    tell('settled', { n })
   }
 
   /** the overlay of a committed page over its page view: made in the drawing's turn, before the swap */

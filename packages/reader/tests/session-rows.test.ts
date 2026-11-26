@@ -10,6 +10,8 @@ import {
   keep,
   missingOf,
   ranked,
+  heldAsOriginal,
+  heldOn,
   rowsTold,
   runOf,
   shownAsOriginal,
@@ -266,5 +268,51 @@ describe("the run the view waits on (runOf, rowsTold): our server's work for the
   it("rows made here: the host's run alone, whatever our server does", () => {
     const s = heard({ prepare: prepare('running'), layer: stale, targets: {} }, 'complete', { here: true })
     expect(runOf(s).run).toBe(false)
+  })
+})
+
+describe("the units held as the original (heldAsOriginal): an accepted row, drawn as arXiv's, by the cause", () => {
+  const page = (n: number, states: string[], wait: string[] = []): Page =>
+    ({
+      page: n,
+      wait: { rows: wait, faces: [] },
+      members: states.map((state, ord) => ({
+        ord,
+        page: n,
+        state,
+        off: 0,
+        lines: [],
+        lit: { left: [], right: [], own: [] },
+      })),
+      links: [],
+    }) as unknown as Page
+  const member = (ord: number) => ({ text: UNITS[ord]?.id }) as never
+  const held = new Map<string, Row>(UNITS.slice(0, 6).map((x) => [x.id, ok(x)]))
+  held.set(UNITS[6]?.id as string, lost(UNITS[6] as Unit))
+  it("counts each unit with a row accepted that a committed page draws as the original, by the prepare's or the lay's cause", () => {
+    const states = ['laid', 'unfit', 'unwrapped', 'none', 'left', 'unproven', 'unwrapped']
+    expect(heldAsOriginal([page(1, states)], member, held)).toEqual({ unfit: 1, unwrapped: 1, unproven: 1 })
+  })
+  it('a unit on two pages once; a page still waiting for its rows not at all', () => {
+    expect(heldAsOriginal([page(1, ['laid', 'unfit']), page(2, ['laid', 'unfit'])], member, held)).toEqual({ unfit: 1 })
+    expect(heldAsOriginal([page(1, ['laid', 'unfit'], ['x'])], member, held)).toEqual({})
+  })
+  it("reads the pages from the composer: one settled as arXiv's with no commit counted; a muted commit of the generation before not (Codex on #689)", () => {
+    // (page 1 laid this generation, nothing of it laid: settled, never committed, so never told `laid`; page 2 shows a commit
+    // of the generation before, muted until this one's; page 3 not laid yet)
+    const p1 = page(1, ['unfit', 'unwrapped'])
+    const old = page(2, ['laid', 'laid', 'unproven'])
+    const composed = {
+      page: (n: number) => (n === 1 ? p1 : n === 2 ? old : null),
+      laid: (n: number) => (n === 2 ? old : null),
+      muted: (n: number) => n === 2,
+      member,
+    }
+    expect(heldOn(composed, 3, held)).toEqual({ unfit: 1, unwrapped: 1 })
+  })
+  it('the other side: a row that failed is lost, not held: counted by viewOf, not here', () => {
+    expect(
+      heldAsOriginal([page(1, ['laid', 'none', 'none', 'none', 'none', 'none', 'refused'])], member, held),
+    ).toEqual({})
   })
 })
