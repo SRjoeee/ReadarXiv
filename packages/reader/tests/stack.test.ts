@@ -346,3 +346,87 @@ describe("a kept page's pixels: its page view's, its detail canvas's past PDF.js
     expect(stack.probe().keptPixels).toBe(100 * 100 + 30 * 20)
   })
 })
+
+describe("a crop-only detail cut dropped while its page was out of view is asked again when it comes back (#688's review, Codex 4710771362)", () => {
+  let stack: Stack
+  afterEach(() => {
+    stack.dispose()
+    vi.unstubAllGlobals()
+  })
+  it('re-cuts the crops of a page back in view whose retry the scheduler dropped', async () => {
+    PageView.all = []
+    Observer.all = []
+    vi.stubGlobal('IntersectionObserver', Observer)
+    const scroller = document.createElement('div')
+    document.body.append(scroller)
+    // (a clock whose frames run when the test says: the visible area's turn)
+    const clock = handClock()
+    const frames = new Map<number, () => void>()
+    let fid = 0
+    clock.frame = (f) => {
+      frames.set(++fid, f)
+      return fid
+    }
+    clock.cancel = (i) => void frames.delete(i)
+    const runFrames = () => {
+      const fs = [...frames.values()]
+      frames.clear()
+      for (const f of fs) f()
+    }
+    stack = createStack({
+      scroller,
+      kit,
+      scheduler: createScheduler(),
+      clock,
+      name: (n) => `page ${n}`,
+      links: null,
+      keepPixels: 1e9,
+    })
+    let cuts = 0
+    stack.contentOf = (n) =>
+      n === 1
+        ? {
+            ...laid('t'),
+            detail: async (_over, _at, area) => {
+              if (area) cuts++
+              return area !== null
+            },
+          }
+        : view('original')
+    await stack.layout(doc as never, 1)
+    const [near, inView] = Observer.all as [Observer, Observer]
+    const slots = [stack.page(1), stack.page(2)] as HTMLElement[]
+    near.cb(slots.map((target) => ({ target, isIntersecting: true })))
+    inView.cb(slots.map((target, i) => ({ target, isIntersecting: i === 0 })))
+    // (page 1 drawn and put in place; page 2's drawing then running, left unfinished: the page views in the order made)
+    for (let i = 0; i < 20 && stack.showing(1) !== 't'; i++) {
+      await settle()
+      PageView.all[0]?.task?.done(true)
+    }
+    await settle()
+    expect(stack.showing(1)).toBe('t')
+    const v2 = PageView.all[1]!
+    expect(v2.task).not.toBeNull()
+    const pv1 = PageView.all[0]!
+    // (page 1 past PDF.js's cap: its detail canvas drawn, no crops cut for it)
+    const canvas = { width: 300, height: 200, style: { left: '10%', top: '10%', width: '50%', height: '50%' } }
+    ;(pv1 as unknown as { detailView: unknown }).detailView = { renderingState: FINISHED, canvas, draw: async () => {} }
+    // (the visible area's turn: the crop-only cut asked, queued behind page 2's drawing)
+    scroller.dispatchEvent(new Event('scroll'))
+    runFrames()
+    await settle()
+    expect(cuts).toBe(0)
+    // (page 1 leaves the view; page 2's drawing ends: the scheduler drops the cut, no longer wanted)
+    inView.cb([{ target: slots[0] as HTMLElement, isIntersecting: false }])
+    v2.task?.done(true)
+    await settle()
+    await settle()
+    expect(cuts).toBe(0)
+    // (page 1 back in view: its crops cut)
+    inView.cb([{ target: slots[0] as HTMLElement, isIntersecting: true }])
+    scroller.dispatchEvent(new Event('scroll'))
+    runFrames()
+    for (let i = 0; i < 5; i++) await settle()
+    expect(cuts).toBe(1)
+  })
+})

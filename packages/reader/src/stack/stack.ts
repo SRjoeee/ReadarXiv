@@ -398,12 +398,20 @@ function detailJob(
     rank: () => (o.stands() && o.inView() ? 0 : null),
     order: () => n + 0.5,
     run: async () => {
-      await o.first()
-      // (the crops in view cut at the detail canvas's resolution, as it stands: docs/PDF-READER.md §11.8)
-      const area = detail.canvas && d.view ? detailAreaOf(detail.canvas, d.view.viewport) : null
-      if (o.stands() && area) await detailCut(d, n, area)
-      if (d.detailJob === job) d.detailJob = null
+      try {
+        await o.first()
+        // (the crops in view cut at the detail canvas's resolution, as it stands: docs/PDF-READER.md §11.8)
+        const area = detail.canvas && d.view ? detailAreaOf(detail.canvas, d.view.viewport) : null
+        if (o.stands() && area) await detailCut(d, n, area)
+      } finally {
+        // (done, or given up: its canvas's draw cancelled, a cut that throws)
+        if (d.detailJob === job) d.detailJob = null
+      }
       o.after()
+    },
+    // (dropped unrun, its page out of view at its turn: the page back asks its cut again)
+    dropped: () => {
+      if (d.detailJob === job) d.detailJob = null
     },
   }
   return job
