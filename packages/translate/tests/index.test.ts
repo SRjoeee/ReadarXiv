@@ -1,9 +1,22 @@
 import { describe, expect, it } from 'vitest'
+import * as entry from '../src/index.ts'
 import { adapterOf, chrome, type Fetch, google, microsoft, TRANSLATE_PURPOSE } from '../src/index.ts'
 
 describe('@readarxiv/translate', () => {
   it('states what the package is for', () => {
     expect(TRANSLATE_PURPOSE).toBe('the translator contract, its adapters and the chain that falls back between them')
+  })
+  it("exports the translation policy's modules: its schema and reading, a producer's name and identity, plan and select", () => {
+    for (const name of [
+      'PolicySchema',
+      'parsePolicy',
+      'targetPolicyOf',
+      'producerKindOf',
+      'producerIdentityOf',
+      'plan',
+      'select',
+    ])
+      expect(typeof (entry as Record<string, unknown>)[name], name).not.toBe('undefined')
   })
   it('runs in Node, with no DOM', () => {
     expect('document' in globalThis).toBe(false)
