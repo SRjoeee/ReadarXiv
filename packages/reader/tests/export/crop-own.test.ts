@@ -303,6 +303,31 @@ describe("a crop's cut against #690's third review", () => {
   })
 })
 
+describe("a crop's cut against #690's fourth review", () => {
+  it("a font's name written again byte for byte, a byte outside ASCII as it was (4712889582)", async () => {
+    // (the font named /F#E9, one byte 0xE9; the formula after a show left out, so its state is written again)
+    const res = '/Font << /F#E9 5 0 R >>'
+    const objects: Obj[] = [
+      '<< /Type /Catalog /Pages 2 0 R >>',
+      '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << ${res} >> /Contents 4 0 R >>`,
+      { dict: '', data: 'BT /F#E9 10 Tf 72 700 Td (Hello x=1) Tj ET' },
+      F1,
+    ]
+    const a = pdf(objects)
+    const addOn: Record<number, Obj> = {
+      1: '<< /Type /Catalog /Pages 2 0 R /OCProperties << /OCGs [7 0 R 8 0 R 9 0 R] /D << /BaseState /ON /ON [7 0 R 8 0 R 9 0 R] >> >> >>',
+      3: `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << ${res} /Properties << /T 8 0 R /E 7 0 R >> >> /Contents 6 0 R >>`,
+      6: { dict: '', data: 'BT /F#E9 10 Tf 72 700 Td /OC /T BDC (Hello ) Tj EMC /OC /E BDC (x=1) Tj EMC ET' },
+      7: '<< /Type /OCG /Name (axt:1.1.e) >>',
+      8: '<< /Type /OCG /Name (axt:1.1.t) >>',
+      9: '<< /Type /OCG /Name (axt:1.1.l) >>',
+    }
+    const [form] = await cropTexts({ bytes: update(a, addOn, 10), seam: a.length }, page([[101.6, 117.4, 'p0']]))
+    expect(form).toContain('/F#E9 10 Tf')
+  })
+})
+
 describe.skipIf(!poppler)('a paragraph of two formulas and a label, exported: what poppler reads stands on ink', () => {
   const content = 'BT /F1 10 Tf 72 700 Td (Hello x=1 and y=2) Tj 228 0 Td ((1)) Tj ET'
   const wrapped =

@@ -343,9 +343,18 @@ const pointsOf = (path: LexOp[]): number[] =>
     const a = p.args.filter((x): x is number => typeof x === 'number')
     return p.op === 're' && a.length >= 4 ? corners([a[0]!, a[1]!, a[0]! + a[2]!, a[1]! + a[3]!]) : a
   })
-/** a name as a content stream writes it: a byte outside '!' to '~', a delimiter or '#' as #xx (ISO 32000-1 §7.3.5) */
+/** a name as a content stream writes it: a byte outside '!' to '~', a delimiter or '#' as #xx (ISO 32000-1 §7.3.5). The
+ *  lexer reads a name a character a byte (its #xx escapes undone), so each character is written back as its own byte, never
+ *  through an encoding of text (#690, 4712889582) */
 const nameTok = (s: string) =>
-  `/${[...new TextEncoder().encode(s)].map((b) => (b < 0x21 || b > 0x7e || '()<>[]{}/%#'.includes(String.fromCharCode(b)) ? `#${b.toString(16).toUpperCase().padStart(2, '0')}` : String.fromCharCode(b))).join('')}`
+  `/${[...s]
+    .map((c) => c.charCodeAt(0) & 255)
+    .map((b) =>
+      b < 0x21 || b > 0x7e || '()<>[]{}/%#'.includes(String.fromCharCode(b))
+        ? `#${b.toString(16).toUpperCase().padStart(2, '0')}`
+        : String.fromCharCode(b),
+    )
+    .join('')}`
 const hexOf = (b: Uint8Array) => [...b].map((x) => x.toString(16).toUpperCase().padStart(2, '0')).join('')
 
 /** a form a crop's source draws, baked as the source is: its content with its groups' ink alone, and the forms it draws so */
