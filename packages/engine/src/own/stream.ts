@@ -1117,7 +1117,23 @@ export function ownedOf(
         if (textAt(pages, between(at, nx), f.want, erasure) !== 0) return null
         const { glyphs: own, boxes } = takeTo(first)
         if (jumps(own)) return null
-        return toStart(own, boxes, pages[pa - 1]!.points[first[1]]!)
+        // (what stands before the first start on its line is that unit's label — a note's number — only where it is a label's form:
+        // the piece's own words there say nothing tells the units after them its ink's, as for an earlier unit's marks set again)
+        const F = pages[pa - 1]!.points[first[1]]!,
+          G = pages[pa - 1]!.glyphs
+        let k = own.length
+        while (
+          k > 0 &&
+          F.glyph < G.n &&
+          Math.abs(G.y[own[k - 1]![1]]! - G.y[F.glyph]!) < 0.5 * Math.max(G.size[own[k - 1]![1]]!, G.size[F.glyph]!)
+        )
+          k--
+        const label = own
+          .slice(k)
+          .map(([p, g]) => pages[p - 1]!.glyphs.u[g] ?? '')
+          .join('')
+        if (labelText(label) && !isLabelForm(label)) return null
+        return toStart(own, boxes, F)
       }
     }
     let e = alone()
