@@ -31,7 +31,7 @@ const doc = (content: string, wrapped: string) => {
   const objects: Obj[] = [
     '<< /Type /Catalog /Pages 2 0 R >>',
     '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
-    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R /F2 8 0 R >> >> /Contents 4 0 R >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R /F2 8 0 R >> /ExtGState << /GS1 << /Font [8 0 R 20] >> >> >> /Contents 4 0 R >>',
     { dict: '', data: content },
     F1,
     '<< >>',
@@ -42,7 +42,7 @@ const doc = (content: string, wrapped: string) => {
   const a = pdf(objects)
   const addOn: Record<number, Obj> = {
     1: '<< /Type /Catalog /Pages 2 0 R /OCProperties << /OCGs [10 0 R 11 0 R 12 0 R] /D << /BaseState /ON /ON [10 0 R 11 0 R 12 0 R] >> >> >>',
-    3: '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R /F2 8 0 R >> /Properties << /T 10 0 R /E 11 0 R /L 12 0 R >> >> /Contents 6 0 R >>',
+    3: '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R /F2 8 0 R >> /ExtGState << /GS1 << /Font [8 0 R 20] >> >> /Properties << /T 10 0 R /E 11 0 R /L 12 0 R >> >> /Contents 6 0 R >>',
     6: { dict: '', data: wrapped },
     10: '<< /Type /OCG /Name (axt:1.1.t) >>',
     11: '<< /Type /OCG /Name (axt:1.1.e) >>',
@@ -181,6 +181,43 @@ describe('a crop holds its own ink and nothing else', () => {
 
 // (poppler, where installed: the words pdftotext reads on each file's page against pdftoppm's drawing of it, 144 dpi)
 const poppler = spawnSync('pdftotext', ['-v']).status === 0 && spawnSync('pdftoppm', ['-v']).status === 0
+describe("a crop's cut against #690's review", () => {
+  it('a font chosen by a graphics state (gs /Font) stays chosen: no Tf of the content written over it (4712006427)', async () => {
+    // (F1 at 10 set by Tf, then GS1 sets F2 at 20; the formula x=1 at 102, 10 units a character at 20)
+    const content = 'BT /F1 10 Tf /GS1 gs 72 700 Td (Hello x=1) Tj ET'
+    const wrapped = 'BT /F1 10 Tf /GS1 gs 72 700 Td /OC /T BDC (Hello ) Tj EMC /OC /E BDC (x=1) Tj EMC ET'
+    const [form] = await cropTexts(doc(content, wrapped), page([[131.6, 162.4, 'p0']]))
+    expect(form).toContain('/GS1 gs')
+    expect(form).not.toMatch(/\/F1 [\d.]+ Tf/)
+    // ("Hello " is 60 units at 20: the way along the line a TJ of -3000 at the gs's size)
+    expect(form).toMatch(/\[-3000\] TJ\n\(x=1\) Tj/)
+  })
+
+  it('a rectangle turned is bounded by its four corners: a crop that meets only a corner keeps it (4712006434)', async () => {
+    // (a 10-unit square turned 45 degrees about (150, 690): its corners at x 150, 157.07, 142.93, 150; a crop over its left
+    // corner alone, 142 to 146)
+    const content = 'q 0.7071 0.7071 -0.7071 0.7071 150 690 cm 0 0 10 10 re f Q'
+    const wrapped = '/OC /E BDC q 0.7071 0.7071 -0.7071 0.7071 150 690 cm 0 0 10 10 re f Q EMC'
+    const forms = await cropTexts(doc(content, wrapped), page([[142, 146, 'p0']]))
+    expect(forms[0]).toContain('0 0 10 10 re')
+  })
+
+  it("a glyph of no advance goes by its font's box, wherever its origin stands (4712014293)", async () => {
+    // (a bar of no advance at 100, its ink to its right within its font's box (0 to 6 units); its origin inside the crop
+    // before it, which ends at 100.4, its ink in the crop after it, from 100.4)
+    const content = 'BT /F2 10 Tf 95 700 Td (x|) Tj ET'
+    const wrapped = 'BT /F2 10 Tf 95 700 Td /OC /E BDC (x|) Tj EMC ET'
+    const forms = await cropTexts(
+      doc(content, wrapped),
+      page([
+        [94.6, 100.4, 'p0'],
+        [100.4, 106.4, 'p1'],
+      ]),
+    )
+    expect(shown(forms[1]!)).toContain(hex('|'))
+  })
+})
+
 describe.skipIf(!poppler)('a paragraph of two formulas and a label, exported: what poppler reads stands on ink', () => {
   const content = 'BT /F1 10 Tf 72 700 Td (Hello x=1 and y=2) Tj 228 0 Td ((1)) Tj ET'
   const wrapped =

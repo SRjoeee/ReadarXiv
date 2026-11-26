@@ -81,6 +81,8 @@ function wordsOnInk(path, n, halves) {
     const half = Number(pw) / 2
     return {
       words: words.length,
+      // (the words of the page's translated half on a side-by-side page: there must be some, #690's review 4712014743)
+      right: halves ? words.filter((w) => w.box[0] >= half).length : words.length,
       noInk: words.filter((w) => !inked(w)).map((w) => w.text),
       across: halves ? words.filter((w) => w.box[0] < half - 0.5 && w.box[2] > half + 0.5).map((w) => w.text) : [],
     }
@@ -272,7 +274,7 @@ export async function exportChecks(t) {
       onInk.some((x) => x === null)
         ? 'every word of both files stands on ink, in its own half (poppler not installed: not read)'
         : "every word of both files stands on ink, in its own half: no formula's copy clipped out of sight",
-      onInk.every((x) => x === null || (x && x.words > 0 && x.noInk.length === 0 && x.across.length === 0)),
+      onInk.every((x) => x === null || (x && x.right > 0 && x.noInk.length === 0 && x.across.length === 0)),
       JSON.stringify(onInk),
     )
     await wide.close()

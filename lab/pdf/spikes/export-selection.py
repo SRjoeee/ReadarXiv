@@ -20,7 +20,8 @@ left = [c for c in chars if c['box'][2] <= HALF and c['box'][2] > c['box'][0]]
 # (the original half's text area: its characters' extent, the running head's page number aside)
 xs0 = sorted(c['box'][0] for c in left); xs1 = sorted(c['box'][2] for c in left); ys0 = sorted(c['box'][1] for c in left); ys1 = sorted(c['box'][3] for c in left)
 q = lambda a, f: a[int(f * (len(a) - 1))]
-area = (q(xs0, 0.002), q(ys0, 0.002), q(xs1, 0.998), q(ys1, 0.995))
+# (a page whose original half holds no text, a figure alone: its whole half is its area)
+area = (q(xs0, 0.002), q(ys0, 0.002), q(xs1, 0.998), q(ys1, 0.995)) if left else (j['box'][0], j['box'][1], HALF, j['box'][3])
 out = {}
 for half, sel in (('original', lambda c: (c['box'][0] + c['box'][2]) / 2 < HALF), ('translation', lambda c: (c['box'][0] + c['box'][2]) / 2 >= HALF)):
     cs = [c for c in chars if sel(c)]

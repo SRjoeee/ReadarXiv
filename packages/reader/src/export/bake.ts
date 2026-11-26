@@ -151,6 +151,7 @@ interface Geo {
   th: number
   rise: number
   tl: number
+  /** the font's resource name where a Tf chose it; null where a graphics state's /Font did (or none is set) */
   font: string | null
   size: number
   tc: number
@@ -330,11 +331,13 @@ function codesAt(
   g.tm = mul([1, 0, 0, 1, x, 0], g.tm)
   return out
 }
-/** the points a path's construction names (a rectangle by two corners), user space */
+/** a rectangle's four corners (x0, y0, x1, y1 given): under a turn or a shear its box needs all four (#690, 4712006434) */
+const corners = (r: readonly number[]) => [r[0]!, r[1]!, r[2]!, r[1]!, r[0]!, r[3]!, r[2]!, r[3]!]
+/** the points a path's construction names (a rectangle by its four corners), user space */
 const pointsOf = (path: LexOp[]): number[] =>
   path.flatMap((p) => {
     const a = p.args.filter((x): x is number => typeof x === 'number')
-    return p.op === 're' && a.length >= 4 ? [a[0]!, a[1]!, a[0]! + a[2]!, a[1]! + a[3]!] : a
+    return p.op === 're' && a.length >= 4 ? corners([a[0]!, a[1]!, a[0]! + a[2]!, a[1]! + a[3]!]) : a
   })
 /** a name as a content stream writes it: a byte outside '!' to '~', a delimiter or '#' as #xx (ISO 32000-1 §7.3.5) */
 const nameTok = (s: string) =>
@@ -561,7 +564,7 @@ export function makeBaker(R: Walker): Baker {
     const formBox = (c: Container, ctm: M): Box | null => {
       const bb = numsOf(R.get(c.st ?? undefined, 'BBox'))
       return bb && bb.length === 4
-        ? boxOf(mul(six(numsOf(R.get(c.st ?? undefined, 'Matrix')) ?? []) ?? I, ctm), bb)
+        ? boxOf(mul(six(numsOf(R.get(c.st ?? undefined, 'Matrix')) ?? []) ?? I, ctm), corners(bb))
         : null
     }
     for (let pi = 0; pi < pieces.length; pi++) {
@@ -584,8 +587,10 @@ export function makeBaker(R: Walker): Baker {
             copy(o)
             return
           }
+          // (a code of no advance has no place on its line of its own: its ink, past its origin, goes by its font's box;
+          // #690, 4712014293)
           const keep = at.map(({ seg, box }) => {
-            if (meetsAny(seg, within!.all)) return mine(seg)
+            if ((seg[2] > seg[0] || seg[3] > seg[1]) && meetsAny(seg, within!.all)) return mine(seg)
             st.codesByBox++
             return !box || mine(box)
           })
@@ -691,6 +696,17 @@ export function makeBaker(R: Walker): Baker {
           if (op === 'q') saved.push(dirty.state)
           if (op === 'Q') dirty.state = saved.pop() ?? dirty.state
           if (op === 'BT') dirty.pos = false
+          // (a graphics state that chooses a font, /Font [font size] (ISO 32000-1 §8.4.5), is written as it stands, and so
+          // is the font it chooses: no Tf of the content's is written over it, its size the line's way is measured at;
+          // #690, 4712006427)
+          if (op === 'gs') {
+            const f = R.look(R.get(R.get(R.get(R.look(res), 'ExtGState'), nameOf(o.args[0]) ?? ''), 'Font'))
+            const size = f instanceof R.PL.PDFArray ? R.look(f.get(1)) : undefined
+            if (size instanceof R.PL.PDFNumber) {
+              geo.font = null
+              geo.size = size.asNumber()
+            }
+          }
           if (placed) {
             if (!had) {
               had = { pre, at: codesAt(geo, shows.get(key), arrayOf(o), fontBox(geo.font, res), true) }
