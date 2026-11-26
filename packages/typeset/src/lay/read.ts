@@ -628,6 +628,13 @@ export function readMember(i: ReadInput): ReadOut {
       ...(m.style.sc !== undefined ? { capsRatio: m.style.sc } : {}),
       orig: { size: m.style.size },
       openBreaks: br.openBreaks,
+      // (a bare declaration's stated size, El.size on an element that sets no ink of its own: `\large` at the top level)
+      declSizes: new Map(
+        pieces.flatMap((p, k) => {
+          const e = p.t === 'ph' ? els.get(String(p.k)) : undefined
+          return e?.bare && e.size !== undefined && e.size > 0 && !e.ink.length ? [[k, e.size] as const] : []
+        }),
+      ),
       referenced: br.referenced,
       tail: (m.tail ?? []).flatMap(([t, s]) => [...t].map((ch) => ({ ch, st: tstyleOf(s, paper.designs) }))),
       tailOwn: null,

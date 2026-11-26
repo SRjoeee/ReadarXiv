@@ -1,6 +1,6 @@
 // The reader's page (the chrome's App.tsx): the document area slides with the contents sidebar when the
 // reader opens or closes it, and never as the page mounts — under StrictMode too, whose second run of a layout effect
-// spent a first-run guard and slid the area 236 px in on every development build (Part 7's final review)
+// spent a first-run guard and slid the area its width in on every development build (Part 7's final review)
 import { StrictMode, act, createElement } from 'react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { LOCALES, setLocale } from '@readarxiv/ui'
@@ -107,6 +107,8 @@ describe('an address with no paper: what the keyboard reaches (Codex on #329)', 
 
 describe("the contents' slide (the reader's design, §5)", () => {
   it('under StrictMode, nothing slides as the page mounts; each press of the contents slides the document area once', async () => {
+    // (the contents beside the document: they move it by their width, reader.css --push)
+    document.documentElement.style.setProperty('--push', '240px')
     const { controller } = fakeController()
     const m = await mountElement(createElement(StrictMode, null, app(controller)))
     expect(animate).not.toHaveBeenCalled()
@@ -119,6 +121,118 @@ describe("the contents' slide (the reader's design, §5)", () => {
       toggle.click()
     })
     expect([animate.mock.calls.length, document.documentElement.hasAttribute('data-axt-contents')]).toEqual([2, false])
+    await m.unmount()
+    document.documentElement.style.removeProperty('--push')
+  })
+
+  it('laid over the document (a window under 720 px, --push 0): the area does not slide, it does not move', async () => {
+    document.documentElement.style.setProperty('--push', '0px')
+    const { controller } = fakeController()
+    const m = await mountElement(app(controller))
+    const toggle = m.container.querySelector<HTMLButtonElement>('button[aria-controls="axt-contents"]')!
+    await act(async () => {
+      toggle.click()
+    })
+    expect([animate.mock.calls.length, document.documentElement.hasAttribute('data-axt-contents')]).toEqual([0, true])
+    await m.unmount()
+    document.documentElement.style.removeProperty('--push')
+  })
+})
+
+describe('the contents laid over the document (a window under 720 px, §6.3)', () => {
+  const overlay = (on: boolean) =>
+    vi.stubGlobal('matchMedia', (q: string) => ({
+      matches: q.includes('720px') ? on : false,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }))
+  afterEach(() => vi.unstubAllGlobals())
+  it('a jump closes them and gives the focus back to their button, the reader asked to take it on to the heading’s page', async () => {
+    overlay(true)
+    const { controller } = fakeController({
+      outline: [{ id: 3, title: 'Methode', original: 'Method', level: 1, page: 2, number: '2' }],
+    })
+    const m = await mountElement(app(controller))
+    const toggle = m.container.querySelector<HTMLButtonElement>('button[aria-controls="axt-contents"]')!
+    await act(async () => toggle.click())
+    await act(async () => m.container.querySelector<HTMLElement>('#axt-contents a')!.click())
+    expect([
+      document.documentElement.hasAttribute('data-axt-contents'),
+      document.activeElement === toggle,
+      controller.goToHeading.mock.calls,
+    ]).toEqual([false, true, [[3, { focus: true }]]])
+    await m.unmount()
+  })
+  it('the focus moved into the document they cover closes them, so that what holds it is in view (#681 review)', async () => {
+    overlay(true)
+    const { controller } = fakeController({
+      outline: [{ id: 3, title: 'Methode', original: 'Method', level: 1, page: 2, number: '2' }],
+    })
+    const m = await mountElement(app(controller))
+    const toggle = m.container.querySelector<HTMLButtonElement>('button[aria-controls="axt-contents"]')!
+    await act(async () => toggle.click())
+    const inDoc = document.createElement('button')
+    m.container.querySelector('main.doc')!.append(inDoc)
+    await act(async () => inDoc.focus())
+    expect([document.documentElement.hasAttribute('data-axt-contents'), document.activeElement === inDoc]).toEqual([
+      false,
+      true,
+    ])
+    inDoc.remove()
+    await m.unmount()
+  })
+
+  it('Escape closes them wherever the focus is, their button included, but not while a menu of the page is open (#681 review)', async () => {
+    overlay(true)
+    const { controller } = fakeController({
+      outline: [{ id: 3, title: 'Methode', original: 'Method', level: 1, page: 2, number: '2' }],
+    })
+    const m = await mountElement(app(controller))
+    const toggle = m.container.querySelector<HTMLButtonElement>('button[aria-controls="axt-contents"]')!
+    const escapeOn = (el: Element) => el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    // (opened by their button, the focus still on it)
+    await act(async () => toggle.click())
+    toggle.focus()
+    await act(async () => escapeOn(toggle))
+    expect([document.documentElement.hasAttribute('data-axt-contents'), document.activeElement === toggle]).toEqual([
+      false,
+      true,
+    ])
+    // (a menu open over the page: its Escape is the menu's)
+    await act(async () => toggle.click())
+    const menu = document.createElement('div')
+    menu.className = 'pop'
+    menu.setAttribute('data-open', '')
+    document.body.append(menu)
+    await act(async () => escapeOn(document.body))
+    expect(document.documentElement.hasAttribute('data-axt-contents')).toBe(true)
+    menu.remove()
+    await m.unmount()
+  })
+
+  it('Escape closes them, the focus back on their button; beside the document a jump and Escape leave them open', async () => {
+    overlay(true)
+    const { controller } = fakeController({
+      outline: [{ id: 3, title: 'Methode', original: 'Method', level: 1, page: 2, number: '2' }],
+    })
+    const m = await mountElement(app(controller))
+    const toggle = m.container.querySelector<HTMLButtonElement>('button[aria-controls="axt-contents"]')!
+    const row = () => m.container.querySelector<HTMLElement>('#axt-contents a')!
+    const pressEscape = () => row().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await act(async () => toggle.click())
+    await act(async () => pressEscape())
+    expect([document.documentElement.hasAttribute('data-axt-contents'), document.activeElement === toggle]).toEqual([
+      false,
+      true,
+    ])
+    overlay(false)
+    await act(async () => toggle.click())
+    await act(async () => pressEscape())
+    await act(async () => row().click())
+    expect([
+      document.documentElement.hasAttribute('data-axt-contents'),
+      controller.goToHeading.mock.calls.at(-1),
+    ]).toEqual([true, [3]])
     await m.unmount()
   })
 })

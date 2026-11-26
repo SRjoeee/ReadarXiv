@@ -398,7 +398,7 @@ const R = {
   download: { name: '下载', translation: '译文 PDF', original: '原文 PDF' }, // S-R-09
   leave: '在默认查看器中打开', // S-R-10
   pill: { original: '原文页码', translation: '译文页码', previous: '上一页', next: '下一页' }, // S-R-11
-  fold: { expand: '展开', collapse: '收起' }, // S-R-02a: the contents' folds, in their tooltips
+  fold: { expand: '展开', collapse: '收起' }, // the folds of the outline kept for the website's import contract (UI.md S-R-02a)
   // S-R-25: a layer's link with no text under it, named by where it goes and said to screen
   // readers; `site` is the address's host, `address` the mail address
   linkName: { internal: '本文中的其他位置', site: (site: string) => `打开 ${site}`, email: (address: string) => `发邮件给 ${address}`, fallback: '链接' },

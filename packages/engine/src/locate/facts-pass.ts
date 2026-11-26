@@ -486,6 +486,7 @@ function readElements(fx: FactsIndex, r: MemberReading): void {
   const classOf = new Map(unit?.classes ?? [])
   const breaks: [El, number][] = []
   const unplaced: [string, El][] = []
+  const apartDecls = (mem.sizeDecls ?? []).some(([, z]) => r2(z) !== r2(mem.style.size))
   for (const [id, el] of mem.elements) {
     const gs = (mem.els.get(id) ?? []).map(gA)
     const fill = fillOfGlyphs(gs)
@@ -511,6 +512,13 @@ function readElements(fx: FactsIndex, r: MemberReading): void {
     const asText = (el.style !== undefined && !c?.mark) || (c?.cls === 'symbol' && !!c.sym && !c.sym[1])
     const one = asText && gs.length && mem.smallCaps?.get(id) === undefined ? oneSize(gs, true) : undefined
     if (one !== undefined && r2(one) !== r2(mem.style.size)) el.size = r2(one)
+    // (a size declaration's: the size its run's glyphs share, from which the typesetter draws what follows it, to the end of its
+    // group, as TeX sets it: a subtitle after `\large` in a title TeX set at the class's \huge. In a member one of whose
+    // declarations runs at another size than the member's, each one's, the member's size too: a declaration back to it after
+    // another, `\LARGE Title\\ \large subtitle` read at the title's, is drawn so; in a member whose every declaration runs at
+    // its own size, none, which draws the same)
+    const decl = mem.sizeDecls?.find(([d]) => d === id)?.[1]
+    if (decl !== undefined && !gs.length && apartDecls) el.size = r2(decl)
     // (its own brackets: its first and last glyphs where they are a pair of them, "[" "]" around a citation's numbers:
     // the brackets a translation that brackets it takes)
     const pair = bracketsOf(gs)
