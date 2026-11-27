@@ -40,6 +40,8 @@ function compileIn(files: ReadonlyMap<string, Uint8Array>, main = 'main.tex', pa
       writeFileSync(join(dir, p), b)
     }
     for (let pass = 0; pass < passes; pass++) {
+      // (each pass's PDF its own: one a pass that dies leaves behind is never read as the run's)
+      rmSync(join(dir, main.replace(/\.tex$/, '.pdf')), { force: true })
       try {
         execFileSync('docker', ['run', '--rm', '--network', 'none', '-v', `${dir}:/work`, '-w', '/work', IMAGE, 'pdflatex', '-interaction=nonstopmode', main], { stdio: 'pipe', timeout: 300_000 })
       } catch {
@@ -200,6 +202,22 @@ describe.skipIf(!docker)("a heading's marks through what a class does with its t
       expect(strays(r.written)).toEqual([])
     }
   }, 1_800_000)
+})
+
+describe.skipIf(!docker)('the compile these tests read', () => {
+  it('a final pass that dies leaves no PDF to compare: an earlier pass\'s is not taken for it', () => {
+    // (a document of our own that counts its passes in a file of its own and stops TeX at its third: the second pass's PDF
+    // must not stand for the run)
+    const tex = String.raw`\documentclass{article}
+\newread\axtcnt \openin\axtcnt=passes.txt \ifeof\axtcnt \def\axtn{0}\else \read\axtcnt to\axtn \fi \closein\axtcnt
+\newwrite\axtout \immediate\openout\axtout=passes.txt \immediate\write\axtout{\the\numexpr\axtn+1\relax}\immediate\closeout\axtout
+\begin{document}
+Our own words.\ifnum\axtn>1 \batchmode\read-1 to\axtx\fi
+\end{document}
+`
+    const c = compileIn(new Map([['main.tex', new TextEncoder().encode(tex)]]))
+    expect(c.ok).toBe(false)
+  }, 300_000)
 })
 
 describe.skipIf(!docker)('no mark of ours in a file TeX writes and reads back', () => {
