@@ -227,14 +227,15 @@ export function targetsOf(
   }
 
   /** the edge reading: the member (a float's: its caption) whose line, label or display ink begins at the point's x on the
-   *  format's grid, its baseline the first under the point within LAND_BELOW, a beginning or not (pdfTeX states a destination
-   *  at the origin of what TeX set next); null where no ink begins there */
+   *  format's grid (pdfTeX states a destination at the origin of what TeX set next, a beginning or not): one whose baseline is
+   *  the point's own on the grid (an anchor TeX set there, not raised), else the one whose baseline is the first under the
+   *  point within LAND_BELOW (raised over it); null where no ink begins there */
   function edgeOf(page: number, x: number, y: number): number | null {
     let best: { base: number; mem: Member } | null = null
     const gx = onGrid(x)
     const gy = onGrid(y)
     const take = (mem: Member, ix0: number, base: number) => {
-      if (Math.abs(onGrid(ix0) - gx) > GRID || onGrid(base) >= gy || y - base > LAND_BELOW) return
+      if (Math.abs(onGrid(ix0) - gx) > GRID || onGrid(base) > gy || y - base > LAND_BELOW) return
       if (!best || base > best.base) best = { base, mem }
     }
     for (const mem of members) {

@@ -394,6 +394,15 @@ describe('a landing is stated only on the engine’s own evidence (the lead’s 
     // (its point left of the display, at no edge: the rule alone lands it, and nothing confirms it)
     expect(targetsOf(w, dests({ 'Item.2': { page: 1, x: 90, y: 620 } }), [])).toEqual([])
   })
+  it('an anchor at the origin of an entry’s first line (unraised, at its left edge and on its baseline) is that entry’s, past the next one’s edge under it', () => {
+    const w = workOf([
+      { kind: 'reference', entry: true, lines: [line(1, 639.82, 57.04, 300)] },
+      { kind: 'reference', entry: true, lines: [line(1, 631.85, 57.04, 300)] },
+    ])
+    expect(targetsOf(w, dests({ 'cite.z': { page: 1, x: 57.04, y: 639.82 } }), [])).toMatchObject([
+      { kind: 'reference', ord: 0 },
+    ])
+  })
   it('a landing another member’s left edge at the point contradicts is never stated', () => {
     // (the point on a reference's first line, at its baseline, over its ink: the rule's landing; another entry's label begins at
     // the point's x 10 under it: the edge names that entry)

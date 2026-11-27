@@ -100,7 +100,7 @@ export function linkTargetsOf({ floats, landings, refused = [], dests, parts, he
       for (const [, el] of pl.els ?? []) if (el.kind === 'display') for (const k of el.ink ?? []) if (k[0] === pt.page) at.push([pl.ord, k[1], k[5]])
     }
     const gx = r2(pt.x), gy = r2(pt.y)
-    const under = at.filter((e) => Math.abs(r2(e[1]) - gx) <= 0.01 && r2(e[2]) < gy && pt.y - e[2] <= 24).sort((a, b) => b[2] - a[2])[0]
+    const under = at.filter((e) => Math.abs(r2(e[1]) - gx) <= 0.01 && r2(e[2]) <= gy && pt.y - e[2] <= 24).sort((a, b) => b[2] - a[2])[0]
     if (!under) return null
     const f = floatOfOrd.get(under[0])
     return f ? f.caption : under[0]
