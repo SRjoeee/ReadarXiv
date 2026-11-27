@@ -19,7 +19,7 @@ import { chainOf } from '../../src/chain.ts'
 import type { Fetch, FetchInit, Result, UnitIn } from '../../src/contract.ts'
 import type { ModelEntry } from '../../src/policy.ts'
 import { producerIdentityOf } from '../../src/producers.ts'
-import { NEVER, type Scripted, scriptedFetch } from '../../src/testing/fakes.ts'
+import { echo as echoTranslator, NEVER, type Scripted, scriptedFetch } from '../../src/testing/fakes.ts'
 import { fakeClock } from '../../src/testing/ports.ts'
 import { translatorSuite } from '../../src/testing/suite.ts'
 import { el, t, unit } from '../pieces.ts'
@@ -384,6 +384,31 @@ describe('llm: through the chain', () => {
     expect(aborted[0]).toBe(5_000)
     expect(spend.settles.map((s) => s.outcome)).toEqual([{ unknown: true }, { unknown: true }])
     for (const r of out) expect(r.ok).toBe(false)
+  })
+
+  it("a model's refusal in a 200 (no units) falls through to the next translator, after one more request", async () => {
+    // (Codex's local review said such a reply could block the fallback: it does not, the chain passes an unavailable
+    // translator over; what it costs is the second request a reply with no units is worth)
+    const clock = fakeClock()
+    const spend = fakeSpend()
+    const refusal = {
+      status: 200,
+      body: JSON.stringify({
+        content: [],
+        usage: { input_tokens: 10, output_tokens: 0 },
+        stop_reason: 'refusal',
+        stop_details: { type: 'refusal', category: null },
+      }),
+    }
+    const f = scriptedFetch(() => refusal)
+    const out: Result[] = []
+    for await (const r of chainOf({ clock }).translate(units.slice(0, 1), 'zh-Hans', {
+      translators: [make(f.fetch, { spend, clock }), echoTranslator('echo:0')],
+    }))
+      out.push(r)
+    expect(out).toMatchObject([{ id: 'u0', ok: true, by: 'echo:0' }])
+    expect(f.requests).toHaveLength(2)
+    expect(spend.settles).toHaveLength(2)
   })
 
   it('a key refused is asked again through the ledger', async () => {
