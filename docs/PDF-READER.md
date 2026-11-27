@@ -1960,9 +1960,31 @@ the highlight's layer, outside the dark filter (the left's links keep their colo
   jumped to, so that reading and Tab go on from there. A link out of the paper, by a click, Enter, a modified or a middle
   click, goes through the host's `links.openExternal` alone (its policy, its new tab); the browser's own navigation never
   runs. A click on a link, on either pane, levels nothing (the click's levelling skips a link).
+  On the rebuilt reader every jump inside the paper is one jump (`packages/reader` `session/one-jump.ts`, link previews'
+  design §3.7, L3): the right's laid links, PDF.js's links on the left and on a right page not laid (both link services'
+  `goToDestination` and `goToPage` handed to it: `panes.ts` `routeInPaper`), Enter on one, a page typed in the pill and a
+  contents entry. It moves the pane it was made on, the other following where the sync is on (today's rule, the lead's ruling
+  6), 72 CSS px of room above a destination's point (56 narrow) [start]; it lands with the band (§17, "The landing") and is one
+  entry of the way back (below). The pill's arrows turn a page as a scroll does and are no jump.
+- **The way back.** One capsule, 回到原处 (UI.md S-R-29, `chrome/BackCapsule.tsx`), while a jump can be gone back from: at the
+  document area's foot centre side by side, the first segment of the pane's pill with one pane shown; its press goes back one
+  jump, and so do the browser's Back (where the host gives history) and the reader scrolling back to the place it left, which
+  spends the entry silently so that a later Back never lands somewhere already left. Coming back lights the sentence under the
+  link left where the highlight lights one there, else the link's own box; Forward lands the target lit. History is the
+  host's (`Host.history`, `session/jumps.ts` HostHistory; `windowHistory` the window's): the reader's state lives under
+  `history.state.axt` (`{ v: 1, n, place, light, left }`) beside the host's, the address is never touched, so a reload keeps
+  the depth and an entry's place. The extension's frame over arXiv's PDF page gets history too (the lead's ruling on R0,
+  2026-11-27: within a live page the browser's Back and Forward reach the frame, `tests/e2e/probes/framed-history.mjs`, P1–P3
+  and the browser's own GoBack, in Chrome for Testing 153 and Chrome 158), and its ordinary close (the toolbar's way out)
+  first steps back over the reader's entries (`unwind`) so that none lingers in arXiv's page's history. **The limit that
+  remains:** after a reload of arXiv's page, or after leaving it and coming back, the frame is a new document that holds no
+  state and hears no traversal of the entries the reader had pushed before, and each jump not undone costs one Back that does
+  nothing visible (the probe's P7: two entries left, two such Backs; P8: one, one). It is not repaired by an entry pushed
+  without the reader's own gesture (the lead's ruling), a new kind of risk the known small cost is preferred to.
 - **Looked at.** As PDF.js draws a link on the left: the PDF's border where it gives one (its width, colour and style:
   solid, dashed, underline), a yellow wash under a hovering pointer; the focus ring is the reader's (2 px, `--focus`), the
-  system's in forced colours. The border is the link's own annotation's, wherever the translation draws it and whatever its
+  system's in forced colours. On the rebuilt reader the wash under a hovering pointer, or over a link held, is the band at half
+  its strength on both panes (`styles.ts`, link previews' L13), PDF.js's yellow overridden. The border is the link's own annotation's, wherever the translation draws it and whatever its
   box there: the engine states it on the part's link (`Link.border`, as PDF.js reads /BS, /Border and /C), the typesetter
   carries it onto each link it draws of that annotation (`Page.links`), and the reader draws it as stated, matching nothing
   against the original's annotations (a citation set as text has another size than its box on A); one with none draws none.
@@ -3281,6 +3303,19 @@ within noise.
   stop of its own is one sentence to the translator (the markers wire writes nothing after the display's marker, and Microsoft
   cuts at neither a marker nor a colon; the tags wire's cutter reads a display as a word), lit as one in pieces around it, as
   today's (2609.33403v1).
+
+### 17.10 The landing (link previews, the way back)
+
+"You landed here" is one look for a jump's arrival and for its way back (link previews' design §3.7; `compose/highlight.ts`
+`land`, `litAt`; `compose/landing.ts`): the band itself (`--axt-hl-color`, `--axt-hl-mix`), drawn in the highlight's own
+layer, multiplied into the page and screened into a dimmed one, at full strength for its first 18 % of 1,700 ms and then
+fading by opacity alone [approved], whatever the hover switch says, the hover's painting leaving it; a new landing replaces the
+last. Arriving, it lights the unit a destination's point lands on, whole (the first member at or at most 24 PDF units under
+the point, hyperref raising an anchor over its text: `LAND_BELOW` [start]), or a contents entry's heading's first rectangle;
+a page typed lights nothing. Coming back, the sentence under the link left where the highlight lights that member by
+sentence, else the link's own box on its pane, never a whole paragraph (the lead's ruling 7). It needs the layer's code (the
+highlight is made with the composer): a paper with no layer jumps and goes back with no band. A hovered or held link takes the
+band at half (11 % by default) on both panes (§11.9, "Looked at").
 
 ## 18. Rules and their versions
 

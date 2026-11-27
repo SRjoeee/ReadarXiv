@@ -113,7 +113,7 @@ export function extensionSlots(o: { controller: ReaderController; store: ConfigS
             <Icon node={Settings} />
           </ToolbarButton>
           {embedded && (
-            <ToolbarButton label={R.leave} data-leave data-wide onClick={leaveReader}>
+            <ToolbarButton label={R.leave} data-leave data-wide onClick={() => void leaveReader()}>
               <Icon node={LogOut} />
             </ToolbarButton>
           )}
@@ -133,7 +133,7 @@ export function extensionSlots(o: { controller: ReaderController; store: ConfigS
           {embedded && (
             <div className="row narrowest-only">
               {R.leave}
-              <ToolbarButton label={R.leave} onClick={leaveReader}>
+              <ToolbarButton label={R.leave} onClick={() => void leaveReader()}>
                 <Icon node={LogOut} />
               </ToolbarButton>
             </div>

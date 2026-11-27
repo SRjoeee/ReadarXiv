@@ -25,12 +25,16 @@
 //   P7  arXiv's page left (the abstract) with the frame at an entry of its own, then the browser's Back three times: where
 //       each lands, whether the reader comes back over the page and at which entry, and whether a Back is spent on nothing
 //   P8  arXiv's page reloaded with the frame at an entry of its own, then Back twice: the same
+//   P9  the reader's own jumps (two pages typed in its pill), its way out pressed (the toolbar's leave), then the browser's
+//       Back once: it leaves arXiv's PDF page at once, the reader's entries stepped back over before the frame went
+//   P10 the reader in a tab of its own: a page typed, the tab reloaded, then Back: it returns to the place left (an entry's
+//       place lives in its state, which a reload keeps)
 // The back-forward cache is on, as a reader's Chrome has it (Playwright turns it off; AXT_BFCACHE=0 leaves it off).
 //
 // Usage: pnpm build && node tests/e2e/probes/framed-history.mjs
 // Environment: AXT_HEADED=1 watches it; AXT_CHROME=<binary> runs another Chrome (a branded Chrome ignores --load-extension:
 // the probe then loads the build through DevTools' Extensions.loadUnpacked); AXT_HAND=<seconds> the hand window (headed).
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -71,6 +75,8 @@ const arxiv = (route, url) => {
 // ---- the browser, the build loaded (Playwright's Chromium by --load-extension; a branded Chrome through DevTools)
 const echo = await startEchoEndpoint()
 copyWithGrants(BUILD, EXT, { hostPermissions: ['http://127.0.0.1/*', ...LAYER_HOSTS.map(h => `${h}/*`)] })
+// (the reader's address may open as a page of its own in this copy, as launchWithReader's `topLevel` has it: P10)
+writeFileSync(join(EXT, 'manifest.json'), JSON.stringify({ ...JSON.parse(readFileSync(join(EXT, 'manifest.json'), 'utf8')), axt_top_level_reader: true }, null, 2))
 const profile = mkdtempSync(join(tmpdir(), 'framed-history-'))
 const branded = !!process.env.AXT_CHROME
 // (a branded Chrome: the profile in developer mode, as a person loading an unpacked build has it)
@@ -308,6 +314,76 @@ try {
     row('P8 after the reload', frame ? `frame entry ${JSON.stringify((await look(frame)).state)}, history.length ${(await look(frame)).length}` : 'no reader')
     await backs('P8 the reload', 2)
   } else row('P8', 'no reader after P7')
+  // P9: the reader's own jumps (two pages typed in the pill, by the keyboard), its way out of the frame pressed (the toolbar's
+  // leave), then the browser's Back: it leaves arXiv's page at once (the reader's entries unwound before the frame went)
+  const tab = await context.newPage()
+  page = tab
+  await tab.goto(`https://arxiv.org/abs/${PAPER}`)
+  await tab.goto(`https://arxiv.org/pdf/${PAPER}`)
+  const reader = await readerFrame(tab)
+  if (reader) {
+    const id9 = await ext.evaluate(async () => (await chrome.tabs.query({ url: 'https://arxiv.org/pdf/*' })).at(-1)?.id ?? null)
+    const typed = async n => {
+      await reader.focus('.pane[data-side="right"] .pill input')
+      await tab.keyboard.press('ControlOrMeta+a')
+      await tab.keyboard.type(String(n))
+      await tab.keyboard.press('Enter')
+      await sleep(600)
+    }
+    const before = await look(reader)
+    await typed(2)
+    await typed(1)
+    const jumped = await look(reader)
+    row('P9 two pages typed in the pill', `frame entry n=${nOf(before)} -> ${nOf(jumped)}, history.length ${before.length} -> ${jumped.length}; the capsule ${await reader.evaluate(() => !!document.querySelector('button.back')) ? 'shown' : 'NOT shown'}`)
+    const leaveAt = await reader.evaluate(() => {
+      const b = document.querySelector('[data-leave]')
+      const r = b?.getBoundingClientRect()
+      return r?.width ? { x: r.x + r.width / 2, y: r.y + r.height / 2 } : null
+    })
+    if (leaveAt) await tab.mouse.click(leaveAt.x, leaveAt.y)
+    await sleep(1500)
+    const gone = !(await tab.$('iframe[data-axt-pdf-reader]'))
+    row('P9 the way out pressed', `${leaveAt ? 'pressed' : 'NO leave button'}; the frame ${gone ? 'taken away' : 'STILL THERE'}; top ${tab.url()}`)
+    await ext.evaluate(id => chrome.tabs.goBack(id), id9).catch(e => console.log(`(tabs.goBack: ${e.message.split('\n')[0]})`))
+    await sleep(1500)
+    row('P9 then the browser\'s Back once', `top ${tab.url()} (${/\/abs\//.test(tab.url()) ? 'left arXiv\'s PDF page at once' : 'did NOT leave it'})`)
+  } else row('P9', 'no reader')
+  // P10: the reader in a tab of its own (the extension's page, no frame): a page typed (a jump), the page reloaded, then the
+  // browser's Back returns to the place left, the entry's place living in its state (a reload keeps it)
+  const own = await context.newPage()
+  page = own
+  await own.goto(`chrome-extension://${id}/pdf-reader.html?live=1&paper=${PAPER}`)
+  const pages10 = await own.waitForFunction(() => window.__reader?.controller?.getState().sides.left.pages, null, { timeout: 60_000 }).then(h => h.jsonValue(), () => 0)
+  if (pages10) {
+    const id10 = await ext.evaluate(async () => (await chrome.tabs.query({ url: 'chrome-extension://*/pdf-reader.html*' })).at(-1)?.id ?? null).catch(() => null)
+    const where = () => own.evaluate(() => {
+      const st = window.__reader.controller.getState()
+      const side = st.display === 'original' ? 'left' : 'right'
+      return { side, display: st.display, page: st.sides[side].page, top: document.getElementById(side)?.scrollTop ?? null, axt: history.state?.axt ?? null, back: !!document.querySelector('button.back') }
+    })
+    await sleep(800)
+    // (the place left somewhere a reload's own opening does not put it: 300 px down)
+    const side0 = (await where()).side
+    await own.mouse.move(900, 400)
+    await own.mouse.wheel(0, 300)
+    await sleep(1000)
+    const at0 = await where()
+    await own.focus(`.pane[data-side="${side0}"] .pill input`)
+    await own.keyboard.press('ControlOrMeta+a')
+    await own.keyboard.type('2')
+    await own.keyboard.press('Enter')
+    await sleep(800)
+    const at1 = await where()
+    await own.reload()
+    await own.waitForFunction(() => window.__reader?.controller?.getState().sides.left.pages, null, { timeout: 60_000 }).catch(() => undefined)
+    await sleep(1500)
+    const at2 = await where()
+    if (id10) await ext.evaluate(id => chrome.tabs.goBack(id), id10).catch(e => console.log(`(tabs.goBack: ${e.message.split('\n')[0]})`))
+    else await own.goBack({ timeout: 3000 }).catch(() => undefined)
+    await sleep(1500)
+    const at3 = await where()
+    row('P10 its own tab: a page typed, the reload, Back', `${at0.display}, the ${at0.side} pane: page ${at0.page} (scrollTop ${at0.top}) -> typed 2: page ${at1.page} (${at1.top}), entry n=${at1.axt?.n}, capsule ${at1.back}; reloaded: entry n=${at2.axt?.n}, capsule ${at2.back}, page ${at2.page} (${at2.top}); Back: page ${at3.page} (${at3.top}), entry n=${at3.axt?.n}, capsule ${at3.back}; at ${own.url().replace(/^chrome-extension:\/\/[^/]+/, '')}`)
+  } else row('P10', 'no reader in its own tab')
   if (guard.violations.length) row('route table', guard.violations.map(v => `${v.method} ${v.url}`).join('; '))
 } catch (e) {
   failed = e.message

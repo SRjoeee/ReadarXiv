@@ -8,6 +8,7 @@ import type { PaperStore } from '@/cache/paper-store'
 import { readerProviderOf } from '@/config/services'
 import type { SurfaceConfig } from '@/shared/surface-config'
 import type { TranslationTransport } from '@/providers/transport'
+import { readerHistory } from './history'
 import { prefsOf, withPrefs } from './prefs'
 import { storedFetch } from './stored-fetch'
 import { hostTranslate, readerTransport } from './translate'
@@ -96,7 +97,8 @@ export function hostPrefs(surface: Pick<SurfaceConfig, 'state' | 'subscribe' | '
 }
 
 function extensionHost(o: { api: string; loopback: boolean; pdf: (ref: string) => string; prefs: PrefStore; transport: TranslationTransport; paper: string; store?: PaperStore | null }): Host {
-  return { fetch: storedFetch({ fetch: hostFetch(o), store: o.store ?? null, api: o.api }), original: o.pdf, prefs: o.prefs, translate: hostTranslate({ transport: o.transport, paper: o.paper }) }
+  // (the page's history, the reader's jumps' to add to: in its own tab and in its frame over arXiv's PDF page alike, history.ts)
+  return { fetch: storedFetch({ fetch: hostFetch(o), store: o.store ?? null, api: o.api }), original: o.pdf, prefs: o.prefs, translate: hostTranslate({ transport: o.transport, paper: o.paper }), history: readerHistory() }
 }
 
 /** the session of an address that names no paper: nothing to show or load; what the reader chooses written as settings */
