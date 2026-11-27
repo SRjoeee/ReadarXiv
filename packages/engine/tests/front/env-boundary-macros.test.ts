@@ -188,6 +188,12 @@ describe('a macro that only looks like a boundary stays what it was (the control
   it("its \\begin in a conditional's branch", () => kept('\\newcommand{\\ben}{\\iffalse\\begin{enumerate}\\fi}\n'))
   it('its \\begin in an argument a macro does not execute', () =>
     kept('\\newcommand{\\gobble}[1]{}\n\\newcommand{\\ben}{\\gobble{\\begin{enumerate}}}\n'))
+  it('a meaning the reading cannot tell (an \\edef, a \\let of a character) leaves the call as it was read, the rest read', () => {
+    expect(read(LIST_BODY, `${LIST}\\edef\\cx{\\ben}\n\\let\\cy=y\n`)).toEqual(LIST_UNITS)
+    expect(read('Words before \\cx{} and \\cy{} after it.', `${LIST}\\edef\\cx{\\ben}\n\\let\\cy=y\n`)).toEqual([
+      { kind: 'para', text: 'Words before and after it.', phs: ['\\cx{}', '\\cy{}'] },
+    ])
+  })
   it('a \\let made before the macro it copies is defined', () => {
     const us = read(
       'Words before the formula\n\\bq\nx = y\n\\eq\nand words after it.',
