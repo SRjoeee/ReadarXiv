@@ -84,13 +84,24 @@ export function normalizeTyped(raw: string): string {
 /** a typed tag after normalizeTyped: a close, a void, an open; any letter (the number says the slot) */
 const TYPED_TAG = /<(\/?)[a-z](\d+)(\/?)>/g
 
-/** the reply read back: normalised, rewritten to the void spelling, then `readTagged`; null where it cannot be read, or
- *  where its text is under 0.2 of the source's (projection length, for a source of 200 characters or more) */
+/** the reply read back: normalised, rewritten to the void spelling, then `readTagged`; null where it cannot be read, where
+ *  a numbered closer does not close the innermost opener still open (crossed tags: the void spelling's closers carry no
+ *  number, so the tags reader would close the innermost span and move words into or out of a span), or where its text is
+ *  under 0.2 of the source's (projection length, for a source of 200 characters or more) */
 export function readTyped(unit: UnitIn, raw: string): { content: OutPiece[]; sentences?: Sentences } | null {
   if (typeof raw !== 'string') return null
-  const voids = normalizeTyped(raw).replace(TYPED_TAG, (m, close: string, n: string, self: string) =>
-    close ? (self ? m : '</t>') : self ? `<x id="${n}"/>` : `<t id="${n}">`,
-  )
+  const open: string[] = []
+  let crossed = false
+  const voids = normalizeTyped(raw).replace(TYPED_TAG, (m, close: string, n: string, self: string) => {
+    if (self) return close ? m : `<x id="${n}"/>`
+    if (!close) {
+      open.push(n)
+      return `<t id="${n}">`
+    }
+    if (open.pop() !== n) crossed = true
+    return '</t>'
+  })
+  if (crossed) return null
   const r = readTagged(unit, voids)
   if (!r) return null
   const source = projectionOf(unit.content).length

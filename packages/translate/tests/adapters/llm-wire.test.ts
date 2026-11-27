@@ -72,6 +72,16 @@ describe('readTyped', () => {
     expect(readTyped(u, 'Wie in <c3/> gezeigt, funktioniert das <s2>Modell</s2>.')).toBeNull()
     expect(readTyped(u, 'Wie in <c1/><c1/> gezeigt, funktioniert das <s2>Modell</s2>.')).toBeNull()
   })
+  it('a reply whose numbered closers do not close their openers in order is unread (crossed tags)', () => {
+    const nested = unit('n', [span('a', 'bold', [t('Outer '), span('b', 'italic', [t('inner')])]), t(' rest.')])
+    expect(writeTyped(nested)).toBe('<s1>Outer <s2>inner</s2></s1> rest.')
+    expect(readTyped(nested, '<s1>Außen <s2>Innen</s2></s1> Rest.')).not.toBeNull()
+    expect(readTyped(nested, '<s1>Außen <s2>Innen</s1> Rest</s2>.')).toBeNull()
+    expect(readTyped(nested, '<s1>Außen <s2>Innen</s2></s2> Rest.')).toBeNull()
+    // siblings in another order are a translation's own: each closes its own opener
+    const two = unit('t', [span('a', 'bold', [t('one')]), t(' and '), span('b', 'italic', [t('two')]), t('.')])
+    expect(readTyped(two, '<s2>zwei</s2> und <s1>eins</s1>.')).not.toBeNull()
+  })
   it('the length rule: a reply under 0.2 of a source of 200 characters or more is unread', () => {
     const long = unit('long', [t(`${'word '.repeat(79)}end.`)])
     expect(long.content.length === 1 && (long.content[0] as { s: string }).s.length).toBe(399)
