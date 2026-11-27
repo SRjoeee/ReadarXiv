@@ -278,9 +278,11 @@ export function targetsOf(
    *  going on with its member is: it begins nothing, and is passed) */
   function itemAt(page: number, x: number | null, y: number): Item | null {
     const items = itemsOf(page)
+    // (on the format's grid, where the parts state the ink: a point TeX set at an ink's edge is on it)
+    const gx = x === null ? null : onGrid(x)
     const gy = onGrid(y)
-    const holdsY = (it: Item) => it.bottom <= y && y <= it.top
-    const holdsX = (it: Item) => x !== null && it.ix0 <= x && x <= it.ix1
+    const holdsY = (it: Item) => onGrid(it.bottom) <= gy && gy <= onGrid(it.top)
+    const holdsX = (it: Item) => gx !== null && onGrid(it.ix0) <= gx && gx <= onGrid(it.ix1)
     const floats = items.filter((it) => it.what === 'float' && holdsY(it) && (x === null || holdsX(it)))
     if (floats.length) return floats.sort((a, b) => a.top - a.bottom - (b.top - b.bottom))[0]!
     const on = items.filter((it) => it.begins && holdsY(it) && holdsX(it) && onGrid(it.base) >= gy)

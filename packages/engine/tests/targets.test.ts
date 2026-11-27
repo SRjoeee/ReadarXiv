@@ -403,6 +403,16 @@ describe('a landing is stated only on the engine’s own evidence (the lead’s 
       { kind: 'reference', ord: 0 },
     ])
   })
+  it('a point at a line’s left edge on the format’s grid stands on it, though it falls a fraction of the grid left of it', () => {
+    // (the part states the line at 314.97; pdfTeX states the destination at 314.9697: one position on the grid)
+    const w = workOf([
+      { kind: 'reference', entry: true, lines: [line(1, 453.27, 314.97, 540)] },
+      { kind: 'reference', entry: true, lines: [line(1, 443.31, 314.97, 540)] },
+    ])
+    expect(targetsOf(w, dests({ 'cite.y': { page: 1, x: 314.9697, y: 453.2701 } }), [])).toMatchObject([
+      { kind: 'reference', ord: 0 },
+    ])
+  })
   it('a landing another member’s left edge at the point contradicts is never stated', () => {
     // (the point on a reference's first line, at its baseline, over its ink: the rule's landing; another entry's label begins at
     // the point's x 10 under it: the edge names that entry)
