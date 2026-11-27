@@ -14204,18 +14204,40 @@ In this order, a point lands on:
 What it lands on decides:
 
 - a reference: a member of a bibliography entry, a source unit that is one (`\bibitem`'s, `Unit.entry`) or a unit made on A of
-  one biblatex entry (`inkreferences`, ink-units.ts rule 1); its box its lines in that column on the page and its label;
-- a heading: its window, from its top across its column's measure down `SECTION_WINDOW` (0.19) of the page's height; where
+  one biblatex entry (`inkreferences`, ink-units.ts rule 1); its box its every ink on A: its lines (each its ink across, its
+  band up and down), its label's ink, its elements' ink (a URL's or an italic's reaching past its line's);
+- a heading: its window, from its top across its column's measure down `SECTION_WINDOW` (0.19) of the page's height, round
+  its own ink whole (a label hung left of the measure, a line past it); where
   that passes TeX's text block bottom (the frame's foot) it stops there and runs on, by the rest of its height, from the top of
   the next column's text (the frame's next column on the page, else the next page's first): its first line inside a column's
   body as TeX's page builder broke it (B's `bs<n>`..`be<n>` brackets), never a running head over it: `Target`'s `next`;
-- a note: a member of kind `footnote`, its lines and label as a reference's;
+- a note: a member of kind `footnote`, its ink as a reference's;
 - a display: the display element's ink on the page (its number need not be inside); across, for its column, the measure of
   its paragraph's lines in its own column (a paragraph that goes on in the other column lends it nothing there);
 - a float: a boxed float, its box (a line of a member of the float lands on its float; of a float with no box, nowhere).
 
 Anything else (a theorem, an item, a cell, a float with no box, a page anchor with no height) lands nowhere: the destination is
 absent from `targets`, and its links keep their jump alone.
+
+**A box is stated only where it holds the whole of what it names** (the lead's ruling of 2026-11-28, the float rule of §20.2
+for every kind: a preview that cuts what it shows, a note's first line half outside, is a wrong one a reader believes). Where
+it cannot, the destination is absent, as a float with no box is (`Target` has no form without a box), and the link keeps its
+jump alone:
+
+- `unstated`: the member (a reference's, a note's, a heading's) holds an element TeX set whose ink the bundle does not state
+  (format's `El`: one TeX set outside the unit's text, `keep`, a space aside, which sets no ink; one of no ink of a class
+  drawn from its ink stated neither to set nothing, `text` '', nor to be its unit's own text: its ink was not found). A `\url`
+  TeX set before a note's text leaves the note's first line stating the comma after it alone: no box can be told to hold it;
+- `pieces`: its ink stands on another page than the destination's (an entry, a note, a display going on over the page), or
+  its lines go on above the one before them on the page (an entry going on in the next column);
+- `foreign`: another member's ink meets the box (a line's band, its label's ink, an element's ink: a note set on the same line
+  as another, the next line's ascenders over a display's foot). A heading's window holds by design what stands under its top
+  across its column's measure (its section's paragraphs, a float TeX set there): there, another's line is foreign where TeX's
+  measure for it is not inside the window's across (another column, a caption across both) or its band reaches above the
+  window's top (a paragraph run in on the heading's line, its letters taller than the heading's), and another's label or
+  element ink where it reaches above the top or its member has no such line in the window; in the window and in its `next`.
+
+These refusals come after the evidence's: a landing the evidence refuses is counted there.
 
 **A landing is stated only on the engine's own evidence** (the lead's ruling of 2026-11-27: a link's target is what a reader is
 shown on hover, and a wrong preview is a bug a reader believes, where no preview leaves the jump). Two readings that are not the
@@ -14248,11 +14270,15 @@ then shows no preview and keeps every jump). Optional: a reader of before strips
 
 `lab/pdf/prepare-back/run.mjs` writes each paper's record into its located dump (`linkTargets`, made by `link-targets.mjs`:
 each float's box or cause and its union where one was made, each landing, the destinations' counts, the targets' size) and
-`floats-gate.mjs` is its gate (`link-targets` in the release check's full tier, after `prepare`). **The gate: no boxed float
-wrong, 0 over the corpus.** A boxed float is wrong where the engine counts any of `foreign`, `cut`, `outside` above 0 (none can
-be boxed so; the check holds the code to it), or where the bundle's own parts read it so apart from the engine: a member of its
-own (its members and captions, by ord) with ink outside the box (a line's ink across at its baseline, an element's or its
-label's ink), or another member's line band, element or label ink meeting the box's inside. **And no stated landing wrong**,
+`floats-gate.mjs` is its gate (`link-targets` in the release check's full tier, after `prepare`). **The gate: no box a head's
+target states wrong, of any kind, 0 over the corpus.** It reads the boxes the head states, never a float's box no target
+states (counted apart: `boxedUnstated`). A stated box is wrong where the bundle's own parts read it so apart from the engine
+(`boxesWrongOf`): its own ink (its member's lines' bands, its label's and its elements' ink; a float's: its members' and
+captions'; a display's: its element's) on another page than the box's (and its `next`'s) or outside the box there (`own ink
+outside`); its member holding an element TeX set whose ink the part does not state (`own ink untold`, §20.3's `unstated`);
+another member's ink meeting the box's inside (`foreign text`), a heading's window read as §20.3 reads it. A float's is wrong
+too where the engine counts any of `foreign`, `cut`, `outside` above 0 (none can be boxed so; the check holds the code to it).
+**And no stated landing wrong**,
 read again from the bundle's parts and the destinations: a page anchor, one the edge reading contradicts, one whose name
 claims another kind, one whose name claims nothing and the edge does not confirm. It fails where no paper of the run states a
 record (dumps made before the targets check nothing). The share of figures and tables

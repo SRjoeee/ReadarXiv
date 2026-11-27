@@ -5,14 +5,16 @@
 // float with no box) lands nowhere, and the destination is absent: its links keep their jump alone. Phase 18 of locate, the
 // last, read-only: it reads the members' lines, elements and labels, the page frames and the floats' boxes (floats.ts). A
 // reference is a member of a bibliography's entry: a source unit that is one (`\bibitem`'s, Unit.entry) or a unit made on A of
-// one biblatex entry (ink-units.ts rule 1, kind `inkreferences`: one entry a unit, cut at the compile's point before it).
-import type { TargetKind } from '@readarxiv/format'
+// one biblatex entry (ink-units.ts rule 1, kind `inkreferences`: one entry a unit, cut at the compile's point before it). A box
+// is stated only where it holds the whole of what it names (the float rule, for every kind): what the member's ink states on
+// A, all of it on the box's page and in one piece, and nothing of another member's; else the destination is absent.
+import type { El, Line, TargetKind } from '@readarxiv/format'
 import type { DestPoint } from './dests.ts'
 import { grow } from './floats.ts'
 import { bracketsOf } from './gaps.ts'
-import type { Box4, FloatBox, Landing, Member, Work } from './work.ts'
+import { type Box4, type FloatBox, INKED_CLASSES, type Landing, type Member, type Refusal, type Work } from './work.ts'
 
-export type { Landing }
+export type { Landing, Refusal }
 
 /** how far under a destination's point the baseline of what it lands on may stand, PDF units: hyperref raises an anchor by the
  *  \baselineskip in force over the first baseline of what it marks (over the corpus's 245 papers: references 8 to 14 under the
@@ -21,9 +23,6 @@ export const LAND_BELOW = 24
 /** a heading's window: from its top down this share of its page's height, across its column's measure (the approved
  *  prototype's three section targets, whose two segments sum to 0.183-0.192 of the page) */
 export const SECTION_WINDOW = 0.19
-
-/** why a landing is not stated (targetsOf's `refused`, the lab's measure) */
-export type Refusal = 'page' | 'edge' | 'name' | 'unproven'
 
 /** the kind a destination's name claims, by the scheme of the package that makes the destination (hyperref's `cite.<key>` a
  *  reference, `Hfootnote.<n>` a note, `page.<n>` a page; `<counter>.<value>` for a counter LaTeX's kernel defines, its
@@ -76,8 +75,8 @@ type Item = {
   x0: number
   x1: number
 } & (
-  | { what: 'line'; mem: Member; line: number }
-  | { what: 'display'; mem: Member; box: Box4 }
+  | { what: 'line'; mem: Member }
+  | { what: 'display'; mem: Member; box: Box4; el: El }
   | { what: 'float'; float: FloatBox }
 )
 /** the order a point under several things at one height lands on them: a float holds its texts, a display stands in its
@@ -96,6 +95,55 @@ const gridOut = (b: Box4): Box4 => [
   Math.ceil(b[2] * 100) / 100,
   Math.ceil(b[3] * 100) / 100,
 ]
+const meets = (r: Box4, u: Box4) => r[0] < u[2] && r[2] > u[0] && r[1] < u[3] && r[3] > u[1]
+
+/** a box of a member's on its page: a member set turned (Member.dir) states its ink in its frame, turned back here (the page's
+ *  (x, y) = (ux fx - uy fy, uy fx + ux fy): turned-frames.ts toFrame's inverse) */
+function onPage(mem: Member, b: Box4): Box4 {
+  if (!mem.dir) return b
+  const [ux, uy] = mem.dir
+  const xs: number[] = []
+  const ys: number[] = []
+  for (const [fx, fy] of [
+    [b[0], b[1]],
+    [b[2], b[1]],
+    [b[0], b[3]],
+    [b[2], b[3]],
+  ] as const) {
+    xs.push(ux * fx - uy * fy)
+    ys.push(uy * fx + ux * fy)
+  }
+  return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]
+}
+/** a piece of a member's ink on A as the bundle states it, on its page: a line's band (its ink across, its band up and down), its
+ *  label's ink, an element's ink */
+type Ink = { page: number; box: Box4; line: Line | null }
+function inkOf(mem: Member): Ink[] {
+  const out: Ink[] = []
+  for (const l of mem.lines) out.push({ page: l[0], box: onPage(mem, [l[2], l[6], l[3], l[5]]), line: l })
+  const lab = mem.labelAt?.ink
+  if (lab) out.push({ page: lab[0], box: onPage(mem, [lab[1], lab[2], lab[3], lab[4]]), line: null })
+  for (const [, el] of mem.elements)
+    for (const k of el.ink) out.push({ page: k[0], box: onPage(mem, [k[1], k[2], k[3], k[4]]), line: null })
+  return out
+}
+/** an element TeX set whose ink the bundle does not state (format's El): one TeX set outside its unit's text (`keep`; a space sets
+ *  no ink), or one of no ink of a class drawn from its ink stated neither to set nothing (`text` '') nor to be its unit's own
+ *  text (a `text`: the unit's glyphs between its points): its ink was not found */
+const untold = (el: El) =>
+  !el.ink.length && (el.keep ? el.kind !== 'space' : INKED_CLASSES.has(el.kind) && el.text === undefined)
+/** a member in two pieces on a page: its lines there, in its order, go on above the one before (in the next column) */
+function rises(mem: Member, page: number): boolean {
+  let before: number | null = null
+  for (const l of mem.lines) {
+    if (l[0] !== page) continue
+    if (before !== null && onGrid(l[4]) > onGrid(before)) return true
+    before = l[4]
+  }
+  return false
+}
+/** TeX's measure for a line inside a box's across */
+const measured = (l: Line, b: Box4) => l[7] >= b[0] && l[8] <= b[2]
 
 /** each destination matched to the thing of a covered kind it lands on, sorted by destination; a destination that lands on
  *  nothing covered is absent */
@@ -124,7 +172,6 @@ export function targetsOf(
         items.push({
           what: 'line',
           mem,
-          line: i,
           begins: i === 0,
           base: l[4],
           top: l[5],
@@ -138,12 +185,10 @@ export function targetsOf(
       // (its label, on its first line: a reference's number, a heading's, where hyperref's anchor stands before)
       const lab = mem.labelAt?.ink
       if (lab && lab[0] === page && mem.lines[0]?.[0] === page) {
-        const at = 0
         const l = mem.lines[0]!
         items.push({
           what: 'line',
           mem,
-          line: at,
           begins: true,
           base: lab[5],
           top: lab[4],
@@ -170,6 +215,7 @@ export function targetsOf(
             what: 'display',
             mem,
             box,
+            el,
             begins: true,
             base: k[5],
             top: k[4],
@@ -202,28 +248,59 @@ export function targetsOf(
     return bodies[p]?.[b - (w.ix.m.offB[p] as number)] === 1
   }
 
+  // (every member's ink by page, read where a box is judged: inkOn)
+  let inkByPage: Map<number, [Member, Ink][]> | null = null
   const out: Landing[] = []
   for (const [dest, pt] of [...dests].sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))) {
     if (!pt || pt.y === null) continue
     const item = itemAt(pt.page, pt.x, pt.y)
-    const landing = item ? landingOf(dest, pt.page, item) : null
-    if (!landing) continue
-    const cause = contradicted(landing, pt)
-    if (cause) refused.push([dest, landing.kind, cause])
-    else out.push(landing)
+    const got = item ? landingOf(dest, pt.page, item) : null
+    if (!got) continue
+    // (a box that cannot hold the whole of what it names: refused after the evidence, which speaks first)
+    const [kind, ord] = Array.isArray(got) ? got : [got.kind, got.ord]
+    const cause = contradicted(dest, kind, ord, pt) ?? (Array.isArray(got) ? got[2] : null)
+    if (cause) refused.push([dest, kind, cause])
+    else out.push(got as Landing)
   }
   return out
 
   /** why the engine's own evidence does not let a landing be stated, null where it does: the destination's name is a page's
    *  (hyperref's `page.<n>`: a page, no thing on it); the left edge at its point names another member (`edge`); its name, of a
    *  class that claims a kind, claims another (`name`); its name claims nothing and the edge does not confirm it (`unproven`) */
-  function contradicted(l: Landing, pt: DestPoint): Refusal | null {
-    const claim = claimOf(l.dest)
+  function contradicted(dest: string, kind: TargetKind, ord: number, pt: DestPoint): Refusal | null {
+    const claim = claimOf(dest)
     if (claim === 'page') return 'page'
     const edge = pt.x === null ? null : edgeOf(pt.page, pt.x, pt.y!)
-    if (edge !== null && edge !== l.ord) return 'edge'
-    if (claim) return claim === l.kind ? null : 'name'
-    return edge === l.ord ? null : 'unproven'
+    if (edge !== null && edge !== ord) return 'edge'
+    if (claim) return claim === kind ? null : 'name'
+    return edge === ord ? null : 'unproven'
+  }
+
+  /** whether another member's ink meets a box on a page: anything of another member there; in a heading's window (`window`),
+   *  which holds what stands under its top across its column's measure by design, not another's line whose TeX measure is
+   *  inside the window's across and whose band reaches no higher than its top, nor its label's or elements' ink reaching no
+   *  higher where it has such a line in the window (a line set turned has no measure on the page) */
+  function foreign(mem: Member, page: number, b: Box4, window: boolean): boolean {
+    const there = inkOn(page).filter(([m, k]) => m !== mem && meets(k.box, b))
+    if (!window) return there.length > 0
+    const under = ([m, k]: [Member, Ink]) => !!k.line && !m.dir && measured(k.line, b) && k.box[3] <= b[3]
+    const held = new Set(there.filter(under).map(([m]) => m))
+    return there.some(([m, k]) => (k.line ? !under([m, k]) : k.box[3] > b[3] || !held.has(m)))
+  }
+  function inkOn(page: number): [Member, Ink][] {
+    if (!inkByPage) {
+      inkByPage = new Map()
+      for (const m of members)
+        for (const k of inkOf(m)) (inkByPage.get(k.page) ?? inkByPage.set(k.page, []).get(k.page)!).push([m, k])
+    }
+    return inkByPage.get(page) ?? []
+  }
+
+  /** why a member's box cannot hold the whole of it on a page, null where it can: an element TeX set whose ink the bundle does
+   *  not state (`unstated`); its ink on another page, or its lines going on in another column (`pieces`) */
+  function partsOf(mem: Member, own: Ink[], page: number): Refusal | null {
+    if (mem.elements.some(([, el]) => untold(el))) return 'unstated'
+    return own.some((k) => k.page !== page) || rises(mem, page) ? 'pieces' : null
   }
 
   /** the edge reading: the member (a float's: its caption) whose line, label or display ink begins at the point's x on the
@@ -308,17 +385,28 @@ export function targetsOf(
     return best
   }
 
-  function landingOf(dest: string, page: number, it: Item): Landing | null {
+  /** what a point's thing states: its landing, or, where its box cannot hold the whole of what it names, its kind, its member
+   *  and why (a box stated holds its member's every ink on A, all on its page and in one piece, and none of another member's:
+   *  never a cut box), or null where it lands nowhere */
+  function landingOf(dest: string, page: number, it: Item): Landing | [TargetKind, number, Refusal] | null {
     if (it.what === 'float') return { dest, kind: 'float', page, ord: it.float.caption!, box: it.float.box! }
     const mem = it.mem
     // (a member inside a float: the float, where it is boxed; nothing where it is not)
     const f = floatOf.get(mem.ord)
     if (f) return f.box && f.caption !== null ? { dest, kind: 'float', page: f.page, ord: f.caption, box: f.box } : null
-    if (it.what === 'display') return { dest, kind: 'display', page, ord: mem.ord, box: gridOut(it.box) }
+    if (it.what === 'display') {
+      // (the display element's ink: all of it on the page)
+      if (it.el.ink.some((k) => k[0] !== page)) return ['display', mem.ord, 'pieces']
+      let box: Box4 | null = null
+      for (const k of it.el.ink) box = grow(box, onPage(mem, [k[1], k[2], k[3], k[4]]))
+      box = gridOut(box!)
+      return foreign(mem, page, box, false)
+        ? ['display', mem.ord, 'foreign']
+        : { dest, kind: 'display', page, ord: mem.ord, box }
+    }
     if (mem.name !== undefined || mem.unit < 0) return null
     const unit = units[mem.unit]!
-    const line = mem.lines[it.line]!
-    if (mem.kind === 'heading') return headingOf(dest, page, mem, line)
+    if (mem.kind === 'heading') return headingOf(dest, page, mem)
     const kind: TargetKind | null =
       (mem.kind === 'reference' && unit.entry) || mem.kind === 'inkreferences'
         ? 'reference'
@@ -326,21 +414,30 @@ export function targetsOf(
           ? 'footnote'
           : null
     if (!kind) return null
-    // (its lines on the page in the line's column, and its label there)
+    // (its every ink: its lines, its label, its elements)
+    const own = inkOf(mem)
+    const why = partsOf(mem, own, page)
+    if (why) return [kind, mem.ord, why]
     let box: Box4 | null = null
-    for (const l of mem.lines) if (l[0] === page && l[1] === line[1]) box = grow(box, [l[2], l[6], l[3], l[5]])
-    const lab = mem.labelAt?.ink
-    if (lab && lab[0] === page) box = grow(box, [lab[1], lab[2], lab[3], lab[4]])
-    return { dest, kind, page, ord: mem.ord, box: gridOut(box!) }
+    for (const k of own) box = grow(box, k.box)
+    box = gridOut(box!)
+    return foreign(mem, page, box, false) ? [kind, mem.ord, 'foreign'] : { dest, kind, page, ord: mem.ord, box }
   }
 
-  /** a heading's window: from its top on the page, across its column's measure, down SECTION_WINDOW of the page's height; where
-   *  that passes TeX's text block bottom (the frame's foot), it stops there and runs on, the rest of its height, from the top of
-   *  the next column's text (the frame's next column on the page, else the next page's first): its first line in a column's body
-   *  as TeX broke it, never a running head over it */
-  function headingOf(dest: string, page: number, mem: Member, line: Member['lines'][number]): Landing {
-    const ls = mem.lines.filter((l) => l[0] === page && l[1] === line[1])
-    const top = Math.max(...ls.map((l) => l[5]))
+  /** a heading's window: from its top on the page, across its column's measure, down SECTION_WINDOW of the page's height, and
+   *  round its own ink whole (a label hung left of the measure, a line past it); where that passes TeX's text block bottom (the
+   *  frame's foot), it stops there and runs on, the rest of its height, from the top of the next column's text (the frame's
+   *  next column on the page, else the next page's first): its first line in a column's body as TeX broke it, never a running
+   *  head over it. None where the heading is not whole on its page, or another member's ink stands in either box but what the
+   *  window holds by design (foreign) */
+  function headingOf(dest: string, page: number, mem: Member): Landing | [TargetKind, number, Refusal] {
+    const own = inkOf(mem)
+    const why = partsOf(mem, own, page)
+    if (why) return ['heading', mem.ord, why]
+    const ls = mem.lines.filter((l) => l[0] === page)
+    let ink: Box4 | null = null
+    for (const k of own) ink = grow(ink, k.box)
+    const top = ink![3]
     const m0 = Math.min(...ls.map((l) => l[7]))
     const m1 = Math.max(...ls.map((l) => l[8]))
     const view = w.ix.inkA.pages[page - 1]!.view
@@ -348,32 +445,29 @@ export function targetsOf(
     const frame = w.ix.framesA.get(page)
     const foot = frame?.foot ?? view[1]
     const bottom = top - height
-    if (bottom >= foot || !frame)
-      return { dest, kind: 'heading', page, ord: mem.ord, box: gridOut([m0, Math.max(bottom, foot), m1, top]) }
+    const runs = bottom < foot && !!frame
+    const box = gridOut(grow([m0, Math.max(bottom, foot), m1, top], ink!))
+    if (foreign(mem, page, box, true)) return ['heading', mem.ord, 'foreign']
+    const here: Landing = { dest, kind: 'heading', page, ord: mem.ord, box }
+    if (!runs) return here
     const rest = foot - bottom
-    const box = gridOut([m0, foot, m1, top])
     // (the next column: the frame's column right of the heading's on its page, else the next page's first)
-    const cols = [...frame.columns].sort((a, b) => a[0] - b[0])
-    const here = cols.findIndex((c) => c[0] <= (m0 + m1) / 2 && (m0 + m1) / 2 <= c[1])
+    const cols = [...frame!.columns].sort((a, b) => a[0] - b[0])
+    const at = cols.findIndex((c) => c[0] <= (m0 + m1) / 2 && (m0 + m1) / 2 <= c[1])
     const [np, col] =
-      here >= 0 && here < cols.length - 1
-        ? [page, cols[here + 1]!]
+      at >= 0 && at < cols.length - 1
+        ? [page, cols[at + 1]!]
         : [page + 1, [...(w.ix.framesA.get(page + 1)?.columns ?? [])].sort((a, b) => a[0] - b[0])[0]]
-    if (!col || np > w.ix.inkA.pages.length) return { dest, kind: 'heading', page, ord: mem.ord, box }
+    if (!col || np > w.ix.inkA.pages.length) return here
     // (that column's first line of text: the highest of the members' lines there)
     let first: Member['lines'][number] | null = null
     for (const m of members)
       m.lines.forEach((l, i) => {
         if (l[0] === np && l[7] < col[1] && l[8] > col[0] && inBody(m, i) && (!first || l[5] > first[5])) first = l
       })
-    if (!first) return { dest, kind: 'heading', page, ord: mem.ord, box }
-    return {
-      dest,
-      kind: 'heading',
-      page,
-      ord: mem.ord,
-      box,
-      next: [np, gridOut([first[7], first[5] - rest, first[8], first[5]])],
-    }
+    if (!first) return here
+    const next = gridOut([first[7], first[5] - rest, first[8], first[5]])
+    if (foreign(mem, np, next, true)) return ['heading', mem.ord, 'foreign']
+    return { ...here, next: [np, next] }
   }
 }

@@ -222,6 +222,11 @@ export interface Landing {
   box: Box4
   next?: [page: number, box: Box4]
 }
+/** why a landing is not stated (targets.ts): the evidence contradicts it (a page's anchor `page`, another member's left edge at
+ *  its point `edge`, its name's claim another kind `name`, its name claiming nothing and no edge confirming it `unproven`), or
+ *  its box cannot hold the whole of what it names (an element TeX set whose ink the bundle does not state `unstated`, what it
+ *  names standing in two pieces `pieces`, the box meeting another member's ink `foreign`) */
+export type Refusal = 'page' | 'edge' | 'name' | 'unproven' | 'unstated' | 'pieces' | 'foreign'
 
 export interface Located {
   /** the units the members are of (a member's `unit` its index here): the instrument's, then those locate made on A (ink.ts:
@@ -257,9 +262,10 @@ export interface Located {
   floats: FloatBox[]
   /** where each destination of A's links lands (targets.ts), sorted by destination; one that lands on nothing covered is absent */
   targets: Landing[]
-  /** the landings the engine's own evidence does not let it state (targets.ts `contradicted`): each destination, the kind it
-   *  would have had and why not, for the lab's measure; never stated in the bundle */
-  refusedTargets?: [dest: string, kind: TargetKind, cause: 'page' | 'edge' | 'name' | 'unproven'][]
+  /** the landings the engine does not state (targets.ts: its own evidence contradicts them, or their box cannot hold the whole
+   *  of what they name): each destination, the kind it would have had and why not, for the lab's measure; never stated in the
+   *  bundle */
+  refusedTargets?: [dest: string, kind: TargetKind, cause: Refusal][]
   /** the time phases 17 and 18 took, where a clock was given (LocateOptions.now): the lab's measure of their cost */
   linkMs?: { floats: number; targets: number }
   /** per A page (index p - 1): each glyph's and each box's group (the wrap's plan), null for none */
