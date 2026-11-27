@@ -29,8 +29,10 @@ export const LAND_BELOW = 24
  *  prototype's three section targets, whose two segments sum to 0.183-0.192 of the page) */
 export const SECTION_WINDOW = 0.19
 
-/** a thing a point may land on, on one page: a member's line or its label, a display element's ink, a boxed float; its
- *  baseline, its band, its ink across (`ix0`, `ix1`) and what it spans across for its column (`x0`, `x1`: a line's measure) */
+/** a thing a point may land on, on one page, at its beginning (hyperref sets an anchor where what it marks begins): a member's
+ *  first line and its label, a display element's first ink, a boxed float's top; its baseline, its band, its ink across (`ix0`,
+ *  `ix1`) and what it spans across for its column (`x0`, `x1`: a line's measure). A line that goes on with its member (its
+ *  second, a paragraph's lines after a display) begins nothing, and is no such thing */
 type Item = {
   base: number
   top: number
@@ -84,14 +86,14 @@ export function targetsOf(
         if (l[0] !== page) return
         const x0 = Math.min(l[2], l[7])
         const x1 = Math.max(l[3], l[8])
-        items.push({ what: 'line', mem, line: i, base: l[4], top: l[5], bottom: l[6], ix0: l[2], ix1: l[3], x0, x1 })
+        if (i === 0)
+          items.push({ what: 'line', mem, line: i, base: l[4], top: l[5], bottom: l[6], ix0: l[2], ix1: l[3], x0, x1 })
       })
-      // (its label, on the line it stands on: a reference's number, a heading's, where hyperref's anchor stands before)
+      // (its label, on its first line: a reference's number, a heading's, where hyperref's anchor stands before)
       const lab = mem.labelAt?.ink
-      const on = mem.lines.findIndex((l) => l[0] === page)
-      if (lab && lab[0] === page && on >= 0) {
-        const at = mem.labelAt?.line !== undefined && mem.lines[mem.labelAt.line]?.[0] === page ? mem.labelAt.line : on
-        const l = mem.lines[at]!
+      if (lab && lab[0] === page && mem.lines[0]?.[0] === page) {
+        const at = 0
+        const l = mem.lines[0]!
         items.push({
           what: 'line',
           mem,
@@ -114,9 +116,9 @@ export function targetsOf(
         const ls = mem.lines.filter((l) => l[0] === page)
         const x0 = Math.min(box[0], ...ls.map((l) => l[7]))
         const x1 = Math.max(box[2], ...ls.map((l) => l[8]))
-        for (const k of el.ink)
-          if (k[0] === page)
-            items.push({ what: 'display', mem, box, base: k[5], top: k[4], bottom: k[2], ix0: k[1], ix1: k[3], x0, x1 })
+        const k = el.ink[0]!
+        if (k[0] === page)
+          items.push({ what: 'display', mem, box, base: k[5], top: k[4], bottom: k[2], ix0: k[1], ix1: k[3], x0, x1 })
       }
     }
     for (const f of boxed)

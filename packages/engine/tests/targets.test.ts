@@ -63,15 +63,15 @@ describe('where a destination lands (targets.ts)', () => {
     { kind: 'reference', entry: true, lines: [line(1, 700, 80), line(1, 688, 90)] },
     { kind: 'reference', entry: true, lines: [line(1, 670, 80), line(1, 658, 90)] },
   ]
-  it('a point between two references lands on the one below it; a point over a reference’s middle lands on it', () => {
+  it('a point between two references lands on the one below it; a point just over a reference’s first line lands on it', () => {
     const t = targetsOf(
       workOf(refs),
-      dests({ between: { page: 1, x: 72, y: 682 }, middle: { page: 1, x: 72, y: 690 } }),
+      dests({ between: { page: 1, x: 72, y: 682 }, first: { page: 1, x: 72, y: 703 } }),
       [],
     )
     expect(t).toEqual([
       { dest: 'between', kind: 'reference', page: 1, ord: 1, box: [80, 656, 300, 677] },
-      { dest: 'middle', kind: 'reference', page: 1, ord: 0, box: [80, 686, 300, 707] },
+      { dest: 'first', kind: 'reference', page: 1, ord: 0, box: [80, 686, 300, 707] },
     ])
   })
   it('a point over no covered member lands nowhere: a theorem, a page anchor (no height), too far over the next line', () => {
@@ -138,6 +138,19 @@ describe('where a destination lands (targets.ts)', () => {
   it('a raised anchor in the band of the entry above, left of its ink, lands on the entry under it', () => {
     // (the entry above ends with a line at the point's height, indented past the point; the entry under begins 18 below it)
     const [t] = targetsOf(workOf(refs), dests({ 'cite.b': { page: 1, x: 80, y: 688 } }), [])
+    expect(t).toMatchObject({ kind: 'reference', ord: 1 })
+  })
+  it('a point raised past the last line of the entry above lands on the entry under it: a line that begins nothing is passed', () => {
+    // (the raise, 11.3, larger than the pitch from the entry above's last line, 10.5: that line's baseline stands 0.8 under the
+    // point, the entry's first 11.3 under it)
+    const w = workOf(
+      [
+        { kind: 'reference', entry: true, lines: [line(1, 151.66, 50), line(1, 141.2, 68)] },
+        { kind: 'reference', entry: true, lines: [line(1, 130.4, 50), line(1, 119.9, 68)] },
+      ],
+      new Map([[1, { block: [50, 300], columns: [[50, 300]] }]]),
+    )
+    const [t] = targetsOf(w, dests({ 'cite.b': { page: 1, x: 50, y: 141.74 } }), [])
     expect(t).toMatchObject({ kind: 'reference', ord: 1 })
   })
   it('a destination set on a line, its point on that line’s ink at its baseline, lands on that line’s member', () => {
