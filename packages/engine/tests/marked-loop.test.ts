@@ -510,11 +510,12 @@ describe("the probe's raw log, returned beside the answers read from it", () => 
   })
 })
 /** what the engine asked and made at d5673d033 (this file's cases run there, before Q1), each request and result as digests; the
- *  probe's request taken again where its word follower answers the skipped space apart (4, marks.ts punctuationSection), every
- *  other request and every result as it was */
+ *  probe's request taken again where its word follower answers the skipped space apart (4, marks.ts punctuationSection), and
+ *  every request again where the gated marks became robust and their gates' TeX moved (marks.ts GATED_MARKS, PDF-READER §18.111):
+ *  every result as it was */
 const GOLDEN_AT_BASE: Record<string, unknown> = {
   'a paper: the probe, every pass, the final pass': {
-    asked: ['f9996ca03a819e8e', 'f8bf604f842ce399', '66ed7620758abc60'],
+    asked: ['3043d1cf4b21a501', '1a98c0377bb78ecc', '6e104be814832a8c'],
     made: {
       pdf: 'ba5627208b38c012',
       log: 'ee997e55c8c8064b',
@@ -529,7 +530,7 @@ const GOLDEN_AT_BASE: Record<string, unknown> = {
     },
   },
   'its bibliography shipped': {
-    asked: ['f9996ca03a819e8e', '358a3dbc66252b16', '66ed7620758abc60'],
+    asked: ['3043d1cf4b21a501', 'e7e5bd808c1a65ec', '6e104be814832a8c'],
     made: {
       pdf: 'ba5627208b38c012',
       log: 'ee997e55c8c8064b',
@@ -544,7 +545,7 @@ const GOLDEN_AT_BASE: Record<string, unknown> = {
     },
   },
   'a mark printed: the guard compiles it again, the final pass over the second': {
-    asked: ['f9996ca03a819e8e', 'f8bf604f842ce399', '0e5ab5bc8bf03338', '6964c9cca387d228'],
+    asked: ['3043d1cf4b21a501', '1a98c0377bb78ecc', '69f587a390743476', '951feb97acb035c5'],
     made: {
       pdf: 'bca44c74041aebf9',
       log: 'ee997e55c8c8064b',
@@ -564,7 +565,7 @@ const GOLDEN_AT_BASE: Record<string, unknown> = {
     },
   },
   'under latex: the driver output read': {
-    asked: ['c50f63b14c61b557', '34d155818ab5093c', 'f01a8461e905ede9'],
+    asked: ['ba2a2542ef1aeabd', '1e8a48485f98a508', '672630e1b0fb1c60'],
     made: {
       pdf: 'ba5627208b38c012',
       log: 'ee997e55c8c8064b',
@@ -579,7 +580,7 @@ const GOLDEN_AT_BASE: Record<string, unknown> = {
     },
   },
   'no final pass asked': {
-    asked: ['f9996ca03a819e8e', '73c0c9ecd4d448b1'],
+    asked: ['3043d1cf4b21a501', '6d976d2c6da61dd6'],
     made: {
       pdf: 'ba5627208b38c012',
       log: 'ee997e55c8c8064b',

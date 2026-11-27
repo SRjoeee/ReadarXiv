@@ -311,6 +311,9 @@ describe('a piece first in the paragraph TeX resumes after a display: its openin
     )
     expect(CARRY_TEX).toContain('\\def\\axt@cyhook{\\ifaxt@cyon\\global\\axt@cybtrue\\fi}')
     expect(CARRY_END_TEX).toContain('{\\ifaxt@cyon\\axt@ifcy{')
+    // (its mark robust as LAYOUT_TEX's, and taken out of LaTeX's writes with them: marks.ts GATED_MARKS, WRITES_TEX)
+    expect(CARRY_TEX).toContain('\\else\\noexpand\\axtpmd\\fi}')
+    expect(CARRY_TEX).toContain('\\g@addto@macro\\axt@unw{\\let\\axtpmd\\@gobble}')
   })
 
   it('a reference after text keeps \\axtpma, and an inline formula after text \\axtpmm', () => {

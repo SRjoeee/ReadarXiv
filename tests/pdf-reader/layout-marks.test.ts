@@ -684,6 +684,10 @@ describe('LAYOUT_TEX', () => {
     // and nameref's titles: stripped where nameref sanitizes them, whoever set them (titlesec's \\@currentlabelname)
     expect(LAYOUT_TEX).toContain('\\AddToHook{package/nameref/after}{\\ifdefined\\NR@sanitize@labelname')
     for (const name of ['axtpma', 'axtpm', 'axthmark']) expect(LAYOUT_TEX).toContain(`\\def\\${name}{\\ifx\\protect\\@typeset@protect`)
+    // robust in every expansion (themselves, unexpanded, where LaTeX does not typeset), and taken out of LaTeX's writes
+    for (const name of ['axtpma', 'axtpm', 'axthmark']) expect(LAYOUT_TEX).toContain(`\\else\\noexpand\\${name}\\fi}`)
+    expect(LAYOUT_TEX).toContain('\\let\\axthmark\\@gobble')
+    expect(LAYOUT_TEX).toContain('\\let\\protected@write\\axt@pwa')
     // MARK_DEF's own mark gated too
     expect(LAYOUT_TEX).toMatch(/\\protected\\def\\axtmark#1\{[^}]*\\ifaxt@off/)
     for (const word of ['\\typeout', '\\wlog', '\\newcount', '\\newdimen', '\\newskip']) expect(LAYOUT_TEX).not.toContain(word)
@@ -1060,7 +1064,7 @@ describe("each colour piece's fill, as TeX set its run in the marked original (P
   })
   it("LAYOUT_TEX writes it through \\message alone, gated as the marks are, and never into a file or a PDF string", () => {
     expect(LAYOUT_TEX).toContain('\\protected\\def\\axt@colour#1{\\ifaxt@off\\else\\ifdefined\\current@color\\message{^^JAXT-COLOUR #1 \\current@color^^J}\\fi\\fi\\ignorespaces}')
-    expect(LAYOUT_TEX).toContain('\\def\\axtcolour{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@colour\\else\\expandafter\\@gobble\\fi}')
+    expect(LAYOUT_TEX).toContain('\\def\\axtcolour{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@lc\\expandafter\\axt@colour\\else\\noexpand\\axtcolour\\fi}')
     expect(LAYOUT_TEX).toContain('\\let\\axtcolour\\@gobble')
   })
   it('reads each piece\'s fill from the log, joins a line TeX wrapped, and gives none to a piece set in two colours or of no form', () => {

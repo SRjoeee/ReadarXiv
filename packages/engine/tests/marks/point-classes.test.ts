@@ -57,10 +57,11 @@ const papers = {
 const markedDigests = (paper: ReturnType<typeof openPaper>) =>
   [...originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES })].map(([p, b]) => `${p} ${sha(b)}`)
 
-/** the TeX and the marked sources at 7d8fad7c4 (this file's computation run there, before POINT_CLASSES) */
+/** the TeX and the marked sources at 7d8fad7c4 (this file's computation run there, before POINT_CLASSES); LAYOUT_TEX's and the
+ *  marked sources' taken again where the gated marks became robust (marks.ts GATED_MARKS): the points' and the DVI forms' as they were */
 const AT_BASE = {
-  tex: { points: 'bcedcfb561bf0e88', layout: 'aa1b273cd576f6a4', dvi: '651ee0348d79c9fc' },
-  sources: { pdflatex: ['main.tex 252684ded2011ad3'], latex: ['main.tex 1ea58d4114880c33'] },
+  tex: { points: 'bcedcfb561bf0e88', layout: '472d40ec331befca', dvi: '651ee0348d79c9fc' },
+  sources: { pdflatex: ['main.tex 6064a693944f761d'], latex: ['main.tex 485f98f459f93740'] },
 }
 
 describe("no byte of the marked TeX moves (held at 7d8fad7c4, before the points' table)", () => {
