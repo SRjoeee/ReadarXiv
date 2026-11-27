@@ -8,18 +8,10 @@
 // one biblatex entry (ink-units.ts rule 1, kind `inkreferences`: one entry a unit, cut at the compile's point before it).
 import type { TargetKind } from '@readarxiv/format'
 import type { DestPoint } from './dests.ts'
-import type { Box4, FloatBox } from './floats.ts'
-import type { Member, Work } from './work.ts'
+import { grow } from './floats.ts'
+import type { Box4, FloatBox, Landing, Member, Work } from './work.ts'
 
-export interface Landing {
-  dest: string
-  kind: TargetKind
-  page: number
-  /** the member's ord (a float's: its caption's) */
-  ord: number
-  box: Box4
-  next?: [page: number, box: Box4]
-}
+export type { Landing }
 
 /** how far under a destination's point the baseline of what it lands on may stand, PDF units: hyperref raises an anchor by the
  *  \baselineskip in force over the first baseline of what it marks (over the corpus's 245 papers: references 8 to 14 under the
@@ -54,9 +46,9 @@ const RANK = { float: 0, display: 1, line: 2 } as const
 /** a height on the format's grid (the parts' numbers are stated on it: a point and a baseline TeX set at one height compare
  *  equal there) */
 const onGrid = (v: number) => Math.round(v * 100) / 100
+/** one step of the format's grid, PDF units: two positions it states one step apart may be one TeX set (each rounded to it) */
+const GRID = 0.01
 
-const grow = (u: Box4 | null, r: Box4): Box4 =>
-  u ? [Math.min(u[0], r[0]), Math.min(u[1], r[1]), Math.max(u[2], r[2]), Math.max(u[3], r[3])] : [...r]
 /** a box on the format's grid, outward: what it holds stays inside it as stated */
 const gridOut = (b: Box4): Box4 => [
   Math.floor(b[0] * 100) / 100,
@@ -199,7 +191,7 @@ export function targetsOf(
     if (x !== null) {
       let edge: Item | null = null
       for (const it of items)
-        if (it.what !== 'float' && under(it) && Math.abs(onGrid(it.ix0) - onGrid(x)) <= 0.01 && higher(it, edge))
+        if (it.what !== 'float' && under(it) && Math.abs(onGrid(it.ix0) - onGrid(x)) <= GRID && higher(it, edge))
           edge = it
       if (edge) return edge.begins ? edge : null
     }

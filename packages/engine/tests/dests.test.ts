@@ -95,4 +95,3 @@ describe('every destination of A resolved on A (dests.ts)', () => {
     expect([...keys].sort()).toEqual([key('cite.a'), key([ref(12), { name: 'Fit' }])].sort())
   })
 })
-

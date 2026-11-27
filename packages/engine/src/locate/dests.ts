@@ -21,6 +21,12 @@ export interface DestDocument {
   destroy?(): Promise<void>
 }
 
+/** a document that reads destinations (PDF.js's PDFDocumentProxy does) */
+function isDestDocument(d: unknown): d is DestDocument {
+  const o = d as Partial<DestDocument> | null
+  return typeof o?.getDestination === 'function' && typeof o.getPageIndex === 'function'
+}
+
 /** the keys of A's link annotations (annotationOf's `to.dest`), every page's, each once */
 export function destKeysOf(annotations: readonly (readonly unknown[] | null)[]): Set<string> {
   const keys = new Set<string>()
@@ -68,10 +74,10 @@ async function resolve(doc: DestDocument, key: string): Promise<DestPoint | null
     return null
   }
   if (typeof dest === 'string') dest = await doc.getDestination(dest).catch(() => null)
-  if (!Array.isArray(dest) || dest.length < 2) return null
-  const point = pointOf(dest[1], dest.slice(2))
+  if (!Array.isArray(dest)) return null
+  const [at, fit, ...args] = dest as unknown[]
+  const point = pointOf(fit, args)
   if (!point) return null
-  const at = dest[0]
   const index =
     typeof at === 'number'
       ? at
@@ -94,9 +100,10 @@ export async function destinationsOf(
   if (!keys.size) return out
   const task = pdfjs.getDocument({ ...options, data: bytes.slice() })
   try {
-    const doc = (await task.promise) as unknown as DestDocument
-    // (a key PDF.js cannot answer is none: a destination is never the paper's failure)
-    for (const key of keys) out.set(key, await resolve(doc, key).catch(() => null))
+    const doc: unknown = await task.promise
+    // (a key PDF.js cannot answer is none: a destination is never the paper's failure; a document that reads no destination
+    // answers none)
+    for (const key of keys) out.set(key, isDestDocument(doc) ? await resolve(doc, key).catch(() => null) : null)
   } finally {
     await task.destroy().catch(() => {})
   }
