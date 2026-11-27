@@ -62,6 +62,15 @@ describe('regionOf', () => {
     expect(r.box).toEqual([60, 380, 560, 700])
     expect(r.fade).toBe(false)
   })
+  it('a caption whose last line has no descender on A (the stated box ink-tight at its baseline) still widens it by its translation', () => {
+    // (the float's box ends at the caption's last baseline, 400; its line's fonts box reaches 398 under it: the line stands in
+    // the box by its ink across and its baseline, and its translation, whose descenders reach 396, widens the box down to them)
+    const tight: Target = ['"figure.1"', 'float', 3, 4, [72, 400, 540, 700]]
+    const cap = placed(4, [line(410, 100, 500), line(400, 100, 300)])
+    const p: Part = { ...part, flows: [[cap, para]] }
+    const r = regionOf(tight, 'right', laid([100, 396, 500, 420]), p)
+    expect(r.box[1]).toBe(396)
+  })
   it('a page not laid crops the target’s box alone, and so does the left', () => {
     expect(regionOf(FIG, 'right', null, part).box).toEqual(FIG[4])
     expect(regionOf(FIG, 'left', laid([60, 380, 560, 420]), part).box).toEqual(FIG[4])

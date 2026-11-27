@@ -14369,7 +14369,8 @@ and its jump. One layer for every kind (`previews.ts`), from the three link sour
   (none in phase 1). Text behaves as text: a selection in it or a drag begun in it keeps it; a press elsewhere clears that
   selection and lets it go.
 - **A crop** (`crop.ts`): the target's box on A, on a laid right page widened by the drawn extent (`Laid.extent`, §20.6) of each
-  member laid there whose every line on A stands inside it. The left's and a right page not laid: arXiv's drawing (the left's
+  member laid there whose every line on A stands inside it (its ink across and its baseline: the head states a float's box by
+  its ink, which a caption's last line with no descender meets at its baseline). The left's and a right page not laid: arXiv's drawing (the left's
   canvas where it is drawn at the crop's scale or finer, else a fresh PDF.js drawing of the region); a laid right page: the
   composer's `region` (its page view's pixels, its crops and its SVG copied), after `warm` lays and draws a far page off the view
   as the pages ahead are. At the page's own scale, smaller where the pane less 24 px (and 640 px of height) holds it not; a

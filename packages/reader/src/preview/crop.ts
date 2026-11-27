@@ -28,9 +28,11 @@ export interface Region {
   fade: boolean
 }
 
-/** a member's lines on a page, each its ink across and its fonts' box up and down (Line: x0, x1, baseline, top, bottom) */
+/** a member's lines on a page, each its ink across and its baseline (Line: x0, x1, baseline): where a line stands. Its fonts'
+ *  box is no measure of it here: the head states a float's box by its ink, and a caption's last line with no descender has its
+ *  baseline on the box's foot and its fonts' box past it (the lead's look at a caption whose translation lost its descenders) */
 const linesOn = (m: Placed, page: number): Box[] =>
-  m.lines.filter((l) => l[0] === page).map((l) => [l[2], l[6], l[3], l[5]] as Box)
+  m.lines.filter((l) => l[0] === page).map((l) => [l[2], l[4], l[3], l[4]] as Box)
 const inside = (a: Box, b: Box) =>
   a[0] >= b[0] - GRID && a[1] >= b[1] - GRID && a[2] <= b[2] + GRID && a[3] <= b[3] + GRID
 const union = (a: Box, b: Box): Box => [
