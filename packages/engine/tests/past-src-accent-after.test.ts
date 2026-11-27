@@ -33,7 +33,18 @@ function pageOf(items: readonly Item[]): StreamPage {
         x = 72
         y -= 12
       } else {
-        glyphs.push({ u, x0: x, x1: x + 5, y, top: y + 7, bottom: y - 2, size: 10, font: 'F', ix0: x, ix1: x + 5 } as Glyph)
+        glyphs.push({
+          u,
+          x0: x,
+          x1: x + 5,
+          y,
+          top: y + 7,
+          bottom: y - 2,
+          size: 10,
+          font: 'F',
+          ix0: x,
+          ix1: x + 5,
+        } as Glyph)
         boxAt.push(0)
         x += 5
       }

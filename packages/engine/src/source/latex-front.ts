@@ -1860,6 +1860,27 @@ function skipSpaces(s: string, i: number) {
   }
   return i
 }
+/**
+ * A bibliography entry's field command (BIB_TEXT) read as TeX reads its call, by the definition in force: the paper's own first
+ * (paperMacros, where \\providecommand defines only what is undefined), then the bibliography head's (bibDefinitions). One whose
+ * first argument is optional (`[2][]{#2}`) takes no braced group for it, so the call's braced groups are its #2, #3, …:
+ * `\\bibinfo{author}{Ann}` sets "author", its #2, and the group after it is text of its own (2509.05371v1's entries); a call
+ * that supplies the optional argument, `\\bibinfo[x]{Ann}`, has it first. Returns the definition, the arguments the braced
+ * groups pass over (`shift`), the index of the braced group TeX sets as it stands (`before`), the braced groups and where the
+ * call ends; null where the call is not of its form
+ */
+function fieldCall(s: string, end: number, name: string, ctx: Ctx) {
+  const def = ctx.macros.get(name) ?? ctx.bibDefs?.get(name)
+  const shift = def?.opt ? 1 : 0
+  if (BIB_TEXT.get(name)! < shift) return null
+  const supplied = shift && s[skipSpaces(s, end)] === '[' ? 1 : 0
+  const before = BIB_TEXT.get(name)! - shift
+  const { args, end: e } = argsAfter(s, end, before + 1 + supplied)
+  const reqs = args.filter((a) => a.kind === 'req')
+  if (args.length !== before + 1 + supplied || reqs.length !== before + 1 || (supplied && args[0]!.kind !== 'opt'))
+    return null
+  return { def, shift, before, reqs, end: e }
+}
 /** the arguments right after a command: [..] and {..} groups, optional spaces between, no blank line */
 function argsAfter(s: string, i: number, max = 9): { args: GroupArg[]; end: number } {
   const args: GroupArg[] = []
@@ -5505,43 +5526,28 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
     }
     // in a bibliography entry, a command that sets its text argument as it stands (BIB_TEXT): a pair around it, its other
     // arguments kept with the opening; a \\bibinfo of a field that is no prose (BIB_KEPT_FIELD) one placeholder
-    // (the call read by the definition in force, as TeX reads it: one whose first argument is optional (`[2][]{#2}`) takes no
-    // braced group for it, so the call's braced groups are its #2, #3, …: `\\bibinfo{author}{Ann}` sets "author", its #2,
-    // and the group after it as text of its own (2509.05371v1's entries); `shift` the arguments the braced groups pass over)
-    const inForce = BIB_KINDS.has(b.kind) && BIB_TEXT.has(name) ? (ctx.macros.get(name) ?? ctx.bibDefs?.get(name)) : undefined
-    const shift = inForce?.opt ? 1 : 0
-    // (a call that supplies the optional argument, `\\bibinfo[x]{Ann}`, has it first: #1, its braced groups #2, … as before)
-    const supplied = shift && s[skipSpaces(s, end)] === '[' ? 1 : 0
-    if (BIB_KINDS.has(b.kind) && BIB_TEXT.has(name) && BIB_TEXT.get(name)! >= shift) {
-      const before = BIB_TEXT.get(name)! - shift,
-        { args, end: e } = argsAfter(s, end, before + 1 + supplied),
-        reqs = args.filter((a) => a.kind === 'req')
-      if (
-        args.length === before + 1 + supplied &&
-        reqs.length === before + 1 &&
-        (!supplied || args[0]!.kind === 'opt')
-      ) {
-        const text = reqs[before]!,
-          field = before && !shift ? s.slice(reqs[0]!.start + 1, reqs[0]!.end - 1).trim() : ''
-        endText()
-        if (name === 'bibinfo' && BIB_KEPT_FIELD.test(field)) {
-          b.ph(s.slice(i, e), i, e)
-          i = e
-          continue
-        }
-        // (a command that prints its argument between marks: the marks text, wrapOf; csquotes' \\enquote by its level)
-        const def = inForce
-        const marks = wrapOf(def, before + 1 + shift) ?? (name === 'enquote' && !def ? quoteMarks(s, end, ctx) : null)
-        if (marks) {
-          i = withMarks(s, i, text.start + 1, text.end - 1, e, marks, b, ctx)
-          continue
-        }
-        const id = b.open(s.slice(i, text.start + 1), i, identityPair(def, before + 1 + shift))
-        walk(s, text.start + 1, text.end - 1, b, ctx)
-        b.close(id, '}', e)
+    const fieldAt = BIB_KINDS.has(b.kind) && BIB_TEXT.has(name) ? fieldCall(s, end, name, ctx) : null
+    if (fieldAt) {
+      const { def, shift, before, reqs, end: e } = fieldAt
+      const text = reqs[before]!,
+        field = before && !shift ? s.slice(reqs[0]!.start + 1, reqs[0]!.end - 1).trim() : ''
+      endText()
+      if (name === 'bibinfo' && BIB_KEPT_FIELD.test(field)) {
+        b.ph(s.slice(i, e), i, e)
         i = e
         continue
       }
+      // (a command that prints its argument between marks: the marks text, wrapOf; csquotes' \\enquote by its level)
+      const marks = wrapOf(def, before + 1 + shift) ?? (name === 'enquote' && !def ? quoteMarks(s, end, ctx) : null)
+      if (marks) {
+        i = withMarks(s, i, text.start + 1, text.end - 1, e, marks, b, ctx)
+        continue
+      }
+      const id = b.open(s.slice(i, text.start + 1), i, identityPair(def, before + 1 + shift))
+      walk(s, text.start + 1, text.end - 1, b, ctx)
+      b.close(id, '}', e)
+      i = e
+      continue
     }
     if (name === 'item') {
       endUnit()
