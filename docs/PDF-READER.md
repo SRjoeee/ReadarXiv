@@ -14141,3 +14141,119 @@ neither its row nor its variant's is read.
   - A shorter name inside another person's longer one ("Jun Yang" in "Jun Yang Li") where the longer is no block name.
   - The anchors' cuts are measured on Microsoft's replies alone. The tags wire's readings (Google, Chrome's built-in
     translator) are tested on shaped replies (`packages/translate/tests/names-wire.test.ts`).
+
+## 20. Link previews: where each link of the paper lands
+
+A link inside the paper names a destination (PDF.js's dest: a name such as `cite.x`, or an explicit array); hovering it shows
+the thing it lands on (the link previews' design, phase 1). The prepare states, once a paper, where each destination lands:
+the head's `targets` (format's `Target`), read by the reader at every open, no part fetched. Only the head moves: no unit, unit
+id, row, part, add-on or version, and no compile (the instrument's key reads none of the files below; §20.5).
+
+### 20.1 Each destination, resolved on A
+
+`packages/engine/src/locate/dests.ts`. The keys are the distinct destinations of A's link annotations, written as `Link.to.dest`
+writes them (`annotations.ts` `annotationOf`). Each is resolved through A's own document, opened once for this alone after A is
+read and let go: a name through PDF.js's `getDestination`, an explicit array as it is, its page by `getPageIndex` (a page index
+as some writers give one taken as it is), its point by its fit (PDF 32000-1 Table 151: `XYZ` its left and top, each null where
+PDF's null; `FitH`/`FitBH` a top alone; `FitV`/`FitBV` a left alone; `FitR` its left and top; `Fit`/`FitB` none). A name A
+lacks, a page that is not A's, a fit of no such name: none; a key PDF.js cannot answer is none, never the paper's failure. The
+module is not `read.ts`, which the compile side's bundle holds.
+
+### 20.2 Each float's box, from its brackets
+
+`packages/engine/src/locate/floats.ts`, locate's phase 17. The marked compile already brackets each float's box: `fs<n>` and
+`fe<n>` inside LaTeX's `\@endfloatbox` (marks/marks.ts POINTS), points on B, each naming the glyphs and boxes B's page showed
+before it. A float's ink is what B shows between them: its glyphs, its painted boxes (a path or an image; an annotation's
+appearance and a turned glyph's own box are none) and its turned glyphs (by their own box between the points). Its box on A is
+the union of their partners there (the alignment's `bToA`, `boxPage`/`boxIndex`, `turnedPage`/`turnedIndex`), a glyph by its
+advance and its outline both (the parts state a line's ink by the advance), on the format's grid outward. Nested brackets are
+the outermost's. A float of a type with no counter (`fn<n>` beside its `fs<n>`: NeurIPS's notice box) is none. Its caption is
+the first caption member inside its bracket that is no part of another there (subcaption's `\@captype` `sub\@captype`); its type
+the caption unit's `float`.
+
+No box, and the cause stated, where any of it cannot be told: a caption in no bracket (`unbracketed`: longtable's captions, a
+`\captionof` outside a float, a float package whose box no `\@endfloatbox` makes); a bracket not closed on its page
+(`unclosed`); a glyph of B with no partner that A draws (`unpaired`; a glyph off its page, in a draft frame, of no ink, a
+line-end hyphen A broke elsewhere, or one whose neighbours' partners stand side by side on A is no ink A lacks: place.ts's rule),
+a path or image with no partner, a shading or a merged box; its ink on two A pages (`pages`); no ink (`empty`); its caption
+crossing its bracket (`caption`); a member that owns any of its ink owning ink on A outside the box (`outside`); a glyph of the
+page none of the float's (not a partner, not its members') whose ink meets the box (`foreign`); a painted box none of the
+float's that meets the box, neither wholly inside it nor wholly round it (`cut`). No threshold: each count must be 0.
+
+### 20.3 Where a destination lands
+
+`packages/engine/src/locate/targets.ts`, locate's phase 18, the last. A destination's kind is the kind of what stands at its
+point (the design's L4), never its name. hyperref sets an anchor where what it marks begins, raised by the `\baselineskip` in
+force over its first baseline (over the 245: a reference's 8 to 14 points under the point, a display's 11 to 17, a note's 9 to
+19, a heading's 10 to 39), into the band of the line above it, and past that line's baseline where the raise passes the pitch.
+What a point may land on is a beginning: a member's first line and its label, a display element's first ink, a boxed float.
+In this order, a point lands on:
+
+1. a boxed float whose box holds it;
+2. a beginning it stands on: its band holds the point's height and its ink the point's x, its baseline at or over the point on
+   the format's grid (an anchor set on the line itself, not raised over it: a theorem's);
+3. the line, label or display under the point within `LAND_BELOW` (24) whose ink begins at the point's x on the format's grid
+   (pdfTeX states a destination at the origin of what TeX sets next): the first such, nothing where that line begins nothing
+   (an item, a head inside a paragraph's unit);
+4. else the first beginning under it in its column (TeX's column frame that holds its x, the nearest where none does; any
+   where it has no x): the highest baseline under its height within `LAND_BELOW`. A line that goes on with its member (the
+   last line of the entry above) begins nothing and is passed.
+
+What it lands on decides:
+
+- a reference: a member of a bibliography entry, a source unit that is one (`\bibitem`'s, `Unit.entry`) or a unit made on A of
+  one biblatex entry (`inkreferences`, ink-units.ts rule 1); its box its lines in that column on the page and its label;
+- a heading: its window, from its top across its column's measure down `SECTION_WINDOW` (0.19) of the page's height; where
+  that passes TeX's text block bottom (the frame's foot) it stops there and runs on, by the rest of its height, from the top of
+  the next column's text (the frame's next column on the page, else the next page's first): `Target`'s `next`;
+- a note: a member of kind `footnote`, its lines and label as a reference's;
+- a display: the display element's ink on the page (its number need not be inside);
+- a float: a boxed float, its box (a line of a member of the float lands on its float; of a float with no box, nowhere).
+
+Anything else (a theorem, an item, a cell, a float with no box, a page anchor with no height) lands nowhere: the destination is
+absent from `targets`, and its links keep their jump alone.
+
+### 20.4 The head's targets
+
+`Head.targets` (format's `Target`, `TargetKind`): `[dest, kind, page, ord, box]`, or with `[…, next page, next box]` for a
+heading that runs on; sorted by destination, each once; absent where nothing lands (a head of before states none, and a reader
+then shows no preview and keeps every jump). Optional: a reader of before strips it, so `FORMAT` stays 1. `ord` is the member's
+(a float's: its caption's). Boxes are PDF units, y up, on the format's grid.
+
+### 20.5 The measure, and its gate
+
+`lab/pdf/prepare-back/run.mjs` writes each paper's record into its located dump (`linkTargets`, made by `link-targets.mjs`:
+each float's box or cause and its union where one was made, each landing, the destinations' counts, the targets' size) and
+`floats-gate.mjs` is its gate (`link-targets` in the release check's full tier, after `prepare`). **The gate: no boxed float
+wrong, 0 over the corpus.** A boxed float is wrong where the engine counts any of `foreign`, `cut`, `outside` above 0 (none can
+be boxed so; the check holds the code to it), or where the bundle's own parts read it so apart from the engine: a member of its
+own (its members and captions, by ord) with ink outside the box (a line's ink across at its baseline, an element's or its
+label's ink), or another member's line band, element or label ink meeting the box's inside. The share of figures and tables
+boxed is reported by type with each miss's cause, never gated. Two readings of the landings are reported beside it, never
+rules: each landing whose kind its hyperref name does not say (`cite.` a reference, `figure.`/`table.` a float, `section.` and
+its kin a heading, `equation.` a display, `Hfootnote.` a note), and each landing another member's left edge contradicts (the
+destination's x the left edge of a line, a label or a display whose baseline is the first under the point, to 0.02).
+
+Over the regression corpus's 245 papers from their stored compiles (2026-11-27, the engine of this section against the line it
+was built on, b3559ab44): every unit, part, add-on and prepare dump byte for byte the line's (6,401 objects), each head the
+line's but `targets` (204 heads state them; 41 papers have no landing); 0 boxed floats wrong. Floats of a bracket boxed:
+figures 1,639 of 1,696 (96.6 %; 38 `foreign`, 19 `unpaired`), tables 1,107 of 1,110 (99.7 %; 1 `foreign`, 1 `unpaired`, 1
+`cut`), floats with no caption 172 of 173, algorithms 6 of 6; captions of no bracket (`unbracketed`): figures 41, tables 23,
+algorithms 39, others 20. A `foreign` refusal read on the page: a section heading inside the union an included figure's
+bounding box reaches. Destinations: 18,142 keys, every one resolved; landed 15,616 (references 8,743, headings 2,253, displays
+2,199, floats 2,176, notes 245), nowhere 2,526 (by their names: of no class above 922 of 1,437, floats 197,
+displays 594, headings 275, references 421, notes 117). The two readings: 14 landings whose kind the name does not say (7
+citations on a heading, 4 equations on a heading, 3 others) and 33 that another member's left edge contradicts (27 citations:
+an anchor whose x stands in the gutter left of the right column's entry is matched in the left column; a run-in heading on a
+display's line); 19 page anchors (`page.N`, at the page's corner) on a float at the page's top, and 10 items on a display
+under them. These 76 are wrong landings, reported (a wrong preview is worse than none), not patched by a destination's name.
+What a theorem's anchor lands on where the source reader made its head a heading unit (213 `theorem.` names, 30 `proposition.`,
+17 `lemma.`) is that heading's window: L4's reading, the kind the unit's.
+
+The size: the head's targets 4.1 KB raw, 1.3 KB gzipped a paper at the median, 3.3 KB at the 95th percentile, 13.6 KB the
+largest (46.7 KB raw); the whole head grows by 1.4 KB gzipped at the median. The prepare's added time (A's destinations, the
+floats' boxes, the landings): 17 ms a paper at the median, 52 ms at the 95th percentile, 104 ms the largest, 1.3 % of the back
+half at the median (2.2 % the largest); its peak resident memory, a paper's process against the line's in the same run, 0 MiB
+at the median, 114 MiB at the 95th percentile (each run's own variance among them: the two runs side by side under the
+machine's load). The stored instrument's key, the hash of the compile side's built bundles, computed over this section's
+engine, is the line's: none of these files is in the compile side's closure, so no paper is compiled again.

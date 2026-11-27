@@ -1,9 +1,6 @@
 // Every destination of A's links resolved at the prepare (locate/dests.ts): each key as Link.to.dest writes it, resolved through
-// A's own document (a stand-in of PDF.js's) to its page and the point it names; and the compile side untouched (read.ts, whose
-// bytes the instrument's key reads through the compile side's bundle, stays the line's).
-import { createHash } from 'node:crypto'
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+// A's own document (a stand-in of PDF.js's) to its page and the point it names. (That the compile side is untouched, the
+// instrument's key the same, is the lab's check: docs/PDF-READER.md §20.5.)
 import { describe, expect, it } from 'vitest'
 import { destinationsOf, destKeysOf } from '../src/locate/dests.ts'
 import type { PdfJs } from '../src/read.ts'
@@ -99,10 +96,3 @@ describe('every destination of A resolved on A (dests.ts)', () => {
   })
 })
 
-describe('the compile side untouched', () => {
-  it('read.ts is byte-identical to the line’s head (the instrument’s key reads the compile side’s bundle)', () => {
-    const bytes = readFileSync(join(import.meta.dirname, '../src/read.ts'))
-    expect(createHash('sha256').update(bytes).digest('hex')).toBe(READ_TS_SHA256)
-  })
-})
-const READ_TS_SHA256 = 'c8430df86c12587f3ab17650ce1ea54fcec3e4103d1d5a137a7baff16688dd6d'
