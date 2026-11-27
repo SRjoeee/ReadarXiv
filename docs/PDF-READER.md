@@ -10785,7 +10785,9 @@ null (a `.bbl`'s `\newblock`).
 no ink (`INVISIBLE`, `textless`, read from its source as `classOf` reads it) is stated empty, whatever class the element carries,
 where that class is one drawn from its ink; a class that draws none (a space, `zero`) reads no such statement. The locate then
 states it `text: ''`, drawn as nothing, proven. Over the 245 no element moves; over the 599, 112 placeholders of 4 papers (an
-`\index` 104, a `\color` with a model 8) in 65 units.
+`\index` 104, a `\color` with a model 8) in 65 units, and the 56 of those units the lay held `unproven` are laid; nothing else
+moves. A `\color` at a table cell's head, which TeX sets before the cell's start, was stated as set outside the unit's text
+(`El.keep`) and is now stated empty (the locate reads `empty` first): drawn as nothing either way.
 
 **What it protects.** `unproven` keeps out a unit whose element may set ink the text group erases and nothing draws again (a
 formula, a year, an algorithm's line). These set none by TeX's definition, and the source reader reads a paper's own `\index`
