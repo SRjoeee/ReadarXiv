@@ -251,8 +251,10 @@ export { LayoutRefusal } from './json.mjs'
   after a pair's prose argument a piece of its own, and the marking asks TeX about a placeholder after a paper's macro (a
   front unit's with its lead) and about each such tail, marks a look-ahead answer's piece only inside its unit and a tail
   inside its braces on TeX's answer (PDF-READER §18.115), so that a file of 47 holds such a paper with those pieces unmarked
-  or cut as before */
-export const LAYOUT = '48'
+  or cut as before; 49 (with PIPELINE 128): the source reader's cut reads a paper's macro that opens or closes an
+  environment as that boundary, by its definition in force in TeX's order (PDF-READER §18.119), so that a file of 48 holds
+  such a paper with the call a placeholder inside the paragraph, or a display's formula cut as text */
+export const LAYOUT = '49'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour
  *  piece's run's fill [unit, k, 0xRRGGBB], a key the file holds only where it has a row; and, of a maker of 18 on, `unlaid`,
