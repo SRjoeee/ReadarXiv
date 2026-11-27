@@ -10641,7 +10641,10 @@ ogonek (cmr10's own encoding, cm-super's and Latin Modern's T1 and TS1), which p
 list report as thirteen spacing accents. Ten decompose under NFKD into a space and their mark; three do not, the grave U+0060,
 the circumflex U+02C6 and the caron U+02C7 (an OT1 "Ciˆencia"), and are read as their marks on both sides
 (`UNDECOMPOSED_ACCENTS`, each the spacing clone of its combining mark by Unicode's names), so that one the text writes as it
-stands still matches as written. The ties' glyphs map to no character. A text with no accent compares as before; another
+stands still matches as written. The ties' glyphs map to no character. A glyph of several characters may run past the text
+looked for (a ligature), never between a letter and its marks: a spacing accent a paper sets on nothing (`\^{}`) before the
+text's last letter stays the ink of the piece before it; and the text looked for (its first WANT characters) keeps the marks
+of its last letter, so that a letter with no precomposed form is compared whole. A text with no accent compares as before; another
 letter under the same accent, the letter under another accent, or a letter the source writes bare after an accent's glyph is
 no match. The ownership alone moves: no marked TeX, no compile, no unit's id.
 
