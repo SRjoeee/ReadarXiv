@@ -7,13 +7,14 @@
 import { ACCEPT_DIGEST, accept } from '../src/accept.ts'
 import { CHROME_DIGEST, chrome } from '../src/adapters/chrome.ts'
 import { GOOGLE_DIGEST, google, TAGS_DIGEST } from '../src/adapters/google.ts'
+import { LLM_WIRE_DIGEST, llmWire } from '../src/adapters/llm-wire.ts'
 import { MICROSOFT_DIGEST, microsoft } from '../src/adapters/microsoft.ts'
 import { CHAIN_DIGEST } from '../src/chain.ts'
 import type { Fetch } from '../src/contract.ts'
 import { sha256Hex } from '../src/sha256.ts'
 import { goldenOf } from '../src/testing/golden.ts'
 import { CASES as ACCEPT_CASES } from './accept-cases.ts'
-import { GOOGLE_REPLIES, MICROSOFT_REPLIES, MICROSOFT_UNITS, TAGS_UNITS } from './adapters/fixtures.ts'
+import { GOOGLE_REPLIES, LLM_REPLIES, MICROSOFT_REPLIES, MICROSOFT_UNITS, TAGS_UNITS } from './adapters/fixtures.ts'
 import { chainDigest } from './chain-cases.ts'
 
 export interface Digest {
@@ -59,4 +60,10 @@ export const DIGESTS: readonly Digest[] = [
       goldenOf(microsoft({ fetch: none }), { target: 'zh-Hans', units: MICROSOFT_UNITS, replies: MICROSOFT_REPLIES }),
   },
   { name: 'CHAIN_DIGEST', file: 'src/chain.ts', literal: CHAIN_DIGEST, compute: () => chainDigest() },
+  {
+    name: 'LLM_WIRE_DIGEST',
+    file: 'src/adapters/llm-wire.ts',
+    literal: LLM_WIRE_DIGEST,
+    compute: async () => goldenOf(llmWire, { target: 'zh-Hans', units: TAGS_UNITS, replies: LLM_REPLIES }),
+  },
 ]

@@ -5,7 +5,8 @@ import { describe, expect, it } from 'vitest'
 import { bodyShapeOf, DEFAULT_PAUSE_MS, refusalOf } from '../src/refusals.ts'
 
 const NOW = Date.UTC(2026, 10, 27, 12)
-const gateway = (code: number) => JSON.stringify({ success: false, error: [{ code, message: 'x' }], messages: [], result: [] })
+const gateway = (code: number) =>
+  JSON.stringify({ success: false, error: [{ code, message: 'x' }], messages: [], result: [] })
 const anthropic = (type: string, extra: Record<string, unknown> = {}) =>
   JSON.stringify({ type: 'error', error: { type, message: 'x', ...extra }, request_id: 'r' })
 const of = (status: number | null, body = '', retryAfter: string | null = null) =>

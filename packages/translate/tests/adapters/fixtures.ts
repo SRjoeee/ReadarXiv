@@ -714,3 +714,33 @@ export const GOOGLE_REPLIES: { unit: number; raw: string; taken: boolean; why?: 
     why: 'a formula before the break the sentence’s before: the boundary marker between it and the break (text.ts leadsNext)',
   },
 ]
+
+/** Replies in the LLM wire's typed tags (adapters/llm-wire.ts) to the tags fixture units, written here in German (no reply
+ *  of a model is quoted): the spellings the 11-06 probe met, read tolerantly, and the ones refused. The behaviour digest
+ *  LLM_WIRE_DIGEST is taken over these (tests/digests.ts) */
+const FW_OPEN = '＜'
+const FW_CLOSE = '＞'
+export const LLM_REPLIES: { unit: number; raw: string; taken: boolean; why?: string }[] = [
+  { unit: 0, raw: 'Wir untersuchen das Problem. <x1/>Es ist schwer.', taken: true, why: 'a boundary marker back' },
+  { unit: 0, raw: 'Wir untersuchen das Problem. Es ist schwer.', taken: true, why: 'the boundary marker lost' },
+  { unit: 1, raw: 'Sei <m1/> wie in <c2/>. <x4/>Mehr dazu in Abschnitt <r3/>.', taken: true },
+  {
+    unit: 1,
+    raw: `Sei < m1/> wie in <C2 />. Mehr dazu in Abschnitt ${FW_OPEN}r3/${FW_CLOSE}.`,
+    taken: true,
+    why: 'a space after the bracket, a capital, full-width brackets',
+  },
+  { unit: 1, raw: 'Sei <m1/> wie in <x2/>. Mehr dazu in Abschnitt <r3/>.', taken: true, why: 'a letter changed' },
+  { unit: 1, raw: 'Sei <m1/> wie in <c2/><c2/>. Abschnitt <r3/>.', taken: false, why: 'an element doubled' },
+  { unit: 1, raw: 'Sei <m1/> wie in <c7/>. Abschnitt <r3/>.', taken: false, why: 'a number not sent' },
+  { unit: 1, raw: 'Sei <m1/> wie in. Abschnitt <r3/>.', taken: false, why: 'an element lost' },
+  { unit: 2, raw: '<s1>Fette Worte</s1> und <s2>ein Link <s3>darin</s3></s2> Ende.', taken: true },
+  {
+    unit: 2,
+    raw: '<s1>Fette Worte</ s1> und <S2>ein Link <s3>darin</s3></s2> Ende.',
+    taken: true,
+    why: 'a space after `</`, a capital',
+  },
+  { unit: 3, raw: 'Wir haben<d1/>. <x2/>Dann geht es weiter.', taken: true },
+  { unit: 9, raw: 'Worte<f1/>. <x2/>Weitere Worte folgen hier.', taken: true },
+]
