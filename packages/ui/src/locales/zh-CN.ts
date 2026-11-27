@@ -407,6 +407,7 @@ const R = {
   },
   leave: '在默认查看器中打开', // S-R-10
   pill: { original: '原文页码', translation: '译文页码', previous: '上一页', next: '下一页' }, // S-R-11
+  back: '回到原处', // S-R-29: the way back, one jump (link previews' §3.7)
   fold: { expand: '展开', collapse: '收起' }, // the folds of the outline kept for the website's import contract (UI.md S-R-02a)
   // S-R-25: a layer's link with no text under it, named by where it goes and said to screen
   // readers; `site` is the address's host, `address` the mail address

@@ -134,7 +134,7 @@ export type SessionEvent =
   /** a face the translation is set in could not be had this visit (the reader's `faces`), its passages drawn in their fallback
    *  until the page is loaded again: the chrome's own toast says so (S-R-28), in the catalogue's one sentence, for every host */
   | { type: 'faces' }
-  /** a jump to go back from, or none any more (the capsule 回到原处 stands while there is) */
+  /** a jump to go back from, or none any more (the back capsule, UI.md S-R-29, stands while there is) */
   | { type: 'back'; on: boolean }
 /** what a session is given: the panes it draws into, and where it tells its events */
 export interface SessionHost {
@@ -242,7 +242,7 @@ export interface ReaderState {
   exporting: { form: ExportForm; percent: number } | null
   /** the PDF download that failed (its retry offered in the capsule until it is closed or tried again); null while none did */
   exportFailed: ExportForm | null
-  /** a jump inside the paper to go back from: the capsule 回到原处 stands (BackCapsule.tsx, S-R-29) */
+  /** a jump inside the paper to go back from: the back capsule stands (BackCapsule.tsx, UI.md S-R-29) */
   back: boolean
 }
 /** the files the reader makes (UI.md S-R-09): the translation's, the side-by-side's */

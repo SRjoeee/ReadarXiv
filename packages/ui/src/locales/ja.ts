@@ -356,6 +356,7 @@ const R: Locale['R'] = {
   },
   leave: '既定のビューアで開く',
   pill: { original: '原文のページ', translation: '訳文のページ', previous: '前のページ', next: '次のページ' },
+  back: '元の位置に戻る',
   fold: { expand: '展開', collapse: '折りたたむ' },
   linkName: { internal: 'この論文内の別の場所', site: site => `${site} を開く`, email: address => `${address} にメールを送信`, fallback: 'リンク' },
   // no space between a digit and the Japanese after it (UI.md §1, the Japanese line)

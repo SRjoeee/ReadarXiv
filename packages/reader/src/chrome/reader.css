@@ -198,6 +198,29 @@ html[data-axt-dim] .axt-hl-layer { mix-blend-mode: screen; }
   /* being edited: the fill stays, the field's own sign of the focus under the pointer, where it has no ring */
   .pill input:focus { background: var(--fill); }
   .pill .of { padding-inline: 3px 5px; }
+  /* the way back (BackCapsule.tsx, link previews' §3.7): one capsule in the pills' dress, 30 px, 12 px words of weight 500, a
+     14 px arrow in ink-3; side by side at the document area's foot centre, 16 px up, moved with the area by the contents
+     (as .capsule-slot is); it rises 8 px in 240 ms and sinks in 160 ms. With one pane shown, the first segment of its pill
+     (no surface of its own inside the pill's), the pill held shown while it is, so that it never changes shape under the thumb */
+  .back-slot { position: fixed; z-index: 6; inset: auto 0 16px 0; display: flex; justify-content: center; pointer-events: none; transition: left 200ms var(--ease); }
+  html[data-axt-contents] .back-slot { left: var(--push); }
+  .back { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding-inline: 10px 12px; border-radius: 999px; color: var(--ink); font-size: 12px; font-weight: 500; white-space: nowrap; pointer-events: auto; transition: background-color 120ms ease-out, scale 120ms ease-out; }
+  .back svg { width: 14px; height: 14px; color: var(--ink-3); flex: none; }
+  .back:active { scale: 0.96; }
+  .back:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .back-slot .back { background: var(--float-bg); backdrop-filter: blur(16px) saturate(1.5); box-shadow: var(--float-shadow); animation: back-in 240ms var(--ease); }
+  .back-slot .back[data-out] { animation: back-out 160ms ease-out forwards; pointer-events: none; }
+  @keyframes back-in { from { opacity: 0; translate: 0 8px; } }
+  @keyframes back-out { to { opacity: 0; translate: 0 4px; } }
+  .pill .back { width: auto; height: 24px; padding-inline: 7px 8px; color: var(--ink); }
+  @media (hover: hover) { .pill .back:hover { background: var(--fill); } }
+  .pill .sep { width: 0.5px; height: 16px; margin-inline: 2px 3px; background: var(--chrome-line); flex: none; }
+  .pill[data-held] { opacity: 1; pointer-events: auto; }
+  @media (prefers-reduced-motion: reduce) {
+    .back:active { scale: 1; }
+    @keyframes back-in { from { opacity: 0; } }
+    @keyframes back-out { to { opacity: 0; } }
+  }
   /* a pane's scroll indicator (§6.5): its right edge; the thumb's place a scroll-driven animation on the pane's timeline */
   .indicator { position: absolute; z-index: 4; inset-block: 6px; inset-inline-end: 0; width: 14px; display: flex; justify-content: center; opacity: 0; transition: opacity 300ms ease-out; }
   .indicator[data-live], .indicator[data-drag] { opacity: 1; transition-duration: 120ms; }

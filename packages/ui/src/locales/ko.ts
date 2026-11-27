@@ -357,6 +357,7 @@ const R: Locale['R'] = {
   },
   leave: '기본 뷰어에서 열기',
   pill: { original: '원문 페이지', translation: '번역문 페이지', previous: '이전 페이지', next: '다음 페이지' },
+  back: '원래 위치로',
   fold: { expand: '펼치기', collapse: '접기' },
   linkName: { internal: '이 논문의 다른 위치', site: site => `${site} 열기`, email: address => `${address}에게 이메일 보내기`, fallback: '링크' },
   // the number attaches to its counter (UI.md §1, the Korean line)

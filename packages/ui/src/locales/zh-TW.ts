@@ -353,6 +353,7 @@ const R: Locale['R'] = {
   },
   leave: '在預設檢視器中開啟',
   pill: { original: '原文頁碼', translation: '譯文頁碼', previous: '上一頁', next: '下一頁' },
+  back: '回到原處',
   fold: { expand: '展開', collapse: '收合' },
   linkName: { internal: '本文中的其他位置', site: site => `開啟 ${site}`, email: address => `寄電子郵件給 ${address}`, fallback: '連結' },
   pageName: (side, n) => `${R.display[side]} · 第 ${n} 頁`,

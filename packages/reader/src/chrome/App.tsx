@@ -3,6 +3,7 @@ import { localeInUse, onLocale } from '@readarxiv/ui'
 import type { ReaderController, Side } from './model.ts'
 import { type Appearance, applyAppearance, dimmed, themeOf, withoutTransitions } from './appearance.ts'
 import { FailureCard, OriginalCard } from './FailureCard.tsx'
+import { BackCapsule } from './BackCapsule.tsx'
 import { Outline } from './Outline.tsx'
 import { PagePill } from './PagePill.tsx'
 import { ScrollIndicator } from './ScrollIndicator.tsx'
@@ -156,6 +157,7 @@ function Page({ controller }: { controller: ReaderController }) {
         {/* an address with no paper: its card is the page's, not a pane's (the display may hide the pane) */}
         {state.noPaper && <FailureCard controller={controller} of="page" />}
       </main>
+      <BackCapsule controller={controller} />
       <StatusCapsule controller={controller} onChooseLanguage={chooseLanguage} />
     </>
   )

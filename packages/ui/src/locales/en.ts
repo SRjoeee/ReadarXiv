@@ -357,6 +357,7 @@ const R: Locale['R'] = {
   },
   leave: 'Open in the default viewer',
   pill: { original: "Original's page", translation: "Translation's page", previous: 'Previous page', next: 'Next page' },
+  back: 'Go back',
   fold: { expand: 'Expand', collapse: 'Collapse' },
   linkName: { internal: 'Elsewhere in this paper', site: site => `Opens ${site}`, email: address => `Email ${address}`, fallback: 'Link' },
   pageName: (side, n) => `${R.display[side]} · Page ${n}`,
