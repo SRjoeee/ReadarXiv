@@ -6,7 +6,7 @@ import type { Mapping } from '../align/align.ts'
 import { setPagesOf } from '../align/align.ts'
 import type { Doc, DocGlyph } from '../doc.ts'
 import type { PageInk } from '../ink.ts'
-import type { Instrument, InstrumentUnit, TexFrame } from '../instrument.ts'
+import type { Instrument, InstrumentUnit, PieceClass, TexFrame } from '../instrument.ts'
 import { fixedFacesOf } from './facts.ts'
 import type { DisplayLine, InkInput, InkStats } from './ink.ts'
 import { r2 } from './lines.ts'
@@ -598,6 +598,32 @@ export const AUTHOR_KINDS = new Set(['author', 'affiliation'])
 /** the classes of an element the typesetter draws from the ink TeX set for it (its reading's VISIBLE, a symbol aside: drawn from
  *  its source where it has no ink): one of no ink states which of three it is, TeX set nothing for it (El.text ''), it stands
  *  outside the unit's text (El.keep), or neither (its ink not found: the typesetter leaves its unit the original's) */
+/** an element as the bundle states it (bundle.ts; targets.ts reads it so too): with what its source says of it (the
+ *  instrument's PieceClass): its class as its kind, and the rest where set; `asInk`, a symbol whose ink locate found not that symbol as its reading draws it (Member.asInk): a formula's, `other`, drawn
+ *  as its ink, no symbol's drawing (2610.10069v1 p20's `$\vs^*$`, read as "*" on the baseline, its bold s lost) */
+export function classed(el: El, c: PieceClass | undefined, asInk = false): El {
+  if (!c) return el
+  const out: El = { ...el, kind: asInk && c.cls === 'symbol' ? 'other' : c.cls }
+  if (c.unknown) out.unknown = 1
+  // (the source's copy text, but where locate states the page's: a URL's, its glyphs' text, which its break points count in)
+  if (c.copy && out.copy === undefined) out.copy = c.copy
+  if (c.sym && !asInk) out.sym = c.sym[1] ? [c.sym[0], 1] : [c.sym[0]]
+  if (c.mark) out.mark = 1
+  if (c.literal) out.literal = 1
+  if (c.glue) out.glue = c.glue[2] ? [c.glue[0], c.glue[1], 1] : [c.glue[0], c.glue[1]]
+  if (c.cmd !== undefined) out.cmd = c.cmd
+  if (c.bare) out.bare = 1
+  if (c.brk) out.brk = 1
+  if (c.note !== undefined) out.note = c.note
+  if (c.same !== undefined) out.same = c.same
+  if (c.colour !== undefined) out.colour = c.colour
+  if (c.nested) out.nested = 1
+  if (c.tie) out.tie = 1
+  // (a text macro's text, where its own glyphs gave it none: the probe's, what TeX sets for it)
+  if (c.text !== undefined && out.text === undefined && !out.ink.length) out.text = c.text
+  return out
+}
+
 export const INKED_CLASSES = new Set(['cite', 'num', 'other', 'display', 'macro', 'umacro'])
 
 /** a unit's pieces by id, spans opened */

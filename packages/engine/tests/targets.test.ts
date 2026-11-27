@@ -29,6 +29,8 @@ type Spec = {
   glyphs?: number[][]
   /** its label's ink: page, x0, y0, x1, y1, baseline */
   label?: [number, number, number, number, number, number]
+  /** its unit's classes (the instrument's: what the bundle states each element's kind and text by) */
+  classes?: [string, { cls: string; text?: string }][]
 }
 /** B's column bodies for the fake: each A glyph's B glyph (`toB`), each B page's glyph count and its body brackets' points */
 type Bodies = { toB: Record<number, number>; pages: { n: number; points: [string, number][] }[] }
@@ -38,6 +40,7 @@ function workOf(specs: Spec[], frames: Map<number, TexFrame> = new Map(), pages 
     kind: s.kind,
     content: [],
     ...(s.entry ? { entry: true as const } : {}),
+    ...(s.classes ? { classes: s.classes } : {}),
   }))
   const members = specs.map(
     (s, ord) =>
@@ -469,6 +472,16 @@ describe('a stated box holds the whole of what it names, or the target is not st
       expect(of(workOf([note(el)]), 'Hfootnote.1', { page: 1, x: 290, y: 110 }).t).toEqual([
         { dest: q('Hfootnote.1'), kind: 'footnote', page: 1, ord: 0, box: [72, 86, 292, 107] },
       ])
+  })
+  it('an element is read as the bundle states it: by its unit’s class and the text its class states', () => {
+    // (locate's element of no ink, of a kind of no ink, whose class the instrument states inked: no text, its ink not found)
+    const url: El = { kind: 'symbol', ink: [] }
+    const w = workOf([{ ...note(url), classes: [['u', { cls: 'other' }]] }])
+    expect(of(w, 'Hfootnote.1', { page: 1, x: 290, y: 110 }).refused).toEqual([['footnote', 'unstated']])
+    // (an inked element of no ink whose class states its text, a text macro's: its glyphs the unit's text)
+    const mac: El = { kind: 'other', ink: [] }
+    const v = workOf([{ ...note(mac), classes: [['u', { cls: 'umacro', text: 'x' }]] }])
+    expect(of(v, 'Hfootnote.1', { page: 1, x: 290, y: 110 }).t).toHaveLength(1)
   })
   it('an element whose ink reaches past its line’s is inside the box', () => {
     const el: El = { kind: 'other', ink: [[1, 280, 697, 300.4, 708, 700]] }

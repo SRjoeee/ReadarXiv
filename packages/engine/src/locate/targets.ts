@@ -12,7 +12,16 @@ import type { El, Line, TargetKind } from '@readarxiv/format'
 import type { DestPoint } from './dests.ts'
 import { grow } from './floats.ts'
 import { bracketsOf } from './gaps.ts'
-import { type Box4, type FloatBox, INKED_CLASSES, type Landing, type Member, type Refusal, type Work } from './work.ts'
+import {
+  type Box4,
+  classed,
+  type FloatBox,
+  INKED_CLASSES,
+  type Landing,
+  type Member,
+  type Refusal,
+  type Work,
+} from './work.ts'
 
 export type { Landing, Refusal }
 
@@ -299,7 +308,9 @@ export function targetsOf(
   /** why a member's box cannot hold the whole of it on a page, null where it can: an element TeX set whose ink the bundle does
    *  not state (`unstated`); its ink on another page, or its lines going on in another column (`pieces`) */
   function partsOf(mem: Member, own: Ink[], page: number): Refusal | null {
-    if (mem.elements.some(([, el]) => untold(el))) return 'unstated'
+    // (each element as the bundle states it: by its unit's classes, bundle.ts)
+    const cls = new Map(units[mem.unit]?.classes ?? [])
+    if (mem.elements.some(([id, el]) => untold(classed(el, cls.get(id), !!mem.asInk?.has(id))))) return 'unstated'
     return own.some((k) => k.page !== page) || rises(mem, page) ? 'pieces' : null
   }
 
