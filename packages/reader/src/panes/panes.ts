@@ -158,6 +158,34 @@ export function routeInPaper(
   }
 }
 
+/**
+ * The page a pane's pill reads, one rule for both panes, PDF.js's own (its viewer's update, which the left's pill reads): the
+ * current page where it is still wholly in view, else the page whose own height the view shows the most of, the first of equals;
+ * 0 where the view shows none. `pages`: each page's top and end in the pane's scroll coordinates (null: not laid out); the view
+ * from `top`, `height` tall
+ */
+export function pageInView(
+  pages: readonly ({ top: number; end: number } | null)[],
+  top: number,
+  height: number,
+  current: number,
+): number {
+  let best = 0,
+    most = 0
+  const bottom = top + height
+  for (let i = 0; i < pages.length; i++) {
+    const p = pages[i]
+    if (!p || p.end <= top || p.top >= bottom) continue
+    const share = (Math.min(p.end, bottom) - Math.max(p.top, top)) / Math.max(1, p.end - p.top)
+    if (i + 1 === current && share >= 1) return current
+    if (share > most) {
+      most = share
+      best = i + 1
+    }
+  }
+  return best
+}
+
 export interface Panes {
   readonly right: Stack
   readonly leftViewer: PDFViewer
@@ -519,8 +547,13 @@ export function createPanes(o: PanesOptions): Panes {
    * container, whose callback runs once layout is done
    */
   const shownNow = new Map<PaneSide, boolean>()
+  /** each pane's view height, kept with its width (the pill's page reads it: pageInView) */
+  const heightNow = new Map<PaneSide, number>()
   const readShown = () => {
-    for (const s of sides) shownNow.set(s, s.container.clientWidth > 0)
+    for (const s of sides) {
+      shownNow.set(s, s.container.clientWidth > 0)
+      heightNow.set(s, s.container.clientHeight)
+    }
   }
   const shown = (s: PaneSide) => shownNow.get(s) ?? false
   readShown()
@@ -901,10 +934,14 @@ export function createPanes(o: PanesOptions): Panes {
    */
   function tellRightPage(fresh = false) {
     if (!right.pages || !shown(R)) return
+    // (the page the left's PDF.js would read of the same view: pageInView, its rule; before, the page at the view's top, which
+    // at a paper's end read page 1 over the last lines of it while the left read 2)
+    const top = fresh || !rightKnown ? follower.shownAt(R) : follower.shownAt(R, (q) => q.scrollY)
+    if (fresh || !rightKnown) places.delete(R)
     const n =
-        (fresh || !rightKnown
-          ? pageAt(R, follower.shownAt(R) + 1)
-          : keptPageAt(R, follower.shownAt(R, (q) => q.scrollY) + 1)) || 1,
+        pageInView(placesOf(R).pages, top, heightNow.get(R) || R.container.clientHeight, rightPage) ||
+        (fresh || !rightKnown ? pageAt(R, top + 1) : keptPageAt(R, top + 1)) ||
+        1,
       pages = right.pages,
       key = `${n}/${pages}`
     rightPage = n
