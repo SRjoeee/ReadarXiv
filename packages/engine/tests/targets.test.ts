@@ -656,7 +656,16 @@ describe("a citation lands on the entry whose key its name holds (cite.<key>, th
       { lines: [line(1, 670, 80), line(1, 658, 90)], label: [1, 60, 668, 70, 677, 670] },
     )
     expect(of(w, 'cite.b', { page: 1, x: 60, y: 703 })).toEqual({
-      t: [{ dest: q('cite.b'), kind: 'reference', page: 1, ord: 1, box: [60, 656, 300, 677], byKey: { geometry: 0, edge: 0 } }],
+      t: [
+        {
+          dest: q('cite.b'),
+          kind: 'reference',
+          page: 1,
+          ord: 1,
+          box: [60, 656, 300, 677],
+          byKey: { geometry: 0, edge: 0 },
+        },
+      ],
       refused: [],
     })
   })
