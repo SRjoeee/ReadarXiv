@@ -12,7 +12,7 @@ export interface Golden {
 }
 
 /** what the behaviour digest is taken over: write's output on every fixture unit, read's on every recorded reply */
-export function goldenOf(t: Translator, f: Golden): string {
+export function goldenOf(t: Pick<Translator, 'write' | 'read'>, f: Golden): string {
   const writes = f.units.map((u) => t.write(u, f.target))
   const reads = f.replies.map((r) => {
     const unit = f.units[r.unit] as UnitIn

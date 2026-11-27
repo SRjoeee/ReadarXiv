@@ -600,6 +600,32 @@ each element its rule-file kind, what it reads as to the tags wire's sentence cu
 numbering label, which reads as a word), and on the markers wire `alone`, a marker of its own (Microsoft's adapter joins
 side-by-side elements for the PDF wire; on the HTML page the live run of 2026-11-07 kept 1,375 of 1,378 placeholders of the
 159 such blocks one marker an element, 1,372 joined).
+**A host's LLM translator** (the website's upgrade job, 2026-11-27) is the package's own, `llm()` (`adapters/llm.ts`): its
+wire is the tags wire's plan written in typed tags (`<m1/>` a formula, `<c3/>` a citation, `<s8>…</s8>` styled words: the
+11-06 LLM probe's form), read back by number and tolerantly (a space after the bracket, capitals, full-width brackets,
+another letter), a reply under 0.2 of a source of 200 characters or more refused (`llm-wire.ts`); its requests are
+Anthropic's Messages API or the OpenAI chat form, as the model entry names, with the paper's title and abstract as context
+not to be translated (context rule v1, `llm-shapes.ts`). It names no gateway and holds no key: the host gives the URL, a
+fetch that adds its headers, and a spend port its ledger answers; a request is reserved before it is sent (no answer, no
+request) and settled once (`unsent` for a ticket granted after the adapter stopped waiting for it), and one with no answer
+is sent at most twice: the adapter's own timer ends the wait before the chain's, whether or not the host's transport heeds
+the abort. A refusal the ledger now knows the wait of (slow, spent, a key) is asked again at once, the batch whole, through
+the ledger, which picks another key or holds it: at most two requests a `send`, never one a unit; a second such refusal,
+or a hold, is a pause past the chain's patience, so the units come back unavailable and the host asks them again in whole
+batches. The model's own refusal (Anthropic's stop reason `refusal`; a 403 OpenRouter's body says is a moderation or a
+content policy's) is split like a request too large, and the lone unit so refused passes to the next translator (with none
+after it, the chain's runs floor asks the model again for the unit's stretches). A provider's 403 is the key's only where
+its body names an authentication or permission error, so one flagged text never disables a key; a 200 whose body holds
+only an error (OpenRouter's, after the reply's headers) is classified by that error. A refusal is classified by who
+answered and its code (`refusals.ts`), a key picked by `pick`, a model's check judged by `checkOf` against the free chain
+on a fixed sample, a unit no translator is asked for counted for neither side (`check.ts`). It serves every target the
+free adapters name, under the same tags (`LLM_TARGETS`: Microsoft's table and the tags it rewrites, `zh` and `zh-CN`
+Simplified Chinese, `zh-TW` Traditional), each named in English as CLDR names it; a reply whose numbered closers cross is
+unread. Its identity `llm:<16 hex>` hashes what changes the text (`llmIdentityOf`): who answers by the entry's
+`provider`, `upstream`, `shape` and `model`, never the URL, which is the host's route (its account and gateway names, which
+no identity here holds, and a route renamed would ask every row again); a deployment that answers otherwise under the same
+model name is another `provider`, never the same name pointed elsewhere. `LLM_WIRE_DIGEST` and `PROMPT_DIGEST` are new,
+and no other digest moved. `scripts/check-boundary.mjs` refuses a gateway's host or header under `packages/`.
 
 ### 8.0 Requests run in the background
 

@@ -37,6 +37,9 @@ export interface ModelCheck {
   ok: boolean
   accepted: number
   of: number
+  /** what it ran against: the model's identity and the sample's digest (check.ts checkAgainstOf). A host holds it to the
+   *  entry and the sample it has now: a check whose `against` differs has lapsed */
+  against: string
 }
 /** a language model as a producer; immutable once anything refers to it */
 export interface ModelEntry {
@@ -125,7 +128,10 @@ const ModelEntrySchema = z.strictObject({
     z.strictObject({ mode: z.literal('paid'), usdPerMTokIn: price, usdPerMTokOut: price }),
     z.strictObject({ mode: z.literal('free') }),
   ]),
-  checks: z.record(z.string(), z.strictObject({ at: label, ok: z.boolean(), accepted: count, of: count })),
+  checks: z.record(
+    z.string(),
+    z.strictObject({ at: label, ok: z.boolean(), accepted: count, of: count, against: label }),
+  ),
 })
 const QuotaGroupSchema = z.strictObject({
   id: label,

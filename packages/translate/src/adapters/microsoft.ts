@@ -57,6 +57,9 @@ const REWRITE: Record<string, string> = {
   lg: 'lug',
 }
 const microsoftTarget = (target: Lang): string => REWRITE[target] ?? target
+/** every tag the endpoint serves: its table's codes and the tags it is asked under another (the LLM adapter serves each,
+ *  under the same tag: llm-shapes.ts LLM_TARGETS) */
+export const MICROSOFT_TARGETS: readonly Lang[] = Object.freeze([...SUPPORTED, ...Object.keys(REWRITE)])
 /** whether the endpoint serves a target, synchronously (a host's settings say it before any call) */
 export const microsoftServesTarget = (target: Lang): boolean => SUPPORTED.has(microsoftTarget(target))
 

@@ -19,6 +19,41 @@ describe('@readarxiv/translate', () => {
     ])
       expect(typeof (entry as Record<string, unknown>)[name], name).not.toBe('undefined')
   })
+  it("exports the LLM translator and the policy's spending decisions", () => {
+    for (const name of [
+      'llm',
+      'llmIdentityOf',
+      'LLM_LIMITS',
+      'SPEND_MS',
+      'CONTEXT_RULE',
+      'LLM_TARGETS',
+      'refusalOf',
+      'bodyShapeOf',
+      'pick',
+      'checkOf',
+      'checkAgainstOf',
+      'sampleDigestOf',
+      'CheckSampleSchema',
+    ])
+      expect(typeof (entry as Record<string, unknown>)[name], name).not.toBe('undefined')
+  })
+  it('its types are exported too (a compile-time check: this test fails to type-check without them)', () => {
+    type Named = [
+      entry.Spend,
+      entry.Ticket,
+      entry.Held,
+      entry.Settlement,
+      entry.LlmOptions,
+      entry.LlmEntry,
+      entry.Usage,
+      entry.ModelRefusal,
+      entry.RefusalClass,
+      entry.PickState,
+      entry.CheckSample,
+    ]
+    const named: Named | null = null
+    expect(named).toBeNull()
+  })
   it('runs in Node, with no DOM', () => {
     expect('document' in globalThis).toBe(false)
   })
