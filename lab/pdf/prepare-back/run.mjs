@@ -9,6 +9,8 @@
 //   spec §3), for its differential;
 //   <out>/located/<id>.json what the gate reads beside the dump: each unit's place, cause, member ords; the wrap's pages; parts;
 //   the float lines (`floatLines`: Located.floatLines, a paper's words: lab data alone; float-lines.mjs reports them);
+//   the link targets (`linkTargets`: each float's box or why none, each destination's landing, the boxed floats read against
+//   the parts: link-targets.mjs; floats-gate.mjs is their gate) and the link phases' time (`linkMs`);
 //   <out>/ownership/<id>.json what the ownership's check finds (Located.disagreements, packages/engine/src/locate/ownership.ts),
 //   in a file of its own so that every object and dump the chain compares stays as it was: the carried (the figure text
 //   made of a printed line, its element's glyphs listed and owned by none: `takeAsStated`) and the found counted apart and by
@@ -29,6 +31,7 @@ import * as PL from '@cantoo/pdf-lib'
 import { analyze, inMemory, originalFactsOf, prepare, readArxiv, stateOf, treeOf } from '@readarxiv/engine'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { deflate, inflate } from './codec.mjs'
+import { linkTargetsOf } from './link-targets.mjs'
 import { flatOf, pieceKOf } from './pieces.mjs'
 import { silentInkOf } from './silent-gate.mjs'
 import { keptWhyOf, statedOf, trailsOf } from './stated.mjs'
@@ -331,6 +334,10 @@ writeFileSync(join(OUT, 'located', `${id}.json`), `${JSON.stringify({
   moves: tally?.mapping.moves.length ?? 0, stretches: tally?.mapping.stretches ?? [],
   identical: tally?.mapping.identical.filter(Boolean).length ?? 0,
   floatLines: located?.floatLines ?? null,
+  // (each float's box or why none, each destination's landing, and the boxed floats read against the parts: link-targets.mjs,
+  // floats-gate.mjs; the link phases' time)
+  linkTargets: located ? linkTargetsOf({ floats: located.floats, landings: located.targets, refused: located.refusedTargets ?? [], dests: tally.dests, parts: written.parts, head }) : null,
+  linkMs: located?.linkMs ?? null,
   peakRss: process.resourceUsage().maxRSS,
 })}\n`)
 // ---- the ownership's check: each glyph whose owner and the members' lists disagree, and a fixed member's glyph in a group;

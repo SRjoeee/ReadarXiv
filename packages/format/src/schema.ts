@@ -607,6 +607,19 @@ export const Link = z.object({
   page: page.optional(),
   border: LinkBorder.optional(),
 })
+/** the kind of the thing a destination of the paper lands on (link previews, docs/PDF-READER.md §20): the kind of the unit at the
+ *  point the destination names on A, never the destination's name. A unit of another kind (a theorem, an item, a cell) is no
+ *  target: its links keep their jump alone */
+export const TargetKind = z.enum(['reference', 'heading', 'footnote', 'display', 'float'])
+/** where a destination of the paper lands, as the prepare matched it (docs/PDF-READER.md §20.2): the destination as Link.to.dest
+ *  writes it (PDF.js's dest as JSON), its kind, its page on A, the member there (a float's: its caption's ord), and its box on A
+ *  (PDF units, y up, x0 y0 x1 y1: a reference's or a note's lines in the column the destination names, a display's ink, a float's
+ *  drawing with its caption, a heading's window from its top across its column's measure); for a heading whose window runs
+ *  past its page's text foot, the next page and the box there */
+export const Target = z.union([
+  z.tuple([z.string().max(2048), TargetKind, page, int.min(0), Box]),
+  z.tuple([z.string().max(2048), TargetKind, page, int.min(0), Box, page, Box]),
+])
 /** the paper's fonts as A names them (base names, subset tag off), with the glyphs of located units set in each, most first:
  *  what the reader picks its served faces by (typeset-inputs A3, A4) */
 export const Faces = z.object({ fonts: z.array(z.tuple([z.string(), int])) })
@@ -698,6 +711,10 @@ export const Head = z.object({
   // marked request died where TeX said no error, and every one from it on was asked without them, so that the paragraph ends
   // and alignment those points state were read off the page. Absent: every class (the corpus's every paper but such a one)
   reduced: z.literal(true).optional(),
+  // where each destination of the paper's links lands (Target), sorted by destination, each destination once; one that lands on
+  // nothing a target kind covers is absent, and so is the field where none lands (a head made before states none: a reader then
+  // shows no preview and keeps every jump). A reader of before strips it, so FORMAT stays (docs/PDF-READER.md §20)
+  targets: z.array(Target).optional(),
 })
 
 // ---------------------------------------------------------------- a translation (packages/translate's Result, by unit id)
@@ -766,6 +783,8 @@ export type Named = z.infer<typeof Named>
 export type Part = z.infer<typeof Part>
 export type Original = z.infer<typeof Original>
 export type Head = z.infer<typeof Head>
+export type TargetKind = z.infer<typeof TargetKind>
+export type Target = z.infer<typeof Target>
 export type Why = z.infer<typeof Why>
 /** what a reader is told of a unit that got no translation, by the kind its words are keyed on (packages/ui
  *  ProviderErrorKind, which holds these): a reply no translator gave back whole is an invalid response; a translator out of
