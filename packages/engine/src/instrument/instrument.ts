@@ -33,6 +33,7 @@ import {
 import { groupFacts } from '../marks/faces.ts'
 import { holdsLetter } from '../locate/figure-lines.ts'
 import { isInk } from '../locate/lines.ts'
+import { INKED_CLASSES } from '../locate/work.ts'
 import { linkTargetOf, unicodeOf } from '../locate/ink.ts'
 import { ownersOf, ROLE } from '../instrument.ts'
 import { readPdf } from '../read.ts'
@@ -44,6 +45,7 @@ import {
   followsOf,
   headEnd,
   INK_ANY,
+  INVISIBLE,
   joinedRead,
   leadStep,
   probeFactsOf,
@@ -55,6 +57,7 @@ import {
 import { ownOf } from '../own/own.ts'
 import { READ_ALONE, regionsOf, WANT } from '../own/stream.ts'
 import { BACKREF_LIST, forcedBreak, lastTexLog, startOf, statedGlue } from '../source/latex-front.ts'
+import { textless } from '../source/arg-roles.ts'
 import { bundleUnitsOf } from './units.ts'
 import { phClass, texToText } from './layer1.ts'
 import { textPieceOf } from '../source/text-piece.ts'
@@ -1263,13 +1266,19 @@ export function placesOf(
 }
 
 /** The pieces whose span the instrument states empty, TeX setting no ink for them where they stand, by unit index and piece
- *  id: a paper's macro the marking's probe said sets none (its `inkless`, to which the marking gives no point); and a text
- *  macro (classesOf's macro or umacro) the marking never marks, its rendering never ink by the marking's own reading (marks.ts
- *  classOf null: INVISIBLE, STRUCTURE, textless; a .bbl's \newblock, \ttfamily, \sloppy), whose places therefore no compile
- *  states. Stated empty, such a piece is drawn as nothing, proven (El.text ''); stated nothing, the typesetter leaves its
- *  unit unproven (a paper's own macro of no stated ink and no text: lay/read.ts), every BibTeX entry English. `units` the
- *  source units, `classes` each
- *  unit's classesOf by piece id */
+ *  id: a paper's macro the marking's probe said sets none (its `inkless`, to which the marking gives no point); and an element
+ *  the marking reads as setting no ink by TeX's own tables, to which it gives no mark (marks.ts classOf null: one of TeX's and
+ *  LaTeX's control words that set none, INVISIBLE: `\\index`, `\\color`, `\\label`, a skip, a .bbl's \\newblock, \\ttfamily,
+ *  \\sloppy; or one the role table proves can set no letters, source/arg-roles.ts textless: a register's or a length's setting),
+ *  whose places therefore no compile states, whatever class the element carries: one classification for both readers. Where
+ *  its class is one the reading draws from its ink (locate/work.ts INKED_CLASSES: an `\\index{…}` or a `\\color[HTML]{…}` the
+ *  class table reads as `other`, a text macro), stated empty it is drawn as nothing, proven (El.text ''); stated nothing, the
+ *  typesetter left its unit unproven (an inked element of no found ink and no text: lay/read.ts), the original's: every
+ *  BibTeX entry English, every paragraph holding an index entry. Of the marking's null, not an alignment's tab, a stray brace,
+ *  a parameter or a script mark (STRUCTURE): a table's rows read as prose would then be laid as prose over a table, and a
+ *  script mark in text sets a formula; nor a forced break (a space's class, which states its own kind). A class that draws no
+ *  ink (a space, `zero`) reads no such statement: those are left out. `units` the source units, `classes` each unit's
+ *  classesOf by piece id */
 export function inklessPieces(
   units: readonly Unit[],
   { classes, inkless = null }: { classes: ClassesBy; inkless?: readonly string[] | null },
@@ -1282,7 +1291,9 @@ export function inklessPieces(
       if (p.t !== 'ph') return
       const marked = classOf(p),
         cls = classes[i]?.get(String(k))?.cls
-      if ((marked === 'macro' && noInk.has(p.src)) || (marked === null && (cls === 'macro' || cls === 'umacro')))
+      // (the marking's reading of no ink, as classOf reads it: its source alone)
+      const noInkRead = marked === null && (INVISIBLE.test(p.src ?? '') || textless(p.src ?? ''))
+      if ((marked === 'macro' && noInk.has(p.src)) || (noInkRead && cls !== undefined && INKED_CLASSES.has(cls)))
         out.push({ unit: i, piece: String(k) })
     }),
   )

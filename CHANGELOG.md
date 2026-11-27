@@ -4,6 +4,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- Fixed: in the PDF reader, a paragraph, a caption or a theorem holding an index entry, such as `word\index{word}`, or a colour given by a model, such as `\color[HTML]{3366AA}`, is translated. Such a paragraph had stayed in the original language.
 - Fixed: in the PDF reader, a heading the paper's class sets in capitals after storing its title, such as a numbered section of a REVTeX 4.0 paper, and a proof's title under thmtools, such as `\begin{proof}[Proof of Theorem 2]`, are translated as headings: the section keeps its number as printed, and a heading of two lines is one heading. The number had been sent to the translator as a word, and a two-line heading translated as two pieces.
 - Fixed: in the PDF reader, a paper that opens or closes a list, a box, a theorem or a displayed formula with a command of its own, such as `\ben` for `\begin{enumerate}` or `\ethm` for `\end{theorem}`, is translated paragraph by paragraph as printed, its formulas kept as printed. Such paragraphs had stayed in the original language, or run together with the formula's text sent to the translator.
 - Fixed: in the PDF reader, a paragraph that goes on after a displayed formula with an accented word, such as "An étale module", is translated; and a bibliography whose paper defines its field command with an optional argument, so that the page prints each field's name before its value, is translated as printed. Both had stayed in the original language.
