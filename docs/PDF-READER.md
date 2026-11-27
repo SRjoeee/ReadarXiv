@@ -10688,7 +10688,7 @@ opened by a macro of one argument or by one TeX delimits had its formula read as
 ran to the file's end. Four of the 29 are displays the reader already read as one display (`\be … \ee`); their element is
 unproven downstream of the source reader, and stays so here.
 
-**The reading** (`source/latex-front.ts`, `boundaryAt`): a call is read by the meaning its macro has where it stands, its body
+**The reading** (`source/latex-front.ts`, `boundaryAt`, the walk's `boundaryCut`): a call is read by the meaning its macro has where it stands, its body
 given the call's arguments as TeX takes them (an optional first and its default, undelimited ones, ones a \def's parameter
 text delimits by a token: `meaningCall`). The body opens environment X where its first token is `\begin{X}` and it leaves X
 open; it closes X where its last token is `\end{X}` and no `\begin{X}` comes before it; a body of a delimited macro that is one
@@ -10710,8 +10710,9 @@ with no argument, and `\renewcommand{\be}{B}` in the body ends the boundary from
 
 **What it protects.** A macro that only looks like a boundary is none: its `\begin` in a string (`\string\begin`), in a
 conditional's branch (`\iffalse\begin{…}\fi`), in an argument another command takes (`\gobble{\begin{…}}`) begins its body with
-another token. Where the reading cannot tell — an `\edef` or `\xdef`, a definition inside a group or an environment (TeX undoes
-it at their end), one in a conditional whose branch the source cannot tell, a `\let` of a meaning not read, a call whose
+another token. Where the reading cannot tell — an `\edef` or `\xdef`, xparse's `\NewDocumentCommand` family (its argument specification
+not taken apart), a definition inside a group or an environment (TeX undoes it at their end), one in a conditional whose
+branch the source cannot tell, a `\let` of a meaning not read, a call whose
 arguments are not read whole, a macro whose meaning no file read in order gives — the call is read as before, the old form
 included. A body that sets a display whole around an undelimited argument (`\newcommand{\eqn}[1]{\begin{equation}#1\end{equation}}`)
 is no boundary, read as before (`displayArgEnd`, §18.95).
