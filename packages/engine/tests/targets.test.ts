@@ -21,7 +21,17 @@ const line = (page: number, y: number, x0 = 72, x1 = 300, m0 = 72, m1 = 300, col
   m1,
   0,
 ]
-type Spec = { kind: string; lines: Line[]; entry?: true; els?: [string, El][]; glyphs?: number[][] }
+type Spec = {
+  kind: string
+  lines: Line[]
+  entry?: true
+  els?: [string, El][]
+  glyphs?: number[][]
+  /** its label's ink: page, x0, y0, x1, y1, baseline */
+  label?: [number, number, number, number, number, number]
+  /** its unit's classes (the instrument's: what the bundle states each element's kind and text by) */
+  classes?: [string, { cls: string; text?: string }][]
+}
 /** B's column bodies for the fake: each A glyph's B glyph (`toB`), each B page's glyph count and its body brackets' points */
 type Bodies = { toB: Record<number, number>; pages: { n: number; points: [string, number][] }[] }
 function workOf(specs: Spec[], frames: Map<number, TexFrame> = new Map(), pages = 2, bodies?: Bodies): Work {
@@ -30,6 +40,7 @@ function workOf(specs: Spec[], frames: Map<number, TexFrame> = new Map(), pages 
     kind: s.kind,
     content: [],
     ...(s.entry ? { entry: true as const } : {}),
+    ...(s.classes ? { classes: s.classes } : {}),
   }))
   const members = specs.map(
     (s, ord) =>
@@ -41,6 +52,7 @@ function workOf(specs: Spec[], frames: Map<number, TexFrame> = new Map(), pages 
         lines: s.lines,
         elements: s.els ?? [],
         lineGlyphs: s.glyphs ?? [],
+        ...(s.label ? { labelAt: { kind: 'number', ink: s.label } } : {}),
       }) as unknown as Member,
   )
   const bp = bodies?.pages ?? []
@@ -395,9 +407,11 @@ describe('a landing is stated only on the engine’s own evidence (the lead’s 
     expect(targetsOf(w, dests({ 'Item.2': { page: 1, x: 90, y: 620 } }), [])).toEqual([])
   })
   it('an anchor at the origin of an entry’s first line (unraised, at its left edge and on its baseline) is that entry’s, past the next one’s edge under it', () => {
+    // (the next entry 10 under it: this fake's bands, 9 high, would meet at a closer pitch, and a box meeting another's band is
+    // never stated)
     const w = workOf([
       { kind: 'reference', entry: true, lines: [line(1, 639.82, 57.04, 300)] },
-      { kind: 'reference', entry: true, lines: [line(1, 631.85, 57.04, 300)] },
+      { kind: 'reference', entry: true, lines: [line(1, 629.82, 57.04, 300)] },
     ])
     expect(targetsOf(w, dests({ 'cite.z': { page: 1, x: 57.04, y: 639.82 } }), [])).toMatchObject([
       { kind: 'reference', ord: 0 },
@@ -421,5 +435,161 @@ describe('a landing is stated only on the engine’s own evidence (the lead’s 
       { kind: 'reference', entry: true, lines: [line(1, 690, 100, 300)] },
     ])
     expect(targetsOf(w, dests({ 'cite.y': { page: 1, x: 100, y: 700 } }), [])).toEqual([])
+  })
+})
+
+describe('a stated box holds the whole of what it names, or the target is not stated (the float rule, every kind)', () => {
+  /** the landings and the refusals of one destination */
+  const of = (w: Work, name: string, pt: DestPoint) => {
+    const refused: Parameters<typeof targetsOf>[3] = []
+    const t = targetsOf(w, dests({ [name]: pt }), [], refused)
+    return { t, refused: refused.map(([, kind, cause]) => [kind, cause]) }
+  }
+  // (a note whose first line ends with a comma after a URL TeX set outside the unit's text: the line states the comma alone)
+  const note = (url: El): Spec => ({
+    kind: 'footnote',
+    lines: [line(1, 100, 290, 292), line(1, 88, 72, 200)],
+    els: [['u', url]],
+  })
+  it('a note holding an element TeX set whose ink the bundle does not state (kept, or not found) is stated with no box', () => {
+    const kept: El = { kind: 'other', literal: 1, copy: 'http://x.org/', ink: [], keep: 1 }
+    expect(of(workOf([note(kept)]), 'Hfootnote.1', { page: 1, x: 290, y: 110 })).toEqual({
+      t: [],
+      refused: [['footnote', 'unstated']],
+    })
+    const unfound: El = { kind: 'other', literal: 1, copy: 'http://x.org/', ink: [] }
+    expect(of(workOf([note(unfound)]), 'Hfootnote.1', { page: 1, x: 290, y: 110 }).refused).toEqual([
+      ['footnote', 'unstated'],
+    ])
+  })
+  it('an element of no ink stated to set nothing, one whose text is its unit’s own, and a kept space leave the box stated', () => {
+    for (const el of [
+      { kind: 'umacro', ink: [], text: '' },
+      { kind: 'umacro', ink: [], text: '. ' },
+      { kind: 'space', ink: [], keep: 1 },
+      { kind: 'zero', ink: [] },
+    ] as El[])
+      expect(of(workOf([note(el)]), 'Hfootnote.1', { page: 1, x: 290, y: 110 }).t).toEqual([
+        { dest: q('Hfootnote.1'), kind: 'footnote', page: 1, ord: 0, box: [72, 86, 292, 107] },
+      ])
+  })
+  it('an element is read as the bundle states it: by its unit’s class and the text its class states', () => {
+    // (locate's element of no ink, of a kind of no ink, whose class the instrument states inked: no text, its ink not found)
+    const url: El = { kind: 'symbol', ink: [] }
+    const w = workOf([{ ...note(url), classes: [['u', { cls: 'other' }]] }])
+    expect(of(w, 'Hfootnote.1', { page: 1, x: 290, y: 110 }).refused).toEqual([['footnote', 'unstated']])
+    // (an inked element of no ink whose class states its text, a text macro's: its glyphs the unit's text)
+    const mac: El = { kind: 'other', ink: [] }
+    const v = workOf([{ ...note(mac), classes: [['u', { cls: 'umacro', text: 'x' }]] }])
+    expect(of(v, 'Hfootnote.1', { page: 1, x: 290, y: 110 }).t).toHaveLength(1)
+  })
+  it('an element whose ink reaches past its line’s is inside the box', () => {
+    const el: El = { kind: 'other', ink: [[1, 280, 697, 300.4, 708, 700]] }
+    const w = workOf([{ kind: 'reference', entry: true, lines: [line(1, 700, 80, 300)], els: [['e', el]] }])
+    expect(of(w, 'cite.a', { page: 1, x: 72, y: 712 }).t).toMatchObject([{ box: [80, 697, 300.4, 708] }])
+  })
+  it('a reference that goes on in the next column, or on the next page, is stated with no box', () => {
+    const col = workOf([{ kind: 'reference', entry: true, lines: [line(1, 100, 72, 300), line(1, 700, 312, 540)] }])
+    expect(of(col, 'cite.a', { page: 1, x: 72, y: 112 })).toEqual({ t: [], refused: [['reference', 'pieces']] })
+    const page = workOf([{ kind: 'reference', entry: true, lines: [line(1, 100, 72, 300), line(2, 700, 72, 300)] }])
+    expect(of(page, 'cite.a', { page: 1, x: 72, y: 112 }).refused).toEqual([['reference', 'pieces']])
+  })
+  it('a note whose box would hold another note set on its line is stated with no box', () => {
+    const w = workOf([
+      { kind: 'footnote', lines: [line(1, 100, 72, 300), line(1, 88, 72, 150)] },
+      { kind: 'footnote', lines: [line(1, 88, 160, 300)] },
+    ])
+    expect(of(w, 'Hfootnote.1', { page: 1, x: 72, y: 112 })).toEqual({ t: [], refused: [['footnote', 'foreign']] })
+  })
+  it('a display whose ink goes on to the next page, or whose box another member’s line meets, is stated with no box', () => {
+    const two: El = {
+      kind: 'display',
+      ink: [
+        [1, 150, 80, 250, 100, 90],
+        [2, 150, 700, 250, 720, 710],
+      ],
+    }
+    const w = workOf([{ kind: 'para', lines: [line(1, 120)], els: [['e', two]] }])
+    expect(of(w, 'equation.1', { page: 1, x: 150, y: 102 })).toEqual({ t: [], refused: [['display', 'pieces']] })
+    const low: El = { kind: 'display', ink: [[1, 150, 598, 250, 630, 610]] }
+    const v = workOf([
+      { kind: 'para', lines: [line(1, 650)], els: [['e', low]] },
+      { kind: 'theorem', lines: [line(1, 592)] },
+    ])
+    expect(of(v, 'equation.2', { page: 1, x: 150, y: 632 })).toEqual({ t: [], refused: [['display', 'foreign']] })
+  })
+  it('a heading’s window holds its own ink whole: its label hung left of its measure, its line past it', () => {
+    const w = workOf(
+      [
+        { kind: 'heading', lines: [line(1, 600, 100, 302, 72, 300)], label: [1, 66, 598, 90, 608.5, 600] },
+        // (a paragraph under it whose ink overhangs its measure, TeX's measure inside the window's: its section's text)
+        { kind: 'para', lines: [line(1, 580, 71.5, 300.6, 72, 300)] },
+      ],
+      new Map([[1, { block: [72, 300], columns: [[72, 300]], foot: 72 }]]),
+    )
+    expect(of(w, 'section.1', { page: 1, x: 66, y: 618 }).t).toMatchObject([
+      { kind: 'heading', box: [66, Math.floor((608.5 - SECTION_WINDOW * 792) * 100) / 100, 302, 608.5] },
+    ])
+  })
+  it('a heading’s window that would hold a line of a wider measure, or one reaching above its top, is stated with no box', () => {
+    const frames = new Map([
+      [
+        1,
+        {
+          block: [72, 540] as [number, number],
+          columns: [
+            [72, 300],
+            [312, 540],
+          ] as [number, number][],
+          foot: 72,
+        },
+      ],
+    ])
+    // (a caption across both columns under a heading of the left one)
+    const wide = workOf(
+      [
+        { kind: 'heading', lines: [line(1, 600, 72, 200, 72, 300)] },
+        { kind: 'caption', lines: [line(1, 560, 72, 540, 72, 540, 2)] },
+      ],
+      frames,
+    )
+    expect(of(wide, 'section.1', { page: 1, x: 72, y: 612 })).toEqual({ t: [], refused: [['heading', 'foreign']] })
+    // (the paragraph before it, its last line's descenders reaching under the heading's top)
+    const above = workOf(
+      [
+        { kind: 'para', lines: [line(1, 608.5)] },
+        { kind: 'heading', lines: [line(1, 600, 72, 140, 72, 300)] },
+      ],
+      frames,
+    )
+    expect(of(above, 'section.1', { page: 1, x: 72, y: 600 })).toEqual({ t: [], refused: [['heading', 'foreign']] })
+  })
+  it('a heading’s window holds whole what TeX set on its line: a paragraph run in on it, taller than the heading', () => {
+    const frames = new Map([
+      [1, { block: [72, 300] as [number, number], columns: [[72, 300]] as [number, number][], foot: 72 }],
+    ])
+    // (its text a little taller, a formula in it taller still, both on the heading's baseline)
+    const formula: El = { kind: 'other', ink: [[1, 200, 597, 240, 609.25, 600]] }
+    const runIn = workOf(
+      [
+        { kind: 'heading', lines: [line(1, 600, 72, 140, 72, 300)] },
+        { kind: 'para', lines: [[1, 0, 150, 300, 600, 607.5, 598, 72, 300, 0], line(1, 588)], els: [['f', formula]] },
+      ],
+      frames,
+    )
+    expect(of(runIn, 'section.1', { page: 1, x: 72, y: 612 }).t).toMatchObject([
+      { kind: 'heading', box: [72, Math.floor((609.25 - SECTION_WINDOW * 792) * 100) / 100, 300, 609.25] },
+    ])
+  })
+  it('a member set turned is read on the page: its line, turned back, meeting a note’s box is foreign', () => {
+    // (a line of a frame turned a quarter (its x axis the page's y): in the frame x 90..110 at height -160..-150, on the page
+    // x 150..160, y 90..110: inside the note's box)
+    const turned = { ...line(1, -158, 90, 110), 5: -150, 6: -160 } as Line
+    const w = workOf([
+      { kind: 'footnote', lines: [line(1, 100, 72, 300), line(1, 88, 72, 200)] },
+      { kind: 'figure', lines: [turned] },
+    ])
+    ;(w.members[1] as { dir?: [number, number] }).dir = [0, 1]
+    expect(of(w, 'Hfootnote.1', { page: 1, x: 72, y: 112 }).refused).toEqual([['footnote', 'foreign']])
   })
 })
