@@ -612,8 +612,9 @@ is sent at most twice: the adapter's own timer ends the wait before the chain's,
 the abort. A refusal the ledger acts on (slow, spent, a key) is asked again, the batch whole, once the ledger has taken its
 settlement (a ledger asked before then would answer the refused key again), through the ledger, which picks another key or
 holds it: at most two requests a `send`, never one a unit; a second such refusal, a hold, or a settlement not taken within
-the spend port's bound (`SPEND_MS`) is a pause past the chain's patience, so the units come back unavailable and the host
-asks them again in whole batches. The model's own refusal (Anthropic's stop reason `refusal`; a 403 OpenRouter's body says is a moderation or a
+the spend port's bound (`SPEND_MS`) or before the adapter's own timer ends the request is a pause past the chain's
+patience (never a timeout, which the chain would ask again), so the units come back unavailable and the host asks them
+again in whole batches. The model's own refusal (Anthropic's stop reason `refusal`; a 403 OpenRouter's body says is a moderation or a
 content policy's) is split like a request too large, and the lone unit so refused passes to the next translator (with none
 after it, the chain's runs floor asks the model again for the unit's stretches). A provider's 403 is the key's only where
 its body names an authentication or permission error, so one flagged text never disables a key; a 200 whose body holds

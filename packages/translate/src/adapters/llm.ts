@@ -8,8 +8,8 @@
 // transport heeds the abort, so the chain's own timeout (3 tries) never decides. A refusal the ledger acts on (slow,
 // spent, a key) is asked again, the batch whole, once the ledger has taken its settlement (within SPEND_MS), through the
 // ledger, which picks another key or holds it: at most two requests a `send`, never one a unit. A second such refusal, the
-// ledger's hold, or a settlement not taken in time is a pause past the chain's patience, so the units come back
-// unavailable and the host asks them again in whole batches.
+// ledger's hold, or a settlement not taken in time (SPEND_MS, or before this adapter's own timer ends the request) is a
+// pause past the chain's patience, so the units come back unavailable and the host asks them again in whole batches.
 //
 // The identity names who answers, not the route: the entry's `provider`, `upstream`, `shape` and `model` are hashed, the
 // URL is not. The URL is the host's (its account and its gateway's names, which no identity of this repository holds, and
@@ -333,10 +333,11 @@ export function llm(o: LlmOptions): Translator {
               case 'spent':
               case 'key': {
                 // (asked again, the batch whole, once the ledger has taken the refusal: it gives another key or holds.
-                // A ledger that has not taken it within SPEND_MS would answer the refused key again: no request)
+                // A ledger that has not taken it within SPEND_MS, or before this adapter's own timer, would answer the
+                // refused key again: no request, the cool-down, never `again`, which the chain would ask again)
                 if (sent < REQUESTS) {
                   const known = await taken(settled, own.signal)
-                  if (signal.aborted || timedOut) throw ended('no answer from the ledger')
+                  if (signal.aborted) throw new Fault('abort', 'aborted', 'llm: aborted')
                   if (known) continue
                 }
                 throw new Fault('cool', 'rate', what, {
