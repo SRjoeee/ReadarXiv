@@ -51,7 +51,9 @@ function workOf(specs: Spec[], frames: Map<number, TexFrame> = new Map(), pages 
   const aToB = new Int32Array(1000).fill(-1)
   for (const [a, b] of Object.entries(bodies?.toB ?? {})) aToB[Number(a)] = b
   const pageB = new Int32Array(offB[bp.length]!)
-  bp.forEach((p, i) => pageB.fill(i + 1, offB[i]!, offB[i + 1]!))
+  bp.forEach((_, i) => {
+    pageB.fill(i + 1, offB[i]!, offB[i + 1]!)
+  })
   const B = {
     pages: bp.map((p) => ({
       glyphs: { length: p.n },

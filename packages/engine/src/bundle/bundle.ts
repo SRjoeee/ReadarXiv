@@ -21,8 +21,7 @@ import {
   type PrepWhy,
   sha256Hex,
   type Style,
-  type Target,
-  TARGET_DEST_MAX,
+  Target,
   type Unit,
   write,
 } from '@readarxiv/format'
@@ -608,17 +607,17 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
 }
 
 /** the head's targets (docs/PDF-READER.md §20): each landing locate made (locate/targets.ts) as format's Target, sorted by its
- *  destination, each destination once; a destination past format's TARGET_DEST_MAX left out (its links keep their jump), so
- *  that no landing can refuse the head */
+ *  destination, each destination once; one format's Target refuses (a destination past its bound) left out, its links keeping
+ *  their jump, so that no landing can refuse the head */
 export function targetsOf(landings: readonly Landing[]): Target[] {
-  return landings
-    .filter((l) => l.dest.length <= TARGET_DEST_MAX)
+  return [...landings]
     .sort((a, b) => (a.dest < b.dest ? -1 : a.dest > b.dest ? 1 : 0))
     .filter((l, i, all) => i === 0 || all[i - 1]!.dest !== l.dest)
     .map(
       (l): Target =>
         l.next ? [l.dest, l.kind, l.page, l.ord, l.box, l.next[0], l.next[1]] : [l.dest, l.kind, l.page, l.ord, l.box],
     )
+    .filter((t) => Target.safeParse(t).success)
 }
 
 /** the paper's fonts as A names them, by the glyphs of located members set in each, most first (at most 24) */

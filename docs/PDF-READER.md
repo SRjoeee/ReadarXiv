@@ -14218,7 +14218,7 @@ absent from `targets`, and its links keep their jump alone.
 ### 20.4 The head's targets
 
 `Head.targets` (format's `Target`, `TargetKind`): `[dest, kind, page, ord, box]`, or with `[…, next page, next box]` for a
-heading that runs on; sorted by destination, each once; a destination past `TARGET_DEST_MAX` (2,048 characters) left out, so
+heading that runs on; sorted by destination, each once; a destination past the format's bound (2,048 characters) left out, so
 that no landing can refuse the head; absent where nothing lands (a head of before states none, and a reader
 then shows no preview and keeps every jump). Optional: a reader of before strips it, so `FORMAT` stays 1. `ord` is the member's
 (a float's: its caption's). Boxes are PDF units, y up, on the format's grid.
