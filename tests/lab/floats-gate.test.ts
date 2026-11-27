@@ -250,6 +250,12 @@ describe("a citation landed by its entry's key: read again from the keys and the
     expect(r.keyRefused).toEqual([['"cite.a"', 0, 1]])
     expect(gateOf([['p1', { floats: [], wrong: [], ...r }]]).proof).toEqual({})
   })
+  it("a landing by key the edge reading contradicts is the key's: by key, never wrong, the edge's member counted (`keyEdge`)", () => {
+    // (member 1's edge at 80 is the first under the point: the edge names it; the key names member 0, where it landed)
+    const r = at('"cite.a"', 0, 80, 688, keys, { geometry: 1, edge: 1 })
+    expect(r).toMatchObject({ edge: [], keyWrong: [], keyEdge: [['"cite.a"', 0, 1]], proof: { reference: { byKey: 1, wrong: 0 } } })
+    expect(gateOf([['p1', { floats: [], wrong: [], ...r }]])).toMatchObject({ pass: true, keyEdge: 1 })
+  })
   it('the gate sums the proof by key', () => {
     const r = at('"cite.a"', 0, 70, 712, keys, { geometry: 1 })
     expect(gateOf([['p1', { floats: [], wrong: [], ...r }]])).toMatchObject({ pass: true, proof: { reference: { byKey: 1 } }, keyGeometry: 1 })

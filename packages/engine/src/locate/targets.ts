@@ -279,7 +279,11 @@ export function targetsOf(
       const mine = byKeyOf(dest, pt, entry)
       if (!mine) continue
       if (Array.isArray(mine)) refused.push([dest, mine[0], mine[2]])
-      else out.push({ ...mine, byKey: { geometry } })
+      else {
+        // (the edge reading, counted where it names another member: the key decides)
+        const edge = pt.x === null ? null : edgeOf(pt.page, pt.x, pt.y)
+        out.push({ ...mine, byKey: { geometry, ...(edge !== null && edge !== mine.ord ? { edge } : {}) } })
+      }
       continue
     }
     if (!got) continue
@@ -310,14 +314,13 @@ export function targetsOf(
     const mems = locatedOf.get(holders[0]!) ?? []
     return mems.length === 1 ? mems[0]! : null
   }
-  /** a citation's landing on the entry its key names: refused (`key`) where the entry begins on another page than the point's or
-   *  another member's left edge stands at the point (the edge reading names it); else as any reference, its box holding the whole
-   *  of it or refused */
+  /** a citation's landing on the entry its key names, whatever the edge reading names (an identity the paper states, against a
+   *  reading of positions: a label of the entry above at a raised anchor's x, a label set apart from its entry): refused (`key`)
+   *  where the entry begins on another page than the point's, the one contradiction; else as any reference, its box holding the
+   *  whole of it or refused */
   function byKeyOf(dest: string, pt: DestPoint, mem: Member): Landing | [TargetKind, number, Refusal] | null {
     const l = mem.lines[0]
     if (!l || l[0] !== pt.page) return ['reference', mem.ord, 'key']
-    const edge = pt.x === null ? null : edgeOf(pt.page, pt.x, pt.y!)
-    if (edge !== null && edge !== mem.ord) return ['reference', mem.ord, 'key']
     return landingOf(dest, pt.page, {
       what: 'line',
       mem,

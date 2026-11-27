@@ -11,10 +11,12 @@
 //   destination's x on the format's grid, its baseline the first under the point), its name's claim another kind
 //   (`disagree`), its name claiming nothing and no edge confirming it (`unproven`): the gate fails on any;
 // - a citation whose name holds one unit's key (`keys`, run.mjs: each unit holding a bibliography key, with its one located
-//   member's ord or null): `byKey` where it lands on that member and no edge contradicts it, wrong where it lands on another
-//   (`keyWrong`); each landing by key that today's rule lands elsewhere (`keyGeometry`: [dest, ord, geometry]), each refusal for
-//   the key with the key's member and the edge's (`keyRefused`: [dest, key's ord, edge's ord or null]), and the keys taken
-//   against the citations' names (`keys`: taken, named, matched, the names no key reads, the keys no name reads);
+//   member's ord or null): `byKey` where it lands on that member, whatever the edge reading names (the key decides), wrong where
+//   it lands on another (`keyWrong`); each landing by key that the point's rule lands elsewhere (`keyGeometry`: [dest, ord,
+//   geometry]) and each one whose point the edge reading gives another member (`keyEdge`: [dest, ord, edge's ord]), each refusal
+//   for the key (its entry beginning on another page) with the key's member and the edge's (`keyRefused`: [dest, key's ord,
+//   edge's ord or null]), and the keys taken against the citations' names (`keys`: taken, named, matched, the names no key
+//   reads, the keys no name reads);
 // - bytes: the head's targets as written, raw and gzipped, and the head gzipped with and without them.
 import { gzipSync } from 'node:zlib'
 
@@ -188,7 +190,7 @@ export function linkTargetsOf({ floats, landings, refused = [], dests, parts, he
     const f = floatOfOrd.get(under[0])
     return f ? f.caption : under[0]
   }
-  const disagree = [], edge = [], unproven = [], pages = [], keyWrong = [], keyGeometry = []
+  const disagree = [], edge = [], unproven = [], pages = [], keyWrong = [], keyGeometry = [], keyEdge = []
   const proof = {}
   for (const l of landings) {
     const claim = claimOf(l.dest)
@@ -196,10 +198,11 @@ export function linkTargetsOf({ floats, landings, refused = [], dests, parts, he
     const k = keyOrdOf(l.dest, keys)
     const p = (proof[l.kind] ??= { byKey: 0, proved: 0, kindOnly: 0, wrong: 0 })
     let bad = true
+    const byKey = k !== undefined && k !== null
     if (claim === 'page') pages.push([l.dest, l.kind, l.ord])
-    else if (e !== null && e !== l.ord) edge.push([l.dest, l.kind, l.ord, e])
+    else if (byKey && k !== l.ord) keyWrong.push([l.dest, l.kind, l.ord, k])
+    else if (!byKey && e !== null && e !== l.ord) edge.push([l.dest, l.kind, l.ord, e])
     else if (claim && claim !== l.kind) disagree.push([l.dest, l.kind, claim])
-    else if (k !== undefined && k !== null && k !== l.ord) keyWrong.push([l.dest, l.kind, l.ord, k])
     else if (!claim && e !== l.ord) unproven.push([l.dest, l.kind, l.ord])
     else bad = false
     if (bad) p.wrong++
@@ -207,6 +210,8 @@ export function linkTargetsOf({ floats, landings, refused = [], dests, parts, he
     else if (e === l.ord) p.proved++
     else p.kindOnly++
     if (!bad && l.byKey && l.byKey.geometry !== l.ord) keyGeometry.push([l.dest, l.ord, l.byKey.geometry])
+    // (the key decides; where the edge reading names another member, counted)
+    if (!bad && byKey && e !== null && e !== l.ord) keyEdge.push([l.dest, l.ord, e])
   }
   // (each refusal for the key: the key's member and the edge's at the point)
   const keyRefused = refused.filter(([, , cause]) => cause === 'key').map(([dest]) => [dest, keyOrdOf(dest, keys) ?? null, edgeOf(dests.get(dest))])
@@ -256,6 +261,7 @@ export function linkTargetsOf({ floats, landings, refused = [], dests, parts, he
     pages,
     keyWrong,
     keyGeometry,
+    keyEdge,
     keyRefused,
     keys: {
       taken: keys.length,

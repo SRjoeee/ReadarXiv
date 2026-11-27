@@ -222,13 +222,13 @@ export interface Landing {
   box: Box4
   next?: [page: number, box: Box4]
   /** landed by its name's key (a citation's `cite.<key>`, the entry's \\bibitem's), with the member's ord the point's rule lands
-   *  the point on (`geometry`; null where it lands nowhere): the lab's check of the one against the other; the bundle does not
-   *  carry it */
-  byKey?: { geometry: number | null }
+   *  the point on (`geometry`; null where it lands nowhere) and the member the edge reading names where it names another
+   *  (`edge`): the lab's count of where the geometric evidence disagrees with the paper's identity; the bundle does not carry it */
+  byKey?: { geometry: number | null; edge?: number }
 }
 /** why a landing is not stated (targets.ts): the evidence contradicts it (a page's anchor `page`, another member's left edge at
  *  its point `edge`, its name's claim another kind `name`, its name claiming nothing and no edge confirming it `unproven`; the
- *  entry its name's key names beginning on another page than the point's, or another member's left edge at the point, `key`),
+ *  entry its name's key names beginning on another page than the point's, `key`),
  *  or its box cannot hold the whole of what it names (an element TeX set whose ink the bundle does not state `unstated`, what it
  *  names standing in two pieces `pieces`, the box meeting another member's ink `foreign`) */
 export type Refusal = 'page' | 'edge' | 'name' | 'unproven' | 'key' | 'unstated' | 'pieces' | 'foreign'

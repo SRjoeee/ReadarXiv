@@ -644,12 +644,21 @@ describe("a citation lands on the entry whose key its name holds (cite.<key>, th
     expect(t).toMatchObject([{ ord: 1 }])
     expect(t[0]!.byKey).toBeUndefined()
   })
-  it("another member's left edge at the point, or the entry beginning on another page: refused (`key`), never stated", () => {
-    // (the second entry's first line begins at the point's x, its baseline the first under it: the edge names it)
-    const edge = two({}, { lines: [line(1, 670, 100), line(1, 658, 90)] })
-    expect(of(edge, 'cite.a', { page: 1, x: 100, y: 682 })).toEqual({ t: [], refused: [['reference', 'key']] })
+  it("the key's entry beginning on another page than the point's: refused (`key`), never stated", () => {
     const page = two({ lines: [line(2, 700, 80), line(2, 688, 90)] })
     expect(of(page, 'cite.a', over)).toEqual({ t: [], refused: [['reference', 'key']] })
+  })
+  it("the label of the entry above at the point's x (an anchor raised past it): the key's entry lands all the same, the edge's member counted", () => {
+    // (each entry's label hung left at 60; the point raised over the second entry's first line past the first entry's: the edge
+    // reading names the first entry, whose label begins at the point's x with its baseline the first under the point)
+    const w = two(
+      { label: [1, 60, 698, 70, 707, 700] },
+      { lines: [line(1, 670, 80), line(1, 658, 90)], label: [1, 60, 668, 70, 677, 670] },
+    )
+    expect(of(w, 'cite.b', { page: 1, x: 60, y: 703 })).toEqual({
+      t: [{ dest: q('cite.b'), kind: 'reference', page: 1, ord: 1, box: [60, 656, 300, 677], byKey: { geometry: 0, edge: 0 } }],
+      refused: [],
+    })
   })
   it('the edge confirming the key: stated', () => {
     expect(of(two(), 'cite.a', { page: 1, x: 80, y: 703 }).t).toMatchObject([{ ord: 0, byKey: { geometry: 0 } }])

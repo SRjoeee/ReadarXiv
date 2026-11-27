@@ -14251,10 +14251,12 @@ byte for byte, case kept, lands on the one located member of the one unit holdin
 located, the point's rule below decides, and its evidence. No character is read otherwise than as itself, on either side,
 and a name that is a key with more after it is no key's: the entry its whole name keys may be one no unit holds. The suffixes
 of chapterbib and bibtopic are such names, and their bibliographies are other jobs' `.bbl` files, which the source reader does
-not read (the prepare's `aux-jobs`): over the regression corpus no citation is named so. The entry its key names is refused (`key`, the lab's) where it begins on another page than the
-destination's point, or where the edge reading (below) names another member: the two readings of the paper disagreeing, neither
-is stated. Where it lands, the box is a reference's (below), with its refusals. The point's rule is its check: the lab counts
-the landings by key that the rule lands elsewhere (§20.5).
+not read (the prepare's `aux-jobs`): over the regression corpus no citation is named so. The entry its key names lands whatever the edge reading (below) names: an identity the paper states, against a reading of
+positions (the lead's ruling of 2026-11-28, on the eye-read sheets: wherever the two disagreed, the edge had named the label of
+the entry above, at an anchor raised past it, or a label set apart from its entry, and the key the entry cited). It is refused
+(`key`, the lab's) where it begins on another page than the destination's point, the one contradiction. Where it lands, the box
+is a reference's (below), with its refusals. The point's rule and the edge reading are its checks, counted by the lab: the
+landings by key the rule lands elsewhere, and those whose point the edge reading gives another member (§20.5).
 
 Every other destination, by its point. In this order, a point lands on:
 
@@ -14325,7 +14327,7 @@ rule above judge each landing:
 A landing is not stated where its name is a page's (a page, no thing on it: the reader gives the jump alone), where the edge
 reading names another member, where its name claims another kind, or where its name claims nothing and the edge reading does
 not confirm its member. The refusals are the lab's (`Located.refusedTargets`), never the bundle's. A citation landed by its
-entry's key is proved by that identity (above), the edge reading its contradiction alone.
+entry's key is proved by that identity (above); the edge reading's disagreement is counted, never a refusal.
 
 ### 20.4 The head's targets
 
@@ -14348,12 +14350,13 @@ outside`); its member holding an element TeX set whose ink the part does not sta
 another member's ink meeting the box's inside (`foreign text`), a heading's window read as §20.3 reads it. A float's is wrong
 too where the engine counts any of `foreign`, `cut`, `outside` above 0 (none can be boxed so; the check holds the code to it).
 **And no stated landing wrong**,
-read again from the bundle's parts and the destinations: a page anchor, one the edge reading contradicts, one whose name
-claims another kind, a citation landed elsewhere than on the entry its name's key names (the units' keys as `run.mjs` reads
+read again from the bundle's parts and the destinations: a page anchor, one the edge reading contradicts (but a citation
+landed by its key: the key decides), one whose name claims another kind, a citation landed elsewhere than on the entry its name's key names (the units' keys as `run.mjs` reads
 them off the located units, the name read as §20.3 reads it), one whose name claims nothing and the edge does not confirm. The
 landings are counted by proof: by key, proved by the edge, their kind claimed by their name alone; beside them, never rules,
-each landing by key the point's rule lands elsewhere (`keyGeometry`), each refusal for the key with the key's member and the
-edge's (`keyRefused`), and the keys taken against the citations' names (matched, the names no key reads, the keys no name
+each landing by key the point's rule lands elsewhere (`keyGeometry`), each one whose point the edge reading gives another
+member (`keyEdge`: how often the geometric evidence is wrong where an identity can tell), each refusal for the key (its entry
+on another page) with the key's member and the edge's (`keyRefused`), and the keys taken against the citations' names (matched, the names no key reads, the keys no name
 reads). It fails where no paper of the run states a
 record (dumps made before the targets check nothing). The share of figures and tables
 boxed is reported by type with each miss's cause, never gated. Two readings of the landings are reported beside it, never

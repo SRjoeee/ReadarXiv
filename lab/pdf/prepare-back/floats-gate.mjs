@@ -10,7 +10,7 @@
 // on the entry its name's key names, one whose name claims nothing and no edge confirms. Exit 1 on any, or where no paper states
 // a record. The share of the figures and tables of a bracket that got a box is reported by type with the cause of each miss,
 // never gated; so are the landings by proof (by their entry's key, proved by the edge, by their name's kind alone), the landings
-// by key today's rule lands elsewhere, the refusals by kind and cause (the evidence's, and a box's that cannot hold its member
+// by key the point's rule lands elsewhere and those whose point the edge reading gives another member, the refusals by kind and cause (the evidence's, and a box's that cannot hold its member
 // whole), the destinations landed nowhere, the targets' size and the phases' time.
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -29,6 +29,7 @@ export function gateOf(records) {
   const disagree = []
   const edge = []
   let keyGeometry = 0
+  let keyEdge = 0
   const keyRefused = []
   const landingWrong = []
   const proof = {}
@@ -69,6 +70,7 @@ export function gateOf(records) {
       for (const f of ['byKey', 'proved', 'kindOnly', 'wrong']) t[f] += p[f] ?? 0
     }
     keyGeometry += r.keyGeometry?.length ?? 0
+    keyEdge += r.keyEdge?.length ?? 0
     for (const d of r.keyRefused ?? []) keyRefused.push([id, ...d])
     for (const [k, c] of Object.entries(r.dests?.refused ?? {})) {
       const t = (refusedBy[k] ??= {})
@@ -98,6 +100,7 @@ export function gateOf(records) {
     disagree,
     edge,
     keyGeometry,
+    keyEdge,
     keyRefused,
     bytes: {
       papers: sizes.length,
@@ -131,7 +134,7 @@ if (process.argv[1] === import.meta.filename) {
   const time = Object.fromEntries(Object.entries(ms).map(([k, v]) => [k, { p50: quantile(v, 0.5), p95: quantile(v, 0.95), max: Math.max(0, ...v) }]))
   const json = process.argv.find((a) => a.startsWith('--json='))?.slice(7)
   if (json) writeFileSync(json, `${JSON.stringify({ papers: records.length, ...g, ms: time }, null, 1)}\n`)
-  console.log(JSON.stringify({ papers: records.length, pass: g.pass, wrong: g.wrong, wrongBy: g.wrongBy, boxedUnstated: g.boxedUnstated, shares: g.shares, byType: g.byType, dests: { ...g.dests, named: undefined }, disagree: g.disagree.length, landingsWrong: g.landingsWrong, proof: g.proof, refused: g.refused, edge: g.edge.length, keyGeometry: g.keyGeometry, keyRefused: g.keyRefused.length, bytes: g.bytes, ms: time }))
+  console.log(JSON.stringify({ papers: records.length, pass: g.pass, wrong: g.wrong, wrongBy: g.wrongBy, boxedUnstated: g.boxedUnstated, shares: g.shares, byType: g.byType, dests: { ...g.dests, named: undefined }, disagree: g.disagree.length, landingsWrong: g.landingsWrong, proof: g.proof, refused: g.refused, edge: g.edge.length, keyGeometry: g.keyGeometry, keyEdge: g.keyEdge, keyRefused: g.keyRefused.length, bytes: g.bytes, ms: time }))
   for (const w of [...g.wrongRows, ...g.landingWrong].slice(0, 20)) console.log('WRONG', JSON.stringify(w))
   process.exit(g.pass ? 0 : 1)
 }
