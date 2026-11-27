@@ -55,6 +55,8 @@ export {
   type KnownSpanKind,
   Split,
   Style,
+  Target,
+  TargetKind,
   Tie,
   toggleKind,
   headNumberOf,

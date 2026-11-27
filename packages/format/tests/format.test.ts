@@ -6,11 +6,12 @@ import {
   canonical,
   chunkDigests,
   chunkMatches,
+  FORMAT,
   FormatError,
   fromUtf8,
   groupName,
   groupOf,
-  type Head,
+  Head,
   kindOfWhy,
   OpenAnswer,
   PaperDoc,
@@ -19,6 +20,7 @@ import {
   Row,
   read,
   sha256Hex,
+  type Target,
   type Units,
   unitId,
   utf8,
@@ -239,6 +241,48 @@ describe('read and write', () => {
     const { reduced: _, ...plain } = head
     expect(fromUtf8(write('head', plain).bytes)).not.toContain('reduced')
     expect(() => read('head', utf8(JSON.stringify({ ...head, reduced: false })))).toThrow(FormatError)
+  })
+  describe('the head states where each destination of the paper lands (`targets`, link previews)', () => {
+    const base: Head = {
+      format: 1,
+      paper: { id: '2501.00001', version: 1, pages: 3 },
+      made: 'test',
+      original: { bytes: 10, sha256: '0'.repeat(64), chunk: 65536, chunks: chunkDigests(new Uint8Array(10)) },
+      addOn: null,
+      units: [],
+      parts: [null, null, null],
+    }
+    const targets: Target[] = [
+      ['"cite.a"', 'reference', 3, 41, [72, 600.5, 300, 640]],
+      ['"section.2"', 'heading', 1, 7, [72, 100, 300, 160], 2, [72, 650, 300, 700]],
+    ]
+    it('a head with targets reads under FORMAT 1, both forms of a target', () => {
+      const head: Head = { ...base, targets }
+      const { bytes, digest } = write('head', head)
+      expect(read('head', bytes, digest)).toEqual(head)
+      expect(FORMAT).toBe(1)
+    })
+    it('a head reader of before strips targets', () => {
+      const { bytes } = write('head', { ...base, targets })
+      const before = Head.omit({ targets: true })
+      const parsed = before.parse(JSON.parse(fromUtf8(bytes) as string))
+      expect('targets' in parsed).toBe(false)
+      expect(parsed).toEqual(base)
+    })
+    it('a target of an unknown kind, a page below 1 or a destination past 2,048 characters is refused', () => {
+      const bad = (t: unknown) => () => read('head', utf8(JSON.stringify({ ...base, targets: [t] })))
+      expect(bad(['"x"', 'theorem', 1, 0, [0, 0, 1, 1]])).toThrow(FormatError)
+      expect(bad(['"x"', 'float', 0, 0, [0, 0, 1, 1]])).toThrow(FormatError)
+      expect(bad([`"${'x'.repeat(2047)}"`, 'float', 1, 0, [0, 0, 1, 1]])).toThrow(FormatError)
+      expect(bad(['"x"', 'float', 1, -1, [0, 0, 1, 1]])).toThrow(FormatError)
+      expect(bad(['"x"', 'heading', 1, 0, [0, 0, 1, 1], 0, [0, 0, 1, 1]])).toThrow(FormatError)
+      expect(() =>
+        read(
+          'head',
+          utf8(JSON.stringify({ ...base, targets: [[`"${'x'.repeat(2046)}"`, 'float', 1, 0, [0, 0, 1, 1]]] })),
+        ),
+      ).not.toThrow()
+    })
   })
   it('a member names beside its paragraph points the element each stands after (`parasAfter`, an id or null a point), or not at all', () => {
     const p = part()
