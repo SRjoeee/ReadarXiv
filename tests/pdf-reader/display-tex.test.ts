@@ -226,11 +226,22 @@ describe.skipIf(!docker)('a display TeX set through a macro of the paper, as a s
     expect(holding(macro, '\\al{\ne &=').el.stop).toBe(',')
     expect(holding(macro, '\\be\nw =').el.stop).toBe(undefined)
   })
-  it("keeps a paper's closing macro that closes no display as it was: its marks' class, no stop", () => {
-    const us = macro.units.filter((x) => elsOf(x.content).some((e) => /^\\[be]q\b/.test(e.src)))
-    expect(us.length).toBeGreaterThan(0)
-    for (const e of us.flatMap((x) => elsOf(x.content)).filter((x) => /^\\[be]q\b/.test(x.src)))
-      expect([e.kind, e.stop]).toEqual(['macro', undefined])
+  it("reads a paper's macros that open and close a quote as the quote's boundaries, no element and no display's stop (§18.119)", () => {
+    // (they were elements of the paragraphs on either side, of the marks' class and no stop; the quote's text is a unit of its
+    // own, as a written \begin{quote} … \end{quote} makes it)
+    expect(macro.units.flatMap((x) => elsOf(x.content)).filter((e) => /^\\[be]q\b/.test(e.src))).toEqual([])
+    const words = (u: Unit) =>
+      u.content
+        .filter((p) => p.t === 'text')
+        .map((p) => (p as { s: string }).s)
+        .join('')
+        .replace(/\s+/g, ' ')
+        .trim()
+    expect(macro.units.map(words).filter((t) => /quote/.test(t))).toEqual([
+      'A quoted line follows.',
+      'The quote ends here.',
+      'The text goes on after the quote.',
+    ])
   })
   it('keeps a text macro and an inline formula as their marks state them, nothing held', () => {
     const { u } = holding(macro, '\\kw')
