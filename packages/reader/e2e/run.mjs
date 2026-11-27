@@ -20,6 +20,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { deflateSync, inflateSync } from 'node:zlib'
 import { chunkDigests, toggleKind, write } from '@readarxiv/format'
+import { zh as ZH_CN } from '../../ui/src/locales/zh-CN.ts'
 import { build } from 'vite'
 import { kindShown } from '../src/compose/classes.ts'
 import { RETRY_MS } from '../src/session/client.ts'
@@ -887,6 +888,8 @@ async function newPage(o = {}) {
   const context = await browser.newContext({
     viewport: o.viewport ?? { width: 1400, height: 900 },
     ...(o.screen ? { screen: o.screen } : {}),
+    // (a touch device with no hover: the primary pointer coarse, `(hover: none)` true, Chromium's mobile emulation)
+    ...(o.touch ? { hasTouch: true, isMobile: true } : {}),
     deviceScaleFactor: o.dpr ?? 1,
   })
   await context.route('**/*', async (route) => {
@@ -6669,6 +6672,535 @@ for (const target of PUNCT_TARGETS)
       }
     },
   )
+// ---------------------------------------------------------------- link previews (docs/PDF-READER.md §20.7; the plan's R9)
+// The chrome page over s5-links (its head states nine targets: four references, two floats, a heading that runs on, a display, a
+// note; a link to a theorem it states none of). AXT_SHOTS=<dir> keeps a shot of the no-hover sheet and of the card's fades.
+const PV_SHOTS = process.env.AXT_SHOTS ?? null
+/** a link of s5-links on a side: the right's laid one by its key, the left's PDF.js one by its name */
+const pvSel = (side, name) =>
+  side === 'right'
+    ? `#right a.axt-link[href="#${encodeURIComponent(JSON.stringify(name))}"] > .axt-link-box`
+    : `#left .annotationLayer .linkAnnotation > a[href="#${name}"]`
+async function pvCentre(page, sel) {
+  await page.evaluate((s) => document.querySelector(s)?.scrollIntoView({ block: 'center' }), sel)
+  await page.waitForTimeout(500)
+  return page.evaluate((s) => {
+    const r = document.querySelector(s)?.getBoundingClientRect()
+    return r ? { x: r.x + r.width / 2, y: r.y + r.height / 2, top: r.top, bottom: r.bottom } : null
+  }, sel)
+}
+async function pvHover(page, sel, wait = 700) {
+  await page.mouse.move(2, 300)
+  await page.waitForTimeout(450)
+  const c = await pvCentre(page, sel)
+  if (!c) return null
+  await page.mouse.move(c.x, c.y, { steps: 3 })
+  await page.waitForTimeout(wait)
+  return c
+}
+const pvShown = (page) =>
+  page.evaluate(() => {
+    const pv = document.querySelector('.axt-pv:not([data-axt-out]):not(.axt-pv-kept)')
+    if (!pv) return null
+    const r = pv.getBoundingClientRect()
+    // (a crop's pixels drawn: its canvases' ink, not blank)
+    let ink = 0
+    for (const c of pv.querySelectorAll('canvas')) {
+      const d = c.getContext('2d')?.getImageData(0, 0, c.width, c.height).data
+      if (d) for (let i = 0; i < d.length; i += 16) if (d[i] < 200) ink++
+    }
+    return {
+      kind: pv.dataset.axtKind,
+      text: pv.querySelector('.axt-pv-ref')?.textContent ?? '',
+      segs: pv.querySelectorAll('.axt-pv-seg').length,
+      fade: !!pv.querySelector('[data-axt-fade]'),
+      svgText: pv.querySelectorAll('svg text').length,
+      ink,
+      quiet: pv.hasAttribute('data-axt-quiet'),
+      rect: { top: r.top, bottom: r.bottom, left: r.left },
+      role: pv.getAttribute('role'),
+    }
+  })
+const pvPane = (page, side) =>
+  page.evaluate((s) => {
+    const r = document.getElementById(s).getBoundingClientRect()
+    return { top: r.top, bottom: r.bottom }
+  }, side)
+/** the previews' words in the interface the checks open the chrome in (zh-CN) */
+const ZH = ZH_CN.R.preview
+const ENTRY = { 'cite.a': 'A. Author', 'cite.b': 'C. Reader', 'cite.c': 'D. Typesetter', 'cite.d': 'G. Linker' }
+
+await check(
+  'previews: each covered kind on each pane, from the head’s targets (a card’s text, a figure, a table, a display, a section running on and fading, a note; the right’s figure crop holding the translated caption; nothing for a link the head states no target of)',
+  async () => {
+    const { page, context, errors } = await chromeLaid('s5-links', { ui: 'zh-CN' })
+    const seen = {}
+    try {
+      for (const side of ['left', 'right']) {
+        for (const [dest, head] of Object.entries(ENTRY)) {
+          await pvHover(page, pvSel(side, dest))
+          const s = await pvShown(page)
+          assert(
+            s?.kind === 'card' && s.text.startsWith(head) && s.role === 'tooltip',
+            `${side} ${dest}: ${JSON.stringify(s)}`,
+          )
+        }
+        for (const dest of ['figure.1', 'table.1', 'equation.1', 'section.2', 'Hfootnote.1']) {
+          await pvHover(page, pvSel(side, dest), 1200)
+          const s = await pvShown(page)
+          assert(s?.kind === 'crop' && s.ink > 0, `${side} ${dest}: ${JSON.stringify(s)}`)
+          if (dest === 'section.2') assert(s.segs === 2 && s.fade, `${side} section: ${JSON.stringify(s)}`)
+          else assert(s.segs === 1 && !s.fade, `${side} ${dest}: ${JSON.stringify(s)}`)
+          seen[`${side} ${dest}`] = s.svgText
+        }
+        await pvHover(page, pvSel(side, 'theorem.1'), 900)
+        assert(!(await pvShown(page)), `${side} theorem: a preview shown`)
+      }
+      // (L12: the right pane's figure crop is what the translation draws there, its caption the laid one's SVG)
+      assert(
+        seen['right figure.1'] > 0 && seen['left figure.1'] === 0,
+        `the figure's caption drawn ${JSON.stringify(seen)}`,
+      )
+      assert(!errors.length, errors.join('; '))
+      return seen
+    } finally {
+      await context.close()
+    }
+  },
+)
+
+await check(
+  'previews: placement under the line, never over the reader’s foot; a bracket of three swaps in place; text selects and holds the card, a press elsewhere lets it go',
+  async () => {
+    const { page, context, errors } = await chromeLaid('s5-links', { ui: 'zh-CN' })
+    try {
+      const out = {}
+      for (const side of ['left', 'right']) {
+        const c = await pvHover(page, pvSel(side, 'cite.a'))
+        const s = await pvShown(page)
+        const pane = await pvPane(page, side)
+        assert(
+          s && (s.rect.top >= c.bottom - 0.5 || s.rect.bottom <= c.top + 0.5),
+          `${side}: over its line ${JSON.stringify({ c, s })}`,
+        )
+        assert(s.rect.bottom <= pane.bottom - 54 + 1, `${side}: over the foot ${JSON.stringify({ s, pane })}`)
+        // (along the bracket to its next number: the same place, its content swapped with no motion)
+        const b = await page.evaluate(
+          (sel) => {
+            const r = document.querySelector(sel).getBoundingClientRect()
+            return { x: r.x + r.width / 2, y: r.y + r.height / 2 }
+          },
+          pvSel(side, 'cite.b'),
+        )
+        await page.mouse.move(b.x, b.y, { steps: 2 })
+        await page.waitForTimeout(250)
+        const t = await pvShown(page)
+        assert(
+          t?.text.startsWith(ENTRY['cite.b']) &&
+            t.quiet &&
+            Math.abs(t.rect.left - s.rect.left) < 1 &&
+            Math.abs(t.rect.top - s.rect.top) < 1,
+          `${side}: the swap ${JSON.stringify({ s, t })}`,
+        )
+        out[side] = { at: s.rect.top - c.bottom }
+      }
+      // (a drag in the card selects its text; the pointer gone, the card stays; a press elsewhere clears it and the card goes)
+      await pvHover(page, pvSel('right', 'cite.b'))
+      const p = await page.evaluate(() => {
+        const r = document.querySelector('.axt-pv .axt-pv-ref').getBoundingClientRect()
+        return { x0: r.left + 2, x1: r.left + Math.min(r.width - 4, 200), y: r.top + 8 }
+      })
+      await page.mouse.move(p.x0, p.y, { steps: 2 })
+      await page.mouse.down()
+      await page.mouse.move(p.x1, p.y + 10, { steps: 5 })
+      await page.mouse.up()
+      await page.mouse.move(p.x1 + 300, p.y + 300, { steps: 4 })
+      await page.waitForTimeout(700)
+      const held = await page.evaluate(() => ({
+        sel: getSelection().toString(),
+        shown: !!document.querySelector('.axt-pv:not([data-axt-out])'),
+      }))
+      assert(held.sel.length > 5 && held.shown, `the selection ${JSON.stringify(held)}`)
+      await page.mouse.click(5, 500)
+      await page.waitForTimeout(500)
+      const gone = await page.evaluate(() => ({
+        sel: getSelection().toString(),
+        shown: !!document.querySelector('.axt-pv:not([data-axt-out])'),
+      }))
+      assert(!gone.sel && !gone.shown, `after a press elsewhere ${JSON.stringify(gone)}`)
+      assert(!errors.length, errors.join('; '))
+      return out
+    } finally {
+      await context.close()
+    }
+  },
+)
+
+await check(
+  'previews: every jump source pushes one entry and shows the capsule (a PDF.js link on the left, a laid link on the right, Enter on one, a page typed, a contents entry); Back and Forward land with the band; scrolling back spends the entry',
+  async () => {
+    const { page, context, errors } = await chromeLaid('s5-links', { ui: 'zh-CN' })
+    const state = () =>
+      page.evaluate(() => ({
+        n: history.state?.axt?.n ?? 0,
+        len: history.length,
+        capsule: !!document.querySelector('button.back:not([data-out])'),
+        lands: document.querySelectorAll('.axt-land').length,
+      }))
+    const back = async () => {
+      await page.mouse.move(2, 300)
+      await page.locator('button.back:not([data-out])').first().click()
+      await page.waitForTimeout(800)
+    }
+    try {
+      const got = {}
+      for (const [name, go] of [
+        [
+          'left link',
+          async () => {
+            const c = await pvCentre(page, pvSel('left', 'figure.1'))
+            await page.mouse.click(c.x, c.y)
+          },
+        ],
+        [
+          'right laid link',
+          async () => {
+            const c = await pvCentre(page, pvSel('right', 'table.1'))
+            await page.mouse.click(c.x, c.y)
+          },
+        ],
+        [
+          'Enter',
+          async () => {
+            await page.evaluate((s) => document.querySelector(s)?.parentElement?.focus(), pvSel('right', 'cite.a'))
+            await page.keyboard.press('Enter')
+          },
+        ],
+        [
+          'typed page',
+          async () => {
+            await page.focus('#right ~ * .pill input, .pill input')
+            await page.keyboard.press('ControlOrMeta+a')
+            await page.keyboard.type('3')
+            await page.keyboard.press('Enter')
+          },
+        ],
+        [
+          'contents entry',
+          async () => {
+            await page.click('button[aria-controls="axt-contents"]')
+            await page.waitForTimeout(500)
+            await page
+              .click('.toc-list a >> nth=-1, .toc-list button >> nth=-1')
+              .catch(() => page.locator('.toc-list a, .toc-list button').last().click())
+          },
+        ],
+      ]) {
+        const a = await state()
+        await go()
+        await page.waitForTimeout(400)
+        const b = await state()
+        got[name] = { n: b.n, capsule: b.capsule, lands: b.lands }
+        assert(b.n === a.n + 1 && b.capsule, `${name}: ${JSON.stringify({ a, b })}`)
+        if (name !== 'typed page') assert(b.lands > 0, `${name}: no band on arrival ${JSON.stringify(b)}`)
+        await back()
+        const c = await state()
+        assert(c.n === a.n && !c.capsule, `${name}: back ${JSON.stringify({ a, b, c })}`)
+        if (name === 'contents entry') await page.click('button[aria-controls="axt-contents"]').catch(() => {})
+      }
+      // (the browser's Back and Forward over a link's entry: the place left lit coming back, the target lit going forward)
+      const c = await pvCentre(page, pvSel('right', 'cite.c'))
+      await page.mouse.click(c.x, c.y)
+      await page.waitForTimeout(1900)
+      await page.goBack({ timeout: 1500 }).catch(() => {})
+      await page.waitForTimeout(300)
+      const backed = await state()
+      await page.waitForTimeout(1900)
+      await page.goForward({ timeout: 1500 }).catch(() => {})
+      await page.waitForTimeout(300)
+      const forward = await state()
+      assert(backed.n === 0 && !backed.capsule && backed.lands > 0, `Back ${JSON.stringify(backed)}`)
+      assert(forward.n === 1 && forward.capsule && forward.lands > 0, `Forward ${JSON.stringify(forward)}`)
+      // (scrolled back to the place left: the entry spent, the capsule gone, nothing moved)
+      await page.goBack({ timeout: 1500 }).catch(() => {})
+      await page.waitForTimeout(600)
+      const top0 = await page.evaluate(() => document.getElementById('right').scrollTop)
+      const d = await pvCentre(page, pvSel('right', 'cite.d'))
+      await page.mouse.click(d.x, d.y)
+      await page.waitForTimeout(800)
+      const jumped = await state()
+      await page.evaluate((t) => document.getElementById('right').scrollTo({ top: t }), top0)
+      await page.waitForTimeout(900)
+      const spent = await state()
+      assert(jumped.n === 1 && spent.n === 0 && !spent.capsule, `the spend ${JSON.stringify({ jumped, spent })}`)
+      assert(!errors.length, errors.join('; '))
+      return got
+    } finally {
+      await context.close()
+    }
+  },
+)
+
+await check(
+  'previews: narrow (390 × 844): a tap opens the sheet, a native modal dialog named by its target, the go-to button alone (no search while SEARCH_URL is null), Esc closes it, the go-to button jumps; each number of [1, 2, 3] its own entry',
+  async () => {
+    const { page, context, errors } = await chromeLaid(
+      's5-links',
+      { ui: 'zh-CN' },
+      { viewport: { width: 390, height: 844 } },
+    )
+    try {
+      const sheet = () =>
+        page.evaluate(() => {
+          const d = document.querySelector('dialog.axt-sheet[open]')
+          return d
+            ? {
+                label: d.getAttribute('aria-label'),
+                text: d.querySelector('.axt-pv-ref')?.textContent ?? '',
+                buttons: [...d.querySelectorAll('button')].map((b) => b.textContent),
+                modal: d.matches(':modal'),
+              }
+            : null
+        })
+      for (const [dest, head] of Object.entries(ENTRY).slice(0, 3)) {
+        const c = await pvCentre(page, pvSel('right', dest))
+        await page.mouse.click(c.x, c.y)
+        await page.waitForTimeout(600)
+        const s = await sheet()
+        assert(s?.modal && s.text.startsWith(head) && s.buttons.join() === ZH.go, `${dest}: ${JSON.stringify(s)}`)
+        await page.keyboard.press('Escape')
+        await page.waitForTimeout(400)
+        assert(!(await sheet()), `${dest}: Esc left it open`)
+      }
+      const f = await pvCentre(page, pvSel('right', 'figure.1'))
+      await page.mouse.click(f.x, f.y)
+      await page.waitForTimeout(600)
+      const s = await sheet()
+      assert(s?.label === ZH.figure('1') && s.buttons.join() === ZH.go, `the figure's sheet ${JSON.stringify(s)}`)
+      await page.click('dialog.axt-sheet[open] button')
+      await page.waitForTimeout(600)
+      const after = await page.evaluate(() => ({
+        n: history.state?.axt?.n ?? 0,
+        sheet: !!document.querySelector('dialog.axt-sheet[open]'),
+      }))
+      assert(after.n === 1 && !after.sheet, `the go-to button ${JSON.stringify(after)}`)
+      assert(!errors.length, errors.join('; '))
+      return { figure: s }
+    } finally {
+      await context.close()
+    }
+  },
+)
+
+await check(
+  'previews: no hover (a touch device at a wide window, its primary pointer coarse): a tap opens the sheet, not a popover, and does not jump',
+  async () => {
+    const { page, context, errors } = await chromeLaid(
+      's5-links',
+      { ui: 'zh-CN' },
+      { touch: true, viewport: { width: 1280, height: 800 } },
+    )
+    try {
+      const hoverNone = await page.evaluate(() => matchMedia('(hover: none)').matches)
+      const f = await pvCentre(page, pvSel('right', 'figure.1'))
+      await page.touchscreen.tap(f.x, f.y)
+      await page.waitForTimeout(800)
+      const got = await page.evaluate(() => ({
+        sheet: !!document.querySelector('dialog.axt-sheet[open]'),
+        popover: !!document.querySelector('.axt-pv:not([data-axt-out])'),
+        n: history.state?.axt?.n ?? 0,
+      }))
+      if (PV_SHOTS) await page.screenshot({ path: join(PV_SHOTS, 'nohover-sheet.png') })
+      assert(hoverNone && got.sheet && !got.popover && got.n === 0, JSON.stringify({ hoverNone, got }))
+      assert(!errors.length, errors.join('; '))
+      return { hoverNone, ...got }
+    } finally {
+      await context.close()
+    }
+  },
+)
+
+await check(
+  'previews: dark (the dimmed page: a crop inverted on its ground, the card raised), reduced motion (no rise in the preview’s animation), the card’s scrolled text fading at both ends as a reader meets it',
+  async () => {
+    const { page, context, errors } = await chromeLaid('s5-links', { ui: 'zh-CN' })
+    try {
+      // (the card of entry [3], long enough to scroll: the wheel over its text, both ends fading by position)
+      await pvHover(page, pvSel('right', 'cite.c'))
+      const at = await page.evaluate(() => {
+        const r = document.querySelector('.axt-pv [data-axt-scrolls]').getBoundingClientRect()
+        return { x: r.x + r.width / 2, y: r.y + r.height / 2 }
+      })
+      await page.mouse.move(at.x, at.y, { steps: 2 })
+      await page.mouse.wheel(0, 30)
+      await page.waitForTimeout(400)
+      const fades = await page.evaluate(() => {
+        const s = document.querySelector('.axt-pv [data-axt-scrolls]')
+        return {
+          ft: Number(s.style.getPropertyValue('--axt-ft')),
+          fb: Number(s.style.getPropertyValue('--axt-fb')),
+          tab: s.tabIndex,
+          page: document.getElementById('right').scrollTop,
+        }
+      })
+      if (PV_SHOTS) await page.screenshot({ path: join(PV_SHOTS, 'card-fades.png') })
+      assert(fades.ft > 0 && fades.fb > 0 && fades.tab === 0, `the fades ${JSON.stringify(fades)}`)
+      // (dark: the reader's pages dimmed)
+      await page.evaluate(() => document.documentElement.setAttribute('data-axt-dim', ''))
+      await pvHover(page, pvSel('right', 'figure.1'), 1200)
+      const dark = await page.evaluate(() => ({
+        filter: getComputedStyle(document.querySelector('.axt-pv .axt-pv-crop')).filter,
+        ground: getComputedStyle(document.querySelector('.axt-pv')).backgroundColor,
+      }))
+      assert(/invert/.test(dark.filter) && /29, 29, 29/.test(dark.ground), `dark ${JSON.stringify(dark)}`)
+      await page.evaluate(() => document.documentElement.removeAttribute('data-axt-dim'))
+      // (reduced motion: the preview appears by its opacity alone)
+      await page.emulateMedia({ reducedMotion: 'reduce' })
+      await page.mouse.move(2, 300)
+      await page.waitForTimeout(900)
+      const c = await pvCentre(page, pvSel('right', 'cite.d'))
+      await page.mouse.move(c.x, c.y)
+      const frames = await page.evaluate(
+        () =>
+          new Promise((done) => {
+            const look = () => {
+              const pv = document.querySelector('.axt-pv:not([data-axt-out])')
+              const a = pv?.getAnimations()[0]
+              if (pv && a)
+                done(
+                  a.effect
+                    .getKeyframes()
+                    .map((k) =>
+                      Object.keys(k).filter((x) => !['offset', 'easing', 'composite', 'computedOffset'].includes(x)),
+                    ),
+                )
+              else if (pv) done([])
+              else requestAnimationFrame(look)
+            }
+            look()
+          }),
+      )
+      assert(
+        frames.flat().every((p) => p === 'opacity'),
+        `reduced motion keyframes ${JSON.stringify(frames)}`,
+      )
+      assert(!errors.length, errors.join('; '))
+      return { fades, dark, frames }
+    } finally {
+      await context.close()
+    }
+  },
+)
+
+await check(
+  'previews: a hover sweep over every link fetches at most one part a target page, and nothing from any other origin',
+  async () => {
+    const { page, context, errors } = await chromeLaid('s5-links', { ui: 'zh-CN' })
+    const asked = []
+    page.on('request', (r) => asked.push(r.url()))
+    try {
+      const before = violations.length
+      for (const side of ['left', 'right'])
+        for (const dest of [
+          ...Object.keys(ENTRY),
+          'figure.1',
+          'table.1',
+          'equation.1',
+          'section.2',
+          'Hfootnote.1',
+          'theorem.1',
+        ])
+          await pvHover(page, pvSel(side, dest), 500)
+      const parts = asked.filter((u) => /\.part(\?|$)|\/part\//.test(u))
+      const twice = parts.filter((u, i) => parts.indexOf(u) !== i)
+      const other = asked.filter(
+        (u) => !u.startsWith(server.origin) && !u.startsWith('blob:') && !u.startsWith('data:'),
+      )
+      assert(!twice.length && !other.length && violations.length === before, JSON.stringify({ twice, other }))
+      assert(!errors.length, errors.join('; '))
+      return { requests: asked.length, parts: parts.length }
+    } finally {
+      await context.close()
+    }
+  },
+)
+
+await check(
+  'previews: no way back without a jump: a page opened, scrolled, left alone and reloaded holds no reader state on its history entry and shows no capsule',
+  async () => {
+    const { page, context, errors } = await chromeLaid('s5-links', { ui: 'zh-CN' })
+    try {
+      await page.mouse.move(900, 400)
+      for (let i = 0; i < 5; i++) {
+        await page.mouse.wheel(0, 400)
+        await page.waitForTimeout(200)
+      }
+      await page.waitForTimeout(3000)
+      const s1 = await page.evaluate(() => ({
+        axt: history.state?.axt ?? null,
+        capsule: !!document.querySelector('button.back'),
+      }))
+      await page.reload()
+      await page.evaluate(([n, x]) => window.__c.open(n, x), ['s5-links', { ui: 'zh-CN' }])
+      await waitFor(page, () => (window.__c.reader?.probe().laidPages ?? 0) > 0, null, 25_000)
+      await page.waitForTimeout(1500)
+      const s2 = await page.evaluate(() => ({
+        axt: history.state?.axt ?? null,
+        capsule: !!document.querySelector('button.back'),
+      }))
+      assert(!s1.axt && !s1.capsule && !s2.axt && !s2.capsule, JSON.stringify({ s1, s2 }))
+      assert(!errors.length, errors.join('; '))
+      return { s1, s2 }
+    } finally {
+      await context.close()
+    }
+  },
+)
+
+await check(
+  'preview-waits: the probe of waits (a reading, no assertion): each link of the paper hovered once from the left pane and the right, the time from the pointer’s entry to its preview shown, by kind',
+  async () => {
+    const { page, context } = await chromeLaid('s5-links', { ui: 'zh-CN' })
+    const times = {}
+    try {
+      for (const side of ['left', 'right'])
+        for (const dest of [...Object.keys(ENTRY), 'figure.1', 'table.1', 'equation.1', 'section.2', 'Hfootnote.1']) {
+          await page.mouse.move(2, 300)
+          await page.waitForTimeout(700)
+          const c = await pvCentre(page, pvSel(side, dest))
+          const t0 = await page.evaluate(() => performance.now())
+          await page.mouse.move(c.x, c.y)
+          const t1 = await page
+            .waitForFunction(
+              () => (document.querySelector('.axt-pv:not([data-axt-out])') ? performance.now() : 0),
+              null,
+              { timeout: 5000, polling: 'raf' },
+            )
+            .then(
+              (h) => h.jsonValue(),
+              () => null,
+            )
+          const kind = dest.split('.')[0]
+          ;(times[kind] ??= []).push(t1 === null ? null : Math.round(t1 - t0))
+        }
+      const all = Object.values(times)
+        .flat()
+        .filter((x) => x !== null)
+        .sort((a, b) => a - b)
+      const q = (p) => all[Math.min(all.length - 1, Math.floor(p * all.length))]
+      return {
+        byKind: times,
+        p50: q(0.5),
+        p95: q(0.95),
+        past280: all.filter((x) => x > 280 + 50).length,
+        of: all.length,
+      }
+    } finally {
+      await context.close()
+    }
+  },
+)
+
 if (process.env.AXT_PUNCT_OUT)
   (await import('node:fs')).writeFileSync(process.env.AXT_PUNCT_OUT, `${JSON.stringify(punctOut, null, 1)}\n`)
 

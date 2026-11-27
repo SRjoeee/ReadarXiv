@@ -24,6 +24,7 @@ import {
   ToolbarButton,
   type UiLanguage,
   useReader,
+  windowHistory,
 } from '../../src/index.ts'
 import { fixtureLay, inked, pagesOf, type ReaderDump } from './convert.ts'
 
@@ -137,6 +138,8 @@ const c = {
     }
     const host = {
       fetch: (u: string, i?: RequestInit) => fetch(u, i),
+      // (the page's history, the reader's jumps' to add to, as both hosts give it: link previews' way back, R9)
+      history: windowHistory(window),
       original: (ref: string) =>
         o.original === 'broken'
           ? `/api/v2/o/broken/${ref.replace(/[./]/g, '_')}.pdf`
@@ -206,7 +209,10 @@ const c = {
           setSyncMode: (m) => set({ sync: m === 'same' }),
           zoomBy: (factor) => reader.do({ do: 'zoomBy', factor }),
           zoomTo: (to) => reader.do({ do: 'zoom', to }),
-          goToPage: (side, page) => reader.do({ do: 'page', side, page }),
+          // (a page typed is a jump; the capsule's press goes back one: link previews' way back, as both hosts map them)
+          goToPage: (side, page, x) =>
+            reader.do({ do: 'page', side, page, ...(x?.jump ? { jump: true as const } : {}) }),
+          back: () => reader.do({ do: 'back' }),
           setPrefs: set,
           pdfBytes: async () => null,
           openOriginal: () => reader.do({ do: 'original' }),

@@ -6,6 +6,7 @@ import { openRanged } from '../../src/bytes/ranged.ts'
 import { type OriginalSource, rangeSource } from '../../src/bytes/source.ts'
 import { chunkStore } from '../../src/bytes/store.ts'
 import { DEFAULTS } from '../../src/prefs.ts'
+import { windowHistory } from '../../src/session/window-history.ts'
 import { type Composer, createComposer, type RowsSource } from '../../src/compose/composer.ts'
 import { createFaces, type Faces } from '../../src/compose/faces.ts'
 import { createServed, type Served } from '../../src/compose/served.ts'
@@ -1456,6 +1457,8 @@ const h = {
       },
       original: (ref: string) =>
         ext ? `https://arxiv.org/pdf/${ref}` : `/api/v2/o/arxiv/${ref.replace(/[./]/g, '_')}.pdf`,
+      // (the page's history, the reader's jumps' to add to, as both hosts give it: link previews' way back, R9)
+      history: windowHistory(window),
       prefs: {
         read: async () => ({ ...DEFAULTS, display: 'bilingual' as const, target, sync: true }),
         write: async () => {},

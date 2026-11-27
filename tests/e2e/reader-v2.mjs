@@ -316,6 +316,27 @@ try {
     await page.close()
   }
 
+  // ------------------------------------------------------------------------------- the framed reader's way back
+  section('the reader framed over arXiv\'s PDF page: a jump is one entry of the page\'s history, and the browser\'s Back returns inside the reader')
+  {
+    // (the lead's ruling on the probe R0: history entries in every host, the frame included; link previews' way back)
+    const page = track(await context.newPage())
+    await page.goto(`https://arxiv.org/pdf/${PAPER}`)
+    const frame = (await page.waitForSelector('iframe[data-axt-pdf-reader]', { timeout: 20_000 }).catch(() => null))?.contentFrame()
+    await frame?.waitForFunction(() => (window.__reader?.probe?.().laidPages ?? 0) >= 1, null, { timeout: 45_000 }).catch(() => undefined)
+    const top = page.url()
+    const state = () => frame.evaluate(() => ({ n: history.state?.axt?.n ?? 0, capsule: !!document.querySelector('button.back:not([data-out])'), page: window.__reader.reader.state().view?.sides?.right?.page ?? null }))
+    const before = await state()
+    await frame.evaluate(() => window.__reader.reader.do({ do: 'page', side: 'right', page: 3, jump: true }))
+    await sleep(800)
+    const jumped = await state()
+    await page.goBack({ timeout: 2000 }).catch(() => undefined)
+    await sleep(800)
+    const back = await state()
+    check('a jump in the framed reader is one entry, and the browser\'s Back returns inside it: arXiv\'s page stays, the capsule goes', before.n === 0 && jumped.n === 1 && jumped.capsule && back.n === 0 && !back.capsule && page.url() === top, JSON.stringify({ before, jumped, back, top: page.url() }))
+    await page.close()
+  }
+
   // ------------------------------------------------------------------------------- the page's end: away and back (the cache)
   section('the reader\'s tab left by a navigation and come back to: the back-forward cache keeps the reader, or Chrome caches no such page')
   {
