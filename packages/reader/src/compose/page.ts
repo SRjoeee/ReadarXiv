@@ -86,6 +86,9 @@ export interface Laid {
     dir?: [ux: number, uy: number]
     band?: true
   }
+  /** the union of everything it draws on this page as the painter draws it (each run's ink box, each crop's placed box), PDF
+   *  units; none where it is not laid or draws nothing here: what a preview of the right pane cuts round it */
+  extent?: Box
 }
 
 export interface Page {
@@ -95,8 +98,9 @@ export interface Page {
   /** every member with ink on `page`, in ord order */
   members: Laid[]
   /** the page's links as drawn: moved with their pieces, else at A's boxes; `owner` the ord of the member that holds one;
-   *  `border` its own annotation's on A (Link.border), none where it has none */
-  links: [box: Box, to: { url: string } | { dest: string }, owner?: number, border?: LinkBorder][]
+   *  `border` its own annotation's on A (Link.border), none where it has none; `piece` the element of the owner that holds it
+   *  on A (Link.owner[1]: an element's id, '' its text), present wherever `owner` is */
+  links: [box: Box, to: { url: string } | { dest: string }, owner?: number, border?: LinkBorder, piece?: string][]
   /** every piece's ink the part states on the pages the page's crops are cut from (each element's, label's and counter's box):
    *  what a crop's antialiased edge leaves behind */
   inks?: Ink[]

@@ -35,6 +35,7 @@ import { cropInks, pageInks } from './clips.ts'
 import type { FlowMember } from './flow.ts'
 import { figuresOf } from './figures.ts'
 import { keptBefore, type Lead, ledBy, type NameWord } from './lead.ts'
+import { withExtents } from './extent.ts'
 import { type LinkFate, type LinkOwner, linksOf } from './links.ts'
 import { inFrame, inkOfLine, litLaid, litOfA, pageBoxOf, runBoxOfA, widened } from './lit.ts'
 import { type CellTie, layPagePrepared, type UnitLay } from './page.ts'
@@ -304,6 +305,13 @@ function unservedOf(tokens: Tokens, metrics: Metrics): { inked: Set<number>; lab
 
 /** layPage: page `part.page` laid from its part and the target's rows */
 export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics, o: EntryOptions = {}): Page {
+  // (each laid member's extent, the union of what it draws on the page as the painter draws it: lay/extent.ts, read by the
+  // reader's previews; stated once every member stands where it is drawn, a frame's turned onto the page)
+  const page = framedPage(part, given, rules, metrics, o)
+  return { ...page, members: withExtents(page.members, metrics) }
+}
+/** layPage's page before the extents: its flows, and its frames turned onto it */
+function framedPage(part: Part, given: Rows, rules: Rules, metrics: Metrics, o: EntryOptions): Page {
   const flat = layFlows(part, given, rules, metrics, o)
   if (!part.frames?.length) return flat
   // (the units TeX set turned, by turn (Part.frames, docs/PDF-READER.md §18.113): each frame laid as a part's flows are, in its
@@ -332,9 +340,9 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
       own.forEach(({ i }, k) => {
         if (fates[k]) o.linkFates![i] = fates[k]
       })
-    const links = sub.links.map(([box, to, owner, border]): Page['links'][number] => {
-      const at = inFrame.findIndex((l) => l.box.every((v, k) => v === box[k]))
-      return [at >= 0 ? own[at]!.l.box : boxOnPage(box, f.dir), to, owner, border] as Page['links'][number]
+    const links = sub.links.map((l): Page['links'][number] => {
+      const at = inFrame.findIndex((x) => x.box.every((v, k) => v === l[0][k]))
+      return [at >= 0 ? own[at]!.l.box : boxOnPage(l[0], f.dir), ...l.slice(1)] as Page['links'][number]
     })
     return { sub, dir: f.dir, links }
   })

@@ -14322,3 +14322,19 @@ measure apart. Not covered, and so no preview (never a wrong one): a caption set
 no bracket, its first and last glyphs on B being level ones; a display kept as a block of its own (no element of a paragraph)
 is no display target. The stored instrument's key, the hash of the compile side's built bundles, computed over this section's
 engine, is the line's: none of these files is in the compile side's closure, so no paper is compiled again.
+
+### 20.6 What the typesetter states for the previews
+
+Two fields of the typesetter's `Page`, in memory alone (no stored shape, no version moves; the reader's mirror,
+`packages/reader/src/compose/page.ts`, states them word for word):
+
+- `Page.links`' fifth member, `piece`: the element of the owner that holds a drawn link on A (`Link.owner[1]`: an element's id,
+  `''` its text), present wherever the third (`owner`) is, the fourth (`border`) left empty where the annotation has none. A
+  link moved with its piece and one left at A's box carry it alike, so that the numbers of one `\cite` are one bracket on the
+  right pane as on the left (a citation's card is anchored to the whole bracket). The first four members are what they were.
+- `Laid.extent`: the union of everything a laid member draws on its page as the painter draws it (`lay/extent.ts`): each run
+  from its x to its last advance (its characters' own places where it has them), its tracking, or its ink's right where that is
+  further, over and under its baseline by its ink at its size, raised where raised, slanted by the painter's 12° where oblique;
+  each crop's source moved and scaled onto its line; a turned line's along its direction. None for a member not laid or laid
+  with nothing on the page. A preview of the right pane cuts round it (the design's L12: what the translation draws, never only
+  the original's box).

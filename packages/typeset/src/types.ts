@@ -204,6 +204,10 @@ export type Laid = {
     dir?: [ux: number, uy: number]
     band?: true
   }
+  /** the union of everything it draws on this page as the painter draws it (lay/extent.ts: each run's ink box, each crop's placed
+   *  box; a turned line's along its direction), PDF units; none where it is not laid or draws nothing here. What a preview of the
+   *  right pane cuts round it (the link previews' L12: the translation's own extent, never only the original's box) */
+  extent?: Box
 }
 
 /** a page, laid or waiting; `ledger` where the call asked for a trace */
@@ -214,8 +218,10 @@ export type Page = {
   members: Laid[]
   /** the page's links as drawn: moved with their pieces, else at A's boxes; `owner` the ord of the member that holds one (Link's
    *  owner), so that a reader leaving that member the original's puts its links back at A's boxes; `border` its own
-   *  annotation's on A (Link.border, moved or not), none where it has none */
-  links: [box: Box, to: Link['to'], owner?: number, border?: Link['border']][]
+   *  annotation's on A (Link.border, moved or not), none where it has none; `piece` the element of the owner that holds it on A
+   *  (Link.owner[1]: an element's id, '' its text), so that the numbers of one \cite are one bracket on the right as on the left
+   *  (the link previews), present wherever `owner` is */
+  links: [box: Box, to: Link['to'], owner?: number, border?: Link['border'], piece?: string][]
   /** every piece's ink the part states (each element's, label's and counter's box) on the pages the page's crops are cut from:
    *  what a crop's antialiased edge must leave behind; none where it draws no crop (lay/clips.ts) */
   inks?: Ink[]

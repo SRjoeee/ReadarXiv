@@ -504,7 +504,7 @@ describe("what stays the original's", () => {
       [[400, 600, 440, 610], { dest: 'sec.1' }],
       [[100, 658, 140, 668], { url: 'https://example.org/b' }],
     ])
-    expect(p3.links[2]).toEqual([[100, 658, 140, 668], { url: 'https://example.org/b' }, 31, [1, 0x00ffff]])
+    expect(p3.links[2]).toEqual([[100, 658, 140, 668], { url: 'https://example.org/b' }, 31, [1, 0x00ffff], ''])
   })
 })
 

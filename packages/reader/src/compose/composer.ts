@@ -676,13 +676,15 @@ export function createComposer(o: ComposerOptions): Composer {
     const out = page.members.map((m): Laid => {
       if (m.state !== 'laid' || !m.off || g.holds(m.ord, page.page, m.off)) return m
       unwrapped.add(m.ord)
-      return { ...m, state: 'unwrapped', off: 0, lines: [], lit: { ...m.lit, right: m.lit.left, own: [] } }
+      // (the original's: it draws nothing of its own, so it states no extent)
+      const { extent: _e, ...rest } = m
+      return { ...rest, state: 'unwrapped', off: 0, lines: [], lit: { ...m.lit, right: m.lit.left, own: [] } }
     })
     if (!unwrapped.size) return page
     const links: Page['links'] = page.links.filter(([, , owner]) => owner === undefined || !unwrapped.has(owner))
     for (const l of part.links ?? [])
       if (l.owner && unwrapped.has(l.owner[0]) && (l.page ?? page.page) === page.page)
-        links.push(l.border ? [l.box, l.to, l.owner[0], l.border] : [l.box, l.to, l.owner[0]])
+        links.push([l.box, l.to, l.owner[0], l.border, l.owner[1]])
     return { ...page, members: out, links }
   }
   /** the rows page n still waited for when the faces of its rows in were last asked (`early`) */

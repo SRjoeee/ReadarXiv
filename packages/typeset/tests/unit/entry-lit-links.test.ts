@@ -128,7 +128,7 @@ describe('Laid.lit: a member lit whole (its row has no sentences)', () => {
     const [laid] = p.members
     expect(laid!.state).toBe('laid')
     expect(laid!.off).toBe(1)
-    expect(p.links).toEqual([[link.box, link.to, 0]])
+    expect(p.links).toEqual([[link.box, link.to, 0, undefined, '5']])
     // (in its member's one entry on both panes, the row it stands on widened over it: `own` holds the displays alone, each a
     // block of its own)
     expect(laid!.lit.own).toEqual([])
@@ -494,7 +494,7 @@ describe('Page.links: as drawn, moved with their pieces, else at A’s boxes', (
     expect(asText[0][2] - asText[0][0]).not.toBeCloseTo(20, 1)
     expect(asText[3]).toEqual(green)
     expect(layPage(part(cite(), [link]), rowsOf([], true), rules, metrics()).links).toEqual([
-      [link.box, link.to, 0, green],
+      [link.box, link.to, 0, green, '5'],
     ])
     const free: Link = { ...at([400, 600, 420, 610]), border: [1.5, 0xff0000, 'dashed'] }
     expect(layPage(part(cite(), [free]), rowsOf([r]), rules, metrics()).links).toEqual([
@@ -513,10 +513,10 @@ describe('Page.links: as drawn, moved with their pieces, else at A’s boxes', (
       { t: 'text', s: ' dort.' },
     ])
     expect(only(layPage(part(m, [href]), rowsOf([rr]), rules, metrics()))[3]).toEqual(href.border)
-    // (none on A, none drawn)
+    // (none on A, none drawn: its place left empty, the owner's piece after it)
     expect(
-      only(layPage(part(cite(), [at([150, 697, 170, 708], [0, '5'])]), rowsOf([r]), rules, metrics())),
-    ).toHaveLength(3)
+      only(layPage(part(cite(), [at([150, 697, 170, 708], [0, '5'])]), rowsOf([r]), rules, metrics()))[3],
+    ).toBeUndefined()
   })
   it('keeps a link at A’s box where the elements’ group the add-on could not part keeps its ink there, drawn or not (#626 review)', () => {
     // (Placed.fixed 2: the member's elements stay shown however they are drawn; the original citation keeps its anchor, by the
@@ -526,17 +526,19 @@ describe('Page.links: as drawn, moved with their pieces, else at A’s boxes', (
     expect(cropOf(crop.members[0]!)).toBeDefined()
     const fixedCrop = layPage(part({ ...cite({}), fixed: 2 }, [link]), rowsOf([r]), rules, metrics())
     expect(fixedCrop.members[0]!.off & 2).toBe(0)
-    expect(fixedCrop.links).toEqual([[link.box, link.to, 0]])
+    expect(fixedCrop.links).toEqual([[link.box, link.to, 0, undefined, '5']])
     const asText = cite({ text: '[3]', style: { role: 'serif', size: 10 } })
     const fixedText = layPage(part({ ...asText, fixed: 2 }, [link]), rowsOf([r]), rules, metrics())
     expect(cropOf(fixedText.members[0]!)).toBeUndefined()
-    expect(fixedText.links).toEqual([[link.box, link.to, 0]])
+    expect(fixedText.links).toEqual([[link.box, link.to, 0, undefined, '5']])
   })
   it('keeps at A’s box a link no member owns, and one whose owner is not laid', () => {
     const free = at([400, 600, 420, 610])
     expect(layPage(part(cite(), [free]), rowsOf([r]), rules, metrics()).links).toEqual([[free.box, free.to]])
     const owned = at([150, 697, 170, 708], [0, '5'])
-    expect(layPage(part(cite(), [owned]), rowsOf([], true), rules, metrics()).links).toEqual([[owned.box, owned.to, 0]])
+    expect(layPage(part(cite(), [owned]), rowsOf([], true), rules, metrics()).links).toEqual([
+      [owned.box, owned.to, 0, undefined, '5'],
+    ])
   })
   it('keeps every link at A’s box on a page that waits for its rows or its faces, the original shown there (#626 review)', () => {
     const owned = at([150, 697, 170, 708], [0, '5'])
@@ -545,7 +547,7 @@ describe('Page.links: as drawn, moved with their pieces, else at A’s boxes', (
     const forRows = layPage(part(cite(), [owned, free]), rowsOf([]), rules, metrics())
     expect(forRows.wait.rows.length).toBeGreaterThan(0)
     expect(forRows.links).toEqual([
-      [owned.box, owned.to, 0],
+      [owned.box, owned.to, 0, undefined, '5'],
       [free.box, free.to],
     ])
     // (its row in, a face not loaded yet: the page waits for the face)
@@ -557,7 +559,7 @@ describe('Page.links: as drawn, moved with their pieces, else at A’s boxes', (
     )
     expect(forFaces.wait.faces.length).toBeGreaterThan(0)
     expect(forFaces.links).toEqual([
-      [owned.box, owned.to, 0],
+      [owned.box, owned.to, 0, undefined, '5'],
       [free.box, free.to],
     ])
   })
@@ -1080,7 +1082,7 @@ describe('Page.links: as drawn, moved with their pieces, else at A’s boxes', (
     const p = layPage(part(note, [back]), rowsOf([rr]), rules, metrics(), { linkFates: fates })
     expect(p.members[0]!.off & 4).toBe(0)
     expect(fates).toEqual(['kept'])
-    expect(p.links).toEqual([[back.box, back.to, 0]])
+    expect(p.links).toEqual([[back.box, back.to, 0, undefined, '']])
     // (a theorem's head drawn anew in the target's word: its label's ink off, the link over it dropped, never left over
     // erased paper)
     const head = member({
@@ -1236,7 +1238,7 @@ describe('Page.links: as drawn, moved with their pieces, else at A’s boxes', (
     const fates: LinkFate[] = []
     const p = layPage(part(name, [round]), rowsOf([], true), rules, metrics(), { linkFates: fates })
     expect(fates).toEqual(['whole'])
-    expect(only(p)).toEqual([[122.5, 700 - 2.2, 197.5, 707.5], round.to, 0])
+    expect(only(p)).toEqual([[122.5, 700 - 2.2, 197.5, 707.5], round.to, 0, undefined, ''])
   })
   it('drops the link round a name drawn as its member’s lead, its text off, and keeps it at A’s box where the name stays', () => {
     // (its word is drawn among its member's lines, no box of its own: nothing to lay the link over, and at A's box it stood over
@@ -1268,7 +1270,7 @@ describe('Page.links: as drawn, moved with their pieces, else at A’s boxes', (
     expect(p.members[0]).toMatchObject({ state: 'laid', off: 1 })
     expect([p.links, fates]).toEqual([[], ['unmatched']])
     // (its member not laid: the name the original's with it, its link at A's box)
-    expect(only(layPage(pt, rowsOf([], true), rules, metrics()))).toEqual([round.box, round.to, 0])
+    expect(only(layPage(pt, rowsOf([], true), rules, metrics()))).toEqual([round.box, round.to, 0, undefined, ''])
   })
 })
 
@@ -1374,6 +1376,7 @@ describe('S.figures over the part: a figure text drawn in its translation where 
       round.to,
       0,
       [1, 0xff0000],
+      '',
     ])
   })
   it('lays a link round a turned figure text over its drawing on the page, along its run (Codex on #634)', () => {
