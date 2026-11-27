@@ -381,7 +381,9 @@ export function createPanes(o: PanesOptions): Panes {
         (e) => {
           const a = (e.target as Element | null)?.closest?.('.annotationLayer a')
           clicked = a ? { s, a, keyboard: (e as MouseEvent).detail === 0 } : null
-          if (a) queueMicrotask(() => (clicked = null))
+          // (kept to the end of this task: a microtask would run before PDF.js's own handler, a browser checking its microtasks
+          // after each listener of a click the user made; seen in a real browser, the link left unlit on the way back)
+          if (a) setTimeout(() => (clicked = null), 0)
         },
         { capture: true, signal },
       )

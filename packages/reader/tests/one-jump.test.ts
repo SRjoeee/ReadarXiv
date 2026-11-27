@@ -206,6 +206,12 @@ describe('one jump for every source', () => {
     expect(t.jumps.depth).toBe(1)
   })
 
+  it('a contents entry whose heading is a member of the page lights that member whole, on both panes', () => {
+    const t = standIn()
+    t.one.heading(t.one.begin(), [4, 72, 600, 300, 612], 4, 12)
+    expect(t.landed).toEqual([{ lit: { id: 12, s: -1 } }])
+  })
+
   it('a contents entry with no rectangle goes to its page, a jump all the same', () => {
     const t = standIn()
     t.one.heading(t.one.begin(), null, 3)

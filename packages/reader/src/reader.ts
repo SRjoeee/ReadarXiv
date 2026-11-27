@@ -574,7 +574,7 @@ export function openReader(
       r = c.firstRect(id)
     }
     if (closed || !panes) return
-    oneJump.heading(from ? { ...from, side: sideRead() } : null, r, page)
+    oneJump.heading(from ? { ...from, side: sideRead() } : null, r, page, c.ordOf(id))
     const at = r?.[0] ?? page
     if (focus && at && root.ownerDocument.activeElement === holder) panes.focusPage(sideRead(), at)
   }

@@ -208,7 +208,7 @@ html[data-axt-dim] .axt-hl-layer { mix-blend-mode: screen; }
   .back svg { width: 14px; height: 14px; color: var(--ink-3); flex: none; }
   .back:active { scale: 0.96; }
   .back:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-  .back-slot .back { background: var(--float-bg); backdrop-filter: blur(16px) saturate(1.5); box-shadow: var(--float-shadow); animation: back-in 240ms var(--ease); }
+  .back-slot .back { padding-inline: 10px 12px; background: var(--float-bg); backdrop-filter: blur(16px) saturate(1.5); box-shadow: var(--float-shadow); animation: back-in 240ms var(--ease); }
   .back-slot .back[data-out] { animation: back-out 160ms ease-out forwards; pointer-events: none; }
   @keyframes back-in { from { opacity: 0; translate: 0 8px; } }
   @keyframes back-out { to { opacity: 0; translate: 0 4px; } }

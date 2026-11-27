@@ -125,6 +125,8 @@ export interface Contents {
   firstRect(id: number): Rect | null
   /** the page the contents give an entry: its first rectangle's, else the head's outline's, else the original's outline's */
   pageOf(id: number): number | null
+  /** the member an entry's heading is, where the head's outline locates it (its ord); null where none does */
+  ordOf(id: number): number | null
 }
 /** what of PDF.js's document the original's outline is read through */
 export interface OutlineDoc {
@@ -273,5 +275,6 @@ export function createContents(units: readonly Unit[], head: Pick<Head, 'outline
     },
     firstRect: (id) => first.get(id) ?? null,
     pageOf,
+    ordOf: (id) => headings[id]?.ord ?? null,
   }
 }

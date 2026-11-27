@@ -20,7 +20,7 @@ export const onePane = (s: Pick<ReaderState, 'narrow' | 'display'>): 'left' | 'r
 /** the capsule's button, alone or as a pill's segment */
 export function BackButton({ controller, out = false }: { controller: ReaderController; out?: boolean }) {
   return (
-    <button type="button" className="chrome back" data-out={out || undefined} onClick={() => controller.back()}>
+    <button type="button" className="back" data-out={out || undefined} onClick={() => controller.back()}>
       <Icon node={Undo2} size={14} />
       <span>{R.back}</span>
     </button>
@@ -44,7 +44,7 @@ export function BackCapsule({ controller }: { controller: ReaderController }) {
   // (one pane shown at once takes it into its pill: no sinking capsule left beside it)
   if (alone) return null
   return (
-    <div className="back-slot">
+    <div className="chrome back-slot">
       <BackButton controller={controller} out={!want} />
     </div>
   )

@@ -56,8 +56,14 @@ export interface OneJump {
   page(side: PlaceSide, n: number): void
   /** the place a contents entry is gone from, read at its press (before its page's part is read) */
   begin(): Place | null
-  /** a contents entry gone to: its heading's first rectangle, else its page */
-  heading(from: Place | null, r: [number, number, number, number, number] | null, page: number | null): void
+  /** a contents entry gone to: its heading's first rectangle, else its page; `ord`, the heading's member where the head locates
+   *  it (lit whole on both panes; else its rectangle on A) */
+  heading(
+    from: Place | null,
+    r: [number, number, number, number, number] | null,
+    page: number | null,
+    ord?: number | null,
+  ): void
   /** the view moved: a scroll back to the place left spends the entry */
   scrolled(): void
   /** the capsule's press */
@@ -144,13 +150,14 @@ export function createOneJump(d: {
       })
     },
     begin: () => d.panes()?.reading() ?? null,
-    heading(from, r, page) {
+    heading(from, r, page, ord = null) {
       const p = d.panes()
       if (!p || (!r && !page)) return
       run({ place: from, light: null }, () => {
         if (r) {
           p.goToRect(r)
-          return { page: r[0], box: [r[1], r[2], r[3], r[4]] }
+          // (its member whole where the head locates it: the right draws the translation of it elsewhere than A's rectangle)
+          return ord !== null ? { lit: { id: ord, s: -1 } } : { page: r[0], box: [r[1], r[2], r[3], r[4]] }
         }
         p.goToPage(from?.side ?? 'right', page as number)
         return null
