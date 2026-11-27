@@ -30,6 +30,20 @@ describe('the page pill', () => {
     expect(m.controller.goToPage.mock.calls).toEqual([['left', 7, { jump: true }]])
   })
 
+  it('Enter while an input method composes is no jump: a Japanese IME confirming full-width digits leaves the field as typed', async () => {
+    const m = await mount()
+    const input = m.container.querySelector('input') as HTMLInputElement
+    // (the IME's text in the field, as typed: the field holds it as a draft)
+    input.value = '7'
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+    await Promise.resolve()
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, isComposing: true }))
+    // (the keyCode 229 a browser gives a key the IME takes, where isComposing is not set on the event)
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 229, bubbles: true }))
+    expect(m.controller.goToPage.mock.calls).toEqual([])
+    expect(input.value).toBe('7')
+  })
+
   it('the arrows are no jump', async () => {
     const m = await mount()
     m.container.querySelector<HTMLButtonElement>(`button[aria-label="${R.pill.next}"]`)?.click()

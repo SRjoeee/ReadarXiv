@@ -22,8 +22,9 @@ export const PagePill = forwardRef<HTMLDivElement, { controller: ReaderControlle
       </TippedButton>
       <input inputMode="numeric" aria-label={side === 'left' ? R.pill.original : R.pill.translation} value={draft ?? String(page)} onFocus={e => e.currentTarget.select()} onBlur={() => setDraft(null)}
         onChange={e => setDraft(e.target.value)} onInput={e => setDraft((e.target as HTMLInputElement).value)}
-        // the field's own value: the draft's state may not have landed when Enter follows the typing at once
-        onKeyDown={e => { if (e.key === 'Enter') { go(Number(e.currentTarget.value)); setDraft(null) } else if (e.key === 'Escape') setDraft(null) }} />
+        // the field's own value: the draft's state may not have landed when Enter follows the typing at once. An Enter that
+        // confirms an input method's text is the IME's (isComposing, or keyCode 229): a Japanese IME's full-width digits
+        onKeyDown={e => { if (e.key === 'Enter') { if (e.nativeEvent.isComposing || e.keyCode === 229) return; go(Number(e.currentTarget.value)); setDraft(null) } else if (e.key === 'Escape') setDraft(null) }} />
       <span className="of">/ {pages}</span>
       <TippedButton label={R.pill.next} side="top" onClick={() => go(page + 1)}>
         <Icon node={ChevronRight} size={14} />

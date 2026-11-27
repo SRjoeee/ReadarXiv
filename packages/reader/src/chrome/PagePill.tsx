@@ -43,9 +43,13 @@ export const PagePill = forwardRef<HTMLDivElement, { controller: ReaderControlle
         onBlur={() => setDraft(null)}
         onChange={(e) => setDraft(e.target.value)}
         onInput={(e) => setDraft((e.target as HTMLInputElement).value)}
-        // the field's own value: the draft's state may not have landed when Enter follows the typing at once
+        // the field's own value: the draft's state may not have landed when Enter follows the typing at once. An Enter that
+        // confirms an input method's text is the IME's, not the field's (isComposing, or the keyCode 229 a browser gives a key
+        // the IME takes; Modern Web Guidance's ime-safe-enter-submit): a Japanese IME confirming full-width digits went to the
+        // page and reset the field
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
+            if (e.nativeEvent.isComposing || e.keyCode === 229) return
             go(Number(e.currentTarget.value), true)
             setDraft(null)
           } else if (e.key === 'Escape') setDraft(null)
