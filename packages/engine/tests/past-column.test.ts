@@ -24,8 +24,9 @@ import {
 import type { SourceUnit } from '../src/source/latex-front.ts'
 
 /** a string is glyphs on the current line (a space 3 pt, `\n` the next line 12 pt down, `\f` a line 200 pt down: a column's
- *  foot), `{ at }` a point (`{ at: '\f' }` ends the page), `{ rule }` a rule 36 pt wide on a line of its own 12 pt down */
-type Item = string | { at: string } | { rule: true }
+ *  foot), `{ at }` a point (`{ at: '\f' }` ends the page), `{ rule }` a rule 36 pt wide on a line of its own 12 pt down,
+ *  `{ under }` a rule under the last glyph set, 2 pt below its baseline */
+type Item = string | { at: string } | { rule: true } | { under: true }
 function pageOf(items: readonly Item[]): StreamPage {
   const glyphs: Glyph[] = [],
     points: { name: string; glyph: number; box: number }[] = [],
@@ -57,7 +58,8 @@ function pageOf(items: readonly Item[]): StreamPage {
           x += 5
         }
       }
-    } else if ('rule' in it) {
+    } else if ('under' in it) boxes.push(x - 5, y - 2.4, x, y - 2)
+    else if ('rule' in it) {
       y -= 12
       boxes.push(72, y, 108, y + 0.4)
     } else points.push({ name: it.at, glyph: glyphs.length, box: boxes.length / 4 })
@@ -134,6 +136,8 @@ const FOOT = (
     notes?: number
     label?: string
     own?: boolean
+    open?: boolean
+    under?: boolean
     end?: boolean
     after?: string
     rows?: string
@@ -143,10 +147,7 @@ const FOOT = (
     label,
     { at: `${n}s` },
     'Anoteofours,at',
-    { at: `${n}e` },
-    { at: `p${n}.1a` },
-    'x.org',
-    { at: `p${n}.1b` },
+    ...(o.open ? [] : [{ at: `${n}e` }, { at: `p${n}.1a` }, 'x.org', { at: `p${n}.1b` }]),
   ]
   return [
     { at: 'bs1' },
@@ -154,6 +155,7 @@ const FOOT = (
     'Wehave',
     { at: 'p1.1a' },
     '\na=b(1)',
+    ...(o.under ? [{ under: true as const }] : []),
     ...(o.rule ? [{ rule: true as const }] : []),
     ...note(0, `\f${o.label ?? '2'}`),
     ...(o.notes === 2 ? note(2, '\n3') : []),
@@ -162,6 +164,8 @@ const FOOT = (
     ...(o.end === false ? [] : [{ at: 'be1' }]),
     { at: '\f' },
     { at: 'bs2' },
+    // (the note's rest at the head of the next column, before the text after it)
+    ...(o.open ? ['\nx.org.'] : []),
     ...(o.rows ? [o.rows] : []),
     `\n${o.after ?? 'whereitholds.'}`,
     { at: '1e' },
@@ -203,6 +207,15 @@ describe("a display at a column's foot, the notes a class ships inside the body 
 
   it('the other side: no body ends after the note on its page: nothing is owned', () => {
     expect(foot({ end: false })).toBe('open, the text after it not found')
+  })
+
+  it("the other side: a note left open at the body's end (its end mark not there), its rest at the next column's head: nothing", () => {
+    expect(foot({ open: true })).toBe('open, the text after it not found')
+    expect(foot({ open: true }, true)).toBe('open, the text after it not found')
+  })
+
+  it("a rule TeX set on the display's last line after its last glyph (an underline) stays its own; the separator does not", () => {
+    expect(foot({ under: true, rule: true })).toBe('a=b(1) +1 box')
   })
 
   it('the other side: the text after it not at the next body: nothing is owned', () => {
