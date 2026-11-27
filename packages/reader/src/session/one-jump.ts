@@ -47,6 +47,8 @@ export interface JumpLights {
    *  null where none */
   litAt(side: PlaceSide, page: number, x: number | null, y: number): { id: number; s: number } | null
   land(l: NonNullable<Light>): void
+  /** the panes about to move by the reader's own hand: what slides under a still pointer lights nothing until it moves */
+  quiet?(): void
 }
 export interface OneJump {
   readonly depth: number
@@ -91,6 +93,7 @@ export function createOneJump(d: {
   }
   /** a move made as a jump: the place left read first, the move, the place arrived at; one entry; the landing */
   const run = (from: { place: Place | null; light: Light }, move: () => Light | undefined) => {
+    d.lights()?.quiet?.()
     const light = move()
     if (light === undefined) return
     const p = d.panes()
@@ -101,6 +104,7 @@ export function createOneJump(d: {
   }
   const off = jumps.on((e) => {
     if (e.silent) return
+    d.lights()?.quiet?.()
     d.panes()?.goToPlace(e.go)
     if (e.light) d.lights()?.land(e.light)
   })

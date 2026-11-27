@@ -348,3 +348,31 @@ describe('the light on arrival is the head’s stated target, never a rule of th
     expect(t.jumps.depth).toBe(2)
   })
 })
+
+describe('a move the reader makes quiets the hover under a still pointer (the lead’s look at staging, 2026-11-28)', () => {
+  it('a jump, the capsule’s return and a history traversal each tell the highlight before the panes move', async () => {
+    const t = standIn()
+    const said: string[] = []
+    const lights: JumpLights = {
+      litAt: () => null,
+      land: () => said.push('land'),
+      quiet: () => said.push('quiet'),
+    }
+    const panes = {
+      ...t.panes,
+      goTo: (...a: Parameters<JumpPanes['goTo']>) => {
+        said.push('goTo')
+        t.panes.goTo(...a)
+      },
+    }
+    const one = createOneJump({ panes: () => panes, lights: () => lights, jumps: t.jumps, narrow: () => false })
+    await one.link({ side: 'left', dest: 'cite.a', keyboard: false, origin: null })
+    expect(said.slice(0, 2)).toEqual(['quiet', 'goTo'])
+    said.length = 0
+    one.back()
+    expect(said[0]).toBe('quiet')
+    said.length = 0
+    t.h.forward()
+    expect(said[0]).toBe('quiet')
+  })
+})

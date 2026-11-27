@@ -39,7 +39,7 @@ function testClock() {
   return { clock, pass }
 }
 
-function setUp(page: Page, on = true) {
+function setUp(page: Page, on = true, o: { pointer?: boolean } = {}) {
   const els = { left: document.createElement('div'), right: document.createElement('div') }
   for (const el of Object.values(els)) document.body.append(el)
   const panes = {
@@ -47,7 +47,8 @@ function setUp(page: Page, on = true) {
     right: { pages: 1, on: () => () => {} },
     on: () => () => {},
     pageElement: (side: 'left' | 'right') => els[side],
-    pointAt: () => null,
+    // (where a check asks for the pointer: the screen's point is the page's own, page 1)
+    pointAt: o.pointer ? (_s: string, x: number, y: number) => ({ page: 1, x, y }) : () => null,
     containerOf: () => document.body,
     frameOf: () => ({ turn: 0, w: 600, h: H, width: 600, height: H }),
     boxOf: (_side: string, _n: number, r: Box) => ({
@@ -143,6 +144,54 @@ describe('the landing band', () => {
     expect(LAND_MS).toBe(1700)
     expect(LAND_FULL).toBe(0.18)
     expect(READER_CSS).toMatch(/@keyframes axt-land \{ 0%, 18% \{ opacity: 1; \} 100% \{ opacity: 0; \} \}/)
+  })
+})
+
+describe('the still pointer and the landing (the lead’s look at staging, 2026-11-28: the entry under a still pointer lit after a jump)', () => {
+  // (the clock's frames run at once here: the hover's one look a frame)
+  const pointed = () => {
+    const x = setUp(page, true, { pointer: true })
+    const t = x.t.clock as { frame: (f: () => void) => number; later: (f: () => void, ms: number) => number }
+    t.frame = (f) => t.later(f, 0)
+    return x
+  }
+  const move = (x: number, y: number) =>
+    document.body.dispatchEvent(new MouseEvent('mousemove', { clientX: x, clientY: y }))
+  const scroll = () => document.body.dispatchEvent(new Event('scroll'))
+  const hover = (el: HTMLElement) => el.querySelectorAll('.axt-hl:not(.axt-land)').length
+  it('after a move the reader made (a jump, a return), what slides under a still pointer lights nothing until the pointer moves', () => {
+    const { els, hl, t } = pointed()
+    move(100, 194)
+    t.pass(0)
+    expect(hover(els.right)).toBeGreaterThan(0)
+    hl.quiet()
+    expect(hover(els.right)).toBe(0)
+    scroll()
+    t.pass(0)
+    expect(hover(els.right)).toBe(0)
+    // (an event at the same place is no move)
+    move(100, 194)
+    t.pass(0)
+    expect(hover(els.right)).toBe(0)
+    move(101, 194)
+    t.pass(0)
+    expect(hover(els.right)).toBeGreaterThan(0)
+    hl.dispose()
+  })
+  it('a landing runs its whole time whatever the pointer does; the hover lights nothing meanwhile, and takes over after it where the pointer moved', () => {
+    const { els, hl, t } = pointed()
+    hl.land({ page: 1, box: [72, 700, 300, 712] })
+    move(100, 194)
+    t.pass(100)
+    move(102, 194)
+    t.pass(700)
+    expect(landed(els.right)).toHaveLength(1)
+    expect(hover(els.right)).toBe(0)
+    t.pass(LAND_MS - 800)
+    expect(landed(els.right)).toHaveLength(0)
+    t.pass(0)
+    expect(hover(els.right)).toBeGreaterThan(0)
+    hl.dispose()
   })
 })
 

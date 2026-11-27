@@ -3316,7 +3316,13 @@ target names, whole on both panes, for a reference, a note or a heading; the tar
 destination the head states no target for lights nothing: the room above the point shows the place (the lead's ruling of
 2026-11-28: a rule of the reader's own, the first member at or just under the point, lit entry [14] for a citation of [13] on
 staging, the anchor raised by about a line; the engine's evidence decides a landing, never the reader). A contents entry lights
-its heading's first rectangle; a page typed lights nothing. Coming back, the sentence under the link left where the highlight lights that member by
+its heading's first rectangle; a page typed lights nothing. The band begins once its target is drawn (a far page's drawing
+is waited for, 3 s at most, never lit elsewhere; a page drawn again meanwhile takes it where its envelope stands) and runs its
+whole time whatever the pointer does; the hover lights nothing while it runs. After a move the reader makes itself (a jump,
+a return, a traversal) the hover lights nothing until the pointer moves (a pointer event at another place): what slides under
+a still pointer is never lit (the lead's look at staging, 2026-11-28: a citation of [13] pressed, [14] slid under the pointer
+and was lit, the landing on [13] drawn before its page was and lost with it). A wheel's scroll under a still pointer lights
+what comes under it, as before. Coming back, the sentence under the link left where the highlight lights that member by
 sentence, else the link's own box on its pane, never a whole paragraph (the lead's ruling 7). It needs the layer's code (the
 highlight is made with the composer): a paper with no layer jumps and goes back with no band. A hovered or held link takes the
 band at half (11 % by default) on both panes (§11.9, "Looked at").

@@ -337,7 +337,9 @@ export function openReader(
   /** what a jump lights: the highlight's landing and its reading of a point (none before the layer's code is in) */
   const jumpLights = (): JumpLights | null => {
     const h = highlight
-    return h ? { litAt: (side, n, x, y) => h.litAt(side, n, x, y), land: (l) => h.land(l) } : null
+    return h
+      ? { litAt: (side, n, x, y) => h.litAt(side, n, x, y), land: (l) => h.land(l), quiet: () => h.quiet() }
+      : null
   }
   /** the head's targets (link previews: where each destination lands, Head.targets), read anew with each head */
   let targetsHeld: { head: Head | null; map: ReadonlyMap<string, Target> } = { head: null, map: new Map() }

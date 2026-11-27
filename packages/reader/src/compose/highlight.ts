@@ -51,6 +51,8 @@ export interface Highlight {
   /** the sentence (or unit, `s` -1) a point of a page lights (PDF units on that pane's page, y up; `x` null: any column),
    *  null where none (the sentence a link left stands in: never a landing, which is the head's stated target's) */
   litAt(side: Side, page: number, x: number | null, y: number): Lit | null
+  /** the reader moved the panes itself (a jump, a return): what slides under the still pointer lights nothing until it moves */
+  quiet(): void
   setOn(on: boolean): void
   /** the shapes each pane shows (the probe's) */
   bands(): Record<Side, number>
@@ -685,14 +687,23 @@ export function createHighlight(o: { panes: Panes; composer: Composer; clock: Cl
     }
     return made
   }
-  // ---- the landing: one at a time, gone after LAND_MS
+  // ---- the landing: one at a time, its whole LAND_MS from when its target is drawn, whatever the pointer does (the lead's
+  // look at staging, 2026-11-28: drawn at the press, a far target's page drawn later took it away, and the hover lit what slid
+  // under the still pointer instead); the hover lights nothing while it runs, and is asked again once it ends
   let landed: Element[] = []
   let landTimer = 0
+  /** how long a landing waits for its target's page to be drawn, ms [start: unmeasured]; past it, nothing is lit */
+  const LAND_WAIT_MS = 3000
+  /** the landing under way: what it lights, when its band began (null: its target not drawn yet), until when it waits for that */
+  let landing: { what: Parameters<Highlight['land']>[0]; start: number | null; until: number } | null = null
   const unland = () => {
     clock.clear(landTimer)
     landTimer = 0
     for (const el of landed) el.remove()
     landed = []
+    const was = landing
+    landing = null
+    if (was?.start !== null && was?.start !== undefined) lookSoon()
   }
   /** a box of a page on a pane, as a band of its own (the link's half tint's inset: 1.5 px over and under, 2 px beside) */
   function drawBox(side: Side, n: number, box: Box): Element | null {
@@ -720,17 +731,48 @@ export function createHighlight(o: { panes: Panes; composer: Composer; clock: Cl
     layer.append(el)
     return el
   }
-  function land(what: { lit: Lit } | { page: number; box: Box; side?: Side }) {
-    if (disposed) return
-    unland()
-    if ('lit' in what) landed = drawLit(what.lit, ' axt-land')
+  /** the landing's band drawn where its target's pages are drawn, its envelope `elapsed` ms in (a page drawn again meanwhile) */
+  function drawLanding(what: Parameters<Highlight['land']>[0], elapsed: number): Element[] {
+    const made: Element[] = []
+    if ('lit' in what) made.push(...drawLit(what.lit, ' axt-land'))
     else
       for (const side of what.side ? [what.side] : (['left', 'right'] as const)) {
         if (side === 'right' && composer.muted(what.page)) continue
         const el = drawBox(side, what.page, what.box)
-        if (el) landed.push(el)
+        if (el) made.push(el)
       }
-    if (landed.length) landTimer = clock.later(unland, LAND_MS)
+    if (elapsed > 0) for (const el of made) (el as HTMLElement).style.animationDelay = `${-Math.round(elapsed)}ms`
+    return made
+  }
+  /** the landing begun, or drawn again where a page of it was drawn anew (its band where its envelope stands) */
+  function landNow() {
+    const l = landing
+    if (!l || disposed) return
+    if (l.start !== null && landed.length && landed.every((el) => el.isConnected)) return
+    const elapsed = l.start === null ? 0 : clock.now() - l.start
+    for (const el of landed) el.remove()
+    landed = drawLanding(l.what, elapsed)
+    if (!landed.length) {
+      // (its target not drawn yet: waited for, LAND_WAIT_MS at most, never lit somewhere else)
+      if (l.start === null && clock.now() > l.until) unland()
+      return
+    }
+    if (l.start === null) {
+      l.start = clock.now()
+      clock.clear(landTimer)
+      landTimer = clock.later(unland, LAND_MS)
+    }
+  }
+  function land(what: { lit: Lit } | { page: number; box: Box; side?: Side }) {
+    if (disposed) return
+    unland()
+    // (the hover's band gone while the landing runs: one light at a time)
+    light(null)
+    landing = { what, start: null, until: clock.now() + LAND_WAIT_MS }
+    landTimer = clock.later(() => {
+      if (landing && landing.start === null) unland()
+    }, LAND_WAIT_MS)
+    landNow()
   }
   function litAt(side: Side, n: number, x: number | null, y: number): Lit | null {
     const page = composer.page(n)
@@ -830,9 +872,13 @@ export function createHighlight(o: { panes: Panes; composer: Composer; clock: Cl
   }
   // the pointer: one look a frame, read before anything is written; a miss held MISS_HOLD
   let last: { side: Side; x: number; y: number } | null = null
+  /** where the pointer stood when the reader moved the panes itself (a jump, a return): until it moves, the hover lights nothing */
+  let still: { x: number; y: number } | null = null
   const look = () => {
     frame = 0
     if (!last || !on || disposed) return
+    // (a move the reader made under a still pointer, or a landing running: nothing lit by the hover)
+    if (still || landing) return
     const t0 = performance.now()
     const t = at(last.side, last.x, last.y)
     if (t) light(t)
@@ -849,7 +895,12 @@ export function createHighlight(o: { panes: Panes; composer: Composer; clock: Cl
     c.addEventListener(
       'mousemove',
       (e) => {
-        last = { side, x: (e as MouseEvent).clientX, y: (e as MouseEvent).clientY }
+        const x = (e as MouseEvent).clientX,
+          y = (e as MouseEvent).clientY
+        // (a pointer event at the place it stood is no move: content slid under a still pointer lights nothing)
+        if (still && x === still.x && y === still.y) return
+        still = null
+        last = { side, x, y }
         lookSoon()
       },
       { signal: ac.signal },
@@ -869,9 +920,13 @@ export function createHighlight(o: { panes: Panes; composer: Composer; clock: Cl
   // the resting pointer asked again)
   const offs = [
     panes.on('scale', () => paint()),
-    panes.on('drawn', () => (lit ? paint() : undefined)),
+    panes.on('drawn', () => {
+      if (lit) paint()
+      landNow()
+    }),
     composer.on('laid', () => {
       if (lit) paint()
+      landNow()
       lookSoon()
     }),
     panes.right.on('shown', () => lookSoon()),
@@ -886,6 +941,12 @@ export function createHighlight(o: { panes: Panes; composer: Composer; clock: Cl
     light,
     at,
     land,
+    quiet() {
+      still = last ? { x: last.x, y: last.y } : { x: Number.NaN, y: Number.NaN }
+      clock.cancel(frame)
+      frame = 0
+      light(null)
+    },
     litAt,
     setOn(next) {
       if (on === next) return
