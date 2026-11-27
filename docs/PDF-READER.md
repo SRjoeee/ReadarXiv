@@ -10720,7 +10720,11 @@ not taken apart), a definition inside a group or an environment (TeX undoes it a
 branch the source cannot tell, a `\let` of a meaning not read, a call whose
 arguments are not read whole, a macro whose meaning no file read in order gives — the call is read as before, the old form
 included. A body that sets a display whole around an undelimited argument (`\newcommand{\eqn}[1]{\begin{equation}#1\end{equation}}`)
-is no boundary, read as before (`displayArgEnd`, §18.95).
+is no boundary, read as before (`displayArgEnd`, §18.95). A call TeX does not execute where it stands closes nothing: an operand
+(`\let\x\ethm`, `\string\end{…}`), a name in `\verb`, a definition's body or a branch TeX skips (`executedAt`, `actedOn`). A
+body closed by a closing macro of its own sets the environment whole: no opener. An opener whose body sets more after its
+`\begin{X}` than the environment's own arguments read whole by their declaration (an argument's prose, a table's arguments split
+with the source), and a display's opener whose end this reading does not find, are read as before.
 
 ## 19. The engine's contract
 
