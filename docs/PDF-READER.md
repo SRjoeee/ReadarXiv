@@ -14195,8 +14195,10 @@ In this order, a point lands on:
 3. the line, label or display under the point within `LAND_BELOW` (24) whose ink begins at the point's x on the format's grid
    (pdfTeX states a destination at the origin of what TeX sets next): the first such, nothing where that line begins nothing
    (an item, a head inside a paragraph's unit);
-4. else the first beginning under it in its column (TeX's column frame that holds its x, the nearest where none does; any
-   where it has no x): the highest baseline under its height within `LAND_BELOW`. A line that goes on with its member (the
+4. else the first beginning under it in its column (TeX's column frame that holds its x; in the gutter between two, the one on
+   its right, since TeX sets an anchor at or left of where its text begins, a label wider than its box carrying it out left of
+   its column, and no text of the left column begins in the gutter; the nearest where it stands outside them all; any where it
+   has no x): the highest baseline under its height within `LAND_BELOW`. A line that goes on with its member (the
    last line of the entry above) begins nothing and is passed.
 
 What it lands on decides:
@@ -14215,6 +14217,25 @@ What it lands on decides:
 Anything else (a theorem, an item, a cell, a float with no box, a page anchor with no height) lands nowhere: the destination is
 absent from `targets`, and its links keep their jump alone.
 
+**A landing is stated only on the engine's own evidence** (the lead's ruling of 2026-11-27: a link's target is what a reader is
+shown on hover, and a wrong preview is a bug a reader believes, where no preview leaves the jump). Two readings that are not the
+rule above judge each landing:
+
+- the edge reading: the line, label or display whose ink begins at the point's x on the format's grid (pdfTeX states a
+  destination at the origin of what TeX sets next, a beginning or not), the one whose baseline is the point's own (an anchor
+  set there, unraised) else the one whose baseline is the first under it within `LAND_BELOW`; its member (a float's caption);
+- the name's claim, read as a format: a name of the simple shape claims a kind by the scheme of the package that makes the
+  destination: hyperref's `cite.<key>` a reference, `Hfootnote.<n>` a note, `page.<n>` a page; `<counter>.<value>` for a
+  counter LaTeX's kernel defines (its sectioning and hyperref's `appendix` a heading, `figure` and `table` a float, `equation`
+  a display). A compound name (`equation.3-footnote.1`), a counter a package or the paper defines (a theorem's, an item's
+  `Item.<n>`) and an explicit destination claim nothing.
+
+A landing is not stated where its name is a page's (a page, no thing on it: the reader gives the jump alone), where the edge
+reading names another member, where its name claims another kind, or where its name claims nothing and the edge reading does
+not confirm its member. The refusals are the lab's (`Located.refusedTargets`), never the bundle's. The reading of a reference's
+own key (`\bibitem`'s, which the source reader reads and keeps nowhere) would prove a citation's member by identity; it moves the
+compile side, and is not here.
+
 ### 20.4 The head's targets
 
 `Head.targets` (format's `Target`, `TargetKind`): `[dest, kind, page, ord, box]`, or with `[…, next page, next box]` for a
@@ -14231,8 +14252,10 @@ each float's box or cause and its union where one was made, each landing, the de
 wrong, 0 over the corpus.** A boxed float is wrong where the engine counts any of `foreign`, `cut`, `outside` above 0 (none can
 be boxed so; the check holds the code to it), or where the bundle's own parts read it so apart from the engine: a member of its
 own (its members and captions, by ord) with ink outside the box (a line's ink across at its baseline, an element's or its
-label's ink), or another member's line band, element or label ink meeting the box's inside; and it fails where no paper of
-the run states a record (dumps made before the targets check nothing). The share of figures and tables
+label's ink), or another member's line band, element or label ink meeting the box's inside. **And no stated landing wrong**,
+read again from the bundle's parts and the destinations: a page anchor, one the edge reading contradicts, one whose name
+claims another kind, one whose name claims nothing and the edge does not confirm. It fails where no paper of the run states a
+record (dumps made before the targets check nothing). The share of figures and tables
 boxed is reported by type with each miss's cause, never gated. Two readings of the landings are reported beside it, never
 rules: each landing whose kind its hyperref name does not say (`cite.` a reference, `figure.`/`table.` a float, `section.` and
 its kin a heading, `equation.` a display, `Hfootnote.` a note), and each landing another member's left edge contradicts (the
@@ -14244,15 +14267,16 @@ line's but `targets` (204 heads state them; 41 papers have no landing); 0 boxed 
 figures 1,639 of 1,696 (96.6 %; 38 `foreign`, 19 `unpaired`), tables 1,107 of 1,110 (99.7 %; 1 `foreign`, 1 `unpaired`, 1
 `cut`), floats with no caption 172 of 173, algorithms 6 of 6; captions of no bracket (`unbracketed`): figures 41, tables 23,
 algorithms 39, others 20. A `foreign` refusal read on the page: a section heading inside the union an included figure's
-bounding box reaches. Destinations: 18,142 keys, every one resolved; landed 15,612 (references 8,743, headings 2,253, displays
-2,195, floats 2,176, notes 245), nowhere 2,530 (by their names: of no class above 922 of 1,437, floats 197,
-displays 597, headings 275, references 421, notes 118). The two readings: 13 landings whose kind the name does not say (7
-citations on a heading, 4 equations on a heading, 2 headings on a note) and 33 that another member's left edge contradicts (27 citations:
-an anchor whose x stands in the gutter left of the right column's entry is matched in the left column; a run-in heading on a
-display's line); 19 page anchors (`page.N`, at the page's corner) on a float at the page's top, and 10 items on a display
-under them. These 75 are wrong landings, reported (a wrong preview is worse than none), not patched by a destination's name.
-What a theorem's anchor lands on where the source reader made its head a heading unit (213 `theorem.` names, 30 `proposition.`,
-17 `lemma.`) is that heading's window: L4's reading, the kind the unit's.
+bounding box reaches. Destinations: 18,142 keys, every one resolved. Stated 15,548: references 8,776 (4,476 proved by the edge
+reading, 4,300 their kind claimed by their name alone), headings 2,193 (2,015; 178), displays 2,193 (1,244; 949), floats 2,148
+(615; 1,533), notes 238 (200; 38); 0 wrong by the gate. Refused by the evidence 108: page anchors 22 (19 on a float at the
+page's top, 3 on a heading), names claiming nothing with no edge to confirm them 56 (36 headings, 10 floats, 10 displays: a
+theorem's head, a list item, a compound name), names claiming another kind 12 (10 headings, 2 notes), the edge reading naming
+another member 18 (9 headings whose raised anchor stands exactly on the previous paragraph's last baseline at its left edge, 5
+notes whose anchor's x is the next note's edge, 4 citations). Landed nowhere 2,486. Before the gutter rule and the grid
+comparison of a point on a line's ink, the edge reading contradicted 33 landings: the gutter rule moved 15 landings to the
+right column's entry (14 citations, one of them landed on a heading before), and comparing on the grid moved 15 more, points at
+an entry's label edge a fraction of the grid left of it raw, landed on the entry under before.
 
 The size: the head's targets 4.1 KB raw, 1.3 KB gzipped a paper at the median, 3.3 KB at the 95th percentile, 13.6 KB the
 largest (46.7 KB raw); the whole head grows by 1.4 KB gzipped at the median. The prepare's added time (A's destinations, the
