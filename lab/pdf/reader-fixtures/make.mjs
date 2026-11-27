@@ -80,10 +80,10 @@ const PAPERS = {
   // display's raised over its first baseline, a float's at its top (hypcap))
   's5-links': {
     id: '2600.00006', version: 1,
-    note: 'Its links inside the paper name destinations the head states as targets (link previews: a citation, a figure, a table, a section, a display, a note), one to a theorem it states none of, and one out of the paper.',
+    note: 'Its links inside the paper name destinations the head states as targets (link previews: a citation, a figure, a table, a section, a display, a note), one to a theorem it states none of, and one out of the paper. Three pages: the table and the theorem on the middle one, the bibliography on the last (entry [3] long enough that its card scrolls).',
     // (TeX's text frame of each page, its block's foot under the note, and its body bracketed (`bs<n>`..`be<n>`) as the page
     // builder broke it: a heading's window that passes the foot runs on to the next page's body)
-    tex: { frames: [{ block: [72, 540], columns: [[72, 540]], foot: 60 }, { block: [72, 540], columns: [[72, 540]], foot: 60 }] },
+    tex: { frames: [0, 1, 2].map(() => ({ block: [72, 540], columns: [[72, 540]], foot: 60 })) },
     dests: {
       'section.2': [1, 72, 172],
       'figure.1': [1, 150, 469],
@@ -91,10 +91,10 @@ const PAPERS = {
       'Hfootnote.1': [1, 72, 79],
       'table.1': [2, 150, 663],
       'theorem.1': [2, 72, 532],
-      'cite.a': [2, 72, 441],
-      'cite.b': [2, 72, 408],
-      'cite.c': [2, 72, 375],
-      'cite.d': [2, 72, 342],
+      'cite.a': [3, 72, 741],
+      'cite.b': [3, 72, 708],
+      'cite.c': [3, 72, 675],
+      'cite.d': [3, 72, 609],
     },
     pages: [
       { size: [612, 792], blocks: [
@@ -130,12 +130,19 @@ const PAPERS = {
         { rules: [[150, 640, 462], [150, 622, 462], [150, 574, 462]] },
         { point: 'fe2' },
         { u: 'thm1', kind: 'theorem', size: 10, x: 72, y: 520, w: 468, lead: 12, label: 'Theorem 1.', text: words(26, 3) },
-        { u: 'h3', kind: 'heading', font: 'HB', size: 12, x: 72, y: 460, w: 468, text: 'References' },
-        { u: 'r1', kind: 'reference', entry: true, size: 9, x: 72, y: 430, w: 468, lead: 11, label: '[1]', text: 'A. Author and B. Writer. A study of reading in two languages. Journal of Synthetic Pages, 12(3):45-67, 2020.' },
-        { u: 'r2', kind: 'reference', entry: true, size: 9, x: 72, y: 397, w: 468, lead: 11, label: '[2]', text: 'C. Reader. Figures, tables and where they stand: a measure of the page. In Proceedings of a Workshop on Layout, pages 1-9, 2021.' },
-        { u: 'r3', kind: 'reference', entry: true, size: 9, x: 72, y: 364, w: 468, lead: 11, label: '[3]', text: 'D. Typesetter, E. Printer, and F. Binder. Lines, columns and the paragraphs between them, with a long title that runs over more than one line of the bibliography. Synthetic Press, 2019.' },
-        { u: 'r4', kind: 'reference', entry: true, size: 9, x: 72, y: 320, w: 468, lead: 11, label: '[4]', text: 'G. Linker. Destinations that land. Technical report, 2022.' },
+        { u: 'p5', kind: 'para', size: 10, x: 72, y: 460, w: 468, lead: 12, text: words(120, 6) },
         { point: 'be2' },
+      ] },
+      // (a page of its own for the bibliography: a jump from page 1 lands on the last page, one to the table on a page in the
+      // middle; entry [3] long enough that its card scrolls)
+      { size: [612, 792], blocks: [
+        { point: 'bs3' },
+        { u: 'h3', kind: 'heading', font: 'HB', size: 12, x: 72, y: 760, w: 468, text: 'References' },
+        { u: 'r1', kind: 'reference', entry: true, size: 9, x: 72, y: 730, w: 468, lead: 11, label: '[1]', text: 'A. Author and B. Writer. A study of reading in two languages. Journal of Synthetic Pages, 12(3):45-67, 2020.' },
+        { u: 'r2', kind: 'reference', entry: true, size: 9, x: 72, y: 697, w: 468, lead: 11, label: '[2]', text: 'C. Reader. Figures, tables and where they stand: a measure of the page. In Proceedings of a Workshop on Layout, pages 1-9, 2021.' },
+        { u: 'r3', kind: 'reference', entry: true, size: 9, x: 72, y: 664, w: 468, lead: 11, label: '[3]', text: `D. Typesetter, E. Printer, and F. Binder. Lines, columns and the paragraphs between them, with a long title that runs over more than one line of the bibliography. In ${words(70, 1)}. Synthetic Press, 2019.` },
+        { u: 'r4', kind: 'reference', entry: true, size: 9, x: 72, y: 598, w: 468, lead: 11, label: '[4]', text: 'G. Linker. Destinations that land. Technical report, 2022.' },
+        { point: 'be3' },
       ] },
     ],
   },

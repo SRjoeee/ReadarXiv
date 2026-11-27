@@ -5,4 +5,4 @@ A paper of our own (CC0 1.0), made by `lab/pdf/reader-fixtures/make.mjs`: `arxiv
 backwards), `de.reader.json` that translation laid, in the baseline's reader-dump format. Remake: `node --import tsx
 lab/pdf/reader-fixtures/make.mjs`.
 
-Its links inside the paper name destinations the head states as targets (link previews: a citation, a figure, a table, a section, a display, a note), one to a theorem it states none of, and one out of the paper.
+Its links inside the paper name destinations the head states as targets (link previews: a citation, a figure, a table, a section, a display, a note), one to a theorem it states none of, and one out of the paper. Three pages: the table and the theorem on the middle one, the bibliography on the last (entry [3] long enough that its card scrolls).
