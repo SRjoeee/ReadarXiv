@@ -24,7 +24,9 @@ const model = (o: Partial<ModelEntry> = {}): ModelEntry => ({
   shape: 'anthropic-messages',
   json: 'schema',
   billing: { mode: 'paid', usdPerMTokIn: 1, usdPerMTokOut: 5 },
-  checks: { 'zh-CN': { at: '2026-11-26T00:00:00Z', ok: true, accepted: 40, of: 40 } },
+  checks: {
+    'zh-CN': { at: '2026-11-26T00:00:00Z', ok: true, accepted: 40, of: 40, against: 'llm:0123456789abcdef|0' },
+  },
   ...o,
 })
 
@@ -51,6 +53,11 @@ describe('a policy read: parsePolicy', () => {
   })
   it('reads a policy that ranks a checked model for a named target', () => {
     expect(parsePolicy(withX()).ok).toBe(true)
+  })
+  it('refuses a check that does not say what it ran against', () => {
+    const p = withX() as unknown as { models: { checks: Record<string, Record<string, unknown>> }[] }
+    delete p.models[0]?.checks['zh-CN']?.against
+    expect(names(refused(p), 'models.0.checks.zh-CN.against')).toBe(true)
   })
   it('refuses what is not an object, naming the whole', () => {
     expect(refused(null).length).toBeGreaterThan(0)
@@ -183,7 +190,19 @@ describe('what a policy is refused for: each names its field', () => {
       'a ranked model whose check for the target failed',
       'targets.zh-CN.ranking',
       (p) => {
-        p.models = [model({ checks: { 'zh-CN': { at: '2026-11-26T00:00:00Z', ok: false, accepted: 30, of: 40 } } })]
+        p.models = [
+          model({
+            checks: {
+              'zh-CN': {
+                at: '2026-11-26T00:00:00Z',
+                ok: false,
+                accepted: 30,
+                of: 40,
+                against: 'llm:0123456789abcdef|0',
+              },
+            },
+          }),
+        ]
         return p
       },
     ],

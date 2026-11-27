@@ -162,7 +162,7 @@ describe('llm: identity', () => {
       ...haiku,
       id: 'another',
       billing: { mode: 'free' },
-      checks: { 'zh-CN': { at: '2026-11-27', ok: true, accepted: 40, of: 40 } },
+      checks: { 'zh-CN': { at: '2026-11-27', ok: true, accepted: 40, of: 40, against: 'llm:0123456789abcdef|0' } },
       reasoning: { effort: 'low', thinking: { type: 'disabled' } },
     }
     expect(llmIdentityOf(same)).toBe(id)
