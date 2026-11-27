@@ -1236,7 +1236,8 @@ export function createComposer(o: ComposerOptions): Composer {
         const copy = svg.cloneNode(true) as SVGSVGElement
         // (the box's own lines alone: a line of the page beyond it is no part of what the crop shows, and would be read as the
         // preview's text by assistive technology (the lead's look at staging, 2026-11-28); in the SVG's units, y down from the
-        // page's top, a line kept where its band (its size over its baseline, a third under) meets the box)
+        // page's top, a line kept where its band (its size over its baseline, a third under) meets the box and it begins left of
+        // the box's right edge)
         const top = vy1 - box[3],
           bottom = vy1 - box[1],
           left = box[0] - vx0,
@@ -1250,7 +1251,10 @@ export function createComposer(o: ComposerOptions): Composer {
           const y = at ? Number(at[2]) : (ys[0] ?? Number.NaN),
             x0 = at ? Number(at[1]) : Math.min(...xs),
             x1 = at ? Number(at[1]) : Math.max(...xs)
-          const meets = y + size / 3 >= top && y - size <= bottom && x1 + 2 * size >= left && x0 <= right
+          // (across: where a line ends is known only where each character has its place (dx); a run of one place may reach
+          // any length to its right)
+          const across = x0 <= right && (at || xs.length < 2 || x1 + 2 * size >= left)
+          const meets = y + size / 3 >= top && y - size <= bottom && across
           if (!(Number.isFinite(y) && meets)) t.remove()
         }
         copy.setAttribute('aria-hidden', 'true')
