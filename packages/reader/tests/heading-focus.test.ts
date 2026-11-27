@@ -57,7 +57,15 @@ vi.mock('../src/compose/composer.ts', () => ({
   },
 }))
 vi.mock('../src/compose/highlight.ts', () => ({
-  createHighlight: () => ({ on: () => () => {}, lit: () => null, setOn: () => {}, dispose: () => {} }),
+  createHighlight: () => ({
+    on: () => () => {},
+    lit: () => null,
+    setOn: () => {},
+    land: () => {},
+    litAt: () => null,
+    quiet: () => {},
+    dispose: () => {},
+  }),
 }))
 const { openReader } = await import('../src/reader.ts')
 
