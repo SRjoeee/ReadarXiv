@@ -7158,6 +7158,129 @@ await check(
 )
 
 await check(
+  'previews: the landing on the target with a still pointer, the hover lighting nothing that slides under it; a pointer moved at 100 ms leaves the band at strength at 800 ms; the return alike; a wheel under a still pointer lights what comes under it, as before',
+  async () => {
+    const { page, context, errors } = await chromeLaid('s5-links', { ui: 'zh-CN' })
+    const lights = () =>
+      page.evaluate(() => {
+        const land = [...document.querySelectorAll('.axt-land')]
+        return {
+          land: land.length,
+          opacity: land.length ? Math.max(...land.map((e) => Number(getComputedStyle(e).opacity))) : 0,
+          hover: document.querySelectorAll('.axt-hl:not(.axt-land)').length,
+        }
+      })
+    try {
+      const out = {}
+      // (a press, the pointer left where it was: the panes scroll under it)
+      const c = await pvCentre(page, pvSel('right', 'cite.c'))
+      await page.mouse.move(c.x, c.y)
+      await page.waitForTimeout(400)
+      await page.mouse.down()
+      await page.mouse.up()
+      await page.waitForTimeout(400)
+      out.still = await lights()
+      await page.waitForTimeout(1700)
+      out.stillAfter = await lights()
+      assert(out.still.land > 0 && out.still.hover === 0, `a press, still pointer: ${JSON.stringify(out.still)}`)
+      assert(
+        out.stillAfter.land === 0 && out.stillAfter.hover === 0,
+        `the landing ended, the pointer still: ${JSON.stringify(out.stillAfter)}`,
+      )
+      // (the return with the pointer still on the capsule: the place left lit, nothing hovered)
+      await page.locator('button.back:not([data-out])').first().click()
+      await page.waitForTimeout(400)
+      out.back = await lights()
+      assert(out.back.land > 0 && out.back.hover === 0, `the return: ${JSON.stringify(out.back)}`)
+      await page.waitForTimeout(1800)
+      // (a press, the pointer moved 100 ms after: the band still at strength at 800 ms, the hover off while it runs)
+      const d = await pvCentre(page, pvSel('right', 'cite.b'))
+      await page.mouse.move(d.x, d.y)
+      await page.waitForTimeout(400)
+      await page.mouse.down()
+      await page.mouse.up()
+      await page.waitForTimeout(100)
+      await page.mouse.move(d.x + 40, d.y + 120, { steps: 3 })
+      await page.waitForTimeout(700)
+      out.moved = await lights()
+      assert(
+        out.moved.land > 0 && out.moved.opacity > 0.05 && out.moved.hover === 0,
+        `moved at 100 ms, read at 800: ${JSON.stringify(out.moved)}`,
+      )
+      await page.waitForTimeout(1400)
+      await page.mouse.move(d.x + 44, d.y + 124)
+      await page.waitForTimeout(200)
+      out.after = await lights()
+      await page.locator('button.back:not([data-out])').first().click()
+      await page.waitForTimeout(2200)
+      // (a wheel under a still pointer: today's rule, what comes under it lit)
+      const e = await pvCentre(page, '#right .page')
+      await page.mouse.move(e.x, e.y)
+      await page.waitForTimeout(300)
+      await page.mouse.wheel(0, 120)
+      await page.waitForTimeout(500)
+      out.wheel = await lights()
+      assert(!errors.length, errors.join('; '))
+      return out
+    } finally {
+      await context.close()
+    }
+  },
+)
+
+await check(
+  'landing-envelope: the landing band’s opacity over time after a press (a reading, no assertion): at 0, 300, 650, 1000 and 1700 ms, the pointer still and moved at 100 ms',
+  async () => {
+    const { page, context } = await chromeLaid('s5-links', { ui: 'zh-CN' })
+    const out = {}
+    try {
+      for (const [how, dest] of [
+        ['still', 'cite.c'],
+        ['moved', 'cite.b'],
+      ]) {
+        const c = await pvCentre(page, pvSel('right', dest))
+        await page.mouse.move(c.x, c.y)
+        await page.waitForTimeout(400)
+        const samples = page.evaluate(
+          () =>
+            new Promise((done) => {
+              const t0 = performance.now()
+              const at = [0, 300, 650, 1000, 1700]
+              const got = []
+              const look = () => {
+                const t = performance.now() - t0
+                while (at.length && t >= at[0]) {
+                  const land = [...document.querySelectorAll('.axt-land')]
+                  got.push([
+                    at.shift(),
+                    land.length ? Math.max(...land.map((e) => Number(getComputedStyle(e).opacity))) : 0,
+                  ])
+                }
+                if (at.length) requestAnimationFrame(look)
+                else done(got)
+              }
+              requestAnimationFrame(look)
+            }),
+        )
+        await page.mouse.down()
+        await page.mouse.up()
+        if (how === 'moved') {
+          await page.waitForTimeout(100)
+          await page.mouse.move(c.x + 40, c.y + 120, { steps: 3 })
+        }
+        out[how] = (await samples).map(([t, o]) => `${t}:${Math.round(o * 100) / 100}`).join(' ')
+        await page.waitForTimeout(400)
+        await page.locator('button.back:not([data-out])').first().click()
+        await page.waitForTimeout(2200)
+      }
+      return out
+    } finally {
+      await context.close()
+    }
+  },
+)
+
+await check(
   'preview-waits: the probe of waits (a reading, no assertion): each link of the paper hovered once from the left pane and the right, the time from the pointer’s entry to its preview shown, by kind',
   async () => {
     const { page, context } = await chromeLaid('s5-links', { ui: 'zh-CN' })
