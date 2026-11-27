@@ -272,7 +272,7 @@ export function targetsOf(
     if (!pt || pt.y === null) continue
     const item = itemAt(pt.page, pt.x, pt.y)
     const got = item ? landingOf(dest, pt.page, item) : null
-    // (a citation whose name holds one located entry's key: that entry, today's landing its check)
+    // (a citation whose name holds one located entry's key: that entry, the point's landing its check)
     const entry = entryOfName(dest)
     if (entry) {
       const geometry = got ? (Array.isArray(got) ? got[1] : got.ord) : null
@@ -295,7 +295,7 @@ export function targetsOf(
    *  `cite.` and a key byte for byte (hyperref's \\@bibitem and \\@lbibitem, natbib's \\NAT@anchor: `cite.<key>\\@extra@b@citeb`,
    *  that macro empty) or `cite.`, a key and `@-<n>` (chapterbib's \\@extra@b@citeb inside a \\include'd unit: `@-` and the
    *  unit's number); one unit holds that key and no other key reads the name; the unit has one located member. Every other
-   *  name is today's rule's: no character is read otherwise than as itself */
+   *  name is the point's rule's: no character is read otherwise than as itself */
   function entryOfName(dest: string): Member | null {
     let name: unknown
     try {

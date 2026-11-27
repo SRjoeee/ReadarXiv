@@ -5385,6 +5385,47 @@ function nestedCellLines(
   }
   return false
 }
+/** an environment the walk reads inside the unit it stands in, walked, and true (a tabular of one column nested in a cell,
+ *  nestedCellLines; one written in a bibliography's entry, entryEnvironment); else false, the walk reads it as before */
+const inUnitEnvironment = (...a: Parameters<typeof nestedCellLines>): boolean =>
+  nestedCellLines(...a) || entryEnvironment(...a)
+/** an environment written in a bibliography's entry, of none of the kinds the walk reads apart (a table, a picture, a float, one
+ *  skipped): part of the entry, its begin and end a pair round its body in the entry's unit, walked, and true; else false, the
+ *  walk reads it as before. An entry is one unit from its \\bibitem to the next (bibliography); the environments its packages
+ *  write there set no paragraph: apacite's APACrefauthors (`\\begingroup \\APACrefauthstyle` … `\\endgroup`), APACrefURL,
+ *  APACrefDOI, Springer Nature's barticle, bbook, bchapter, botherref (its style's head: `\\def\\barticle#1{#1}`). Read as a
+ *  unit of its own, the entry is cut after its authors and the rest of it, no word outside a command's argument, is no unit at
+ *  all. `endText` the walk's own */
+function entryEnvironment(
+  s: string,
+  i: number,
+  afterBegin: number,
+  bodyEnd: number,
+  afterEnd: number,
+  env: string,
+  b: Builder,
+  ctx: Ctx,
+  endText: () => void,
+): boolean {
+  if (
+    !BIB_KINDS.has(b.kind) ||
+    TABLE_ENVS.test(env) ||
+    ctx.tblrEnvs.has(env) ||
+    ctx.tableWraps?.has(env) ||
+    SKIP_ENVS.test(env) ||
+    ctx.skipEnvs.has(env) ||
+    FLOAT_ENVS.test(env) ||
+    env === 'tikzpicture' ||
+    env === 'thebibliography'
+  )
+    return false
+  endText()
+  const argsEnd = envArgs(s, afterBegin, bodyEnd, env, ctx).end
+  const id = b.open(s.slice(i, argsEnd), i)
+  walk(s, argsEnd, bodyEnd, b, ctx)
+  b.close(id, s.slice(bodyEnd, afterEnd), afterEnd)
+  return true
+}
 /** an \\input, \\include, \\subfile or one of import.sty's commands at `end` (past its name): the file it names walked as a file
  *  of its own (Ctx.visit); the index past its arguments */
 function fileCommand(name: string, s: string, end: number, b: Builder, ctx: Ctx): number {
@@ -5903,33 +5944,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
       // cell's entry, its rows the box's lines, as \makecell's and \shortstack's are): its begin and end a pair round them, each
       // row's end a forced break (inGridCell). One of one row is its own cell as before (nothing to join: its pieces, its id and
       // its rows the same); one of several columns a table of its own, below (nestedCellLines)
-      if (!opened && nestedCellLines(s, i, afterBegin, bodyEnd, afterEnd, env, b, ctx, endText)) {
-        i = afterEnd
-        continue
-      }
-      // an environment written in a bibliography's entry, of none of the kinds read apart below (a table, a picture, a float, one
-      // skipped): part of the entry, its begin and end a pair round its body in the entry's unit. An entry is one unit from its
-      // \bibitem to the next (bibliography); the environments its packages write there set no paragraph: apacite's
-      // APACrefauthors (`\begingroup \APACrefauthstyle` … `\endgroup`), APACrefURL, APACrefDOI, Springer Nature's barticle,
-      // bbook, bchapter, botherref (its style's head: `\def\barticle#1{#1}`). Read as one of its own, the entry was cut after
-      // its authors, the rest of it, no word outside a command's argument, no unit at all
-      if (
-        BIB_KINDS.has(b.kind) &&
-        !opened &&
-        !TABLE_ENVS.test(env) &&
-        !ctx.tblrEnvs.has(env) &&
-        !ctx.tableWraps?.has(env) &&
-        !SKIP_ENVS.test(env) &&
-        !ctx.skipEnvs.has(env) &&
-        !FLOAT_ENVS.test(env) &&
-        env !== 'tikzpicture' &&
-        env !== 'thebibliography'
-      ) {
-        endText()
-        const argsEnd = envArgs(s, afterBegin, bodyEnd, env, ctx).end
-        const id = b.open(s.slice(i, argsEnd), i)
-        walk(s, argsEnd, bodyEnd, b, ctx)
-        b.close(id, s.slice(bodyEnd, afterEnd), afterEnd)
+      if (!opened && inUnitEnvironment(s, i, afterBegin, bodyEnd, afterEnd, env, b, ctx, endText)) {
         i = afterEnd
         continue
       }

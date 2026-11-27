@@ -221,7 +221,7 @@ export interface Landing {
   ord: number
   box: Box4
   next?: [page: number, box: Box4]
-  /** landed by its name's key (a citation's `cite.<key>`, the entry's \\bibitem's), with the member's ord today's rule lands
+  /** landed by its name's key (a citation's `cite.<key>`, the entry's \\bibitem's), with the member's ord the point's rule lands
    *  the point on (`geometry`; null where it lands nowhere): the lab's check of the one against the other; the bundle does not
    *  carry it */
   byKey?: { geometry: number | null }
