@@ -154,6 +154,9 @@ describe('the definition in force where the macro is called decides, in the orde
   it('a redefinition later in the preamble replaces the boundary', () => {
     expect(read(LIST_BODY, `${LIST}\\renewcommand{\\ben}{\\textbf{N}}\n`)[0]!.phs).toEqual(['\\ben'])
   })
+  it("a definition the reading does not take apart (xparse's \\RenewDocumentCommand) leaves no older boundary in force", () => {
+    expect(read(LIST_BODY, `${LIST}\\RenewDocumentCommand{\\ben}{}{\\textbf{N}}\n`)[0]!.phs).toEqual(['\\ben'])
+  })
   it('a boundary defined last in the preamble is one, whatever was defined before it', () => {
     expect(read(LIST_BODY, `\\newcommand{\\ben}{\\textbf{N}}\n\\renewcommand{\\ben}{\\begin{enumerate}}\n\\newcommand{\\een}{\\end{enumerate}}\n`)).toEqual(
       LIST_UNITS,
