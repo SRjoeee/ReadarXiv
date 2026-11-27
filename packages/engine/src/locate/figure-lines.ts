@@ -723,6 +723,70 @@ function linesOf(
       // box, items 1 to 4 each wrapped over its rows); whether a row opens one or not, the wrap rule joins the rows under it)
       const side = spread((l) => l.x0) <= tol ? 'l' : spread((l) => l.x1) <= tol ? 'r' : null
       if (!side || legend) continue
+      // (row k and row k + 1 one block's: one under the other with no blank line by their bands, in one face, not each led by ink
+      // of its own, the lower opening no item; and the text going on from k to k + 1: the row above ends in a hyphen, or this
+      // row's first letter, after any punctuation it opens with, is lower case)
+      const wrapped = (k: number) => {
+        const a = F[k]!,
+          b = F[k + 1]!
+        return (
+          !opens[k + 1]!.length &&
+          a.y - b.y > 0.5 * b.size &&
+          a.y - b.y - a.band < a.band &&
+          sameFace(a, b) &&
+          !ledApart(a, b)
+        )
+      }
+      const goesOn = (k: number) =>
+        endOf(glyphs, rows[k]!.read.gs, rows[k + 1]!.read.gs, sourceOf, true) !== 'space' ||
+        /^\p{Ll}/u.test(textOf(rows[k + 1]!.read.gs, glyphs).replace(/^[\p{P}\p{Z}]+/u, ''))
+      // (a blank line the rows show: a step between two rows of one face larger than the rows' own leading (their
+      // smallest step, within the tolerance) and no push (at the leading their ink would have come no closer than the rows at
+      // the leading do: a taller row set apart is no blank line) is how the path ends a paragraph, and the rows show where each
+      // ends: a run of rows between two such steps, one under the other in one face, not each led by ink of its own, none opening
+      // an item but its first, is one text where its text goes on at one break or more (a hyphen, or a row that opens in lower
+      // case: running text, not values over values). A row short of the run's far edge ends a paragraph only where two of the
+      // run's rows or more end at that edge (a justified paragraph's last row, TeX's \parfillskip); in a ragged run neither a
+      // short row nor a capital or a digit at a row's start ends one (2611.18114v1 p26: rows wrapped short of the box's measure,
+      // the next row's first word able to stand on the row above). Rows that show no blank line: the wrap test below)
+      // (the steps read between two rows of one face alone: a step to a row of another face, a heading's over its rows, is a
+      // change of face, which ends a text by itself and tells no blank line: 2608.17019v1 p3's bold heading over its statements)
+      const steps = F.slice(1).map((b, k) => ({
+        pitch: F[k]!.y - b.y,
+        clear: F[k]!.bottom - b.top,
+        one: sameFace(F[k]!, b),
+      }))
+      // (each face's rows against their own leading: a bold heading's tighter leading is no measure of its body's)
+      const blank = steps.map((s, k) => {
+        if (!s.one) return false
+        const mine = steps.filter((t, j) => t.one && sameFace(F[j]!, F[k]!))
+        const lead = Math.min(...mine.map((t) => t.pitch))
+        const clear0 = Math.min(...mine.filter((t) => t.pitch <= lead + tol).map((t) => t.clear))
+        return s.pitch > lead + tol && s.clear - (s.pitch - lead) >= clear0 - tol
+      })
+      if (blank.some(Boolean)) {
+        const runs: number[][] = [[0]]
+        steps.forEach((_, k) => {
+          if (!blank[k] && wrapped(k)) runs.at(-1)!.push(k + 1)
+          else runs.push([k + 1])
+        })
+        const far = (n: number) => (side === 'l' ? rows[n]!.l.x1 : -rows[n]!.l.x0)
+        for (const run of runs) {
+          if (!run.slice(1).some((n) => goesOn(n - 1))) continue
+          const edge = Math.max(...run.map(far))
+          const flush = run.filter((n) => far(n) >= edge - tol).length > 1
+          let sub: number[] = []
+          for (const n of run) {
+            sub.push(n)
+            if (flush && far(n) < edge - tol) {
+              if (sub.length > 1) textOfRows(sub, side)
+              sub = []
+            }
+          }
+          if (sub.length > 1) textOfRows(sub, side)
+        }
+        continue
+      }
       const segs = h.shape.segs as ArrayLike<number>
       const firstWord = (r: { read: Read }) => {
         const gs = r.read.gs.filter((g) => real(glyphs[g]!))
@@ -738,9 +802,7 @@ function linesOf(
         const a = F[k]!,
           b = F[k + 1]!,
           al = rows[k]!.l
-        if (opens[k + 1]!.length) return false
-        if (!(a.y - b.y > 0.5 * b.size && a.y - b.y - a.band < a.band) || !sameFace(a, b) || ledApart(a, b))
-          return false
+        if (!wrapped(k)) return false
         const y = al.y + 0.35 * al.size
         const xs: number[] = []
         for (let i = 0; i + 3 < segs.length; i += 4) {
@@ -753,9 +815,7 @@ function linesOf(
         if (!Number.isFinite(right) || !Number.isFinite(left)) return false
         const inset = side === 'l' ? al.x0 - left : right - al.x1
         const space = a.wordSpace ?? b.wordSpace ?? SPACE_GAP * al.size
-        if (!(al.x1 - al.x0 + space + firstWord(r) > right - left - 2 * inset)) return false
-        if (endOf(glyphs, rows[k]!.read.gs, r.read.gs, sourceOf, true) !== 'space') return true
-        return /^\p{Ll}/u.test(textOf(r.read.gs, glyphs).replace(/^[\p{P}\p{Z}]+/u, ''))
+        return al.x1 - al.x0 + space + firstWord(r) > right - left - 2 * inset && goesOn(k)
       })
       const groups: number[][] = [[0]]
       joins.forEach((j, k) => {
