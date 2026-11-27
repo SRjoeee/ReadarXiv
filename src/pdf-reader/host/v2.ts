@@ -96,7 +96,7 @@ export function hostPrefs(surface: Pick<SurfaceConfig, 'state' | 'subscribe' | '
   }
 }
 
-function extensionHost(o: { api: string; loopback: boolean; pdf: (ref: string) => string; prefs: PrefStore; transport: TranslationTransport; paper: string; store?: PaperStore | null }): Host {
+export function extensionHost(o: { api: string; loopback: boolean; pdf: (ref: string) => string; prefs: PrefStore; transport: TranslationTransport; paper: string; store?: PaperStore | null }): Host {
   // (the page's history, the reader's jumps' to add to: in its own tab and in its frame over arXiv's PDF page alike, history.ts)
   return { fetch: storedFetch({ fetch: hostFetch(o), store: o.store ?? null, api: o.api }), original: o.pdf, prefs: o.prefs, translate: hostTranslate({ transport: o.transport, paper: o.paper }), history: readerHistory() }
 }
