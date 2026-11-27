@@ -14205,9 +14205,11 @@ What it lands on decides:
   one biblatex entry (`inkreferences`, ink-units.ts rule 1); its box its lines in that column on the page and its label;
 - a heading: its window, from its top across its column's measure down `SECTION_WINDOW` (0.19) of the page's height; where
   that passes TeX's text block bottom (the frame's foot) it stops there and runs on, by the rest of its height, from the top of
-  the next column's text (the frame's next column on the page, else the next page's first): `Target`'s `next`;
+  the next column's text (the frame's next column on the page, else the next page's first): its first line inside a column's
+  body as TeX's page builder broke it (B's `bs<n>`..`be<n>` brackets), never a running head over it: `Target`'s `next`;
 - a note: a member of kind `footnote`, its lines and label as a reference's;
-- a display: the display element's ink on the page (its number need not be inside);
+- a display: the display element's ink on the page (its number need not be inside); across, for its column, the measure of
+  its paragraph's lines in its own column (a paragraph that goes on in the other column lends it nothing there);
 - a float: a boxed float, its box (a line of a member of the float lands on its float; of a float with no box, nowhere).
 
 Anything else (a theorem, an item, a cell, a float with no box, a page anchor with no height) lands nowhere: the destination is
@@ -14216,7 +14218,8 @@ absent from `targets`, and its links keep their jump alone.
 ### 20.4 The head's targets
 
 `Head.targets` (format's `Target`, `TargetKind`): `[dest, kind, page, ord, box]`, or with `[…, next page, next box]` for a
-heading that runs on; sorted by destination, each once; absent where nothing lands (a head of before states none, and a reader
+heading that runs on; sorted by destination, each once; a destination past `TARGET_DEST_MAX` (2,048 characters) left out, so
+that no landing can refuse the head; absent where nothing lands (a head of before states none, and a reader
 then shows no preview and keeps every jump). Optional: a reader of before strips it, so `FORMAT` stays 1. `ord` is the member's
 (a float's: its caption's). Boxes are PDF units, y up, on the format's grid.
 
@@ -14228,7 +14231,8 @@ each float's box or cause and its union where one was made, each landing, the de
 wrong, 0 over the corpus.** A boxed float is wrong where the engine counts any of `foreign`, `cut`, `outside` above 0 (none can
 be boxed so; the check holds the code to it), or where the bundle's own parts read it so apart from the engine: a member of its
 own (its members and captions, by ord) with ink outside the box (a line's ink across at its baseline, an element's or its
-label's ink), or another member's line band, element or label ink meeting the box's inside. The share of figures and tables
+label's ink), or another member's line band, element or label ink meeting the box's inside; and it fails where no paper of
+the run states a record (dumps made before the targets check nothing). The share of figures and tables
 boxed is reported by type with each miss's cause, never gated. Two readings of the landings are reported beside it, never
 rules: each landing whose kind its hyperref name does not say (`cite.` a reference, `figure.`/`table.` a float, `section.` and
 its kin a heading, `equation.` a display, `Hfootnote.` a note), and each landing another member's left edge contradicts (the
@@ -14240,20 +14244,22 @@ line's but `targets` (204 heads state them; 41 papers have no landing); 0 boxed 
 figures 1,639 of 1,696 (96.6 %; 38 `foreign`, 19 `unpaired`), tables 1,107 of 1,110 (99.7 %; 1 `foreign`, 1 `unpaired`, 1
 `cut`), floats with no caption 172 of 173, algorithms 6 of 6; captions of no bracket (`unbracketed`): figures 41, tables 23,
 algorithms 39, others 20. A `foreign` refusal read on the page: a section heading inside the union an included figure's
-bounding box reaches. Destinations: 18,142 keys, every one resolved; landed 15,616 (references 8,743, headings 2,253, displays
-2,199, floats 2,176, notes 245), nowhere 2,526 (by their names: of no class above 922 of 1,437, floats 197,
-displays 594, headings 275, references 421, notes 117). The two readings: 14 landings whose kind the name does not say (7
-citations on a heading, 4 equations on a heading, 3 others) and 33 that another member's left edge contradicts (27 citations:
+bounding box reaches. Destinations: 18,142 keys, every one resolved; landed 15,612 (references 8,743, headings 2,253, displays
+2,195, floats 2,176, notes 245), nowhere 2,530 (by their names: of no class above 922 of 1,437, floats 197,
+displays 597, headings 275, references 421, notes 118). The two readings: 13 landings whose kind the name does not say (7
+citations on a heading, 4 equations on a heading, 2 headings on a note) and 33 that another member's left edge contradicts (27 citations:
 an anchor whose x stands in the gutter left of the right column's entry is matched in the left column; a run-in heading on a
 display's line); 19 page anchors (`page.N`, at the page's corner) on a float at the page's top, and 10 items on a display
-under them. These 76 are wrong landings, reported (a wrong preview is worse than none), not patched by a destination's name.
+under them. These 75 are wrong landings, reported (a wrong preview is worse than none), not patched by a destination's name.
 What a theorem's anchor lands on where the source reader made its head a heading unit (213 `theorem.` names, 30 `proposition.`,
 17 `lemma.`) is that heading's window: L4's reading, the kind the unit's.
 
 The size: the head's targets 4.1 KB raw, 1.3 KB gzipped a paper at the median, 3.3 KB at the 95th percentile, 13.6 KB the
 largest (46.7 KB raw); the whole head grows by 1.4 KB gzipped at the median. The prepare's added time (A's destinations, the
-floats' boxes, the landings): 17 ms a paper at the median, 52 ms at the 95th percentile, 104 ms the largest, 1.3 % of the back
-half at the median (2.2 % the largest); its peak resident memory, a paper's process against the line's in the same run, 0 MiB
-at the median, 114 MiB at the 95th percentile (each run's own variance among them: the two runs side by side under the
-machine's load). The stored instrument's key, the hash of the compile side's built bundles, computed over this section's
+floats' boxes, the landings): 18 ms a paper at the median, 58 ms at the 95th percentile, 106 ms the largest, about 1.3 % of the
+back half at the median; its peak resident memory, a paper's process against the line's run before it, -30 MiB at the median and
+57 MiB at the 95th percentile: the runs' own variance under the machine's load, larger than what is added, which this does not
+measure apart. Not covered, and so no preview (never a wrong one): a caption set wholly turned (a sideways table's) is read as of
+no bracket, its first and last glyphs on B being level ones; a display kept as a block of its own (no element of a paragraph)
+is no display target. The stored instrument's key, the hash of the compile side's built bundles, computed over this section's
 engine, is the line's: none of these files is in the compile side's closure, so no paper is compiled again.
