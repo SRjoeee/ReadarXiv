@@ -17,6 +17,9 @@ export {
   type Result,
 } from './reader.ts'
 export type { Side, Zoom } from './panes/panes.ts'
+// the way back (PDF-READER §11.9): the jump stack's history contract, and a window's history as a host gives it
+export type { Entry as HistoryEntry, HostHistory, Light, Place } from './session/jumps.ts'
+export { type WindowHistory, windowHistory } from './session/window-history.ts'
 // PDF.js's builds: which one a browser runs; the legacy one itself is `@readarxiv/reader/pdfjs-legacy`'s
 export { buildFor, legacyRuns, modernRuns } from './pdfjs/builds.ts'
 export type { PdfBuild, PdfModules } from './pdfjs/kit.ts'
