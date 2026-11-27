@@ -51,6 +51,23 @@ describe('a field command read by the definition TeX keeps', () => {
     expect(textOf(ps)).toContain('authorAnn Lee')
   })
 
+  it('a call that supplies the optional argument: its braced group is the argument TeX sets (Codex, local review)', () => {
+    const u = openPaper(
+      new Map([
+        [
+          'main.tex',
+          enc(
+            '\\documentclass{article}\n\\providecommand{\\bibinfo}[2][]{#2}\n\\begin{document}\nSome text.\n\\begin{thebibliography}{9}\n\\bibitem{a} \\bibinfo[author]{Ann Lee}, A long title of a book.\n\\end{thebibliography}\n\\end{document}\n',
+          ),
+        ],
+      ]),
+    ).units.find((x) => x.kind === 'reference')!
+    const ps = (u.pieces as { t: string; s?: string; src?: string; sets?: number }[]).map((p) =>
+      p.t === 'text' ? p.s! : p.t === 'open' ? `[${p.src}|${p.sets ?? '-'}` : p.t === 'close' ? ']' : `<${p.src}>`,
+    )
+    expect(ps.slice(0, 3)).toEqual(['[\\bibinfo[author]{|0', 'Ann Lee', ']'])
+  })
+
   it('provided first in the bibliography with an optional argument: read so there too', () => {
     const ps = pieces('', '\\providecommand{\\bibinfo}[2][]{#2}\n')
     expect(textOf(ps)).toContain('authorAnn Lee')
