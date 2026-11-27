@@ -153,6 +153,23 @@ describe('where a destination lands (targets.ts)', () => {
     const [t] = targetsOf(w, dests({ 'cite.b': { page: 1, x: 50, y: 141.74 } }), [])
     expect(t).toMatchObject({ kind: 'reference', ord: 1 })
   })
+  it('a point at the left edge of a line that begins nothing lands nowhere, not on the beginning under it', () => {
+    // (an item of a list inside a paragraph's unit: its anchor raised over its line, at the line's left edge; a display under)
+    const display: El = { kind: 'display', ink: [[1, 150, 665, 250, 676, 670]] }
+    const w = workOf([{ kind: 'para', lines: [line(1, 700), line(1, 680, 90)], els: [['e1', display]] }])
+    expect(targetsOf(w, dests({ 'Item.1': { page: 1, x: 90, y: 692 } }), [])).toEqual([])
+  })
+  it('a point at the left edge of an entry’s label lands on that entry, past a line under the point that begins elsewhere', () => {
+    // (the entry above's last line, indented, 0.9 under the point; the label at the point's x 11.3 under it; no frame)
+    const w = workOf([
+      { kind: 'reference', entry: true, lines: [line(1, 151.66, 50), line(1, 141.2, 50)] },
+      { kind: 'reference', entry: true, lines: [line(1, 130.4, 50), line(1, 119.9, 68)] },
+    ])
+    const [t] = targetsOf(w, dests({ 'cite.b': { page: 1, x: 50, y: 142.1 } }), [])
+    // (both lines begin at 50: the higher under the point is the entry above's second line, which begins nothing: nowhere,
+    // never the entry above)
+    expect(t).toBeUndefined()
+  })
   it('a destination set on a line, its point on that line’s ink at its baseline, lands on that line’s member', () => {
     const w = workOf([
       { kind: 'theorem', lines: [line(1, 700)] },

@@ -34,6 +34,8 @@ export const SECTION_WINDOW = 0.19
  *  `ix1`) and what it spans across for its column (`x0`, `x1`: a line's measure). A line that goes on with its member (its
  *  second, a paragraph's lines after a display) begins nothing, and is no such thing */
 type Item = {
+  /** it begins what it is of: a member's first line or its label, a display's first ink, a float */
+  begins: boolean
   base: number
   top: number
   bottom: number
@@ -86,8 +88,19 @@ export function targetsOf(
         if (l[0] !== page) return
         const x0 = Math.min(l[2], l[7])
         const x1 = Math.max(l[3], l[8])
-        if (i === 0)
-          items.push({ what: 'line', mem, line: i, base: l[4], top: l[5], bottom: l[6], ix0: l[2], ix1: l[3], x0, x1 })
+        items.push({
+          what: 'line',
+          mem,
+          line: i,
+          begins: i === 0,
+          base: l[4],
+          top: l[5],
+          bottom: l[6],
+          ix0: l[2],
+          ix1: l[3],
+          x0,
+          x1,
+        })
       })
       // (its label, on its first line: a reference's number, a heading's, where hyperref's anchor stands before)
       const lab = mem.labelAt?.ink
@@ -98,6 +111,7 @@ export function targetsOf(
           what: 'line',
           mem,
           line: at,
+          begins: true,
           base: lab[5],
           top: lab[4],
           bottom: lab[2],
@@ -118,13 +132,25 @@ export function targetsOf(
         const x1 = Math.max(box[2], ...ls.map((l) => l[8]))
         const k = el.ink[0]!
         if (k[0] === page)
-          items.push({ what: 'display', mem, box, base: k[5], top: k[4], bottom: k[2], ix0: k[1], ix1: k[3], x0, x1 })
+          items.push({
+            what: 'display',
+            mem,
+            box,
+            begins: true,
+            base: k[5],
+            top: k[4],
+            bottom: k[2],
+            ix0: k[1],
+            ix1: k[3],
+            x0,
+            x1,
+          })
       }
     }
     for (const f of boxed)
       if (f.page === page) {
         const [x0, y0, x1, y1] = f.box!
-        items.push({ what: 'float', float: f, base: y1, top: y1, bottom: y0, ix0: x0, ix1: x1, x0, x1 })
+        items.push({ what: 'float', float: f, begins: true, base: y1, top: y1, bottom: y0, ix0: x0, ix1: x1, x0, x1 })
       }
     itemsByPage.set(page, items)
     return items
@@ -148,10 +174,13 @@ export function targetsOf(
     return [...frame.columns].sort((a, b) => dist(a) - dist(b))[0]!
   }
 
-  /** the thing a point lands on. A boxed float that holds it. Else a line it stands on: one whose band holds its height and
-   *  whose ink holds its x, its baseline at or over it (an anchor TeX set on that line, not raised over it). Else the first
-   *  thing under it in its column: the highest baseline under its height, within LAND_BELOW (hyperref raises an anchor over
-   *  what it marks, into the band of the line above, which stands at or over the point) */
+  /** the thing a point lands on, null for none. A boxed float that holds it. A beginning it stands on:
+   *  one whose band holds its height and whose ink its x, its baseline at or over it (an anchor TeX set on that line, not raised
+   *  over it). The line, label or display under it within LAND_BELOW whose ink begins at its x on the format's grid (pdfTeX
+   *  states a destination at the origin of what TeX set next): the first such; nothing where that begins nothing (an item, a
+   *  head inside a paragraph's unit). Else the first beginning under it in its column: the highest baseline under its height,
+   *  within LAND_BELOW (hyperref raises an anchor over what it marks, past the last line of what stands above, which a line
+   *  going on with its member is: it begins nothing, and is passed) */
   function itemAt(page: number, x: number | null, y: number): Item | null {
     const items = itemsOf(page)
     const gy = onGrid(y)
@@ -159,16 +188,26 @@ export function targetsOf(
     const holdsX = (it: Item) => x !== null && it.ix0 <= x && x <= it.ix1
     const floats = items.filter((it) => it.what === 'float' && holdsY(it) && (x === null || holdsX(it)))
     if (floats.length) return floats.sort((a, b) => a.top - a.bottom - (b.top - b.bottom))[0]!
-    const on = items.filter((it) => it.what !== 'float' && holdsY(it) && holdsX(it) && onGrid(it.base) >= gy)
+    const on = items.filter((it) => it.begins && holdsY(it) && holdsX(it) && onGrid(it.base) >= gy)
     if (on.length) return on.sort((a, b) => RANK[a.what] - RANK[b.what] || a.top - a.bottom - (b.top - b.bottom))[0]!
+    const under = (it: Item) => onGrid(it.base) < gy && y - it.base <= LAND_BELOW
+    const higher = (it: Item, best: Item | null) =>
+      !best ||
+      it.base > best.base ||
+      (it.base === best.base &&
+        (Number(it.begins) > Number(best.begins) || (it.begins === best.begins && RANK[it.what] < RANK[best.what])))
+    if (x !== null) {
+      let edge: Item | null = null
+      for (const it of items)
+        if (it.what !== 'float' && under(it) && Math.abs(onGrid(it.ix0) - onGrid(x)) <= 0.01 && higher(it, edge))
+          edge = it
+      if (edge) return edge.begins ? edge : null
+    }
     const col = columnOf(page, x)
     const inColumn = (it: Item) =>
       col ? it.x0 < col[1] && it.x1 > col[0] : x === null || it.what === 'float' || (it.x0 <= x && x <= it.x1)
     let best: Item | null = null
-    for (const it of items) {
-      if (!inColumn(it) || onGrid(it.base) >= gy || y - it.base > LAND_BELOW) continue
-      if (!best || it.base > best.base || (it.base === best.base && RANK[it.what] < RANK[best.what])) best = it
-    }
+    for (const it of items) if (it.begins && inColumn(it) && under(it) && higher(it, best)) best = it
     return best
   }
 
