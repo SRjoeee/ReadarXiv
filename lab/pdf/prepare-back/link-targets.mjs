@@ -5,11 +5,11 @@
 //   members and captions, by ord) with ink outside the box (a line's ink across at its baseline, an element's or a label's ink:
 //   `own ink outside`), or another member's line band, element or label ink meeting the box's inside (`foreign text`);
 // - landings: each destination's landing (locate/targets.ts) as [dest, kind, page, ord]; dests: how many keys, resolved,
-//   landed by kind, landed nowhere; disagree: each landing whose kind its hyperref name does not say ([dest, kind, the
-//   name's kind]), and `otherLanded` each landing of a name hyperref's classes above do not say (a theorem's, an item's): a
-//   check of the rule, never a rule (the design's L4); `edge`: each landing another member's left edge contradicts, the
-//   destination's x the left edge of a label, a line or a display of another member (to 0.02, pdfTeX's dest stands where
-//   the next box begins) whose baseline is the first under the point: an independent reading of where it lands;
+//   landed by kind, refused by the engine by kind and cause, landed nowhere; each stated landing's evidence read again here
+//   (`proof` by kind: proved by the edge, its kind claimed by its name alone, wrong) and every wrong one by its cause: a page
+//   anchor (`pages`), another member's left edge at its point (`edge`: the line, label or display whose ink begins at the
+//   destination's x on the format's grid, its baseline the first under the point), its name's claim another kind
+//   (`disagree`), its name claiming nothing and no edge confirming it (`unproven`): the gate fails on any;
 // - bytes: the head's targets as written, raw and gzipped, and the head gzipped with and without them.
 import { gzipSync } from 'node:zlib'
 
@@ -21,6 +21,17 @@ const NAMED = [
   [/^(?:chapter|section|subsection|subsubsection|paragraph|appendix)\./, 'heading'],
   [/^(?:equation|AMS)\./, 'display'],
 ]
+/** the kind a destination's name claims (the engine's targets.ts CLAIMS and SIMPLE_NAME, read again here) */
+const CLAIMS = { cite: 'reference', Hfootnote: 'footnote', page: 'page', part: 'heading', chapter: 'heading', section: 'heading', subsection: 'heading', subsubsection: 'heading', paragraph: 'heading', subparagraph: 'heading', appendix: 'heading', figure: 'float', table: 'float', equation: 'display' }
+const SIMPLE_NAME = /^(?:(cite)\.(.+)|([A-Za-z]+)\.([A-Za-z0-9.]+))$/
+function claimOf(dest) {
+  let name = null
+  try { name = JSON.parse(dest) } catch {}
+  const m = typeof name === 'string' ? SIMPLE_NAME.exec(name) : null
+  const scheme = m?.[1] ?? m?.[3]
+  return scheme && Object.hasOwn(CLAIMS, scheme) ? CLAIMS[scheme] : null
+}
+const r2 = (v) => Math.round(v * 100) / 100
 const meets = (r, u) => r[0] < u[2] && r[2] > u[0] && r[1] < u[3] && r[3] > u[1]
 const within = (r, u) => r[0] >= u[0] && r[2] <= u[2] && r[1] >= u[1] && r[3] <= u[3]
 
@@ -57,7 +68,7 @@ function inkOf({ pl, back }, page) {
 }
 
 /** the record (above) of a paper's floats, landings and destinations, read against its parts and its head */
-export function linkTargetsOf({ floats, landings, dests, parts, head }) {
+export function linkTargetsOf({ floats, landings, refused = [], dests, parts, head }) {
   const wrong = []
   for (const f of floats) {
     if (!f.box) continue
@@ -72,13 +83,43 @@ export function linkTargetsOf({ floats, landings, dests, parts, head }) {
   }
   const landed = {}
   for (const l of landings) landed[l.kind] = (landed[l.kind] ?? 0) + 1
-  const disagree = []
+  // (each landing's evidence, as the engine reads it (packages/engine/src/locate/targets.ts `contradicted`), read here again from
+  // the bundle's parts and the destinations: the name's claim, by the scheme of the package that makes it; the edge reading)
+  const partByPage = new Map(parts.map((p) => [p.page, p]))
+  const floatOfOrd = new Map()
+  for (const f of floats) for (const o of [...f.members, ...f.captions]) floatOfOrd.set(o, f)
+  const edgeOf = (pt) => {
+    const part = pt && pt.x !== null ? partByPage.get(pt.page) : null
+    if (!part) return null
+    const at = []
+    for (const { pl, back } of membersOf(part)) {
+      if (back) continue
+      for (const ln of pl.lines ?? []) if (ln[0] === pt.page) at.push([pl.ord, ln[2], ln[4]])
+      const lab = pl.label?.ink
+      if (lab && lab[0] === pt.page) at.push([pl.ord, lab[1], lab[5]])
+      for (const [, el] of pl.els ?? []) if (el.kind === 'display') for (const k of el.ink ?? []) if (k[0] === pt.page) at.push([pl.ord, k[1], k[5]])
+    }
+    const gx = r2(pt.x), gy = r2(pt.y)
+    const under = at.filter((e) => Math.abs(r2(e[1]) - gx) <= 0.01 && r2(e[2]) < gy && pt.y - e[2] <= 24).sort((a, b) => b[2] - a[2])[0]
+    if (!under) return null
+    const f = floatOfOrd.get(under[0])
+    return f ? f.caption : under[0]
+  }
+  const disagree = [], edge = [], unproven = [], pages = []
+  const proof = {}
   for (const l of landings) {
-    let name = null
-    try { name = JSON.parse(l.dest) } catch {}
-    if (typeof name !== 'string') continue
-    const said = NAMED.find(([re]) => re.test(name))?.[1]
-    if (said && said !== l.kind) disagree.push([l.dest, l.kind, said])
+    const claim = claimOf(l.dest)
+    const e = edgeOf(dests.get(l.dest))
+    const p = (proof[l.kind] ??= { proved: 0, kindOnly: 0, wrong: 0 })
+    let bad = true
+    if (claim === 'page') pages.push([l.dest, l.kind, l.ord])
+    else if (e !== null && e !== l.ord) edge.push([l.dest, l.kind, l.ord, e])
+    else if (claim && claim !== l.kind) disagree.push([l.dest, l.kind, claim])
+    else if (!claim && e !== l.ord) unproven.push([l.dest, l.kind, l.ord])
+    else bad = false
+    if (bad) p.wrong++
+    else if (e === l.ord) p.proved++
+    else p.kindOnly++
   }
   // (each destination with a name hyperref's says a kind of, by that kind: how many, and how many of them landed)
   const named = {}
@@ -91,34 +132,11 @@ export function linkTargetsOf({ floats, landings, dests, parts, head }) {
     n.keys++
     if (landedSet.has(k)) n.landed++
   }
-  const otherLanded = []
-  for (const l of landings) {
-    let name = null
-    try { name = JSON.parse(l.dest) } catch {}
-    if (typeof name === 'string' && !NAMED.some(([re]) => re.test(name))) otherLanded.push([l.dest, l.kind])
-  }
-  // (the edge reading: for each landing, the items of the page whose left edge is the point's x, the first under it)
-  const edge = []
-  const partByPage = new Map(parts.map((p) => [p.page, p]))
-  const floatOfOrd = new Map()
-  for (const f of floats) for (const o of [...f.members, ...f.captions]) floatOfOrd.set(o, f)
-  for (const l of landings) {
-    const pt = dests.get(l.dest)
-    const part = pt && pt.x !== null ? partByPage.get(pt.page) : null
-    if (!part) continue
-    const at = []
-    for (const { pl, back } of membersOf(part)) {
-      if (back) continue
-      for (const ln of pl.lines ?? []) if (ln[0] === pt.page) at.push([pl.ord, ln[2], ln[4]])
-      const lab = pl.label?.ink
-      if (lab && lab[0] === pt.page) at.push([pl.ord, lab[1], lab[5]])
-      for (const [, el] of pl.els ?? []) if (el.kind === 'display') for (const k of el.ink ?? []) if (k[0] === pt.page) at.push([pl.ord, k[1], k[5]])
-    }
-    const under = at.filter((e) => Math.abs(e[1] - pt.x) <= 0.02 && e[2] < pt.y && pt.y - e[2] <= 24).sort((a, b) => b[2] - a[2])[0]
-    if (!under) continue
-    const f = floatOfOrd.get(under[0])
-    const ord = f ? f.caption : under[0]
-    if (ord !== l.ord) edge.push([l.dest, l.kind, l.ord, under[0]])
+  // (what the engine refused to state, by kind and cause, and what landed nowhere)
+  const refusedBy = {}
+  for (const [, kind, cause] of refused) {
+    const r = (refusedBy[kind] ??= {})
+    r[cause] = (r[cause] ?? 0) + 1
   }
   const resolved = [...dests.values()].filter(Boolean).length
   const targets = head?.targets ? JSON.stringify(head.targets) : ''
@@ -127,10 +145,12 @@ export function linkTargetsOf({ floats, landings, dests, parts, head }) {
     floats: floats.map(({ serial, page, caption, captions, type, box, union, cause, foreign, cut, outside, unpaired, members }) => ({ serial, page, caption, captions, type, box, union, cause, foreign, cut, outside, unpaired, members })),
     wrong,
     landings: landings.map((l) => [l.dest, l.kind, l.page, l.ord]),
-    dests: { keys: dests.size, resolved, landed, nowhere: dests.size - landings.length, named },
+    dests: { keys: dests.size, resolved, landed, refused: refusedBy, nowhere: dests.size - landings.length - refused.length, named },
+    proof,
     disagree,
-    otherLanded,
     edge,
+    unproven,
+    pages,
     bytes: {
       targets: targets.length,
       targetsGzip: targets ? gzipSync(targets).length : 0,

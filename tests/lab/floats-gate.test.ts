@@ -62,6 +62,7 @@ describe('the link targets’ record: a boxed float read against the bundle’s 
     })
     expect(r.dests).toMatchObject({ keys: 3, resolved: 2, landed: { reference: 1, heading: 1 }, nowhere: 1 })
     expect(r.disagree).toEqual([['"figure.2"', 'heading', 'float']])
+    expect(r.proof).toMatchObject({ heading: { wrong: 1 } })
     expect(r.bytes.targets).toBeGreaterThan(0)
   })
 })
@@ -86,6 +87,22 @@ describe('the landings read by the left edge at the destination’s x', () => {
       ['"cite.a"', 'reference', 0, 1],
       ['"cite.b"', 'reference', 1, 2],
     ])
+  })
+})
+
+describe('a stated landing the evidence does not prove fails the gate', () => {
+  const parts = [partOf(placed(0, 700, 80), placed(1, 676, 80))]
+  const at = (dest: string, kind: string, ord: number, x: number, y: number) =>
+    linkTargetsOf({ floats: [], landings: [{ dest, kind, page: 1, ord, box: [0, 0, 1, 1] }], dests: new Map([[dest, { page: 1, x, y }]]), parts, head: { format: 1 } })
+  it('a page anchor, a name claiming nothing with no edge, each fails; a name claiming nothing with its edge, and a citation, pass', () => {
+    expect(at('"page.1"', 'reference', 0, 80, 712).pages).toHaveLength(1)
+    expect(at('"Item.3"', 'reference', 1, 70, 688).unproven).toHaveLength(1)
+    expect(at('"Item.3"', 'reference', 1, 80, 688)).toMatchObject({ unproven: [], proof: { reference: { proved: 1 } } })
+    expect(at('"cite.a"', 'reference', 0, 70, 712)).toMatchObject({ unproven: [], proof: { reference: { kindOnly: 1 } } })
+    const rec = (r: object) => ({ floats: [], wrong: [], ...r })
+    expect(gateOf([['p1', rec(at('"page.1"', 'reference', 0, 80, 712))]]).pass).toBe(false)
+    expect(gateOf([['p1', rec(at('"Item.3"', 'reference', 1, 70, 688))]]).pass).toBe(false)
+    expect(gateOf([['p1', rec(at('"cite.a"', 'reference', 0, 70, 712))]]).pass).toBe(true)
   })
 })
 

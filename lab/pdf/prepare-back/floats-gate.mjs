@@ -3,9 +3,12 @@
 // The gate (docs/PDF-READER.md §20.3, the lead's ruling of 2026-11-27): no boxed float wrong, 0 over the corpus. A boxed float is
 // wrong where the engine counts another's glyph inside its box, ink none of its own crossing its edge or ink of its own members
 // outside it (locate/floats.ts `foreign`, `cut`, `outside`), or where the bundle's own parts show a member of its own with ink
-// outside the box or another member's text meeting it (link-targets.mjs `wrong`). Exit 1 on any. The share of the figures and
-// tables of a bracket that got a box is reported by type with the cause of each miss, never gated; so are the destinations
-// (landed by kind, nowhere, each landing whose kind its hyperref name does not say), the targets' size and the phases' time.
+// outside the box or another member's text meeting it (link-targets.mjs `wrong`). And no stated landing wrong (the lead's ruling of
+// 2026-11-27: a landing the engine's own evidence contradicts is never stated): a page anchor, one another member's left edge at
+// its point contradicts, one whose name's claim is another kind, one whose name claims nothing and no edge confirms. Exit 1 on
+// any, or where no paper states a record. The share of the figures and tables of a bracket that got a box is reported by type with
+// the cause of each miss, never gated; so are the landings by proof (proved by the edge, by their name's kind alone), the
+// refusals by cause, the destinations landed nowhere, the targets' size and the phases' time.
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -21,8 +24,10 @@ export function gateOf(records) {
   const wrongRows = []
   const dests = { papers: 0, keys: 0, resolved: 0, nowhere: 0, landed: {}, named: {} }
   const disagree = []
-  const otherLanded = []
   const edge = []
+  const landingWrong = []
+  const proof = {}
+  const refusedBy = {}
   const sizes = []
   for (const [id, r] of records) {
     for (const f of r.floats) {
@@ -46,21 +51,34 @@ export function gateOf(records) {
       }
     }
     for (const d of r.disagree ?? []) disagree.push([id, ...d])
-    for (const d of r.otherLanded ?? []) otherLanded.push([id, ...d])
     for (const d of r.edge ?? []) edge.push([id, ...d])
+    // (every stated landing the evidence contradicts or does not prove: wrong, the gate's other half)
+    for (const [why, rows] of [['page', r.pages], ['edge', r.edge], ['name', r.disagree], ['unproven', r.unproven]])
+      for (const x of rows ?? []) landingWrong.push({ id, why, dest: x[0], kind: x[1] })
+    for (const [k, p] of Object.entries(r.proof ?? {})) {
+      const t = (proof[k] ??= { proved: 0, kindOnly: 0, wrong: 0 })
+      for (const f of ['proved', 'kindOnly', 'wrong']) t[f] += p[f]
+    }
+    for (const [k, c] of Object.entries(r.dests?.refused ?? {})) {
+      const t = (refusedBy[k] ??= {})
+      for (const [cause, n] of Object.entries(c)) t[cause] = (t[cause] ?? 0) + n
+    }
     if (r.bytes?.targetsGzip !== undefined) sizes.push(r.bytes)
   }
   const share = (t) => (byType[t]?.bracketed ? byType[t].boxed / byType[t].bracketed : null)
   return {
     // (and some paper states a record: a run whose dumps hold none, made before the targets, checks nothing)
-    pass: wrongRows.length === 0 && records.length > 0,
+    pass: wrongRows.length === 0 && landingWrong.length === 0 && records.length > 0,
     wrong: wrongRows.length,
     wrongRows,
+    landingsWrong: landingWrong.length,
+    landingWrong,
+    proof,
+    refused: refusedBy,
     byType,
     shares: { figure: share('figure'), table: share('table') },
     dests,
     disagree,
-    otherLanded,
     edge,
     bytes: {
       papers: sizes.length,
@@ -94,7 +112,7 @@ if (process.argv[1] === import.meta.filename) {
   const time = Object.fromEntries(Object.entries(ms).map(([k, v]) => [k, { p50: quantile(v, 0.5), p95: quantile(v, 0.95), max: Math.max(0, ...v) }]))
   const json = process.argv.find((a) => a.startsWith('--json='))?.slice(7)
   if (json) writeFileSync(json, `${JSON.stringify({ papers: records.length, ...g, ms: time }, null, 1)}\n`)
-  console.log(JSON.stringify({ papers: records.length, pass: g.pass, wrong: g.wrong, shares: g.shares, byType: g.byType, dests: { ...g.dests, named: undefined }, disagree: g.disagree.length, otherLanded: g.otherLanded.length, edge: g.edge.length, bytes: g.bytes, ms: time }))
-  for (const w of g.wrongRows.slice(0, 20)) console.log('WRONG', JSON.stringify(w))
+  console.log(JSON.stringify({ papers: records.length, pass: g.pass, wrong: g.wrong, shares: g.shares, byType: g.byType, dests: { ...g.dests, named: undefined }, disagree: g.disagree.length, landingsWrong: g.landingsWrong, proof: g.proof, refused: g.refused, edge: g.edge.length, bytes: g.bytes, ms: time }))
+  for (const w of [...g.wrongRows, ...g.landingWrong].slice(0, 20)) console.log('WRONG', JSON.stringify(w))
   process.exit(g.pass ? 0 : 1)
 }

@@ -336,7 +336,7 @@ writeFileSync(join(OUT, 'located', `${id}.json`), `${JSON.stringify({
   floatLines: located?.floatLines ?? null,
   // (each float's box or why none, each destination's landing, and the boxed floats read against the parts: link-targets.mjs,
   // floats-gate.mjs; the link phases' time)
-  linkTargets: located ? linkTargetsOf({ floats: located.floats, landings: located.targets, dests: tally.dests, parts: written.parts, head }) : null,
+  linkTargets: located ? linkTargetsOf({ floats: located.floats, landings: located.targets, refused: located.refusedTargets ?? [], dests: tally.dests, parts: written.parts, head }) : null,
   linkMs: located?.linkMs ?? null,
   peakRss: process.resourceUsage().maxRSS,
 })}\n`)
