@@ -20,7 +20,6 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { deflateSync, inflateSync } from 'node:zlib'
 import { chunkDigests, toggleKind, write } from '@readarxiv/format'
-import { zh as ZH_CN } from '../../ui/src/locales/zh-CN.ts'
 import { build } from 'vite'
 import { kindShown } from '../src/compose/classes.ts'
 import { RETRY_MS } from '../src/session/client.ts'
@@ -6726,8 +6725,9 @@ const pvPane = (page, side) =>
     const r = document.getElementById(s).getBoundingClientRect()
     return { top: r.top, bottom: r.bottom }
   }, side)
-/** the previews' words in the interface the checks open the chrome in (zh-CN) */
-const ZH = ZH_CN.R.preview
+/** the previews' words in the interface the checks open the chrome in (zh-CN, UI.md S-R-30, S-R-33): the labels the checks
+ *  locate controls by */
+const ZH = { go: '前往', figure: (n) => `图 ${n}` }
 const ENTRY = { 'cite.a': 'A. Author', 'cite.b': 'C. Reader', 'cite.c': 'D. Typesetter', 'cite.d': 'G. Linker' }
 
 await check(
