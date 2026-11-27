@@ -125,3 +125,51 @@ describe('the text after a display, its first word set with an accent of its own
     expect(display('An ètale')).toBe(NOT_FOUND)
   })
 })
+
+// Every text accent the LaTeX kernel declares (ot1enc.def, t1enc.def, ts1enc.def: \DeclareTextAccent's \` \' \^ \~ \" \H \r \v
+// \u \= \. and the capital ones, the \char of \b \c \k) sets a glyph its font names grave, acute, circumflex, tilde, dieresis,
+// hungarumlaut, ring, caron, breve, macron, dotaccent, cedilla or ogonek (cmr10's own encoding, cm-super's and Latin Modern's
+// T1 and TS1 encodings), and a PDF reports each as the character pdfTeX's glyphtounicode.tex and PDF.js's glyph list map that
+// name to: thirteen spacing accents. Ten decompose under NFKD into a space and their combining mark; three do not (` U+0060, ˆ U+02C6,
+// ˇ U+02C7): the "Ciˆencia" of a paper set in OT1 is "Ciência" as much as "Estad´ısticas" is "Estadísticas".
+/** the thirteen: each spacing accent a kernel accent's glyph is reported as, and the combining mark it sets */
+const KERNEL_ACCENTS: readonly (readonly [string, string])[] = [
+  ['`', '̀'],
+  ['´', '́'],
+  ['ˆ', '̂'],
+  ['˜', '̃'],
+  ['¯', '̄'],
+  ['˘', '̆'],
+  ['˙', '̇'],
+  ['¨', '̈'],
+  ['˚', '̊'],
+  ['˝', '̋'],
+  ['ˇ', '̌'],
+  ['¸', '̧'],
+  ['˛', '̨'],
+]
+describe("the text after a display, a letter set by \\accent with each of the kernel's accents", () => {
+  it.each(KERNEL_ACCENTS)('%s before its letter is the letter under its mark', (glyph, mark) => {
+    expect(display(`An ${glyph}etale`, `An ${`e${mark}`.normalize('NFC')}tale`)).toBe('a=b')
+  })
+
+  it.each(KERNEL_ACCENTS)('%s before another letter is no match', (glyph, mark) => {
+    expect(display(`An ${glyph}atale`, `An ${`e${mark}`.normalize('NFC')}tale`)).toBe(NOT_FOUND)
+  })
+
+  it.each(KERNEL_ACCENTS)('%s before a letter the source writes bare is no match: the accent is not dropped', (glyph) => {
+    expect(display(`An ${glyph}etale`, 'An etale')).toBe(NOT_FOUND)
+  })
+
+  it('a circumflex, a caron or a grave over another accent of the same letter is no match', () => {
+    expect(display('An ˆetale', 'An ětale')).toBe(NOT_FOUND)
+    expect(display('An ˇetale', 'An êtale')).toBe(NOT_FOUND)
+    expect(display('An `etale', 'An êtale')).toBe(NOT_FOUND)
+  })
+
+  it('a spacing accent the text writes as it stands (no accent of a letter) is matched as written', () => {
+    expect(display('An xˆy is', 'An xˆy is')).toBe('a=b')
+    expect(display('An xˇy is', 'An xˇy is')).toBe('a=b')
+    expect(display('An x´y is', 'An x´y is')).toBe('a=b')
+  })
+})
