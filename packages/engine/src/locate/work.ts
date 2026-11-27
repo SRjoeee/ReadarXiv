@@ -10,6 +10,7 @@ import type { Instrument, InstrumentUnit, TexFrame } from '../instrument.ts'
 import { fixedFacesOf } from './facts.ts'
 import type { DisplayLine, InkInput, InkStats } from './ink.ts'
 import { r2 } from './lines.ts'
+import type { DestPoint } from './dests.ts'
 import type { PaintedFrame } from './frames.ts'
 import type { FloatLine } from './ledger.ts'
 import type { Word } from './words.ts'
@@ -367,6 +368,9 @@ export interface LocateOptions {
   /** each A page's closed painted paths that hold text (frames.ts framesOnPage), where the raw pages are not given (`pages`):
    *  read from them where they are */
   frames?: (readonly PaintedFrame[] | null)[]
+  /** every destination A's links name, resolved on A (dests.ts destinationsOf), by its key as Link.to.dest writes it: where each
+   *  lands is the last phase's (targets.ts). None given, no destination lands */
+  dests?: ReadonlyMap<string, DestPoint | null>
 }
 
 /** the record of a locate: its index, and the fields the phases fill from the start */

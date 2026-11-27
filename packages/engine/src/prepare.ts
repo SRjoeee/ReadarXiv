@@ -15,6 +15,7 @@ import { type FrontHalf, originalFactsOf, type PrepareStage, prepareFront, type 
 import type { Compiled, CompileRequest } from './compile/live.ts'
 import { classesOf } from './instrument/instrument.ts'
 import type { Instrument } from './instrument.ts'
+import { destinationsOf, destKeysOf } from './locate/dests.ts'
 import { type Located, type LocateOptions, locate } from './locate/locate.ts'
 import { isMemoryError } from './memory.ts'
 import { FrontRefusal, INSTRUMENT_OBJECTS, type OriginalFacts, type StoredInstrument, short } from './plan.ts'
@@ -47,7 +48,8 @@ export interface PrepareDeps {
 
 export type Tally = {
   kind: 'tally'
-  ms: Record<'read' | 'align' | 'locate' | 'wrap' | 'bundle', number>
+  /** each step's time; `dests` A's destinations resolved (locate/dests.ts), between the read and the alignment */
+  ms: Record<'read' | 'dests' | 'align' | 'locate' | 'wrap' | 'bundle', number>
   pages: number
   located: Located['stats']
   wrap: { refused?: string; pagesRefused: number; groups: number }
@@ -119,7 +121,8 @@ export async function* prepareBack(
     kind: 'tally',
     ms: {
       read: times.t1 - t0,
-      align: times.t2 - times.t1,
+      dests: times.t1d - times.t1,
+      align: times.t2 - times.t1d,
       locate: times.t3 - times.t2,
       wrap: t4 - times.t3,
       bundle: t5 - t4,
@@ -153,12 +156,20 @@ async function placedOf(
   pages: number
   pagesA: ReadPage<AlignFacts>[] | null
   recovered: Recovered
-  times: { t1: number; t2: number; t3: number }
+  times: { t1: number; t1d: number; t2: number; t3: number }
 }> {
   const keep = deps.keep === true
   // (A's raw glyphs let go page by page unless kept: locate and the wrap read the Doc's; the lab's proofs and reviews read raw ones)
   const read = await readArxiv(deps.pdfjs, original, deps.pdfOptions, keep)
   const t1 = now()
+  // (every destination A's links name, resolved on A once (locate/dests.ts): where each lands is locate's last phase)
+  const dests = await destinationsOf(
+    deps.pdfjs,
+    original,
+    destKeysOf(read.pages.map((p) => p.annotations)),
+    deps.pdfOptions,
+  )
+  const t1d = now()
   const owners = new Int32Array(ins.ink.pages.reduce((n, p) => n + p.glyphs.length, 0)).fill(-1)
   let o = 0
   ins.ink.pages.forEach((pg, p) => {
@@ -179,6 +190,7 @@ async function placedOf(
     pages: raws,
     take: !keep,
     classesOf: deps.classesOf,
+    dests,
   })
   const t3 = now()
   // (B's ink and its owners: read by align and locate alone; the bundle reads the instrument's units and TeX's statements)
@@ -195,7 +207,7 @@ async function placedOf(
     pages: read.doc.pages.length,
     pagesA: keep ? read.pages : null,
     recovered: read.recovered,
-    times: { t1, t2, t3 },
+    times: { t1, t1d, t2, t3 },
   }
 }
 
