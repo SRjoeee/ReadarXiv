@@ -1458,6 +1458,20 @@ function runsOn(pages: readonly StreamPage[], glyphs: readonly Place[], end: num
   )
 }
 
+/**
+ * The spacing accents a PDF reports a kernel text accent's glyph as that Unicode does not decompose, each with the combining mark
+ * it sets. The kernel's text accents (ot1enc.def, t1enc.def, ts1enc.def: \\DeclareTextAccent's \\` \\' \\^ \\~ \\" \\H \\r \\v \\u \\=
+ * \\. and the capital ones, the \\char of \\b \\c \\k) set the glyphs their fonts name grave, acute, circumflex, tilde, dieresis,
+ * hungarumlaut, ring, caron, breve, macron, dotaccent, cedilla and ogonek (cmr10's own encoding, cm-super's and Latin Modern's
+ * T1 and TS1 encodings), which a PDF reports as pdfTeX's glyphtounicode.tex (its ToUnicode) and PDF.js's glyph list (where it
+ * has none) map those names, the same thirteen characters: ten decompose under NFKD into a space and their mark (´ ˜ ¯ ˘ ˙ ¨ ˚ ˝
+ * ¸ ˛), these three do not, each the spacing clone of its mark (GRAVE ACCENT and COMBINING GRAVE ACCENT, MODIFIER LETTER
+ * CIRCUMFLEX ACCENT and COMBINING CIRCUMFLEX ACCENT, CARON and COMBINING CARON). Neither maps the ties' glyphs (\\t, TS1's
+ * tieaccent): no character to read
+ */
+const UNDECOMPOSED_ACCENTS: Readonly<Record<string, string>> = { '`': '̀', 'ˆ': '̂', 'ˇ': '̌' }
+const asMarks = (c: string) => c.replace(/[`ˆˇ]/g, (a) => UNDECOMPOSED_ACCENTS[a]!)
+
 /** each place textAt's text begins at, in order */
 function* textStarts(pages: readonly StreamPage[], glyphs: readonly Place[], want: string, quotes: boolean) {
   // (`quotes`: TeX's quotes as one, a straight one set as a curly one by OT1 and the source's '' read as ”)
@@ -1466,9 +1480,11 @@ function* textStarts(pages: readonly StreamPage[], glyphs: readonly Place[], wan
   // (both sides as Unicode decomposes them, NFKD: a letter TeX set by \\accent is two glyphs, the accent's own and the letter's,
   // which is the source's precomposed letter decomposed, its base and its combining mark; a mark set as a glyph of its own
   // stands with the letter after it (\\accent sets the accent first) unless the text looked for puts it on the letter before
-  // (a cedilla a font composes under its letter), and the letter and its marks are compared in Unicode's canonical order)
-  want = fold(want.normalize('NFKD'))
-  const chars = glyphs.map(([p, g]) => fold(charOf(pages[p - 1]!.glyphs.u[g]!)))
+  // (a cedilla a font composes under its letter), and the letter and its marks are compared in Unicode's canonical order. The
+  // spacing accents NFKD leaves as they are, UNDECOMPOSED_ACCENTS, read as their marks on both sides: one written as it stands
+  // in the text is the same mark there and on B, and still matches as written)
+  want = fold(asMarks(want.normalize('NFKD')))
+  const chars = glyphs.map(([p, g]) => fold(asMarks(charOf(pages[p - 1]!.glyphs.u[g]!))))
   const marksAlone = (c: string) => /^\p{M}+$/u.test(c)
   for (let e = 0; e < chars.length; e++) {
     if (!chars[e]) continue
