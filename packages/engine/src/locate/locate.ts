@@ -15,6 +15,8 @@
 //   the ink makers where A's pages are given (ink.ts: ink units, kept blocks, figure texts, of A's glyphs no source unit owns, B's
 //   marks carried onto A); then the units born on A (born.ts) from the glyphs B never printed that no ink maker takes. Flows: members that share a TeX line, consecutive in the stream. Ties: a table's cells; a
 //   figure's set. Links: A's annotations, each owned by the element or the text its rectangle lies over.
+// - Link previews (docs/PDF-READER.md §20): each float's box on A from its brackets on B (floats.ts), and where each destination
+//   of A's links lands (targets.ts), both read after everything else and changing nothing of it.
 // - Groups: per member and page, `<ord>.<page>.t` its text (and a name's or figure text's word), `.e` its
 //   travelling elements, `.l` its label; a display, a kept block and what is not located are in no group.
 import type { Mapping } from '../align/align.ts'
@@ -27,6 +29,7 @@ import { endMarks } from './end-marks.ts'
 import { frameTurned, holdTurned } from './turned-frames.ts'
 import { framesOnPage, type PaintedFrame } from './frames.ts'
 import { frameMeasures, lineGeometry, rooms } from './geometry.ts'
+import { floatBoxes } from './floats.ts'
 import { flowsAndTies, rowAligns } from './flows.ts'
 import { leadNames } from './leads.ts'
 import { linksOnA } from './links.ts'
@@ -34,6 +37,7 @@ import { paragraphMeasures } from './measures.ts'
 import { placeUnits } from './members.ts'
 import { groupsOf, type Owned, ownershipOf } from './ownership.ts'
 import { sentenceStarts } from './sentences.ts'
+import { targetsOf } from './targets.ts'
 import { unitsBornOnA, unitsMadeOnA } from './page-units.ts'
 import { claimTrails } from './trails.ts'
 import { eachBetweenPaired, field, type Located, type LocateOptions, type Member, open, type Work } from './work.ts'
@@ -102,11 +106,26 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   rowAligns(w) // 14
   linksOnA(w, owned, o, held) // 15: an annotation over a held unit's turned glyphs its member's
   const frames = frameTurned(w, held) // 16: the units TeX set turned, read in their frames
-  return close(w, owned, frames)
+  const t0 = o.now?.() ?? 0
+  const floats = floatBoxes(w, owned) // 17: each float's box, by its brackets
+  const t1 = o.now?.() ?? 0
+  const refusedTargets: Located['refusedTargets'] = []
+  const targets = o.dests ? targetsOf(w, o.dests, floats, refusedTargets) : [] // 18: where each destination of A's links lands
+  const t2 = o.now?.() ?? 0
+  const located = close(w, owned, frames, floats, targets)
+  located.refusedTargets = refusedTargets
+  if (o.now) located.linkMs = { floats: t1 - t0, targets: t2 - t1 }
+  return located
 }
 
 /** what locate states, read off the record its phases wrote: the wrap's groups, the ownership's check, the counts */
-function close(w: Work, owned: Owned, frames: Located['frames']): Located {
+function close(
+  w: Work,
+  owned: Owned,
+  frames: Located['frames'],
+  floats: Located['floats'],
+  targets: Located['targets'],
+): Located {
   const { ins } = w.ix
   const { units, members, stats, displays, floatLines } = w
   const born = field(w, 'born')
@@ -150,6 +169,8 @@ function close(w: Work, owned: Owned, frames: Located['frames']): Located {
     ties,
     frames,
     links,
+    floats,
+    targets,
     groups,
     figureGroups,
     stats,
