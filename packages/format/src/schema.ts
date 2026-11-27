@@ -613,9 +613,10 @@ export const Link = z.object({
 export const TargetKind = z.enum(['reference', 'heading', 'footnote', 'display', 'float'])
 /** where a destination of the paper lands, as the prepare matched it (docs/PDF-READER.md §20.2): the destination as Link.to.dest
  *  writes it (PDF.js's dest as JSON), its kind, its page on A, the member there (a float's: its caption's ord), and its box on A
- *  (PDF units, y up, x0 y0 x1 y1: a reference's or a note's lines in the column the destination names, a display's ink, a float's
- *  drawing with its caption, a heading's window from its top across its column's measure); for a heading whose window runs
- *  past its page's text foot, the next page and the box there */
+ *  (PDF units, y up, x0 y0 x1 y1: a reference's or a note's every ink on A, a display's ink, a float's drawing with its caption, a
+ *  heading's window from its top across its column's measure and round its own ink); for a heading whose window runs past its
+ *  page's text foot, the next page and the box there. A box holds the whole of what it names and nothing of another's, or the
+ *  destination is absent (docs/PDF-READER.md §20.3) */
 export const Target = z.union([
   z.tuple([z.string().max(2048), TargetKind, page, int.min(0), Box]),
   z.tuple([z.string().max(2048), TargetKind, page, int.min(0), Box, page, Box]),
