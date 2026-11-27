@@ -28,18 +28,23 @@ describe("a bibliography entry's key, the \\bibitem's argument (cite.<key>)", ()
   it('a label of a group of its own, the argument after spaces and a line end (a .bbl as BibTeX writes it)', () => {
     expect(keysOf('\\bibitem[{Doe et~al.(2020)}]%\n  {doe:2020}\nJane Doe. A study. 2020.\n')).toEqual(['doe:2020'])
   })
-  it('an argument that is more than characters gives no key: a control sequence, a group, an active character, a comment', () => {
+  it('an argument that is more than characters gives no key: a control sequence, a group, an active character', () => {
     expect(
       keysOf(
         [
           '\\bibitem{\\keyname}\nOne. 2020.',
           '\\bibitem{a{b}c}\nTwo. 2020.',
           '\\bibitem{a~b}\nThree. 2020.',
-          '\\bibitem{ab%\n}\nFour. 2020.',
-          '\\bibitem{plain}\nFive. 2020.',
+          '\\bibitem{plain}\nFour. 2020.',
         ].join('\n'),
       ),
-    ).toEqual([undefined, undefined, undefined, undefined, 'plain'])
+    ).toEqual([undefined, undefined, undefined, 'plain'])
+  })
+  it("a comment in the argument is TeX's to drop, with its line's end and the next line's leading spaces: apacite's `{%` form", () => {
+    expect(keysOf('\\bibitem [\\protect \\citeauthoryear {%\nDoe%\n}{%\nDoe%\n}{%\n{\\protect \\APACyear {2020}}%\n}]{%\ndoe2020where}\nJane Doe. 2020.\n')).toEqual([
+      'doe2020where',
+    ])
+    expect(keysOf('\\bibitem{ab%\n   cd}\nOne. 2020.\n')).toEqual(['abcd'])
   })
   it("REVTeX's entry between \\BibitemOpen and \\BibitemShut keeps its key", () => {
     expect(keysOf('\\bibitem [{\\citenamefont {Doe}(2020)}]{Doe2020}\\BibitemOpen Jane Doe, A study (2020)\\BibitemShut {NoStop}\n')).toEqual(
@@ -54,5 +59,50 @@ describe("a bibliography entry's key, the \\bibitem's argument (cite.<key>)", ()
   it("an entry's later paragraph, TeX's other unit of it, carries no key: the key is the entry's first unit's", () => {
     const units = entriesOf({ 'main.tex': doc('\\bibitem{two}\nFirst paragraph of it.\n\nSecond paragraph of it.\n') })
     expect(units.map((u) => u.key)).toEqual(['two', undefined])
+  })
+})
+
+// An entry is one unit from its \bibitem to the next (latex-front.ts bibliography): an environment written inside it, one its
+// package defines to set no paragraph, is part of it, its \begin and \end a pair round its body in the entry's unit. apacite
+// writes an entry's authors in `APACrefauthors` (apacite.sty: `\begingroup \APACrefauthstyle` … `\endgroup`) and the rest of the
+// entry after it in field commands of its own: read as one environment of its own, the entry was cut after its authors, and the
+// rest, no word of it outside a command's argument, was no unit at all (its ink an ink unit made on the page).
+const APA = (key: string, who: string, title: string) =>
+  [
+    `\\bibitem [\\protect \\citeauthoryear {%\n${who}%\n}{%\n${who}%\n}{%\n{\\protect \\APACyear {2020}}%\n}]{%\n${key}}`,
+    `\\APACinsertmetastar {%\n${key}}%`,
+    '\\begin{APACrefauthors}%',
+    `${who}, J\\BPBI E.%`,
+    '\\end{APACrefauthors}%',
+    '\\unskip\\',
+    '\\newblock',
+    '\\APACrefYearMonthDay{2020}{}{}.',
+    '\\newblock',
+    `{\\BBOQ}\\APACrefatitle {${title}} {${title}}{\\BBCQ}`,
+    '\\newblock',
+    '\\APACjournalVolNumPages{A Journal}{1}{2}{3--4}.',
+    '\\PrintBackRefs{\\CurrentBib}',
+    '',
+  ].join('\n')
+const textOf = (u: { pieces: readonly { t: string; s?: string; src?: string }[] }) =>
+  u.pieces.map((p) => (p.t === 'text' ? p.s : `<${p.t}:${(p.src ?? '').slice(0, 24)}>`)).join('')
+
+describe('an environment written in an entry is part of it: the entry one unit', () => {
+  it("apacite's entry: its authors and the rest one unit, the environment a pair round the authors, the key its own", () => {
+    const units = entriesOf({ 'main.tex': doc(`${APA('doe2020', 'Doe', 'A Title of Ours')}\n${APA('roe2021', 'Roe', 'Another Title')}`) })
+    expect(units.map((u) => u.key)).toEqual(['doe2020', 'roe2021'])
+    const [a] = units
+    const t = textOf(a!)
+    expect(t).toMatch(/^<ph:\\APACinsertmetastar[^>]*><open:\\begin\{APACrefauthors\}/)
+    expect(t).toContain('Doe, J')
+    expect(t).toContain('<close:\\end{APACrefauthors}')
+    expect(t).toContain('APACrefatitle')
+    expect(t).toContain('APACjournalVolNumPages')
+  })
+  it('an environment outside a bibliography still ends the paragraph’s unit, as before', () => {
+    const units = openPaper(
+      new Map([['main.tex', enc('\\documentclass{article}\n\\begin{document}\nBefore it.\n\\begin{quote}Inside it.\\end{quote}\nAfter it.\n\\end{document}\n')]]),
+    ).units.map((u) => u.pieces.map((p) => (p.t === 'text' ? p.s : '')).join('').trim())
+    expect(units).toEqual(['Before it.', 'Inside it.', 'After it.'])
   })
 })

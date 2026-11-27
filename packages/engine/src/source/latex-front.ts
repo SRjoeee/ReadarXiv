@@ -5907,6 +5907,32 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
         i = afterEnd
         continue
       }
+      // an environment written in a bibliography's entry, of none of the kinds read apart below (a table, a picture, a float, one
+      // skipped): part of the entry, its begin and end a pair round its body in the entry's unit. An entry is one unit from its
+      // \bibitem to the next (bibliography); the environments its packages write there set no paragraph: apacite's
+      // APACrefauthors (`\begingroup \APACrefauthstyle` … `\endgroup`), APACrefURL, APACrefDOI, Springer Nature's barticle,
+      // bbook, bchapter, botherref (its style's head: `\def\barticle#1{#1}`). Read as one of its own, the entry was cut after
+      // its authors, the rest of it, no word outside a command's argument, no unit at all
+      if (
+        BIB_KINDS.has(b.kind) &&
+        !opened &&
+        !TABLE_ENVS.test(env) &&
+        !ctx.tblrEnvs.has(env) &&
+        !ctx.tableWraps?.has(env) &&
+        !SKIP_ENVS.test(env) &&
+        !ctx.skipEnvs.has(env) &&
+        !FLOAT_ENVS.test(env) &&
+        env !== 'tikzpicture' &&
+        env !== 'thebibliography'
+      ) {
+        endText()
+        const argsEnd = envArgs(s, afterBegin, bodyEnd, env, ctx).end
+        const id = b.open(s.slice(i, argsEnd), i)
+        walk(s, argsEnd, bodyEnd, b, ctx)
+        b.close(id, s.slice(bodyEnd, afterEnd), afterEnd)
+        i = afterEnd
+        continue
+      }
       endUnit()
       // a TikZ picture: only its texts are prose (tikzText); the drawing stays as it is
       if (env === 'tikzpicture') {
@@ -7266,15 +7292,16 @@ function bibliography(s: string, from: number, to: number, b: Builder, ctx: Ctx)
   b.kind = saved
   ctx.bibDefs = savedDefs
 }
-/** a `\\bibitem`'s key (its required argument, `arg`), where the argument is characters only as the source reader reads it: no
- *  control sequence (`\\`), no group (`{`, `}`), no comment (`%`), no active character (`~`): nothing TeX would expand or read
- *  otherwise than as the characters written. Every other character is the key's as written; null where there is none. hyperref
+/** a `\\bibitem`'s key (its required argument, `arg`), where the argument is characters only as the source reader reads it, its
+ *  comments out as TeX takes them (texUncommented: apacite writes `{%` and the key on the next line): no control sequence (`\\`),
+ *  no group (`{`, `}`), no active character (`~`): nothing TeX would expand or read otherwise than as the characters written.
+ *  Every other character is the key's as written; null where there is none. hyperref
  *  names the entry's destination `cite.<key>` (hyperref.sty's \\@bibitem and \\@lbibitem; natbib's \\NAT@anchor through
  *  \\hyper@natanchorstart): whether a destination's name equals it is the landing's to read (locate/targets.ts), never a class
  *  of characters here */
 function bibKeyOf(s: string, arg: GroupArg | undefined): string | null {
   if (!arg) return null
-  const key = s.slice(arg.start + 1, arg.end - 1)
+  const key = texUncommented(s.slice(arg.start + 1, arg.end - 1))
   return key.length && !/[\\{}%~]/.test(key) ? key : null
 }
 /**

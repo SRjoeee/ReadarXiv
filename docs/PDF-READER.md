@@ -13716,8 +13716,16 @@ lines) follows it, the original's with it off, translated with it on (the author
   (class references), its names its own: never set in two pieces styled apart, and no guess of where its names end, which
   PIPELINE 29's `refnames` made (a committee's name in the authors' block taken for its names up to the title's words; a title
   with a comma taken for its authors). A `.bbl` is read in the encoding the paper declares, as its own TeX is. The
-  label (`\bibitem`'s optional argument, set in the list's label box) and the key are no piece; what a style writes before the
-  first entry is no unit, nor REVTeX's `\BibitemOpen` and `\BibitemShut`. In an entry a number (a year, pages, a volume and its
+  label (`\bibitem`'s optional argument, set in the list's label box) and the key are no piece (the key is kept beside the
+  entry's first unit, §20.3); what a style writes before the
+  first entry is no unit, nor REVTeX's `\BibitemOpen` and `\BibitemShut`. An environment written in an entry, of none of the
+  kinds the walk reads apart (a table, a picture, a float, one skipped), is part of the entry: its `\begin` and `\end` a pair round
+  its body in the entry's unit. The environments the styles write there set no paragraph (apacite's `APACrefauthors`,
+  `\begingroup \APACrefauthstyle` … `\endgroup`, `APACrefURL`, `APACrefDOI`; Springer Nature's `barticle`, `bbook`, `bchapter`,
+  `botherref`, its style's head `\def\barticle#1{#1}`): read as a unit of its own, an apacite entry was cut after its authors,
+  the rest of it, every word in apacite's field commands, no unit at all, its ink an ink unit kept as the original (§20.3's
+  reference box held the authors alone). Over the regression corpus's 245 and 599 papers no other environment stands in an
+  entry. In an entry a number (a year, pages, a volume and its
   issue: a token of a digit and no letter, white space or a piece that sets none on each side) or a DOI written out, letters and
   all (`10.1007/s00125-020-05190-9.`, after `doi: ` or `doi:`) is a placeholder of the class `number` (`layout/marks.mjs`, both
   marks, MARKS_SCHEMA 11), the original's ink as a web address and a formula are. An entry is marked as the body's units are, in
