@@ -71,6 +71,74 @@ const PAPERS = {
       ] },
     ],
   },
+  // (links inside the paper as hyperref makes them, to named destinations (the catalog's /Dests), each kind the link previews
+  // cover: a \cite of three numbers (one element, an annotation over each number), a \ref to a figure, to a table, to a section
+  // whose heading stands near a page's foot (its window runs on to the next page), to a display's number, a footnote's mark; one
+  // to a theorem (no kind a preview covers: its jump alone) and one out of the paper. The floats bracketed as the marked compile
+  // brackets them (`/axt-fs<n> ri` before the float's first ink, `/axt-fe<n> ri` after its last), each caption naming its type;
+  // a bibliography of four entries. Each destination at the point hyperref sets it: a heading's, an entry's, a note's and a
+  // display's raised over its first baseline, a float's at its top (hypcap))
+  's5-links': {
+    id: '2600.00006', version: 1,
+    note: 'Its links inside the paper name destinations the head states as targets (link previews: a citation, a figure, a table, a section, a display, a note), one to a theorem it states none of, and one out of the paper.',
+    // (TeX's text frame of each page, its block's foot under the note, and its body bracketed (`bs<n>`..`be<n>`) as the page
+    // builder broke it: a heading's window that passes the foot runs on to the next page's body)
+    tex: { frames: [{ block: [72, 540], columns: [[72, 540]], foot: 60 }, { block: [72, 540], columns: [[72, 540]], foot: 60 }] },
+    dests: {
+      'section.2': [1, 72, 172],
+      'figure.1': [1, 150, 469],
+      'equation.1': [1, 236, 558],
+      'Hfootnote.1': [1, 72, 79],
+      'table.1': [2, 150, 663],
+      'theorem.1': [2, 72, 532],
+      'cite.a': [2, 72, 441],
+      'cite.b': [2, 72, 408],
+      'cite.c': [2, 72, 375],
+      'cite.d': [2, 72, 342],
+    },
+    pages: [
+      { size: [612, 792], blocks: [
+        { point: 'bs1' },
+        { u: 'h1', kind: 'heading', font: 'HB', size: 12, x: 72, y: 720, w: 468, label: '1', text: 'Introduction' },
+        { u: 'p1', kind: 'para', size: 10, x: 72, y: 700, w: 468, lead: 12, text: words(64, 4), link: { word: 50, url: 'https://example.invalid/links' }, els: [
+          { at: 6, s: '[1, 2, 3]', kind: 'cite', src: '\\cite{a,b,c}', links: [['1', 'cite.a'], ['2', 'cite.b'], ['3', 'cite.c']] },
+          { at: 14, s: '1', kind: 'ref', src: '\\ref{fig:one}', dest: 'figure.1' },
+          { at: 20, s: '1', kind: 'ref', src: '\\ref{tab:one}', dest: 'table.1' },
+          { at: 27, s: '2', kind: 'ref', src: '\\ref{sec:two}', dest: 'section.2' },
+          { at: 33, s: '(1)', kind: 'ref', src: '\\eqref{eq:one}', dest: 'equation.1' },
+          { at: 39, s: '1', kind: 'ref', src: '\\footnotemark', dest: 'Hfootnote.1' },
+          { at: 45, s: '1', kind: 'ref', src: '\\ref{thm:one}', dest: 'theorem.1' },
+          { at: 58, s: '4', kind: 'cite', src: '\\cite{d}', links: [['4', 'cite.d']] },
+        ] },
+        { u: 'p2', kind: 'para', size: 10, x: 72, y: 600, w: 468, lead: 12, text: words(20, 30) },
+        { u: 'p2', kind: 'para', size: 10, x: 236, y: 546, w: 300, lead: 12, display: true, text: '', els: [{ at: 0, s: 'E = m c + 1 (1)', kind: 'display', src: '\\begin{equation}E=mc+1\\end{equation}' }] },
+        { u: 'p2', kind: 'para', size: 10, x: 72, y: 526, w: 468, lead: 12, text: words(14, 12) },
+        { point: 'fs1' },
+        { figure: [150, 330, 462, 470] },
+        { u: 'cap1', kind: 'caption', float: 'figure', size: 9, x: 150, y: 316, w: 312, lead: 10.8, label: 'Figure 1:', text: words(16, 21) },
+        { point: 'fe1' },
+        { u: 'h2', kind: 'heading', font: 'HB', size: 12, x: 72, y: 160, w: 468, label: '2', text: 'Method' },
+        { u: 'p3', kind: 'para', size: 10, x: 72, y: 140, w: 468, lead: 12, text: words(30, 8) },
+        { point: 'be1' },
+        { u: 'fn1', kind: 'footnote', size: 8, x: 72, y: 70, w: 468, lead: 9.6, label: '1', text: words(18, 2) },
+      ] },
+      { size: [612, 792], blocks: [
+        { point: 'bs2' },
+        { u: 'p4', kind: 'para', size: 10, x: 72, y: 720, w: 468, lead: 12, text: words(40, 14) },
+        { point: 'fs2' },
+        { u: 'tab1', kind: 'caption', float: 'table', size: 9, x: 150, y: 650, w: 312, lead: 10.8, label: 'Table 1:', text: words(12, 17) },
+        { rules: [[150, 640, 462], [150, 622, 462], [150, 574, 462]] },
+        { point: 'fe2' },
+        { u: 'thm1', kind: 'theorem', size: 10, x: 72, y: 520, w: 468, lead: 12, label: 'Theorem 1.', text: words(26, 3) },
+        { u: 'h3', kind: 'heading', font: 'HB', size: 12, x: 72, y: 460, w: 468, text: 'References' },
+        { u: 'r1', kind: 'reference', entry: true, size: 9, x: 72, y: 430, w: 468, lead: 11, label: '[1]', text: 'A. Author and B. Writer. A study of reading in two languages. Journal of Synthetic Pages, 12(3):45-67, 2020.' },
+        { u: 'r2', kind: 'reference', entry: true, size: 9, x: 72, y: 397, w: 468, lead: 11, label: '[2]', text: 'C. Reader. Figures, tables and where they stand: a measure of the page. In Proceedings of a Workshop on Layout, pages 1-9, 2021.' },
+        { u: 'r3', kind: 'reference', entry: true, size: 9, x: 72, y: 364, w: 468, lead: 11, label: '[3]', text: 'D. Typesetter, E. Printer, and F. Binder. Lines, columns and the paragraphs between them, with a long title that runs over more than one line of the bibliography. Synthetic Press, 2019.' },
+        { u: 'r4', kind: 'reference', entry: true, size: 9, x: 72, y: 320, w: 468, lead: 11, label: '[4]', text: 'G. Linker. Destinations that land. Technical report, 2022.' },
+        { point: 'be2' },
+      ] },
+    ],
+  },
   's2-splits': {
     id: '2600.00003', version: 1,
     pages: [
@@ -175,24 +243,32 @@ async function write(paper) {
     const out = streams[p], S = shows[p]
     for (const b of pg.blocks) {
       if (b.figure) {
-        // (its frame stroked, no glyph: hyperref's annotation over the graphic's box)
+        // (its frame stroked, no glyph: hyperref's annotation over the graphic's box, where it links out)
         const [x0, y0, x1, y1] = b.figure
         out.push(`q 0.5 w ${x0} ${y0} ${x1 - x0} ${y1 - y0} re S Q`)
-        annots.push([p, b.figure, { url: b.href }])
+        if (b.href) annots.push([p, b.figure, { url: b.href }])
         continue
       }
+      // (a point of the marked compile: a float's bracket, `/axt-<name> ri` where TeX put it in the stream)
+      if (b.point) { out.push(`/axt-${b.point} ri`); continue }
+      // (a table's rules: paths, no glyph)
+      if (b.rules) { for (const [x0, y, x1] of b.rules) out.push(`q 0.5 w ${x0} ${y} m ${x1} ${y} l S Q`); continue }
       // (a stored argument: a unit of the source, its text set nowhere of its own)
       if (b.stored) { addText(unitOf(b.u, b.kind, { front: true, held: true }), b.text); continue }
       const font = b.font ?? 'H', size = b.size
       // (ink no unit owns: text the class sets of what it stored, which locate makes a unit of)
-      const unit = b.ink ? null : unitOf(b.u, b.kind, { ...(b.title ? { title: true, front: true } : {}), ...(b.front ? { front: true } : {}) })
+      const unit = b.ink ? null : unitOf(b.u, b.kind, { ...(b.title ? { title: true, front: true } : {}), ...(b.front ? { front: true } : {}), ...(b.entry ? { entry: true } : {}), ...(b.float ? { float: b.float } : {}) })
       const runIn = b.runIn ? unitOf(b.runIn.u, 'heading') : null
       // the tokens: a label, a run-in head, the words, an element among them
       const toks = []
       if (b.label) toks.push({ s: b.label, unit, role: 'label', font: 'HB' })
       if (runIn) toks.push({ s: b.runIn.text, unit: runIn, role: 'text', font: 'HB', runIn: true })
-      b.text.split(' ').forEach((w, i) => {
+      // (a display's block: its element alone on its line)
+      if (!b.text && b.els) for (const e of b.els) toks.push({ s: e.s, unit, role: 'element', font: 'TI', el: e })
+      ;(b.text ? b.text.split(' ') : []).forEach((w, i) => {
         if (b.el && i === b.el.at) toks.push({ s: b.el.s, unit, role: 'element', font: 'TI', el: b.el })
+        // (elements among the words: a citation, a \ref, each set in the text's face, with the links over its characters)
+        for (const e of b.els ?? []) if (i === e.at) toks.push({ s: e.s, unit, role: 'element', font, el: e })
         // (a \ref: the number it sets, in the text's face, an element of its own)
         if (b.ref && i === b.ref.at) toks.push({ s: b.ref.s, unit, role: 'element', font, el: { ...b.ref, kind: 'ref' }, ref: b.ref })
         toks.push({ s: w, unit, role: 'text', font, word: i, ...(b.link && i === b.link.word ? { link: b.link.url } : {}) })
@@ -233,6 +309,17 @@ async function write(paper) {
           // (hyperref's annotations: over the \href group's word, over the number the \ref sets)
           if (t.link) annots.push([p, [x, y - 2, x + fonts[t.font].widthOfTextAtSize(t.s, size), y + size * 0.8], { url: t.link }])
           if (t.ref) annots.push([p, [x, y - 2, x + fonts[t.font].widthOfTextAtSize(t.s, size), y + size * 0.8], { page: t.ref.page }])
+          if (t.el?.dest) annots.push([p, [x, y - 2, x + fonts[t.font].widthOfTextAtSize(t.s, size), y + size * 0.8], { dest: t.el.dest }])
+          if (t.el?.links) {
+            // (hyperref's \cite: one annotation over each number of the bracket, the bracket's other characters in none)
+            let from = 0
+            for (const [sub, dest] of t.el.links) {
+              const k = t.s.indexOf(sub, from)
+              from = k + sub.length
+              const a = x + fonts[t.font].widthOfTextAtSize(t.s.slice(0, k), size)
+              annots.push([p, [a, y - 2, a + fonts[t.font].widthOfTextAtSize(sub, size), y + size * 0.8], { dest }])
+            }
+          }
           // (an element is its own run, then the text after it a new one)
           if (t.el) flush()
         }
@@ -267,7 +354,8 @@ async function write(paper) {
     const id = String(u.flat++)
     u.pieces.push({ t: 'el', id, kind: el.kind ?? 'math', src: el.src })
     // (a reference: a number, its command the source's)
-    if (el.kind === 'ref') u.classes.push([id, { cls: 'num', cmd: 'ref' }])
+    if (el.kind === 'ref') u.classes.push([id, { cls: 'num', cmd: /^\\(\w+)/.exec(el.src)?.[1] ?? 'ref' }])
+    if (el.kind === 'cite') u.classes.push([id, { cls: 'num', cmd: 'cite' }])
     // (the text after it starts with its space)
     return Number(id)
   }
@@ -279,6 +367,7 @@ async function write(paper) {
     const A = to.url ? { Type: 'Action', S: 'URI', URI: PL.PDFString.of(to.url) } : null
     const dict = { Type: 'Annot', Subtype: 'Link', Rect: rect.map(r2), Border: [0, 0, 0] }
     if (A) dict.A = A
+    else if (to.dest) dict.Dest = PL.PDFName.of(to.dest)
     else dict.Dest = [pageRefs[to.page - 1], PL.PDFName.of('XYZ'), 72, paper.pages[to.page - 1].size[1] - 40, null]
     const ref = doc.context.register(doc.context.obj(dict))
     const page = doc.getPage(p)
@@ -286,8 +375,14 @@ async function write(paper) {
     if (arr) arr.push(ref)
     else page.node.set(PL.PDFName.of('Annots'), doc.context.obj([ref]))
   }
+  // (the named destinations, the catalog's /Dests (PDF 1.1's form, which PDF.js reads as the names tree): each an explicit XYZ)
+  if (paper.dests) {
+    const dests = {}
+    for (const [name, [pg, x, y]] of Object.entries(paper.dests)) dests[name] = [pageRefs[pg - 1], PL.PDFName.of('XYZ'), x, y, null]
+    doc.catalog.set(PL.PDFName.of('Dests'), doc.context.obj(dests))
+  }
   const bytes = await doc.save({ useObjectStreams: false })
-  return { bytes, units: [...units.values()], shows }
+  return { bytes, units: [...units.values()], shows, tex: paper.tex ?? {} }
 }
 
 /** the instrument of A itself: each show's glyphs owned by its segments, in order (A read as `reading` reads it) */
@@ -296,7 +391,7 @@ async function instrumentOf(bytes, written, reading = pdfjs) {
   const index = new Map(written.units.map((u, i) => [u, i]))
   const units = written.units.map(u => {
     const content = u.pieces.length ? u.pieces : [{ t: 'text', s: u.labels }]
-    return { id: unitId(u.kind, content), kind: u.kind, content, ...(u.spans.length ? { spans: u.spans } : {}), ...(u.classes.length ? { classes: u.classes } : {}), ...(u.title ? { title: true } : {}), ...(u.front ? { front: true } : {}), ...(u.held ? { stored: true } : {}) }
+    return { id: unitId(u.kind, content), kind: u.kind, content, ...(u.entry ? { entry: true } : {}), ...(u.float ? { float: u.float } : {}), ...(u.spans.length ? { spans: u.spans } : {}), ...(u.classes.length ? { classes: u.classes } : {}), ...(u.title ? { title: true } : {}), ...(u.front ? { front: true } : {}), ...(u.held ? { stored: true } : {}) }
   })
   const glyphs = r.doc.pages.map((pg, p) => {
     const O = { unit: new Int32Array(pg.glyphs.length).fill(-1), role: new Uint8Array(pg.glyphs.length), piece: new Int32Array(pg.glyphs.length).fill(-1) }
@@ -322,7 +417,7 @@ async function instrumentOf(bytes, written, reading = pdfjs) {
     return O
   })
   const none = n => ({ unit: new Int32Array(n).fill(-1), role: new Uint8Array(n), piece: new Int32Array(n).fill(-1) })
-  return { ink: r.doc, units, glyphs, boxes: r.doc.pages.map(pg => none(pg.kinds.length)), turned: r.doc.pages.map(pg => none(pg.turned?.length ?? 0)), tex: {}, made: { compiler: 'pdf-lib', tree: '', front: 'reader-fixtures' } }
+  return { ink: r.doc, units, glyphs, boxes: r.doc.pages.map(pg => none(pg.kinds.length)), turned: r.doc.pages.map(pg => none(pg.turned?.length ?? 0)), tex: written.tex ?? {}, made: { compiler: 'pdf-lib', tree: '', front: 'reader-fixtures' } }
 }
 
 // ---------------------------------------------------------------- the translation and its dump
