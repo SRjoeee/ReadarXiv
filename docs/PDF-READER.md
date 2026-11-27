@@ -10790,8 +10790,14 @@ moves. A `\color` at a table cell's head, which TeX sets before the cell's start
 (`El.keep`) and is now stated empty (the locate reads `empty` first): drawn as nothing either way.
 
 **What it protects.** `unproven` keeps out a unit whose element may set ink the text group erases and nothing draws again (a
-formula, a year, an algorithm's line). These set none by TeX's definition, and the source reader reads a paper's own `\index`
-or `\color` by its definition in force (§18.119: one that sets its argument is a span of text, no placeholder). Of the marking's
+formula, a year, an algorithm's line). These set none by TeX's definition, and only where the command is TeX's or LaTeX's: the
+marking reads the name by its spelling, so a command the paper defines (`instrument/instrument.ts` `ownCommandsOf`: the source
+reader's own reading of the paper's definitions, `\renewcommand{\index}[1]{\textdagger}`, `\let\index…`) is read by its
+definition and is not stated empty, its call held unproven as before (stated empty, the dagger TeX sets would be erased with
+the paragraph and drawn by nothing). One whose definition sets its argument is a span of text, no placeholder (§18.119). The
+text macro of the marking's null stated empty before this item (a `.bbl`'s `\newblock`) is kept as it was: a class's own
+`\newblock`, defined in the paper's files of many papers, sets no ink, and telling which definition sets ink is the
+definition's reading, not this one's. None of the 56 units this item lays stands at a command its paper defines. Of the marking's
 null the rest keep their statements: an alignment's tab, a stray brace, a parameter or a script mark (a table's rows read as
 prose would be laid as prose over a table; a script mark in text sets a formula), and a forced break and a tie, which state
 their own kinds. A paper's macro, a `\rule` the probe asks about, and a register's setting the source reader keeps with the
