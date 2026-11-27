@@ -609,10 +609,11 @@ not to be translated (context rule v1, `llm-shapes.ts`). It names no gateway and
 fetch that adds its headers, and a spend port its ledger answers; a request is reserved before it is sent (no answer, no
 request) and settled once (`unsent` for a ticket granted after the adapter stopped waiting for it), and one with no answer
 is sent at most twice: the adapter's own timer ends the wait before the chain's, whether or not the host's transport heeds
-the abort. A refusal the ledger now knows the wait of (slow, spent, a key) is asked again at once, the batch whole, through
-the ledger, which picks another key or holds it: at most two requests a `send`, never one a unit; a second such refusal,
-or a hold, is a pause past the chain's patience, so the units come back unavailable and the host asks them again in whole
-batches. The model's own refusal (Anthropic's stop reason `refusal`; a 403 OpenRouter's body says is a moderation or a
+the abort. A refusal the ledger acts on (slow, spent, a key) is asked again, the batch whole, once the ledger has taken its
+settlement (a ledger asked before then would answer the refused key again), through the ledger, which picks another key or
+holds it: at most two requests a `send`, never one a unit; a second such refusal, a hold, or a settlement not taken within
+the spend port's bound (`SPEND_MS`) is a pause past the chain's patience, so the units come back unavailable and the host
+asks them again in whole batches. The model's own refusal (Anthropic's stop reason `refusal`; a 403 OpenRouter's body says is a moderation or a
 content policy's) is split like a request too large, and the lone unit so refused passes to the next translator (with none
 after it, the chain's runs floor asks the model again for the unit's stretches). A provider's 403 is the key's only where
 its body names an authentication or permission error, so one flagged text never disables a key; a 200 whose body holds
