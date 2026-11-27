@@ -460,6 +460,73 @@ describe('llm: through the chain', () => {
     expect(out.map((r) => r.ok && r.by)).toEqual([tr.identity, tr.identity, tr.identity, tr.identity])
   })
 
+  /** a ledger of two keys that learns of a refusal only when its settlement ends, `settled` after the call (a delay on the
+   *  fake clock, or never); every reserve, fetch and settlement is written into `order` */
+  const twoKeys = (clock: ReturnType<typeof fakeClock>, settled: 'later' | 'never' | 'rejects') => {
+    const order: string[] = []
+    let known = false
+    let n = 0
+    const spend: Spend = {
+      async reserve() {
+        const key = known ? 'good' : 'bad'
+        order.push(`reserve:${key}`)
+        return { ok: true, id: `r${++n}`, headers: { 'x-key-alias': key } }
+      },
+      async settle(_id, outcome) {
+        order.push('settle-start')
+        if (settled === 'never') return new Promise<void>(() => {})
+        if (settled === 'rejects') throw new Error('the ledger failed to write')
+        await clock.sleep(SPEND_MS / 4, NEVER)
+        if ('refusal' in outcome) known = true
+        order.push('settle-end')
+      },
+    }
+    const f = scriptedFetch((url, init) => {
+      const key = init.headers['x-key-alias']
+      order.push(`fetch:${key}`)
+      return key === 'good' ? echo(url, init) : keyRefused
+    })
+    return { order, spend, f }
+  }
+
+  it('a key refused: the batch is asked again only once the ledger has taken the refusal, with the key it then gives', async () => {
+    const clock = fakeClock()
+    const { order, spend, f } = twoKeys(clock, 'later')
+    const tr = make(f.fetch, { spend, clock })
+    const out = await run(tr, clock)
+    expect
+      .soft(order.slice(0, 6))
+      .toEqual(['reserve:bad', 'fetch:bad', 'settle-start', 'settle-end', 'reserve:good', 'fetch:good'])
+    expect.soft(sizes(f)).toEqual([4, 4])
+    expect(out.map((r) => (r.ok ? r.by : r.why.kind))).toEqual([tr.identity, tr.identity, tr.identity, tr.identity])
+  })
+
+  for (const settled of ['never', 'rejects'] as const)
+    it(`a key refused and its settlement ${settled === 'never' ? 'never ends' : 'rejected'}: no second request, the units unavailable past the patience`, async () => {
+      const clock = fakeClock()
+      const { order, spend, f } = twoKeys(clock, settled)
+      const out = await run(make(f.fetch, { spend, clock }), clock)
+      expect(order).toEqual(['reserve:bad', 'fetch:bad', 'settle-start'])
+      expect(sizes(f)).toEqual([4])
+      for (const r of out)
+        expect(r).toEqual({ id: r.id, ok: false, why: { kind: 'unavailable', retryAfterMs: PAST_PATIENCE } })
+    })
+
+  it("a key refused and its settlement never ends: the call's abort ends the wait, no second request", async () => {
+    const clock = fakeClock({ auto: false })
+    const { order, spend, f } = twoKeys(clock, 'never')
+    const call = new AbortController()
+    const p = (async () => {
+      for await (const _ of make(f.fetch, { spend, clock }).send(['a'], { target: 'zh-Hans' }, call.signal)) {
+        // nothing
+      }
+    })().catch((e) => e)
+    await new Promise((r) => setTimeout(r, 0))
+    call.abort()
+    expect(await p).toMatchObject({ remedy: 'abort', code: 'aborted' })
+    expect(order).toEqual(['reserve:bad', 'fetch:bad', 'settle-start'])
+  })
+
   it('observed 401 twice: two requests of the whole batch, none of one unit; the units unavailable past the patience', async () => {
     const clock = fakeClock()
     const spend = fakeSpend()
