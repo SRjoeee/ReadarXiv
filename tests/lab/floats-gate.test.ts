@@ -100,6 +100,9 @@ describe('the floats’ gate over the corpus’s records', () => {
     expect(g.byType.figure).toMatchObject({ bracketed: 2, boxed: 1, causes: { unpaired: 1 } })
     expect(g.byType.table).toMatchObject({ bracketed: 0, boxed: 0, causes: { unbracketed: 1 } })
   })
+  it('fails where no paper states a record: a run of before checks nothing', () => {
+    expect(gateOf([]).pass).toBe(false)
+  })
   it('fails a boxed float the engine counts wrong, or one the parts show wrong', () => {
     expect(gateOf([['p1', rec([float({ foreign: 1 })])]]).pass).toBe(false)
     expect(gateOf([['p1', rec([float({})], [{ serial: 1, page: 1, ord: 0, why: 'foreign text' }])]]).pass).toBe(false)

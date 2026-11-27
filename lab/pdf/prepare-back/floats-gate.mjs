@@ -52,7 +52,8 @@ export function gateOf(records) {
   }
   const share = (t) => (byType[t]?.bracketed ? byType[t].boxed / byType[t].bracketed : null)
   return {
-    pass: wrongRows.length === 0,
+    // (and some paper states a record: a run whose dumps hold none, made before the targets, checks nothing)
+    pass: wrongRows.length === 0 && records.length > 0,
     wrong: wrongRows.length,
     wrongRows,
     byType,
