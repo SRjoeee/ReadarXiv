@@ -3639,7 +3639,7 @@ function executedAt(t: string, at: number) {
  */
 function bodyBoundary(
   body: string,
-  ctx: Pick<Ctx, 'meanings' | 'displayEnvs'>,
+  ctx: Pick<Ctx, 'meanings' | 'displayEnvs'> & Partial<Pick<Ctx, 'envMacros'>>,
   depth = 0,
 ): Omit<Boundary, 'end' | 'close'> | null | undefined {
   const t = texUncommented(body).trim()
@@ -3651,10 +3651,12 @@ function bodyBoundary(
     if (closeAt >= t.length) {
       // (closed in the body by a paper's macro TeX executes there: the body sets the environment whole, no boundary)
       const rest = t.slice(after)
+      // (a macro whose body may stand for a boundary, boundaryNames; one read unsure that the old reading reads as an end)
+      const names = ctx.meanings ? boundaryNames(ctx.meanings) : new Set<string>()
       for (const w of rest.matchAll(/\\([A-Za-z@]+)/g)) {
         const m = ctx.meanings?.get(w[1]!)
-        if (m === 'unsure') return undefined
-        if (!m || !executedAt(rest, w.index)) continue
+        if (m === 'unsure' && ctx.envMacros?.get(w[1]!)?.side === 'end') return undefined
+        if (!m || m === 'unsure' || !names.has(w[1]!) || !executedAt(rest, w.index)) continue
         const b = depth < EXPANSION_DEPTH && !m.params && !m.delim ? bodyBoundary(m.body, ctx, depth + 1) : undefined
         if (b === undefined) return undefined
         if (b?.side === 'end' && b.env === env) return null
