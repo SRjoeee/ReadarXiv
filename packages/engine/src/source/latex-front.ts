@@ -5510,11 +5510,17 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
     // and the group after it as text of its own (2509.05371v1's entries); `shift` the arguments the braced groups pass over)
     const inForce = BIB_KINDS.has(b.kind) && BIB_TEXT.has(name) ? (ctx.macros.get(name) ?? ctx.bibDefs?.get(name)) : undefined
     const shift = inForce?.opt ? 1 : 0
+    // (a call that supplies the optional argument, `\\bibinfo[x]{Ann}`, has it first: #1, its braced groups #2, … as before)
+    const supplied = shift && s[skipSpaces(s, end)] === '[' ? 1 : 0
     if (BIB_KINDS.has(b.kind) && BIB_TEXT.has(name) && BIB_TEXT.get(name)! >= shift) {
       const before = BIB_TEXT.get(name)! - shift,
-        { args, end: e } = argsAfter(s, end, before + 1),
+        { args, end: e } = argsAfter(s, end, before + 1 + supplied),
         reqs = args.filter((a) => a.kind === 'req')
-      if (args.length === before + 1 && reqs.length === before + 1) {
+      if (
+        args.length === before + 1 + supplied &&
+        reqs.length === before + 1 &&
+        (!supplied || args[0]!.kind === 'opt')
+      ) {
         const text = reqs[before]!,
           field = before && !shift ? s.slice(reqs[0]!.start + 1, reqs[0]!.end - 1).trim() : ''
         endText()
