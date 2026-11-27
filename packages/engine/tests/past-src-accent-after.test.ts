@@ -134,19 +134,19 @@ describe('the text after a display, its first word set with an accent of its own
 // ˇ U+02C7): the "Ciˆencia" of a paper set in OT1 is "Ciência" as much as "Estad´ısticas" is "Estadísticas".
 /** the thirteen: each spacing accent a kernel accent's glyph is reported as, and the combining mark it sets */
 const KERNEL_ACCENTS: readonly (readonly [string, string])[] = [
-  ['`', '̀'],
-  ['´', '́'],
-  ['ˆ', '̂'],
-  ['˜', '̃'],
-  ['¯', '̄'],
-  ['˘', '̆'],
-  ['˙', '̇'],
-  ['¨', '̈'],
-  ['˚', '̊'],
-  ['˝', '̋'],
-  ['ˇ', '̌'],
-  ['¸', '̧'],
-  ['˛', '̨'],
+  ['\u0060', '\u0300'],
+  ['\u00b4', '\u0301'],
+  ['\u02c6', '\u0302'],
+  ['\u02dc', '\u0303'],
+  ['\u00af', '\u0304'],
+  ['\u02d8', '\u0306'],
+  ['\u02d9', '\u0307'],
+  ['\u00a8', '\u0308'],
+  ['\u02da', '\u030a'],
+  ['\u02dd', '\u030b'],
+  ['\u02c7', '\u030c'],
+  ['\u00b8', '\u0327'],
+  ['\u02db', '\u0328'],
 ]
 describe("the text after a display, a letter set by \\accent with each of the kernel's accents", () => {
   it.each(KERNEL_ACCENTS)('%s before its letter is the letter under its mark', (glyph, mark) => {
@@ -157,9 +157,12 @@ describe("the text after a display, a letter set by \\accent with each of the ke
     expect(display(`An ${glyph}atale`, `An ${`e${mark}`.normalize('NFC')}tale`)).toBe(NOT_FOUND)
   })
 
-  it.each(KERNEL_ACCENTS)('%s before a letter the source writes bare is no match: the accent is not dropped', (glyph) => {
-    expect(display(`An ${glyph}etale`, 'An etale')).toBe(NOT_FOUND)
-  })
+  it.each(KERNEL_ACCENTS)(
+    '%s before a letter the source writes bare is no match: the accent is not dropped',
+    (glyph) => {
+      expect(display(`An ${glyph}etale`, 'An etale')).toBe(NOT_FOUND)
+    },
+  )
 
   it('a circumflex, a caron or a grave over another accent of the same letter is no match', () => {
     expect(display('An ˆetale', 'An ětale')).toBe(NOT_FOUND)

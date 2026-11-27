@@ -1469,8 +1469,12 @@ function runsOn(pages: readonly StreamPage[], glyphs: readonly Place[], end: num
  * CIRCUMFLEX ACCENT and COMBINING CIRCUMFLEX ACCENT, CARON and COMBINING CARON). Neither maps the ties' glyphs (\\t, TS1's
  * tieaccent): no character to read
  */
-const UNDECOMPOSED_ACCENTS: Readonly<Record<string, string>> = { '`': '̀', 'ˆ': '̂', 'ˇ': '̌' }
-const asMarks = (c: string) => c.replace(/[`ˆˇ]/g, (a) => UNDECOMPOSED_ACCENTS[a]!)
+const UNDECOMPOSED_ACCENTS: Readonly<Record<string, string>> = {
+  '\u0060': '\u0300',
+  '\u02c6': '\u0302',
+  '\u02c7': '\u030c',
+}
+const asMarks = (c: string) => c.replace(/[\u0060\u02c6\u02c7]/g, (a) => UNDECOMPOSED_ACCENTS[a]!)
 
 /** each place textAt's text begins at, in order */
 function* textStarts(pages: readonly StreamPage[], glyphs: readonly Place[], want: string, quotes: boolean) {

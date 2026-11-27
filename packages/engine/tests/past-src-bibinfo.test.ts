@@ -81,7 +81,9 @@ const bblPieces = (preamble: string, head: string, entries = ENTRIES) => {
     new Map([
       [
         'main.tex',
-        enc(`\\documentclass{article}\n${preamble}\\begin{document}\nSome text.\n\\bibliography{refs}\n\\end{document}\n`),
+        enc(
+          `\\documentclass{article}\n${preamble}\\begin{document}\nSome text.\n\\bibliography{refs}\n\\end{document}\n`,
+        ),
       ],
       ['main.bbl', enc(`\\begin{thebibliography}{9}\n${head}\n${entries}\n\\end{thebibliography}\n`)],
     ]),
@@ -102,7 +104,10 @@ describe("a bibliography head's definitions read in the order TeX runs them", ()
   it("a head that replaces the paper's definition: its replacement reads the entries (\\def, \\renewcommand)", () => {
     for (const head of ['\\def\\bibinfo#1#2{#2}', '\\renewcommand{\\bibinfo}[2]{#2}', '\\gdef\\bibinfo #1#2{#2}']) {
       const ps = bblPieces(OPTIONAL, head)
-      expect(ps.filter((p) => p.startsWith('[\\bibinfo')), head).toEqual(PAIRS)
+      expect(
+        ps.filter((p) => p.startsWith('[\\bibinfo')),
+        head,
+      ).toEqual(PAIRS)
       expect(textOf(ps), head).not.toMatch(/author|journal/)
     }
   })

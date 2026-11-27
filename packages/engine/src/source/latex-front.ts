@@ -1861,25 +1861,45 @@ function skipSpaces(s: string, i: number) {
   return i
 }
 /**
- * A bibliography entry's field command (BIB_TEXT) read as TeX reads its call, by the definition in force: the paper's own first
- * (paperMacros, where \\providecommand defines only what is undefined), then the bibliography head's (bibDefinitions). One whose
- * first argument is optional (`[2][]{#2}`) takes no braced group for it, so the call's braced groups are its #2, #3, …:
- * `\\bibinfo{author}{Ann}` sets "author", its #2, and the group after it is text of its own (2509.05371v1's entries); a call
- * that supplies the optional argument, `\\bibinfo[x]{Ann}`, has it first. Returns the definition, the arguments the braced
- * groups pass over (`shift`), the index of the braced group TeX sets as it stands (`before`), the braced groups and where the
- * call ends; null where the call is not of its form
+ * A bibliography entry's field command (BIB_TEXT) read as TeX reads its call, by the definition in force where the entries are
+ * set: the bibliography head's where it made one (bibDefinitions, read in the order TeX runs it), else the paper's own
+ * (paperMacros). Where that definition says which of its arguments its body sets as text (argumentSet), the call's shape and
+ * that argument are the definition's: its parameter count, its optional first argument (`[2][]{#2}`, which takes no braced
+ * group: the call's braced groups are its #2, #3, …, and a call that supplies it, `\\bibinfo[x]{Ann}`, has it first), the
+ * parameter its body sets. `\\bibinfo{author}{Ann}` under `[2][]{#2}` sets "author", its #2, and the group after it is text of
+ * its own; under `[3][]{#3}` it sets "Ann"; under `\\def\\bibinfo#1#2{#1}` it sets "author" and drops "Ann". A standard command
+ * whose definition the paper and the head do not give (a class's or a package's), or one whose body sets no single argument,
+ * keeps its fixed slot (BIB_TEXT). Returns the definition, the parameter TeX sets as it stands (`arg`, from 1) and the index of
+ * its braced group (`before`), the braced groups and where the call ends; null where the call is not of its form, or where the
+ * argument set is the optional one
  */
 function fieldCall(s: string, end: number, name: string, ctx: Ctx) {
-  const def = ctx.macros.get(name) ?? ctx.bibDefs?.get(name)
-  const shift = def?.opt ? 1 : 0
-  if (BIB_TEXT.get(name)! < shift) return null
+  const def = ctx.bibDefs?.get(name) ?? ctx.macros.get(name)
+  const set = def && argumentSet(def)
+  const shift = (set ? set.opt : def?.opt) ? 1 : 0,
+    arg = set ? set.arg : BIB_TEXT.get(name)! + 1,
+    count = (set ? set.of : arg) - shift,
+    before = arg - 1 - shift
+  if (before < 0 || before >= count) return null
   const supplied = shift && s[skipSpaces(s, end)] === '[' ? 1 : 0
-  const before = BIB_TEXT.get(name)! - shift
-  const { args, end: e } = argsAfter(s, end, before + 1 + supplied)
+  const { args, end: e } = argsAfter(s, end, count + supplied)
   const reqs = args.filter((a) => a.kind === 'req')
-  if (args.length !== before + 1 + supplied || reqs.length !== before + 1 || (supplied && args[0]!.kind !== 'opt'))
-    return null
-  return { def, shift, before, reqs, end: e }
+  if (args.length !== count + supplied || reqs.length !== count || (supplied && args[0]!.kind !== 'opt')) return null
+  return { def, arg, before, reqs, end: e }
+}
+/**
+ * The argument a definition's body sets as text, and how many it takes: a body that is one parameter or a kernel selector
+ * (selectsArgument: `#2`, `\\@secondoftwo`), else the one parameter its body typesets as prose and hands to nothing else
+ * (paramUse, as paperMacros reads a macro's prose), the optional first never; null where it sets none or several
+ */
+function argumentSet(def: Macro | BibDef) {
+  const body = texUncommented(def.def),
+    opt = !!def.opt && def.params > 0
+  const sel = selectsArgument(def.params, body)
+  if (sel) return { of: sel.of, arg: sel.arg, opt: opt && sel.of === def.params }
+  const use = throughBoxes(paramUse(body, 0, body.length))
+  const text = [...use.text].filter((n) => n <= def.params && !use.other.has(n) && !(opt && n === 1))
+  return text.length === 1 ? { of: def.params, arg: text[0]!, opt } : null
 }
 /** the arguments right after a command: [..] and {..} groups, optional spaces between, no blank line */
 function argsAfter(s: string, i: number, max = 9): { args: GroupArg[]; end: number } {
@@ -5528,9 +5548,10 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
     // arguments kept with the opening; a \\bibinfo of a field that is no prose (BIB_KEPT_FIELD) one placeholder
     const fieldAt = BIB_KINDS.has(b.kind) && BIB_TEXT.has(name) ? fieldCall(s, end, name, ctx) : null
     if (fieldAt) {
-      const { def, shift, before, reqs, end: e } = fieldAt
+      const { def, arg, before, reqs, end: e } = fieldAt
+      // (the field's name: the braced group before the one it sets, where there is one)
       const text = reqs[before]!,
-        field = before && !shift ? s.slice(reqs[0]!.start + 1, reqs[0]!.end - 1).trim() : ''
+        field = before ? s.slice(reqs[0]!.start + 1, reqs[0]!.end - 1).trim() : ''
       endText()
       if (name === 'bibinfo' && BIB_KEPT_FIELD.test(field)) {
         b.ph(s.slice(i, e), i, e)
@@ -5538,14 +5559,15 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
         continue
       }
       // (a command that prints its argument between marks: the marks text, wrapOf; csquotes' \\enquote by its level)
-      const marks = wrapOf(def, before + 1 + shift) ?? (name === 'enquote' && !def ? quoteMarks(s, end, ctx) : null)
+      const marks = wrapOf(def, arg) ?? (name === 'enquote' && !def ? quoteMarks(s, end, ctx) : null)
       if (marks) {
         i = withMarks(s, i, text.start + 1, text.end - 1, e, marks, b, ctx)
         continue
       }
-      const id = b.open(s.slice(i, text.start + 1), i, identityPair(def, before + 1 + shift))
+      // (the closing: the argument's brace, and the groups after it TeX takes and does not set)
+      const id = b.open(s.slice(i, text.start + 1), i, identityPair(def, arg))
       walk(s, text.start + 1, text.end - 1, b, ctx)
-      b.close(id, '}', e)
+      b.close(id, s.slice(text.end - 1, e), e)
       i = e
       continue
     }
@@ -6687,34 +6709,47 @@ function bibliography(s: string, from: number, to: number, b: Builder, ctx: Ctx)
   ctx.bibDefs = savedDefs
 }
 /**
- * What a bibliography's head (the lines before its first entry, as a style writes them) defines, by name: each command's
- * declared arguments and its body, the first definition of a name the one TeX keeps — apsrev4-2's `\providecommand \bibinfo
- * [0]{\@secondoftwo}%` and `\providecommand \bibnamefont [1]{#1}%`, ACM's `\providecommand\bibinfo[2]{#2}` and `\ifx
- * \showarticletitle \undefined \def \showarticletitle #1{#1} \fi`. A paper's own definition comes before the .bbl and wins
- * (paperMacros; a \providecommand defines nothing then); what a class or a package defines is not seen, and a style's
- * \providecommand is taken for it: TeX Live's classes that define these commands define them so (revtex4-2's
- * `\providecommand\bibinfo[2]{#2}`)
+ * What a bibliography's head (the lines before its first entry, as a style writes them) defines, by name, where it is in force
+ * for the entries after it: each command's declared arguments and its body, read in the order TeX runs them — apsrev4-2's
+ * `\providecommand \bibinfo [0]{\@secondoftwo}%` and `\providecommand \bibnamefont [1]{#1}%`, ACM's
+ * `\providecommand\bibinfo[2]{#2}` and `\ifx \showarticletitle \undefined \def \showarticletitle #1{#1} \fi`. A paper's own
+ * definition (`defined`, paperMacros) comes before the .bbl: a \providecommand, a \newcommand or a tested \def of the head
+ * defines nothing then, and any other definition replaces it for the entries (the entries' reader takes the head's first);
+ * what a class or a package defines is not seen, and a style's \providecommand is taken for it: TeX Live's classes that define
+ * these commands define them so (revtex4-2's `\providecommand\bibinfo[2]{#2}`)
  */
 function bibDefinitions(head: string, defined: ReadonlyMap<string, unknown> = new Map()) {
   const out = new Map<string, BibDef>(),
     t = texUncommented(head)
-  // (LaTeX's \\providecommand defines only what is undefined: the paper's own definition before the bibliography stays in
-  // force; a `[n][default]` makes the first argument optional, as \\newcommand reads it)
+  // (read in the order TeX runs them, from what is in force before the bibliography, the paper's own definitions: LaTeX's
+  // \\providecommand defines only what is undefined, and its \\newcommand refuses what is defined (\\@ifdefinable), as does a
+  // \\def under a test that the command is undefined (TeX's \\ifx against \\undefined or \\relax, \\csname's \\relax for an
+  // undefined name, the kernel's \\@ifundefined); \\renewcommand, \\DeclareRobustCommand and a \\def, \\gdef, \\edef, \\xdef
+  // otherwise replace what is in force. A `[n][default]` makes the first argument optional, as \\newcommand reads it)
   const re =
-    /\\(?:(provide|new)command\*?\s*(?:\{\s*\\([A-Za-z@]+)\s*\}|\\([A-Za-z@]+))\s*(?:\[(\d)\])?(\s*\[[^\]]*\])?|[egx]?def\s*\\([A-Za-z@]+)\s*((?:#\d\s*)*))(?=\s*\{)/g
+    /\\(?:(provide|new|renew)command\*?\s*(?:\{\s*\\([A-Za-z@]+)\s*\}|\\([A-Za-z@]+))\s*(?:\[(\d)\])?(\s*\[[^\]]*\])?|[egx]?def\s*\\([A-Za-z@]+)\s*((?:#\d\s*)*)|DeclareRobustCommand\*?\s*(?:\{\s*\\([A-Za-z@]+)\s*\}|\\([A-Za-z@]+))\s*(?:\[(\d)\])?(\s*\[[^\]]*\])?)(?=\s*\{)/g
   for (const m of t.matchAll(re)) {
-    const name = (m[2] ?? m[3] ?? m[6])!,
+    const name = (m[2] ?? m[3] ?? m[6] ?? m[8] ?? m[9])!,
       k = skipSpaces(t, m.index + m[0].length),
       e = t[k] === '{' ? matchGroup(t, k) : -1
-    if (e < 0 || out.has(name) || (m[1] === 'provide' && defined.has(name))) continue
+    const unlessDefined =
+      m[1] === 'provide' || m[1] === 'new' || (m[6] !== undefined && UNDEFINED_TEST(name).test(t.slice(0, m.index)))
+    if (e < 0 || (unlessDefined && (out.has(name) || defined.has(name)))) continue
     out.set(name, {
-      params: m[6] !== undefined ? (m[7]!.match(/#\d/g) ?? []).length : Number(m[4] ?? 0),
+      params: m[6] !== undefined ? (m[7]!.match(/#\d/g) ?? []).length : Number(m[4] ?? m[10] ?? 0),
       def: t.slice(k + 1, e - 1),
-      ...(m[4] && m[5] ? { opt: true } : {}),
+      ...((m[4] && m[5]) || (m[10] && m[11]) ? { opt: true } : {}),
     })
   }
   return out
 }
+/** a source that ends in a test that a command (`name`) is undefined, the branch that defines it next: TeX's `\\ifx \\name
+ *  \\undefined` (or \\@undefined, or \\relax, which \\csname makes of an undefined name), `\\expandafter\\ifx\\csname name
+ *  \\endcsname\\relax`, LaTeX's `\\@ifundefined{name}{` */
+const UNDEFINED_TEST = (name: string) =>
+  new RegExp(
+    String.raw`(?:\\ifx\s*\\${name}(?![A-Za-z@])\s*\\(?:undefined|@undefined|relax)|\\expandafter\s*\\ifx\s*\\csname\s*${name}\s*\\endcsname\s*\\relax|\\@ifundefined\s*\{\s*${name}\s*\}\s*\{)\s*$`,
+  )
 /** TeX's text ligatures of quotation marks and dashes as the characters they set (`` “, '' ”, ` ‘, ' ’, --- —, -- –) */
 const texMarks = (t: string) =>
   t
