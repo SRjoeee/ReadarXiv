@@ -80,40 +80,47 @@ const WITH =
   'Our own words of a second paragraph, {\\color[HTML]{3366AA} some words of ours in a colour} and more words of ours after them to fill the line.'
 const WITHOUT = WITH.replace('\\index{entry!of ours}', '').replace('\\color[HTML]{3366AA} ', '')
 
+/** a document of ours as the prepare marks it (markedOfPaper) and its instrument (instrumentOf): the pieces it states empty, and
+ *  the unit and piece of the placeholder whose source begins so */
+async function stated(tex: string) {
+  const files = new Map([['main.tex', enc(tex)]])
+  const paper = openPaper(files)
+  const compiles: Compiled[] = []
+  const compile = async ({ main, overrides }: Request) => {
+    const c = compileIn(new Map([...files, ...overrides]), main)
+    compiles.push(c)
+    return c
+  }
+  const made = await markedOfPaper(paper, { compile: compile as never, final: false })
+  if (!('pdf' in made) || !made.pdf) throw new Error(`no marked original: ${JSON.stringify(made).slice(0, 300)}`)
+  const pdf = made.pdf as Uint8Array
+  const last = compiles.find((c) => c.pdf && c.pdf.length === pdf.length && c.pdf.every((b, i) => b === pdf[i]))
+  const m = made as { options?: Record<string, unknown>; probeLog?: string }
+  const { instrument } = await instrumentOf({
+    paper: paper as never,
+    finalPdf: pdf,
+    options: m.options ?? {},
+    log: last?.log ?? '',
+    probeLog: m.probeLog ?? null,
+    pdfjs: { getDocument, OPS } as never,
+    documentOptions: DOCUMENT_OPTIONS,
+    made: { compiler: 'pdflatex', tree: '2025', front: 'today' },
+  })
+  const empty = new Set((instrument.empty ?? []).map((x) => `${x.unit}|${x.piece}`))
+  /** the unit and piece of the placeholder whose source begins so */
+  const where = (begins: string) => {
+    for (const [i, u] of paper.units.entries()) {
+      const k = (u.pieces as { t: string; src?: string }[]).findIndex((p) => p.t === 'ph' && (p.src ?? '').startsWith(begins))
+      if (k >= 0) return `${i}|${k}`
+    }
+    return null
+  }
+  return { files, empty, where }
+}
+
 describe.skipIf(!docker)('an element TeX sets no ink for, by the marking’s own reading, stated empty', () => {
   it('an \\index and a \\color with a model: stated empty by the instrument, and TeX sets no glyph for them', async () => {
-    const files = new Map([['main.tex', enc(doc(WITH))]])
-    const paper = openPaper(files)
-    const compiles: Compiled[] = []
-    const compile = async ({ main, overrides }: Request) => {
-      const c = compileIn(new Map([...files, ...overrides]), main)
-      compiles.push(c)
-      return c
-    }
-    const made = await markedOfPaper(paper, { compile: compile as never, final: false })
-    if (!('pdf' in made) || !made.pdf) throw new Error(`no marked original: ${JSON.stringify(made).slice(0, 300)}`)
-    const pdf = made.pdf as Uint8Array
-    const last = compiles.find((c) => c.pdf && c.pdf.length === pdf.length && c.pdf.every((b, i) => b === pdf[i]))
-    const m = made as { options?: Record<string, unknown>; probeLog?: string }
-    const { instrument } = await instrumentOf({
-      paper: paper as never,
-      finalPdf: pdf,
-      options: m.options ?? {},
-      log: last?.log ?? '',
-      probeLog: m.probeLog ?? null,
-      pdfjs: { getDocument, OPS } as never,
-      documentOptions: DOCUMENT_OPTIONS,
-      made: { compiler: 'pdflatex', tree: '2025', front: 'today' },
-    })
-    const empty = new Set((instrument.empty ?? []).map((x) => `${x.unit}|${x.piece}`))
-    /** the unit and piece of the placeholder whose source begins so */
-    const where = (begins: string) => {
-      for (const [i, u] of paper.units.entries()) {
-        const k = (u.pieces as { t: string; src?: string }[]).findIndex((p) => p.t === 'ph' && (p.src ?? '').startsWith(begins))
-        if (k >= 0) return `${i}|${k}`
-      }
-      return null
-    }
+    const { files, empty, where } = await stated(doc(WITH))
     expect(where('\\index')).not.toBeNull()
     expect(where('\\color[HTML]')).not.toBeNull()
     expect(empty.has(where('\\index')!)).toBe(true)
@@ -123,5 +130,22 @@ describe.skipIf(!docker)('an element TeX sets no ink for, by the marking’s own
     const bare = compileIn(new Map([['main.tex', enc(doc(WITHOUT))]]))
     expect(own.ok && bare.ok).toBe(true)
     expect(await itemsOf(own.pdf!)).toEqual(await itemsOf(bare.pdf!))
+  }, 900_000)
+
+  it('an \\index the paper defines to print a mark: TeX sets it, and the instrument does not state it empty', async () => {
+    // (the marking reads `\\index` by its spelling and gives it no mark; stated empty, the paragraph would be laid and the
+    // dagger TeX set, in its text's range, erased with the text and drawn by nothing)
+    const own = '\\renewcommand{\\index}[1]{\\textdagger}\n'
+    const body = 'Our own words of a paragraph, with an entry\\index{entry} standing in it, and more words of ours after it to fill the line out.'
+    const tex = doc(body).replace('\\begin{document}', `${own}\\begin{document}`)
+    const { files, empty, where } = await stated(tex)
+    expect(where('\\index')).not.toBeNull()
+    expect(empty.has(where('\\index')!)).toBe(false)
+    // (TeX's own: the call sets a glyph, the dagger, which the text without it does not hold)
+    const withIt = compileIn(files)
+    const without = compileIn(new Map([['main.tex', enc(tex.replace('\\index{entry}', ''))]]))
+    expect(withIt.ok && without.ok).toBe(true)
+    expect((await itemsOf(withIt.pdf!)).join(' ')).toContain('\u2020')
+    expect((await itemsOf(without.pdf!)).join(' ')).not.toContain('\u2020')
   }, 900_000)
 })

@@ -15,16 +15,23 @@ import { describe, expect, it } from 'vitest'
 import { openPaper } from '../src/compile/live.ts'
 import { classesOf, elementKindOf, inklessPieces } from '../src/instrument/instrument.ts'
 import { classOf } from '../src/marks/marks.ts'
+import { paperOf } from '../src/source/arg-roles.ts'
+import { texFilesOf } from '../src/source/latex-front.ts'
 
 const enc = (s: string) => new TextEncoder().encode(s)
 type Ph = { t: string; s?: string; src?: string }
 /** a document's units, each unit's classes as the instrument reads them, and the pieces it states empty (by `unit|piece`) */
 function stated(body: string, preamble = '') {
-  const units = openPaper(
+  const paper = openPaper(
     new Map([['main.tex', enc(`\\documentclass{article}\n${preamble}\\begin{document}\n${body}\n\\end{document}\n`)]]),
-  ).units as { kind: string; pieces: Ph[] }[]
+  )
+  const units = paper.units as { kind: string; pieces: Ph[] }[]
   const classes = units.map((u) => new Map(classesOf(u.pieces as never)))
-  const empty = new Set(inklessPieces(units as never, { classes: classes as never }).map((x) => `${x.unit}|${x.piece}`))
+  // (the commands the paper defines, as the source reader reads them: what instrumentOf hands inklessPieces)
+  const own = paperOf(texFilesOf(paper.fsys, paper.meta.main!)).own
+  const empty = new Set(
+    inklessPieces(units as never, { classes: classes as never, own }).map((x) => `${x.unit}|${x.piece}`),
+  )
   /** the placeholder whose source begins so, in the first unit holding one: its class, kind and whether it is stated empty */
   const at = (begins: string) => {
     for (const [i, u] of units.entries()) {
@@ -61,9 +68,9 @@ describe('an element the marking reads as setting no ink is stated empty by the 
     expect(r.at('\\color')).toMatchObject({ marking: null, cls: 'other', empty: true })
   })
 
-  it('a \\color declaration the class table reads as setting nothing is stated empty too (no other reading moves)', () => {
+  it('a \\color declaration the class table reads as setting nothing (`zero`, a class drawn from no ink) is stated nothing: no reading needs it', () => {
     const r = stated(`${WORDS} {\\color{red} red words of ours} and more words after it.`, '\\usepackage{xcolor}\n')
-    expect(r.at('\\color')).toMatchObject({ marking: null, cls: 'zero' })
+    expect(r.at('\\color')).toMatchObject({ marking: null, cls: 'zero', empty: false })
   })
 })
 
@@ -90,6 +97,30 @@ describe('what keeps its statement (controls)', () => {
     const r = stated(`${WORDS} with a tie~here and a break\\\\ there and more words after it.`)
     expect(r.at('~')).toMatchObject({ kind: 'space', cls: 'space', empty: false })
     expect(r.at('\\\\')).toMatchObject({ kind: 'break', empty: false })
+  })
+
+  it('an \\index the paper defines to print a mark (its argument unused: still a placeholder) is not stated empty', () => {
+    // (the marking reads `\\index` by its spelling and gives it no mark; TeX sets the dagger. Stated empty, the paragraph would
+    // be laid and the dagger, in its text's range, erased with it and drawn by nothing: the paper's own command is read by its
+    // definition, never by its spelling)
+    const r = stated(
+      `${WORDS} with an entry\\index{entry} in it and more words after it.`,
+      '\\renewcommand{\\index}[1]{\\textdagger}\n',
+    )
+    expect(r.at('\\index')).toMatchObject({ marking: null, cls: 'other', empty: false })
+    const s = stated(
+      `${WORDS} with an entry\\index{entry} in it and more words after it.`,
+      '\\let\\index\\textdagger\n',
+    )
+    expect(s.at('\\index')).toMatchObject({ empty: false })
+  })
+
+  it('a command of the role table’s textless kind the paper defines to print a mark is not stated empty', () => {
+    const r = stated(
+      `${WORDS} with a counter\\setcounter{x}{2} in it and more words after it.`,
+      '\\newcounter{x}\\renewcommand{\\setcounter}[2]{\\textdagger}\n',
+    )
+    expect(r.at('\\setcounter')).toMatchObject({ empty: false })
   })
 
   it('a paper’s own \\index that sets its argument is no placeholder: its words are the unit’s text', () => {
