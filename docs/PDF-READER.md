@@ -14401,27 +14401,29 @@ label or its run-in line 557, a reference's element past its line 148, a note's 
 apart: 1,509. The 245 papers' stored sources were not at hand for the whole run: over the 114 that ran, the same, byte for byte
 but the heads, the gate passing. The targets phase: 12 ms a paper at the median, 50 at the 95th percentile.
 
-By the entry's key (2026-11-28, the engine of §20.3's landing by key and §19.13's entry read whole against the line before it,
-whose marked compile it shares but where an entry's units move). The regression corpus's 245 papers, every compile made again at
-the line (none was kept at its marks): 242 papers byte for byte the line's but the heads' reference targets; the marked TeX moved
-in 3 (two apacite papers, whose entries are now one unit each, and one of Springer Nature's, whose entries' units hold the
-environment's pair, its targets unchanged). The gate passes on both sides. References stated 8,624 (the line 8,611): 8,150 by
-key, 103 proved by the edge, 371 by their name's kind alone (the line: 4,395 by the edge, 4,216 by the kind alone); refused for
-the key 90, by the edge 0 (4), the box's refusals 212 (165: an entry the key names whose box cannot be told whole where the
-point's rule had named a neighbour whose box could be). Over the 599 papers from their kept compiles (the 7 whose marked TeX moved,
-one apacite paper and six of Springer Nature's, compiled again; 534 + 7 prepared, 531 with a record): references stated 16,348
-(16,320): 15,657 by key, 352 by the edge, 339 by the kind alone (10,212 and 6,108); refused for the key 396, by the edge 7 (59);
-landed nowhere 5,634 (6,054). Of the landings by key the point's rule lands elsewhere: over the 245, 131 it landed nowhere and 79
-on another member (72 an entry of the other column, 7 the entry above); over the 599, 371 and 139 (97 above, 40 the other
-column). The refusals for the key: over the 245, 56 the edge naming the entry above, 32 one of the other column, 1 below, 1
-another page; over the 599, 304 above (a raised anchor past the last line of the entry above, at its left edge, or a label
-set in a column of its own), 83 the other column, 3 below, 5 overlapping, 1 another page. Read by eye (100 rows of the sheets,
-both corpora, both classes): in every one the entry the key names is the one the link cites. Keys: over the 599, 22,788 taken
-(the census of the sources: every `\bibitem`'s argument is characters only, 45 after a comment, apacite's `{%`), 16,519 citation
-names matched; of the names no key reads, 1,077 stand in papers with no key taken (biblatex's and the like), two differ from a
-key in a character (a name the PDF holds with a NUL after it; a key's `Ö`, its UTF-8 bytes read as Latin-1 by the source reader
-and its name decoded by PDF.js as PDFDocEncoding). The entries cut after their authors (a reference unit whose next line in its
-column, at its text's edge, is ink no unit owns): 81 in 3 papers over the 245 and 60 in 8 over the 599, now 19 in 2 and 24 in 8:
-what is left is an entry whose last line holds only what follows its last word (a kept number, a URL), which its end mark, set
-after that word, leaves to no unit (the marking's, not the reading's). The targets phase: 11 ms a paper at the median, 37 at the
-95th percentile.
+By the entry's key (2026-11-28, the engine of §20.3's landing by key, the key deciding, and §19.13's entry read whole, against
+the line before it, whose marked compile it shares but where an entry's units move). The regression corpus's 245 papers, every
+compile made again at the line (none was kept at its marks): 242 papers byte for byte the line's but the heads' reference
+targets; the marked TeX moved in 3 (two apacite papers, whose entries are now one unit each, and one of Springer Nature's, whose
+entries' units hold the environment's pair, its targets unchanged). The gate passes on both sides. References stated 8,711 (the
+line 8,611): 8,237 by key (87 of them at a point the edge reading gives another member), 103 proved by the edge, 371 by their
+name's kind alone (the line: 4,395 by the edge, 4,216 by the kind alone); refused for the key 1 (its entry on another page), by
+the edge 0 (4), the box's refusals 214 (165: an entry the key names whose box cannot be told whole where the point's rule had
+named a neighbour whose box could be). Over the 599 papers from their kept compiles (the 7 whose marked TeX moved, one apacite
+paper and six of Springer Nature's, compiled again; 541 prepared, 531 with a record): references stated 16,735 (16,320): 16,044
+by key (387 where the edge reading gives the point another member), 352 by the edge, 339 by the kind alone (10,212 and 6,108);
+refused for the key 1, by the edge 7 (59); landed nowhere 5,634 (6,054). Before the key decided (the edge's disagreement a
+refusal), the landings by key the point's rule lands elsewhere were, over the 245, 131 where it landed nowhere and 79 on another
+member (72 an entry of the other column, 7 the entry above), over the 599, 371 and 139 (97 above, 40 the other column); and the
+edge's disagreements, then refused, over the 245, 56 the entry above, 32 one of the other column, 1 below; over the 599, 304
+above (a raised anchor past the last line of the entry above, at its left edge, or a label set in a column of its own), 83 the
+other column, 3 below, 5 overlapping. Read by eye (100 rows of the sheets, both corpora, both classes): in every one the entry
+the key names is the one the link cites. Keys: over the 599, 22,788 taken (the census of the sources: every `\bibitem`'s
+argument is characters only, 45 after a comment, apacite's `{%`), 16,519 citation names matched; of the names no key reads,
+1,077 stand in papers with no key taken (biblatex's and the like), two differ from a key in a character (a name the PDF holds
+with a NUL after it; a key's `Ö`, its UTF-8 bytes read as Latin-1 by the source reader and its name decoded by PDF.js as
+PDFDocEncoding). The entries cut after their authors (a reference unit whose next line in its column, at its text's edge, is
+ink no unit owns, and that holds pieces after its last text): 81 in 3 papers over the 245 and 54 in 6 over the 599, now 19 in
+2 and 18 in 6: what is left is an entry whose last line holds only what follows its last word (a kept number, a URL), which its
+end mark, set after that word, leaves to no unit (the marking's, not the reading's). The targets phase: 11 ms a paper at the
+median, 37 at the 95th percentile.
