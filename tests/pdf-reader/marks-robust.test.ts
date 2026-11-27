@@ -8,8 +8,10 @@ import { describe, expect, it } from 'vitest'
 import { marksOutOfPlace } from '../../packages/engine/src/compile/guard.ts'
 import { openPaper, originalFiles } from '../../packages/engine/src/compile/live.ts'
 import { markedOfPaper } from '../../packages/engine/src/compile/paper.ts'
+import { instrumentOf } from '../../packages/engine/src/instrument/instrument.ts'
 import { LAYOUT_CLASSES } from '../../packages/engine/src/marks/marks.ts'
 import { compileImageRef } from '../../lab/pdf/spikes/compile-image.mjs'
+import { DOCUMENT_OPTIONS } from './helpers/ocg-pdfs'
 
 // The marks survive what a class or a package does with a text before it sets it, and never reach a file TeX writes. A gated
 // mark of ours (LAYOUT_TEX's \axthmark, \axtpma, \axtpmm, \axtpm, \axthpk, \axttg, \axtcolour, CARRY_TEX's \axtpmd) is
@@ -100,7 +102,17 @@ async function prepared(tex: string) {
   const pdf = made.pdf as Uint8Array
   const last = compiles.find((c) => c.pdf && c.pdf.length === pdf.length && c.pdf.every((b, i) => b === pdf[i]))
   const own = compileIn(files)
-  return { paper, pdf, log: last?.log ?? '', written: last?.written ?? new Map<string, string>(), own: own.pdf! }
+  const m = made as { options?: Record<string, unknown>; probeLog?: string }
+  return {
+    paper,
+    pdf,
+    log: last?.log ?? '',
+    written: last?.written ?? new Map<string, string>(),
+    own: own.pdf!,
+    ownLog: own.log,
+    options: m.options ?? {},
+    probeLog: m.probeLog ?? null,
+  }
 }
 /** the heading units' indices, in order */
 const headingsOf = (paper: ReturnType<typeof openPaper>) =>
@@ -240,5 +252,105 @@ describe.skipIf(!docker)('no mark of ours in a file TeX writes and reads back', 
     expect(c.written.get('main.toc')).toContain('A heading by hand')
     expect(c.written.get('main.idx')).toContain('an entry')
     expect(c.written.get('main.lof')).toContain('A caption')
+  }, 900_000)
+})
+
+/** the points a PDF sets, by page: each name with the pages it is set on */
+const pointPagesOf = async (pdf: Uint8Array) => {
+  const doc = await getDocument({ data: pdf.slice(), verbosity: 0 }).promise
+  const out = new Map<string, number[]>()
+  for (let n = 1; n <= doc.numPages; n++) {
+    const ops = await (await doc.getPage(n)).getOperatorList()
+    ops.fnArray.forEach((f, j) => {
+      const name = (ops.argsArray[j]?.[0] as { name?: string } | undefined)?.name
+      if (f === OPS.setRenderingIntent && typeof name === 'string' && name.startsWith('axt-')) out.set(name.slice(4), [...(out.get(name.slice(4)) ?? []), n])
+    })
+  }
+  await doc.loadingTask.destroy()
+  return out
+}
+/** what the ownership (own/own.ts ownOf, as the instrument calls it) reads for a unit: null where it owns it, else why not; and
+ *  the pages it owns it on */
+async function ownedOf(r: Awaited<ReturnType<typeof prepared>>, id: number) {
+  const pdfjs = { getDocument, OPS } as never
+  const { today } = await instrumentOf({
+    paper: r.paper as never,
+    finalPdf: r.pdf,
+    options: r.options,
+    log: r.log,
+    probeLog: r.probeLog,
+    pdfjs,
+    documentOptions: DOCUMENT_OPTIONS,
+    made: { compiler: 'pdflatex', tree: '2025', front: 'today' },
+  })
+  const u = today.own.units.get(id)
+  return { unhidden: u ? u.unhidden : 'no unit', pages: [...(u?.pages ?? [])].sort() }
+}
+/** a section of several pages of our own words, so that its running head stands on the pages after its own */
+const PAGES = Array.from({ length: 14 }, (_, i) => `Our own paragraph number ${i + 1} of the section, ${'with words of ours that fill the line out and go on to the next one, '.repeat(6)}and an end.`).join('\n\n')
+
+describe.skipIf(!docker)("what the marks do where LaTeX stores a heading and sets it again without writing it", () => {
+  it("a running head (\\markboth under the headings style, and fancyhdr's \\leftmark and \\rightmark, two-sided): no point of the heading's set there, the heading located once, every head's words where the paper's own compile sets them", async () => {
+    for (const pre of [
+      '\\documentclass[twoside]{article}\n\\pagestyle{headings}',
+      '\\documentclass[twoside]{article}\n\\usepackage{fancyhdr}\n\\pagestyle{fancy}\n\\fancyhead[LE]{\\leftmark}\\fancyhead[RO]{\\rightmark}',
+    ]) {
+      const r = await prepared(`${pre}\n\\begin{document}\n\\section{Introduction to the test}\n${PAGES}\n\\subsection{A part of ours with $x$ in it}\n${PAGES}\n\\end{document}\n`)
+      const items = await itemsOf(r.pdf)
+      // (the running heads stand on the pages after the headings' own: the case the test is about)
+      expect(items.some((i) => /^[2-9] .* (?:1 )?INTRODUCTION/.test(i) || /^[2-9] .*Introduction to the test/.test(i)), pre).toBe(true)
+      expect(items, pre).toEqual(await itemsOf(r.own))
+      const points = await pointPagesOf(r.pdf)
+      for (const h of headingsOf(r.paper)) {
+        const s = points.get(`h${h}s`) ?? [],
+          e = points.get(`h${h}e`) ?? []
+        expect([s.length, e.length], `${pre} heading ${h}`).toEqual([1, 1])
+        expect(await ownedOf(r, h), `${pre} heading ${h}`).toEqual({ unhidden: null, pages: [e[0]] })
+      }
+      expect(strays(r.written)).toEqual([])
+    }
+  }, 1_800_000)
+  it("hyperref's PDF strings (bookmarks of a numbered, a starred and a \\texorpdfstring heading, the title and the author in the document's information): each string the paper's own compile writes, and no warning of a token not allowed in one but the paper's own", async () => {
+    const r = await prepared(
+      [
+        '\\documentclass{article}',
+        '\\usepackage[pdfusetitle,bookmarks=true]{hyperref}',
+        '\\title{A title of our own words with $x$}',
+        '\\author{Ann Lee}',
+        '\\begin{document}',
+        '\\maketitle',
+        '\\section{Introduction to $x$ and the test}',
+        'Our own first paragraph, long enough to be a unit of its own.',
+        '\\section*{A starred heading of ours}',
+        '\\addcontentsline{toc}{section}{A starred heading of ours}',
+        'Our own second paragraph, long enough to be a unit of its own.',
+        '\\section{Results \\texorpdfstring{with $y$}{with y} of ours}',
+        'Our own last paragraph, long enough to be a unit of its own.',
+        '\\end{document}',
+        '',
+      ].join('\n'),
+    )
+    const stringsOf = async (pdf: Uint8Array) => {
+      const doc = await getDocument({ data: pdf.slice(), verbosity: 0 }).promise
+      const titles: string[] = []
+      const walk = (o: { title: string; items?: unknown[] }[] | null) => {
+        for (const x of o ?? []) {
+          titles.push(x.title)
+          walk((x.items ?? []) as never)
+        }
+      }
+      walk((await doc.getOutline()) as never)
+      const info = (await doc.getMetadata()).info as Record<string, unknown>
+      await doc.loadingTask.destroy()
+      return { titles, title: info.Title, author: info.Author }
+    }
+    const marked = await stringsOf(r.pdf),
+      own = await stringsOf(r.own)
+    expect(marked.titles.length).toBeGreaterThanOrEqual(3)
+    expect(marked).toEqual(own)
+    expect(marked.titles.join('\n')).not.toMatch(/axt|[hp]\d+[se.]/)
+    const warnings = (log: string) => (log.match(/Token not allowed in a PDF string/g) ?? []).length
+    expect(warnings(r.log)).toBe(warnings(r.ownLog))
+    expect(strays(r.written)).toEqual([])
   }, 900_000)
 })
