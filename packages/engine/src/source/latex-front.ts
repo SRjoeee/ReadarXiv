@@ -262,6 +262,8 @@ type Ctx = {
    *  by where they start (meaningEvents), read once */
   meanings?: Map<string, Meaning>
   meaningEvents?: Map<string, Map<number, { made: Made[]; local: boolean }>>
+  /** each walked text's control words TeX surely acts on, by where they stand (actedOn), read once */
+  acted?: Map<string, Set<number>>
   ifs: Set<string>
   ifValues: Map<string, boolean>
   ends: Map<WalkFile, Set<number>>
@@ -3619,6 +3621,14 @@ function meaningCall(s: string, at: number, m: Exclude<Meaning, 'unsure'>, to: n
   }
   return { args, end: k, close }
 }
+/** whether the control word at t[at] is one TeX executes there, not an operand of the command before it (`\\string\\end`,
+ *  `\\let\\x\\ethm`: OPERAND_OF, SECOND_OPERAND_OF) */
+function executedAt(t: string, at: number) {
+  const before = t.slice(Math.max(0, at - 80), at),
+    one = /\\([A-Za-z@]+)\s*=?\s*$/.exec(before),
+    two = /\\([A-Za-z@]+)\s*\\[A-Za-z@]+\s*=?\s*$/.exec(before)
+  return !(one && OPERAND_OF.has(one[1]!)) && !(two && SECOND_OPERAND_OF.has(two[1]!))
+}
 /**
  * Whether a body, its parameters given, stands for an environment's boundary, read from what TeX does with it and never from a
  * name: its first token `\\begin{env}` with the body leaving `env` open (`begin`, `rest` what follows inside it), or with
@@ -3638,12 +3648,25 @@ function bodyBoundary(
     const env = open[1]!.trim(),
       after = open[0].length,
       [closeAt, past] = endOfEnv(t, after, env)
-    if (closeAt >= t.length) return { side: 'begin', env, rest: t.slice(after) }
+    if (closeAt >= t.length) {
+      // (closed in the body by a paper's macro TeX executes there: the body sets the environment whole, no boundary)
+      const rest = t.slice(after)
+      for (const w of rest.matchAll(/\\([A-Za-z@]+)/g)) {
+        const m = ctx.meanings?.get(w[1]!)
+        if (m === 'unsure') return undefined
+        if (!m || !executedAt(rest, w.index)) continue
+        const b = depth < EXPANSION_DEPTH && !m.params && !m.delim ? bodyBoundary(m.body, ctx, depth + 1) : undefined
+        if (b === undefined) return undefined
+        if (b?.side === 'end' && b.env === env) return null
+      }
+      return { side: 'begin', env, rest }
+    }
     return past === t.length && (displayEnv(env) || ctx.displayEnvs.has(env)) ? { side: 'whole', env, rest: '' } : null
   }
   const shut = /\\end\s*\{([^{}]+)\}$/.exec(t)
   if (shut) {
     const env = shut[1]!.trim()
+    if (!executedAt(t, shut.index)) return null
     return new RegExp(String.raw`\\begin\s*\{\s*${env.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\s*\}`).test(
       t.slice(0, shut.index),
     )
@@ -3666,7 +3689,7 @@ function bodyBoundary(
   const last = /\\([A-Za-z@]+)$/.exec(t),
     tail = last && ctx.meanings?.get(last[1]!)
   if (tail === 'unsure') return undefined
-  if (tail && !tail.params && !tail.delim) {
+  if (tail && !tail.params && !tail.delim && executedAt(t, last!.index)) {
     const b = bodyBoundary(tail.body, ctx, depth + 1)
     if (
       b?.side === 'end' &&
@@ -3727,6 +3750,21 @@ function boundaryNames(meanings: Map<string, Meaning>): Set<string> {
   BOUNDARY_NAMES.set(meanings, out)
   return out
 }
+/** where the control words of a walked text stand that TeX surely acts on there (texCommands: not in a definition's body, a
+ *  branch it skips, \\verb or a line environment), read once a text */
+function actedOn(s: string, ctx: Ctx): Set<number> {
+  ctx.acted ??= new Map()
+  let out = ctx.acted.get(s)
+  if (!out) {
+    out = new Set(
+      texCommands(s, { lineEnvs: ctx.lineEnvs, ifs: ctx.ifs, ifValues: ctx.ifValues })
+        .filter((c) => !c.inDef && c.sure)
+        .map((c) => c.at),
+    )
+    ctx.acted.set(s, out)
+  }
+  return out
+}
 /**
  * Where an environment opened at s[from] (past its \\begin and what goes with it) ends as TeX reads it: its \\end{env} written, or
  * a call of the paper's macro in force that closes it (boundaryAt), the same environment opened inside it either way passed over
@@ -3746,7 +3784,8 @@ function envEnd(s: string, from: number, env: string, ctx: Ctx): [number, number
       else if (--depth === 0) return [m.index, m.index + m[0].length]
       continue
     }
-    if (!names.has(m[3]!)) continue
+    // (a call TeX executes there: none in a definition's body, a branch it skips, \\verb, an operand: actedOn, executedAt)
+    if (!names.has(m[3]!) || !actedOn(s, ctx).has(m.index) || !executedAt(s, m.index)) continue
     const b = boundaryAt(s, m.index + m[0].length, m[3]!, s.length, ctx)
     if (!b || b.env !== env) continue
     if (b.side === 'begin') depth++
@@ -5424,11 +5463,23 @@ function boundaryCut(
     return { at: bound.end }
   }
   if (MATH_ENVS.test(bound.env) || display || SKIP_ENVS.test(bound.env) || ctx.skipEnvs.has(bound.env)) {
+    // (no end found where this reading looks: the call read as before, the old shorthand's reading included)
     const [close, past] = envEnd(s, bound.end, bound.env, ctx)
-    const stop = past <= to && close < s.length ? past : bound.end
+    if (past > to || close >= s.length) return undefined
     endText()
-    b.ph(s.slice(i, stop), i, stop, display, undefined, display && stop > bound.end ? close - i : undefined)
-    return { at: stop }
+    b.ph(s.slice(i, past), i, past, display, undefined, display ? close - i : undefined)
+    return { at: past }
+  }
+  // (what the body sets after its \\begin{…} is the environment's own arguments, read whole by its declaration, or nothing:
+  // anything else, prose of an argument or arguments the source gives the rest of, leaves the call read as before)
+  if (/\S/.test(bound.rest)) {
+    const env = bound.env,
+      params =
+        ctx.envs.get(env) ??
+        (ctx.theorems.has(env) ? THEOREM_PARAMS : null) ??
+        (ctx.ownEnvs.has(env) ? null : environmentParams(env, paper?.bindings ?? null)),
+      r = params && readArgs(bound.rest, 0, params, bound.rest.length)
+    if (!r?.complete || /\S/.test(bound.rest.slice(r.end))) return undefined
   }
   return { opened: { env: bound.env, afterBegin: bound.end, argsInBody: /\S/.test(bound.rest) } }
 }
