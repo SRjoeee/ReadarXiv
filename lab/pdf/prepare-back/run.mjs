@@ -219,6 +219,13 @@ const OBJ = '￼'
 // (a unit's pieces as the dump spec's flat list, §2, each its k by place, and each element's `k` its piece's: pieces.mjs flatOf,
 // pieceKOf, lane lost-11)
 /** the flat pieces' text, a placeholder or a nested unit U+FFFC */
+/** each unit holding a bibliography key (the source reader's \\bibitem's), with its one located member's ord, or null where it has
+ *  none or several: what link-targets.mjs reads a citation's landing by key against */
+function keysOf(located) {
+  const mems = new Map()
+  for (const m of located.members) if (m.located) mems.set(m.unit, [...(mems.get(m.unit) ?? []), m.ord])
+  return located.units.flatMap((u, i) => (u.key === undefined ? [] : [[u.key, mems.get(i)?.length === 1 ? mems.get(i)[0] : null]]))
+}
 const textOfPieces = ps => ps.map(p => (p.kind === 'text' ? p.s : p.kind === 'ph' || p.kind === 'nested' ? OBJ : '')).join('')
 const LABEL_KIND = { float: 'caption', head: 'number', number: 'number', mark: 'footnote' }
 const units = []
@@ -336,7 +343,7 @@ writeFileSync(join(OUT, 'located', `${id}.json`), `${JSON.stringify({
   floatLines: located?.floatLines ?? null,
   // (each float's box or why none, each destination's landing, and the boxed floats read against the parts: link-targets.mjs,
   // floats-gate.mjs; the link phases' time)
-  linkTargets: located ? linkTargetsOf({ floats: located.floats, landings: located.targets, refused: located.refusedTargets ?? [], dests: tally.dests, parts: written.parts, head }) : null,
+  linkTargets: located ? linkTargetsOf({ floats: located.floats, landings: located.targets, refused: located.refusedTargets ?? [], dests: tally.dests, parts: written.parts, head, keys: keysOf(located) }) : null,
   linkMs: located?.linkMs ?? null,
   peakRss: process.resourceUsage().maxRSS,
 })}\n`)

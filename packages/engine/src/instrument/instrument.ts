@@ -2406,6 +2406,7 @@ export async function instrumentOf({
       ...(u.title ? { title: true } : {}),
       ...(u.front ? { front: true } : {}),
       ...(entryOf(u) ? { entry: true } : {}),
+      ...(entryOf(u) && u.key !== undefined ? { key: u.key } : {}),
       ...(u.of ? { of: u.of } : {}),
       ...(u.held && (u.kind === 'author' || u.kind === 'affiliation') ? { stored: true } : {}),
       ...(facts.kept.has(i) ? { kept: true, [facts.why.get(i)!]: true } : {}),

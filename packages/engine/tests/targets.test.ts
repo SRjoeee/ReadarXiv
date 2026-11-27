@@ -25,6 +25,10 @@ type Spec = {
   kind: string
   lines: Line[]
   entry?: true
+  /** its unit's bibliography key (\\bibitem's) */
+  key?: string
+  /** located (default true) */
+  located?: boolean
   els?: [string, El][]
   glyphs?: number[][]
   /** its label's ink: page, x0, y0, x1, y1, baseline */
@@ -40,6 +44,7 @@ function workOf(specs: Spec[], frames: Map<number, TexFrame> = new Map(), pages 
     kind: s.kind,
     content: [],
     ...(s.entry ? { entry: true as const } : {}),
+    ...(s.key !== undefined ? { key: s.key } : {}),
     ...(s.classes ? { classes: s.classes } : {}),
   }))
   const members = specs.map(
@@ -48,7 +53,7 @@ function workOf(specs: Spec[], frames: Map<number, TexFrame> = new Map(), pages 
         ord,
         unit: ord,
         kind: s.kind,
-        located: true,
+        located: s.located ?? true,
         lines: s.lines,
         elements: s.els ?? [],
         lineGlyphs: s.glyphs ?? [],
@@ -591,5 +596,84 @@ describe('a stated box holds the whole of what it names, or the target is not st
     ])
     ;(w.members[1] as { dir?: [number, number] }).dir = [0, 1]
     expect(of(w, 'Hfootnote.1', { page: 1, x: 72, y: 112 }).refused).toEqual([['footnote', 'foreign']])
+  })
+})
+
+describe("a citation lands on the entry whose key its name holds (cite.<key>, the \\bibitem's), geometry its check", () => {
+  /** the landings and the refusals of one destination */
+  const of = (w: Work, name: string, pt: DestPoint) => {
+    const refused: Parameters<typeof targetsOf>[3] = []
+    const t = targetsOf(w, dests({ [name]: pt }), [], refused)
+    return { t, refused: refused.map(([, kind, cause]) => [kind, cause]) }
+  }
+  // (two entries, each of two lines; a point at no edge over the second: today's rule lands it on the second)
+  const two = (a: Partial<Spec> = {}, b: Partial<Spec> = {}): Work =>
+    workOf([
+      { kind: 'reference', entry: true, lines: [line(1, 700, 80), line(1, 688, 90)], key: 'a', ...a },
+      { kind: 'reference', entry: true, lines: [line(1, 670, 80), line(1, 658, 90)], key: 'b', ...b },
+    ])
+  const over = { page: 1, x: 72, y: 682 }
+  it('the entry whose key the name holds, byte for byte, whatever the geometry says; the geometry its check', () => {
+    expect(of(two(), 'cite.a', over)).toEqual({
+      t: [{ dest: q('cite.a'), kind: 'reference', page: 1, ord: 0, box: [80, 686, 300, 707], byKey: { geometry: 1 } }],
+      refused: [],
+    })
+    expect(of(two(), 'cite.b', over).t).toMatchObject([{ ord: 1, byKey: { geometry: 1 } }])
+  })
+  it("a name that is the key with more after it (chapterbib's `@-<n>`, a key of its own ending so): no key's, today's rule decides", () => {
+    // (a key 'a' and a name `cite.a@-2`: the entry whose key is `a@-2` may be one no unit holds; never read as a's)
+    const t = of(two(), 'cite.a@-2', over).t
+    expect(t).toMatchObject([{ ord: 1 }])
+    expect(t[0]!.byKey).toBeUndefined()
+  })
+  it("a name of no key's: today's rule decides (no unit holds it; it differs in a character, in case; not chapterbib's form)", () => {
+    for (const name of ['cite.zz', 'cite.A', 'cite.a@-x', 'cite.a@-', 'cite.a ', 'cite.a@-1']) {
+      const t = of(two(), name, over).t
+      expect(t).toHaveLength(1)
+      expect(t[0]!.ord).toBe(1)
+      expect(t[0]!.byKey).toBeUndefined()
+    }
+  })
+  it("a key two units hold, or a name two keys read: today's rule decides", () => {
+    expect(of(two({}, { key: 'a' }), 'cite.a', over).t).toMatchObject([{ ord: 1 }])
+    expect(of(two({}, { key: 'a' }), 'cite.a', over).t[0]!.byKey).toBeUndefined()
+    expect(of(two({}, { key: 'a' }), 'cite.a', over).t[0]!.byKey).toBeUndefined()
+  })
+  it("the key's unit not located: today's rule decides", () => {
+    const t = of(two({ located: false }), 'cite.a', over).t
+    expect(t).toMatchObject([{ ord: 1 }])
+    expect(t[0]!.byKey).toBeUndefined()
+  })
+  it("the key's entry beginning on another page than the point's: refused (`key`), never stated", () => {
+    const page = two({ lines: [line(2, 700, 80), line(2, 688, 90)] })
+    expect(of(page, 'cite.a', over)).toEqual({ t: [], refused: [['reference', 'key']] })
+  })
+  it("the label of the entry above at the point's x (an anchor raised past it): the key's entry lands all the same, the edge's member counted", () => {
+    // (each entry's label hung left at 60; the point raised over the second entry's first line past the first entry's: the edge
+    // reading names the first entry, whose label begins at the point's x with its baseline the first under the point)
+    const w = two(
+      { label: [1, 60, 698, 70, 707, 700] },
+      { lines: [line(1, 670, 80), line(1, 658, 90)], label: [1, 60, 668, 70, 677, 670] },
+    )
+    expect(of(w, 'cite.b', { page: 1, x: 60, y: 703 })).toEqual({
+      t: [
+        {
+          dest: q('cite.b'),
+          kind: 'reference',
+          page: 1,
+          ord: 1,
+          box: [60, 656, 300, 677],
+          byKey: { geometry: 0, edge: 0 },
+        },
+      ],
+      refused: [],
+    })
+  })
+  it('the edge confirming the key: stated', () => {
+    expect(of(two(), 'cite.a', { page: 1, x: 80, y: 703 }).t).toMatchObject([{ ord: 0, byKey: { geometry: 0 } }])
+  })
+  it("the key's entry whose box cannot hold the whole of it is refused as any reference is", () => {
+    const col = two({ lines: [line(1, 700, 72, 300), line(1, 760, 312, 540)] })
+    expect(of(col, 'cite.a', over)).toEqual({ t: [], refused: [['reference', 'pieces']] })
   })
 })
