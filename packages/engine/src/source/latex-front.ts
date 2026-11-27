@@ -3491,7 +3491,10 @@ function applyMade(meanings: Map<string, Meaning>, made: readonly Made[], local:
   for (const d of made) {
     if (local) meanings.set(d.name, 'unsure')
     else if (d.how === 'set' || !meanings.has(d.name))
-      meanings.set(d.name, 'let' in d.meaning ? (meanings.get(d.meaning.let) ?? 'unsure') : d.meaning)
+      meanings.set(
+        d.name,
+        typeof d.meaning === 'object' && 'let' in d.meaning ? (meanings.get(d.meaning.let) ?? 'unsure') : d.meaning,
+      )
   }
 }
 /**
