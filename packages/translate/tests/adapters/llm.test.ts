@@ -527,6 +527,40 @@ describe('llm: through the chain', () => {
     expect(order).toEqual(['reserve:bad', 'fetch:bad', 'settle-start'])
   })
 
+  // (callMs 10 s: the adapter's own timer ends the request at 5 s; the refusal comes at 4.5 s, less than SPEND_MS before it)
+  const lateRefusal = (clock: ReturnType<typeof fakeClock>) => {
+    const keys = twoKeys(clock, 'never')
+    const fetch: Fetch = async (url, init) => {
+      await clock.sleep(4_500, NEVER)
+      return keys.f.fetch(url, init)
+    }
+    return { ...keys, fetch, limits: { callMs: 10_000 } }
+  }
+
+  it("a key refused just before the adapter's own timer, its settlement not ended: the cool-down, not a timeout", async () => {
+    const clock = fakeClock({ auto: false })
+    const { order, spend, fetch, limits } = lateRefusal(clock)
+    const p = (async () => {
+      for await (const _ of make(fetch, { spend, clock, limits }).send(['a'], { target: 'zh-Hans' }, NEVER)) {
+        // nothing
+      }
+    })().catch((e) => e)
+    await new Promise((r) => setTimeout(r, 0))
+    await clock.advance(4_500)
+    await clock.advance(500)
+    expect(await p).toMatchObject({ remedy: 'cool', code: 'rate', retryAfterMs: ATTEMPTS * 10_000 + 1 })
+    expect(order).toEqual(['reserve:bad', 'fetch:bad', 'settle-start'])
+  })
+
+  it("the same through the chain: no second reserve or request while the refusal's settlement has not ended", async () => {
+    const clock = fakeClock()
+    const { order, spend, fetch, limits } = lateRefusal(clock)
+    const out = await run(make(fetch, { spend, clock, limits }), clock)
+    expect(order).toEqual(['reserve:bad', 'fetch:bad', 'settle-start'])
+    for (const r of out)
+      expect(r).toEqual({ id: r.id, ok: false, why: { kind: 'unavailable', retryAfterMs: ATTEMPTS * 10_000 + 1 } })
+  })
+
   it('observed 401 twice: two requests of the whole batch, none of one unit; the units unavailable past the patience', async () => {
     const clock = fakeClock()
     const spend = fakeSpend()
