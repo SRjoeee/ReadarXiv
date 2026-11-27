@@ -344,7 +344,10 @@ export function place(
   // ink read as the text, which its text group would erase and no translation draws again: 2608.25210v2 p7's Algorithm 1,
   // its formulas' and keywords' glyphs claimed as its text (200 letters where its text pieces write 6), erased with its 21
   // lines and one drawn. The unit stays the original's. A count, no threshold: fewer is TeX's (a ligature's one glyph
-  // for its letters, a word the class does not print), more is never)
+  // for its letters, a word the class does not print), more is never. The reason states the ownership's verdict first where it
+  // gave one: a placeholder it could not delimit ('marks', its ink then left in the text's range) or glyphs that spell no source
+  // of the unit ('spell') came first, and this count is what they made. Never the bare verdict: a cause of 'marks' alone says
+  // TeX set no point of the unit and it owns no glyph of B (bundle.ts asks no row of it), which this unit's glyphs are not)
   if (name === undefined) {
     let claimed = 0
     for (const [a, [role, k]] of roleAt)
@@ -353,7 +356,7 @@ export function place(
     if (claimed > written) {
       for (const [a] of unpaired) claims.hold(a)
       mem.located = false
-      mem.cause = 'text past its source'
+      mem.cause = unit.why ? `${unit.why}: text past its source` : 'text past its source'
       return mem
     }
   }
