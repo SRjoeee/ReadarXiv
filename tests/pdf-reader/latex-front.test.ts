@@ -693,7 +693,9 @@ describe('a letter command is the letter itself in its word: TeX\'s skipped spac
     const p = project('\\documentclass{article}\\begin{document}\nText.\n\\begin{thebibliography}{1}\n\\bibitem{a} S{\\o}ren. 2020. The {\\O}resund study.\n\\end{thebibliography}\n\\end{document}')
     const entry = (p.units as Unit[]).find(u => u.kind === 'reference')
     expect(entry?.pieces.filter(x => x.t === 'ph').map(x => (x as { src?: string }).src)).toContain('2020.')
-    expect(todayAnswer<{ wire: string }>('serialize', entry).wire).toMatch(/^Søren\. @a# The Øresund study\.$/)
+    // (today's engine has no key: the unit as today's serialize was recorded with, the entry's key, which no wire reads, left out)
+    const { key: _key, ...asToday } = entry as Unit & { key?: string }
+    expect(todayAnswer<{ wire: string }>('serialize', asToday).wire).toMatch(/^Søren\. @a# The Øresund study\.$/)
   })
 
   it('a group around the letter spends its pair\'s id, as a group around an accent does: the pairs after it keep theirs', () => {
