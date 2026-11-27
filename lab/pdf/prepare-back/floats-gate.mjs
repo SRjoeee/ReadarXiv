@@ -21,6 +21,8 @@ export function gateOf(records) {
   const wrongRows = []
   const dests = { papers: 0, keys: 0, resolved: 0, nowhere: 0, landed: {}, named: {} }
   const disagree = []
+  const otherLanded = []
+  const edge = []
   const sizes = []
   for (const [id, r] of records) {
     for (const f of r.floats) {
@@ -44,6 +46,8 @@ export function gateOf(records) {
       }
     }
     for (const d of r.disagree ?? []) disagree.push([id, ...d])
+    for (const d of r.otherLanded ?? []) otherLanded.push([id, ...d])
+    for (const d of r.edge ?? []) edge.push([id, ...d])
     if (r.bytes?.targetsGzip !== undefined) sizes.push(r.bytes)
   }
   const share = (t) => (byType[t]?.bracketed ? byType[t].boxed / byType[t].bracketed : null)
@@ -55,6 +59,8 @@ export function gateOf(records) {
     shares: { figure: share('figure'), table: share('table') },
     dests,
     disagree,
+    otherLanded,
+    edge,
     bytes: {
       papers: sizes.length,
       targetsGzip: { p50: quantile(sizes.map((b) => b.targetsGzip), 0.5), p95: quantile(sizes.map((b) => b.targetsGzip), 0.95), max: Math.max(0, ...sizes.map((b) => b.targetsGzip)) },
@@ -87,7 +93,7 @@ if (process.argv[1] === import.meta.filename) {
   const time = Object.fromEntries(Object.entries(ms).map(([k, v]) => [k, { p50: quantile(v, 0.5), p95: quantile(v, 0.95), max: Math.max(0, ...v) }]))
   const json = process.argv.find((a) => a.startsWith('--json='))?.slice(7)
   if (json) writeFileSync(json, `${JSON.stringify({ papers: records.length, ...g, ms: time }, null, 1)}\n`)
-  console.log(JSON.stringify({ papers: records.length, pass: g.pass, wrong: g.wrong, shares: g.shares, byType: g.byType, dests: { ...g.dests, named: undefined }, disagree: g.disagree.length, bytes: g.bytes, ms: time }))
+  console.log(JSON.stringify({ papers: records.length, pass: g.pass, wrong: g.wrong, shares: g.shares, byType: g.byType, dests: { ...g.dests, named: undefined }, disagree: g.disagree.length, otherLanded: g.otherLanded.length, edge: g.edge.length, bytes: g.bytes, ms: time }))
   for (const w of g.wrongRows.slice(0, 20)) console.log('WRONG', JSON.stringify(w))
   process.exit(g.pass ? 0 : 1)
 }

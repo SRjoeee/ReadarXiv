@@ -66,6 +66,29 @@ describe('the link targets’ record: a boxed float read against the bundle’s 
   })
 })
 
+describe('the landings read by the left edge at the destination’s x', () => {
+  it('lists a landing on a member other than the one whose left edge stands at the point’s x first under it', () => {
+    const r = linkTargetsOf({
+      floats: [],
+      landings: [
+        { dest: '"cite.a"', kind: 'reference', page: 1, ord: 0, box: [0, 0, 1, 1] },
+        { dest: '"cite.b"', kind: 'reference', page: 1, ord: 1, box: [0, 0, 1, 1] },
+      ],
+      dests: new Map([
+        ['"cite.a"', { page: 1, x: 80, y: 700 }],
+        ['"cite.b"', { page: 1, x: 80, y: 676 }],
+      ]),
+      parts: [partOf(placed(0, 700, 90), placed(1, 688, 80), placed(2, 664, 80))],
+      head: { format: 1 },
+    })
+    // (cite.a: member 1's edge at 80 is the first under its point, not member 0's; cite.b: member 2's, under it, not 1's)
+    expect(r.edge).toEqual([
+      ['"cite.a"', 'reference', 0, 1],
+      ['"cite.b"', 'reference', 1, 2],
+    ])
+  })
+})
+
 describe('the floats’ gate over the corpus’s records', () => {
   const rec = (floats: object[], wrong: object[] = []) => ({ floats, wrong, landings: [], dests: {}, disagree: [], bytes: {} })
   it('passes refused floats and right boxes, and counts the share of figures and tables boxed by cause', () => {
