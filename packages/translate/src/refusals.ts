@@ -108,7 +108,7 @@ export function refusalOf(o: { status: number | null; body: string; retryAfter: 
   // a size, whoever said it (RFC 9110 §15.5.14; Anthropic's errors page: 413 request_too_large)
   if (s === 413) return row('size', 'documented')
   if (who === 'gateway') {
-    // observed 2026-11-27: 2040 an alias the gateway has not stored (no request reaches the provider); 2044 a request sent
+    // observed: 2040 an alias the gateway has not stored (no request reaches the provider); 2044 a request sent
     // with no alias where no default key is stored. AI Gateway's troubleshooting page: 2009 unauthorized, 2049 a request
     // the gateway's authentication refuses (the Run token's)
     if (s === 400 && code === '2040') return row('key', 'observed')
@@ -120,7 +120,7 @@ export function refusalOf(o: { status: number | null; body: string; retryAfter: 
     return row('unclear', 'neither')
   }
   if (who === 'provider') {
-    // observed 2026-11-27: a wrong stored key is the provider's own 401 (authentication_error), passed through; a model
+    // observed: a wrong stored key is the provider's own 401 (authentication_error), passed through; a model
     // the provider does not have its 404 (not_found_error)
     if (s === 401) return row('key', code === 'authentication_error' ? 'observed' : 'documented')
     if (s === 404) return row('request', code === 'not_found_error' ? 'observed' : 'documented')
