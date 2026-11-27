@@ -169,6 +169,30 @@ export function linkLayer(
     a.append(s)
     layer.append(a)
   })
+  // (a narrow screen widens each link's hit area (styles.ts), never over a neighbour's: each side's reach ends at the midpoint
+  // between the link and the nearest of the page's links beside it on its line, or over or under it between lines; PDF units at
+  // the page's scale, where it has a neighbour there)
+  layer.querySelectorAll<HTMLElement>('a.axt-link').forEach((a, i) => {
+    const b = list[i]?.box
+    if (!b) return
+    const lim: Record<'l' | 'r' | 't' | 'b', number> = { l: Infinity, r: Infinity, t: Infinity, b: Infinity }
+    for (const o of list) {
+      const c = o.box
+      if (c === b) continue
+      const across = Math.min(b[3], c[3]) - Math.max(b[1], c[1]) > 0
+      const along = Math.min(b[2], c[2]) - Math.max(b[0], c[0]) > 0
+      if (across) {
+        if (c[0] >= (b[0] + b[2]) / 2) lim.r = Math.min(lim.r, Math.max(0, (c[0] - b[2]) / 2))
+        else lim.l = Math.min(lim.l, Math.max(0, (b[0] - c[2]) / 2))
+      } else if (along) {
+        if (c[1] >= (b[1] + b[3]) / 2) lim.t = Math.min(lim.t, Math.max(0, (c[1] - b[3]) / 2))
+        else lim.b = Math.min(lim.b, Math.max(0, (b[1] - c[3]) / 2))
+      }
+    }
+    for (const [k, v] of Object.entries(lim))
+      if (Number.isFinite(v))
+        a.style.setProperty(`--axt-hit-${k}`, `calc(var(--total-scale-factor, 1) * ${Math.round(v * 1e3) / 1e3}px)`)
+  })
   const shown = list.map((x) => x.to)
   const boxes = list.map((x) => x.box)
   const indexOf = (e: Event) => {

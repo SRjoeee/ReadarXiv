@@ -109,8 +109,9 @@ ${DIMMED} .axt-sheet::backdrop, :root[data-theme="dark"] .axt-reader .axt-sheet:
 @keyframes axt-sheet-in { from { translate: 0 100%; } }
 @keyframes axt-sheet-out { to { translate: 0 100%; } }
 @keyframes axt-fade-in { from { opacity: 0; } }
-/* links' hit areas on a narrow screen widened (7 px above and below, 3 px at the sides) [start: checked against 24 px] */
-.axt-reader[data-axt-narrow] .axt-link > .axt-link-box::before { content: ""; position: absolute; inset: -7px -3px; }
+/* links' hit areas on a narrow screen widened (7 px above and below, 3 px at the sides) [start: checked against 24 px], each side
+   never past the midpoint to a neighbour (compose/links.ts: --axt-hit-t, -r, -b, -l, set where the link has one there) */
+.axt-reader[data-axt-narrow] .axt-link > .axt-link-box::before { content: ""; position: absolute; inset: calc(-1 * min(7px, var(--axt-hit-t, 7px))) calc(-1 * min(3px, var(--axt-hit-r, 3px))) calc(-1 * min(7px, var(--axt-hit-b, 7px))) calc(-1 * min(3px, var(--axt-hit-l, 3px))); }
 @media (prefers-reduced-motion: reduce) {
   @keyframes axt-pv-in { from { opacity: 0; } }
   @keyframes axt-sheet-in { from { opacity: 0; } }
