@@ -337,7 +337,7 @@ export function openReader(
   /** what a jump lights: the highlight's landing and its reading of a point (none before the layer's code is in) */
   const jumpLights = (): JumpLights | null => {
     const h = highlight
-    return h ? { litAt: (side, n, x, y, below) => h.litAt(side, n, x, y, below), land: (l) => h.land(l) } : null
+    return h ? { litAt: (side, n, x, y) => h.litAt(side, n, x, y), land: (l) => h.land(l) } : null
   }
   /** the head's targets (link previews: where each destination lands, Head.targets), read anew with each head */
   let targetsHeld: { head: Head | null; map: ReadonlyMap<string, Target> } = { head: null, map: new Map() }
@@ -352,7 +352,7 @@ export function openReader(
     narrow: () => root.hasAttribute('data-axt-narrow'),
     target: (dest) => {
       const t = targetsNow().get(JSON.stringify(dest))
-      return t ? { page: t[2], box: [...t[4]] as [number, number, number, number] } : null
+      return t ? { kind: t[1], page: t[2], ord: t[3], box: [...t[4]] as [number, number, number, number] } : null
     },
   })
   const offDepth = jumps.onDepth(() => tellSoon())

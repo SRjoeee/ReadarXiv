@@ -3,6 +3,7 @@
 // a contents entry each push one entry, land, and leave a way back; the pill's arrows, a link out of the paper and a destination
 // that resolves to nothing do none of it. Over the panes and the highlight stood in for (they record what they are asked) and a
 // host's history over an array.
+import type { Target } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
 import { linkLayer } from '../src/compose/links.ts'
 import type { Page } from '../src/compose/page.ts'
@@ -44,7 +45,7 @@ function fakeHistory() {
 }
 
 /** the panes stood in for: a reading place that a move changes, what each move was asked */
-function standIn(o: { pages?: Record<string, number> } = {}) {
+function standIn(o: { pages?: Record<string, number>; targets?: Record<string, Target> } = {}) {
   const asked: { name: string; args: unknown[] }[] = []
   let here: Place = { page: 1, at: 0.25, side: 'right' }
   const pages = o.pages ?? { 'cite.a': 9, 'section.2': 4 }
@@ -87,7 +88,17 @@ function standIn(o: { pages?: Record<string, number> } = {}) {
   const h = fakeHistory()
   const jumps = createJumps({ history: h })
   let narrow = false
-  const one = createOneJump({ panes: () => panes, lights: () => lights, jumps, narrow: () => narrow })
+  const targets = o.targets ?? {}
+  const one = createOneJump({
+    panes: () => panes,
+    lights: () => lights,
+    jumps,
+    narrow: () => narrow,
+    target: (dest) => {
+      const t = targets[typeof dest === 'string' ? dest : JSON.stringify(dest)]
+      return t ? { kind: t[1], page: t[2], ord: t[3], box: [...t[4]] as [number, number, number, number] } : null
+    },
+  })
   return { asked, panes, landed, h, jumps, one, setNarrow: (on: boolean) => (narrow = on), here: () => here }
 }
 const settle = () => new Promise<void>((r) => setTimeout(r, 0))
@@ -129,8 +140,8 @@ describe('one jump for every source', () => {
       name: 'goTo',
       args: [{ page: 9 }, { side: 'right', keyboard: false, room: ROOM_WIDE }],
     })
-    // (the target: the unit at the destination's point, lit whole; the place left: the sentence under the link)
-    expect(t.landed).toEqual([{ lit: { id: 7, s: -1 } }])
+    // (a destination the head states no target for: nothing lit on arrival; the place left: the sentence under the link)
+    expect(t.landed).toEqual([])
     expect(t.h.entries[0]?.left?.light).toEqual({ lit: { id: 3, s: 1 } })
     layer.remove()
   })
@@ -253,7 +264,7 @@ describe('one jump for every source', () => {
 
 describe('the way back', () => {
   it('Back lands the place left on the pane that went, lit; Forward lands the target, lit', async () => {
-    const t = standIn()
+    const t = standIn({ targets: { 'cite.a': ['"cite.a"', 'reference', 9, 13, [72, 600, 300, 640]] } })
     await t.one.link({
       side: 'left',
       dest: 'cite.a',
@@ -266,7 +277,7 @@ describe('the way back', () => {
     expect(t.jumps.depth).toBe(0)
     t.h.forward()
     expect(t.asked.at(-1)).toEqual({ name: 'goToPlace', args: [{ page: 9, at: 0.1, side: 'left' }] })
-    expect(t.landed.at(-1)).toEqual({ lit: { id: 7, s: -1 } })
+    expect(t.landed.at(-1)).toEqual({ lit: { id: 13, s: -1 } })
     expect(t.jumps.depth).toBe(1)
   })
 
@@ -287,23 +298,53 @@ describe('the way back', () => {
   })
 })
 
-describe('a jump to a target the head states (link previews)', () => {
-  it('lands with the target’s own box on both panes, not the unit at its point; a destination the head states nothing of as before', async () => {
-    const t = standIn()
-    const target = (dest: string | unknown[]) =>
-      JSON.stringify(dest) === JSON.stringify('cite.a')
-        ? { page: 9, box: [72, 600, 300, 640] as [number, number, number, number] }
-        : null
+describe('the light on arrival is the head’s stated target, never a rule of the reader’s (the lead’s ruling of 2026-11-28)', () => {
+  // (a reference list whose entries' anchors stand where a geometric rule picks the entry below: raised by about a line over
+  // entry [13]'s first baseline, and set unraised on its own label. The highlight stood in for answers, for a point with room
+  // below, the entry under it (14), as the reader's old LAND_BELOW rule read it; the head states entry 13)
+  const lightsBelow = (landed: NonNullable<Light>[]): JumpLights => ({
+    litAt: (_side, _page, _x, _y, below = 0) => (below > 0 ? { id: 14, s: 0 } : null),
+    land: (l) => landed.push(l),
+  })
+  const entry: Target = ['"cite.k13"', 'reference', 9, 13, [72, 600, 300, 640]]
+  for (const [anchor, dest] of [
+    ['raised by a line over its first baseline', [8, { name: 'XYZ' }, 72, 652, null]],
+    ['unraised on its own label', [8, { name: 'XYZ' }, 72, 638, null]],
+  ] as const)
+    it(`a citation lands on the entry it cites, the anchor ${anchor}: the unit the head names, never the entry below`, async () => {
+      const t = standIn({ targets: { 'cite.k13': entry } })
+      const landed: NonNullable<Light>[] = []
+      const panes = { ...t.panes, resolve: async () => ({ page: 9, dest: [...dest] }) }
+      const one = createOneJump({
+        panes: () => panes,
+        lights: () => lightsBelow(landed),
+        jumps: t.jumps,
+        narrow: () => false,
+        target: (d) =>
+          d === 'cite.k13'
+            ? { kind: entry[1], page: entry[2], ord: entry[3], box: [...entry[4]] as [number, number, number, number] }
+            : null,
+      })
+      await one.link({ side: 'right', dest: 'cite.k13', keyboard: false, origin: null })
+      expect(landed).toEqual([{ lit: { id: 13, s: -1 } }])
+    })
+  it('a float or a display lands with its box; a destination the head states nothing of lights nothing', async () => {
+    const t = standIn({
+      pages: { 'figure.1': 9, 'theorem.1': 9 },
+      targets: { 'figure.1': ['"figure.1"', 'float', 9, 4, [72, 400, 540, 700]] },
+    })
+    const landed: NonNullable<Light>[] = []
     const one = createOneJump({
       panes: () => t.panes,
-      lights: () => ({ litAt: () => ({ id: 7, s: 0 }), land: (l) => t.landed.push(l) }),
+      lights: () => lightsBelow(landed),
       jumps: t.jumps,
       narrow: () => false,
-      target,
+      target: (d) => (d === 'figure.1' ? { kind: 'float', page: 9, ord: 4, box: [72, 400, 540, 700] } : null),
     })
-    await one.link({ side: 'left', dest: 'cite.a', keyboard: false, origin: null })
-    expect(t.landed.at(-1)).toEqual({ page: 9, box: [72, 600, 300, 640] })
-    await one.link({ side: 'left', dest: 'section.2', keyboard: false, origin: null })
-    expect(t.landed.at(-1)).toEqual({ lit: { id: 7, s: -1 } })
+    await one.link({ side: 'left', dest: 'figure.1', keyboard: false, origin: null })
+    expect(landed).toEqual([{ page: 9, box: [72, 400, 540, 700] }])
+    await one.link({ side: 'left', dest: 'theorem.1', keyboard: false, origin: null })
+    expect(landed).toHaveLength(1)
+    expect(t.jumps.depth).toBe(2)
   })
 })

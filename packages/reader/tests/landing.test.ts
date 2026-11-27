@@ -156,12 +156,11 @@ describe('what a point of a page lights', () => {
     const { hl } = setUp(page)
     expect(hl.litAt('left', 1, 100, 705)).toEqual({ id: 2, s: -1 })
   })
-  it('nothing over no member; the first member at most `below` under a point over none', () => {
+  it('nothing over no member, nor over a member under the point: no landing rule of the reader’s own (the lead’s ruling of 2026-11-28)', () => {
     const { hl } = setUp(page)
     expect(hl.litAt('left', 1, 100, 650)).toBeNull()
-    expect(hl.litAt('left', 1, 100, 720, 24)).toEqual({ id: 2, s: -1 })
-    expect(hl.litAt('left', 1, 100, 740, 24)).toBeNull()
-    expect(hl.litAt('left', 1, null, 720, 24)).toEqual({ id: 2, s: -1 })
+    expect(hl.litAt('left', 1, 100, 720)).toBeNull()
+    expect(hl.litAt('left', 1, null, 720)).toBeNull()
   })
 })
 

@@ -49,8 +49,8 @@ export interface Highlight {
    *  in the highlight's own layer, whatever the hover switch says; a new landing replaces the last */
   land(what: { lit: Lit } | { page: number; box: Box; side?: Side }): void
   /** the sentence (or unit, `s` -1) a point of a page lights (PDF units on that pane's page, y up; `x` null: any column),
-   *  else the first member whose box stands at most `below` under it; null where none */
-  litAt(side: Side, page: number, x: number | null, y: number, below?: number): Lit | null
+   *  null where none (the sentence a link left stands in: never a landing, which is the head's stated target's) */
+  litAt(side: Side, page: number, x: number | null, y: number): Lit | null
   setOn(on: boolean): void
   /** the shapes each pane shows (the probe's) */
   bands(): Record<Side, number>
@@ -732,15 +732,13 @@ export function createHighlight(o: { panes: Panes; composer: Composer; clock: Cl
       }
     if (landed.length) landTimer = clock.later(unland, LAND_MS)
   }
-  function litAt(side: Side, n: number, x: number | null, y: number, below = 0): Lit | null {
+  function litAt(side: Side, n: number, x: number | null, y: number): Lit | null {
     const page = composer.page(n)
     if (!page || (side === 'right' && composer.muted(n))) return null
     const committed = !!composer.laid(n)
     const across = (b: Box) => x === null || (x >= b[0] && x <= b[2])
     let best: Lit | null = null,
-      least = Number.POSITIVE_INFINITY,
-      near: Lit | null = null,
-      nearest = Number.POSITIVE_INFINITY
+      least = Number.POSITIVE_INFINITY
     for (const m of page.members) {
       if (m.lit.dir) continue
       const { per } = entriesOf(page, m.ord, side, committed)
@@ -754,13 +752,10 @@ export function createHighlight(o: { panes: Panes; composer: Composer; clock: Cl
               least = area
               best = t
             }
-          } else if (below > 0 && across(b) && b[3] <= y && y - b[3] <= below && y - b[3] < nearest) {
-            nearest = y - b[3]
-            near = t
           }
         }
     }
-    return best ?? near
+    return best
   }
   function at(side: Side, x: number, y: number): Lit | null {
     // (the page under the point and the point in its box by arithmetic over the places the panes keep (pointAt), the follower's

@@ -3310,9 +3310,12 @@ within noise.
 `land`, `litAt`; `compose/landing.ts`): the band itself (`--axt-hl-color`, `--axt-hl-mix`), drawn in the highlight's own
 layer, multiplied into the page and screened into a dimmed one, at full strength for its first 18 % of 1,700 ms and then
 fading by opacity alone [approved], whatever the hover switch says, the hover's painting leaving it; a new landing replaces the
-last. Arriving, it lights the unit a destination's point lands on, whole (the first member at or at most 24 PDF units under
-the point, hyperref raising an anchor over its text: `LAND_BELOW` [start]), or a contents entry's heading's first rectangle;
-a page typed lights nothing. Coming back, the sentence under the link left where the highlight lights that member by
+last. Arriving by a link, it lights the target the head states for its destination (`Head.targets`, §20.4): the unit the
+target names, whole on both panes, for a reference, a note or a heading; the target's box for a float or a display. A
+destination the head states no target for lights nothing: the room above the point shows the place (the lead's ruling of
+2026-11-28: a rule of the reader's own, the first member at or just under the point, lit entry [14] for a citation of [13] on
+staging, the anchor raised by about a line; the engine's evidence decides a landing, never the reader). A contents entry lights
+its heading's first rectangle; a page typed lights nothing. Coming back, the sentence under the link left where the highlight lights that member by
 sentence, else the link's own box on its pane, never a whole paragraph (the lead's ruling 7). It needs the layer's code (the
 highlight is made with the composer): a paper with no layer jumps and goes back with no band. A hovered or held link takes the
 band at half (11 % by default) on both panes (§11.9, "Looked at").
@@ -14381,8 +14384,8 @@ and its jump. One layer for every kind (`previews.ts`), from the three link sour
 - **To assistive technology** a preview is a tooltip of its link: `role="tooltip"`, the link `aria-describedby` it while it is
   open, never `aria-expanded`, the focus never moved by its showing; Tab from the link goes into it, past its last stop to the
   next link (closing it), Shift+Tab back. A crop is `role="img"` named by its label (UI.md S-R-33).
-- **The jump** lands on a target the head states with that target's own box lit (session/one-jump.ts), in place of the unit at
-  its point.
+- **The jump** lands lit by the target the head states (session/one-jump.ts, §17.10): the unit it names (a reference, a note,
+  a heading) or its box (a float, a display); nothing lit where the head states none.
 
 Surfaces wear the chrome's tokens `--surface`, `--surface-blur`, `--hairline`, `--shadow`, `--shadow-lift`, `--ink-read`
 (packages/ui tokens.ts; the reader core reads them with the prototype's values as fallbacks); reduced motion keeps opacity

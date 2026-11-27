@@ -5,8 +5,11 @@
 // capsule, the browser's Back where the host gives history, a scroll back spending it). The pill's arrows and a scroll are no
 // jump; a link out of the paper goes out through the host, as before; a destination that resolves to nothing does nothing.
 //
-// What lights: arriving, the unit at the destination's point, whole (the first at or just below it: hyperref raises an anchor
-// above its text; LAND_BELOW), or a contents entry's heading's first rectangle; a page typed, nothing. Coming back, the
+// What lights: arriving by a link, the target the head states for its destination (Head.targets, the engine's on its own
+// evidence; the lead's ruling of 2026-11-28: a rule of the reader's own lit the entry under the one cited, staging's page 2 of a
+// numbered list), the unit it names where it names one (a reference, a note, a heading: lit whole on both panes, the right as
+// drawn), its box else (a float, a display); a destination it states none for, nothing (the room above the point shows the
+// place); a contents entry, its heading's first rectangle; a page typed, nothing. Coming back, the
 // sentence under the link left where the highlight lights one there, else the link's own box, never a whole paragraph (open
 // item 7). A link whose destination the head states (Head.targets, the previews' table) lights that target's own box instead.
 import type { Rect, Jumps, Light, Place, PlaceSide } from './jumps.ts'
@@ -14,9 +17,6 @@ import type { Rect, Jumps, Light, Place, PlaceSide } from './jumps.ts'
 /** CSS px left above a target gone to, wide and narrow [start, P5 app.js:457] */
 export const ROOM_WIDE = 72
 export const ROOM_NARROW = 56
-/** how far under a destination's point (PDF units) the unit it lands on may start (hyperref raises an anchor by
- *  \baselineskip over its text); a starting value, unmeasured, as the engine's LAND_BELOW will be measured (plan B3, B5) */
-export const LAND_BELOW = 24
 
 /** where a link left from: its pane, its page and its box on that pane's page (PDF units: a PDF.js link's rectangle, a laid
  *  link's Page.links box) */
@@ -44,8 +44,8 @@ export interface JumpPanes {
 /** what a jump lights */
 export interface JumpLights {
   /** the sentence (or unit, `s` -1) under a point of a page (PDF units on that pane's page; `x` null: any column), or the first
-   *  at most `below` under it; null where none */
-  litAt(side: PlaceSide, page: number, x: number | null, y: number, below?: number): { id: number; s: number } | null
+   *  null where none */
+  litAt(side: PlaceSide, page: number, x: number | null, y: number): { id: number; s: number } | null
   land(l: NonNullable<Light>): void
 }
 export interface OneJump {
@@ -71,26 +71,6 @@ export interface OneJump {
   dispose(): void
 }
 
-/** the point an explicit destination names on its page (PDF units), as its fit gives one: XYZ its left and top, FitH/FitBH a
- *  top, FitR its top left; none for Fit, FitB, FitV/FitBV */
-export function pointOf(dest: readonly unknown[]): { x: number | null; y: number } | null {
-  const kind = (dest[1] as { name?: string } | undefined)?.name
-  const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null)
-  if (kind === 'XYZ') {
-    const y = num(dest[3])
-    return y === null ? null : { x: num(dest[2]), y }
-  }
-  if (kind === 'FitH' || kind === 'FitBH') {
-    const y = num(dest[2])
-    return y === null ? null : { x: null, y }
-  }
-  if (kind === 'FitR') {
-    const y = num(dest[5])
-    return y === null ? null : { x: num(dest[2]), y }
-  }
-  return null
-}
-
 export function createOneJump(d: {
   panes: () => JumpPanes | null
   lights: () => JumpLights | null
@@ -98,7 +78,7 @@ export function createOneJump(d: {
   narrow: () => boolean
   /** the box the head states a destination lands on (link previews: Head.targets), lit on arrival in place of the unit at its
    *  point; none where the head states none */
-  target?: (dest: string | unknown[]) => { page: number; box: Rect } | null
+  target?: (dest: string | unknown[]) => { kind: string; page: number; ord: number; box: Rect } | null
 }): OneJump {
   const { jumps } = d
   /** the light of a link left: the sentence under its centre where one is known, else its own box on its pane */
@@ -138,13 +118,12 @@ export function createOneJump(d: {
       run({ place: q.reading(), light: leftLight(o.origin) }, () => {
         q.goTo(at, { side: o.side, keyboard: o.keyboard, room: d.narrow() ? ROOM_NARROW : ROOM_WIDE })
         if (o.keyboard && o.side === 'right') q.focusPage('right', at.page)
-        // (a target the head states: its own box, on the panes that show its page)
+        // (the target the head states: the unit it names (a reference, a note, a heading), else its box; none stated, nothing)
         const t = d.target?.(o.dest) ?? null
-        if (t && t.page === at.page) return { page: t.page, box: t.box }
-        const pt = pointOf(at.dest)
-        // (the unit the destination lands on, lit whole; read on the original's page, whose units the point names)
-        const lit = pt ? (d.lights()?.litAt('left', at.page, pt.x, pt.y, LAND_BELOW) ?? null) : null
-        return lit ? { lit: { id: lit.id, s: -1 } } : null
+        if (!t || t.page !== at.page) return null
+        return t.kind === 'reference' || t.kind === 'footnote' || t.kind === 'heading'
+          ? { lit: { id: t.ord, s: -1 } }
+          : { page: t.page, box: t.box }
       })
     },
     page(side, n) {
