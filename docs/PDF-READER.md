@@ -10019,16 +10019,36 @@ expansion took off (all in this section's last item), and the rest are the holes
   title after `\appendix`, which the class throws away, the first of two `\title`s, longtable's `\endhead` of a table of one
   page, a `\footnote` in a float's caption): nothing is on the page to draw, but the unit is cut and asked. REVTeX 4.2 sets a
   note in the bibliography (3: the entry is its own unit). cas-common copies its abstract verbatim after a look-ahead that takes
-  our line probe, and the layout guard writes that unit as the paper's own (1, `compile/guard.ts` `cutCopyUnits`). A class that
-  stores a heading's argument by `\protected@edef` before setting it takes the marks in it off (LAYOUT_TEX's gates:
-  `\ifx\protect\@typeset@protect` the mark, else `\@gobble`), and one that changes its case renames them (`h5s` to `H5S`):
-  REVTeX 4.0's `\section` (textcase v0.06: `\protected@edef`, then `\uppercase`; 16 headings of 3 papers) and thmtools' proof
-  note (1) are unlocated, their text drawn through ink units. Its root form, every gated mark a `\protected` command whose
-  letters are its point's name and whose argument its digits (`\axtpmapa{5.2}` for `p5.2a`), moved no text item in its native
-  cases (160 compiles of 20 classes and packages, REVTeX 4.0's headings and the proof note located), but over the corpus it
-  moved more than the 17: amsart's titles and the headings of classes whose case change had renamed their marks gain TeX's
-  statement of their alignment and skips (a heading's alignment read `j` now TeX's `c`, its skip after it stated). It is held
-  back for a round of its own, its expected set those headings too.
+  our line probe, and the layout guard writes that unit as the paper's own (1, `compile/guard.ts` `cutCopyUnits`). (A class
+  that stores a heading's argument by `\protected@edef` before setting it took the marks in it off, and one that changed its
+  case renamed them: the next item.)
+- **A gated mark is robust in every expansion and kept out of every write** (`marks/marks.ts` GATED_MARKS, `gateTex`,
+  WRITES_TEX). LAYOUT_TEX's gates (`\axthmark`, `\axtpma`, `\axtpmm`, `\axtpm`, `\axthpk`, `\axttg`, `\axtcolour`, and
+  CARRY_TEX's `\axtpmd`) tested `\ifx\protect\@typeset@protect` and took the mark, else `\@gobble`, so that nothing of ours
+  was written into a file. LaTeX sets the same `\protect` for an expansion made to set a text later (`\protected@edef`) as for
+  one made to write a file (`\protected@write`): a class that stores a heading's argument by `\protected@edef` before setting
+  it took the marks in it off. REVTeX 4.0's `\section` (textcase v0.06, which it carries: `\protected@edef`, then `\uppercase`)
+  and thmtools' proof note (thm-patch.sty: its optional title through a `\protected@edef`) were unlocated, their text drawn
+  through ink units, the heading's number read as a word and a heading of two lines cut in two (67 units of 11 papers of the
+  599 of the census, 34 of 6 the first, 33 of 5 the second). Now each gate writes itself through, unexpanded, where LaTeX does
+  not typeset, as a robust command does, and sets its point where the stored text is set; and LaTeX's `\protected@write` (and
+  a `\protected@iwrite` where a package defines one), the one path of `\addtocontents`, `\addcontentsline`, `\label`,
+  `\index` and `\glossary`, lets each gated mark be `\@gobble` in its own group before its `\edef` (wrapped before the
+  class, and again where the document begins if a class or a package defined it anew), so that a contents line, a list's entry,
+  a label or an index entry holds none, raw or stored by a `\protected@edef` first: what a pass writes is what it wrote before
+  (written through as `\protect\axthmark`, a stored text's mark would stand unexpanded in the write's `\edef` and be written:
+  minitoc reads its part contents back with no `\@starttoc`, and the heading's points were set twice there, the root form's
+  regression of the round before). A running head keeps them, set in the output routine with every mark off; a PDF string and
+  nameref's titles have them taken out as before. TeX's `\uppercase` turns the argument's letters (`{h5s}` to `{H5S}`) and no
+  control sequence's name; our names are lower-case letters, digits and full stops, which `\lowercase` turns back exactly, so
+  the gate hands its argument to its command through `\lowercase` (`\axt@lc`, `\protected`): the point, its alignment
+  (AXT-ALIGN) and its skips (AXT-SECT) are named as the marking wrote them, as the reader already read every point's name
+  (`read.ts`, lower case). So amsart's titles and headings, which `\uppercasenonmath` set as `H6E` with no alignment stated,
+  state theirs now. What a file holds of our other marks is as before: a caption's own `\axtmark` and `\axtend` and its
+  `\axtlines` in its list entry's text (`compile/guard.ts` `inText`), a babel name's marks (`NAME_MARK_FILE`), an author's
+  call (`\axtcall`); and `\index` reads its own argument verbatim (`\@sanitize`), as the paper wrote it. A package that
+  writes a text it stored by `\protected@edef` with a `\write` of its own, not LaTeX's, would write a gated mark now; the
+  layout guard reads every written file for marks out of a list entry's text (`marksOutOfPlace`) as before.
 - **Round 3's native cases and corpus** (E, F, G; our own content, the four engines with hyperref and without, every text item of
   the marked original against the paper's own unmarked compile, to 0.01 pt): E's forms, 40 compiles, 304 items, none moved, each
   split confirmed by TeX's paragraph points (a `qe` between the two units' points, none inside either); F's, 96 compiles of 12

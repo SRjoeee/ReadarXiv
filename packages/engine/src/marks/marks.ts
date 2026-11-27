@@ -8,9 +8,10 @@
 // it, the space and tie after that word put back (cite.sty's \unskip and its penalty test see them as before); none is
 // set in a contents list, a list of figures or the output routine's running heads (the gate); none goes after a paper's
 // macro or a footnote's call, which may look at what follows, nor after a control word, whose following spaces TeX
-// skips; and none is written to a file or a PDF string, so that the aux, the lists and the bookmarks are byte for byte
-// the paper's, but a babel name's (NAMES_TEX), which writes itself into the lists and the running heads it is copied
-// into, and sets nothing there. The native cases (lab/pdf/spikes/
+// skips; each is kept, robust, through a class's \protected@edef of the text it stands in, and none is written to a file
+// LaTeX writes (its \protected@write takes them out: GATED_MARKS) or a PDF string, so that the aux, the lists and the
+// bookmarks hold of them what they held with no mark, but a babel name's (NAMES_TEX), which writes itself into the lists
+// and the running heads it is copied into, and sets nothing there. The native cases (lab/pdf/spikes/
 // layout-marks-cases.mjs) hold every text item of the page in place; what a line the marks move could cost on arXiv's
 // page (a unit not located, or drawn otherwise) is counted by the prepare's corpus gates (lab/pdf/README.md).
 import {
@@ -2216,12 +2217,15 @@ export function readMarkProbe(
  *   in any list, gated as the marks are; nothing where no colour package is loaded. It ends in \ignorespaces: \color ends
  *   in one, which the mark, unexpandable, would stop short of the spaces after it (2503.06072's `\textcolor{red}{ \underline`
  *   moved its URL a space right)
- * - **Nothing written.** The three test \protect against \@typeset@protect and gobble their name otherwise, so written
- *   to a file (\protected@write: the aux's labels, the contents lists) or into a mark (running heads) they are gone; in a
- *   PDF string they are gobbled (\pdfstringdefDisableCommands); nameref's titles, which it keeps as strings, have them
+ * - **Nothing written.** Each is robust in every expansion and kept out of every write (GATED_MARKS): where \protect is
+ *   not \@typeset@protect it writes itself through unexpanded, so that a class's \protected@edef of a heading keeps it, and
+ *   LaTeX's \protected@write lets it gobble in its own group (WRITES_TEX), so that the aux's labels and the contents lists
+ *   hold none; a running head (\markboth) keeps it and sets it with every mark off (the output routine's gate); in a PDF
+ *   string they are gobbled (\pdfstringdefDisableCommands); nameref's titles, which it keeps as strings, have them
  *   taken out first, at gettitlestring and where nameref sanitizes a title whoever set it (titlesec). What does the work
  *   is \protected, so an expansion (an \edef, a case change's) never runs it, and a case change leaves its name as it is
- *   (l3text's \l_text_case_exclude_arg_tl): a heading set in capitals keeps its marks' names.
+ *   (l3text's \l_text_case_exclude_arg_tl; TeX's own \uppercase turns its argument's letters, which the gate's \axt@lc
+ *   turns back): a heading set in capitals keeps its marks' names.
  * - **The points.** Beside each destination, a point (POINTS_TEX): a rendering intent named after it, `/axt-<name> ri`,
  *   in each engine's literal (pdfTeX's and LuaTeX's `direct`, xdvipdfmx's `pdf:code`), which PDF.js keeps in the operator
  *   list in its place among the glyphs (it drops DP and MP, and splits its text items at a BMC: tokens moved by up to
@@ -2775,6 +2779,58 @@ export function regionsTex(
   ].join('')
 }
 
+/**
+ * The gated marks (LAYOUT_TEX's, and CARRY_TEX's \axtpmd), each with the \protected command that sets its point: robust, as
+ * LaTeX's robust commands are, in every expansion, and kept out of every file LaTeX writes (PDF-READER §18.111).
+ * - **Where LaTeX typesets** (\protect is \@typeset@protect) the gate expands to its command, its argument handed on in lower
+ *   case (\axt@lc: TeX's \lowercase over the command and its argument, inside a \protected command, so that an expansion keeps
+ *   it as it is). A class that changes a stored text's case with TeX's primitive changes every character token's code by its
+ *   \uccode and no control sequence's name: textcase's \MakeTextUppercase (REVTeX 4.0's \section) turns `{h5s}` to `{H5S}`
+ *   and leaves `\axthmark` as it is. Our names are lower-case letters, digits and full stops, which \lowercase turns back
+ *   exactly (the letters' codes the format's pairs, the others' none), so the point, its alignment (AXT-ALIGN) and its
+ *   skips (AXT-SECT) are named as the marking wrote them: amsart's \uppercasenonmath set `H6E` and stated no alignment.
+ * - **Anywhere else** (\protected@edef's \@unexpandable@protect, \typeout's \string, the output routine's \noexpand) it
+ *   writes itself through, unexpanded (`\noexpand\axthmark`): a class that stores a text by \protected@edef before it sets it
+ *   (textcase's \MakeTextUppercase, thmtools' proof's optional title) keeps the marks in it, and they set their points where
+ *   that text is set. Not `\protect\axthmark`: a stored text written later goes through \protected@write's \edef too, where
+ *   `\protect` keeps the mark from expanding and so from being taken out (WRITES_TEX).
+ * - **What TeX writes and reads back** (WRITES_TEX): LaTeX's \protected@write (and \protected@iwrite where a package or the
+ *   kernel defines one), the one path of \addtocontents, \addcontentsline, \label, \index and \glossary, lets each gated mark be
+ *   \@gobble in its own group, before its \edef: in a contents line, a list's entry, a label, an index entry, as raw text or
+ *   stored by a \protected@edef first, no gated mark is written, as when the gate took itself off there. A file a pass writes
+ *   holds what it held. A running head (\markboth's \mark) keeps them, set with every mark off (the output routine's
+ *   \axt@off); a PDF string has them taken out (\pdfstringdefDisableCommands); nameref's titles too (\axt@unmark)
+ */
+export const GATED_MARKS = [
+  ['axtpma', 'axt@pma'],
+  ['axtpmm', 'axt@pmm'],
+  ['axtpm', 'axt@pm'],
+  ['axthpk', 'axt@hpk'],
+  ['axttg', 'axt@gp'],
+  ['axthmark', 'axt@hm'],
+  ['axtcolour', 'axt@colour'],
+  ['axtpmd', 'axt@pmy'],
+] as const
+/** a gated mark's gate (GATED_MARKS): its command with its argument in lower case where LaTeX typesets, itself unexpanded
+ *  anywhere else */
+const gateTex = (cs: string, inner: string): string =>
+  `\\def\\${cs}{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@lc\\expandafter\\${inner}\\else\\noexpand\\${cs}\\fi}`
+/**
+ * LaTeX's writes with every gated mark taken out (GATED_MARKS): \protected@write wrapped where LAYOUT_TEX stands, before the
+ * class and every package, its second argument (the code it runs in its own group, before \protect is set for its \edef) with
+ * \axt@unw after it (CARRY_TEX adds its own \axtpmd to it, where the marking writes a carrier); and where the document begins (begindocument/end), a \protected@write a class or a package defined anew
+ * since (\nofiles' own), and a \protected@iwrite (endfloat's, answers'), each wrapped the same, each in a slot of its own,
+ * so that a definition that calls the one before it never calls itself. Each wrap once: a wrapper is not wrapped again
+ */
+const WRITES_TEX = [
+  `\\def\\axt@unw{${GATED_MARKS.filter(([cs]) => cs !== 'axtpmd')
+    .map(([cs]) => `\\let\\${cs}\\@gobble`)
+    .join('')}}`,
+  '\\long\\def\\axt@pwa#1#2#3{\\axt@pwsa{#1}{#2\\axt@unw}{#3}}\\long\\def\\axt@pwb#1#2#3{\\axt@pwsb{#1}{#2\\axt@unw}{#3}}\\long\\def\\axt@piw#1#2#3{\\axt@piws{#1}{#2\\axt@unw}{#3}}',
+  '\\ifx\\protected@write\\axt@pwa\\else\\let\\axt@pwsa\\protected@write\\let\\protected@write\\axt@pwa\\fi',
+  '\\ifdefined\\AddToHook\\AddToHook{begindocument/end}{\\ifx\\protected@write\\axt@pwa\\else\\ifx\\protected@write\\axt@pwb\\else\\let\\axt@pwsb\\protected@write\\let\\protected@write\\axt@pwb\\fi\\fi\\ifdefined\\protected@iwrite\\ifx\\protected@iwrite\\axt@piw\\else\\let\\axt@piws\\protected@iwrite\\let\\protected@iwrite\\axt@piw\\fi\\fi}\\fi',
+].join('')
+
 export const LAYOUT_TEX = [
   '\\makeatletter\\newif\\ifaxt@off\\newif\\ifaxt@hold\\global\\let\\axt@pend\\@empty\\let\\axt@icr\\/\\def\\axt@icv{0pt}\\newif\\ifaxt@sig',
   '\\ifdefined\\XeTeXrevision\\else\\ifdefined\\pdfextension\\def\\axt@dest#1{\\pdfextension dest name{axt-#1} fitr width 0pt height 0pt depth 0pt\\relax}\\else\\ifdefined\\pdfdest\\def\\axt@dest#1{\\ifnum\\pdfoutput>0 \\pdfdest name{axt-#1} fitr width 0pt height 0pt depth 0pt\\relax\\fi}\\fi\\fi\\fi',
@@ -2831,13 +2887,9 @@ export const LAYOUT_TEX = [
   '\\protected\\def\\axt@gp#1{\\ifaxt@off\\else\\expandafter\\gdef\\csname axt@gp@#1\\endcsname{\\axt@pm{#1}}\\expandafter\\aftergroup\\csname axt@gp@#1\\endcsname\\fi}',
   '\\protected\\def\\axt@hm#1{\\ifaxt@off\\else\\axt@align{#1}\\ifhmode\\relax\\axt@holdtrue\\axt@put{#1}\\axt@holdfalse\\fi\\fi}',
   '\\protected\\def\\axt@colour#1{\\ifaxt@off\\else\\ifdefined\\current@color\\message{^^JAXT-COLOUR #1 \\current@color^^J}\\fi\\fi\\ignorespaces}',
-  '\\def\\axtpma{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@pma\\else\\expandafter\\@gobble\\fi}',
-  '\\def\\axtpmm{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@pmm\\else\\expandafter\\@gobble\\fi}',
-  '\\def\\axtpm{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@pm\\else\\expandafter\\@gobble\\fi}',
-  '\\def\\axthpk{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@hpk\\else\\expandafter\\@gobble\\fi}',
-  '\\def\\axttg{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@gp\\else\\expandafter\\@gobble\\fi}',
-  '\\def\\axthmark{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@hm\\else\\expandafter\\@gobble\\fi}',
-  '\\def\\axtcolour{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@colour\\else\\expandafter\\@gobble\\fi}',
+  '\\protected\\def\\axt@lc#1#2{\\lowercase{#1{#2}}}',
+  ...GATED_MARKS.filter(([cs]) => cs !== 'axtpmd').map(([cs, inner]) => gateTex(cs, inner)),
+  WRITES_TEX,
   '\\ifdefined\\AddToHook\\AddToHook{cmd/@starttoc/before}{\\global\\axt@offtrue}\\AddToHook{cmd/@starttoc/after}{\\global\\axt@offfalse}\\AddToHook{cmd/@outputpage/before}{\\axt@offtrue}',
   '\\AddToHook{package/gettitlestring/after}{\\let\\axt@title@of\\GetTitleString\\long\\def\\GetTitleString#1{\\def\\axt@title{#1}\\axt@unmark\\axt@title\\expandafter\\axt@title@of\\expandafter{\\axt@title}}}',
   '\\AddToHook{package/nameref/after}{\\ifdefined\\NR@sanitize@labelname\\let\\axt@NRsanitize\\NR@sanitize@labelname\\def\\NR@sanitize@labelname{\\axt@unmark\\@currentlabelname\\axt@NRsanitize}\\fi}\\fi',
@@ -3079,7 +3131,7 @@ export const CALL_TEX =
  * bytes as before. After LAYOUT_TEX, whose \axt@pmc and \axt@pm it wraps; without LaTeX's para/end (before 2021-06) it is
  * \axtpma. One line
  */
-export const CARRY_TEX = String.raw`\makeatletter\newbox\axt@cb\newbox\axt@cyc\newif\ifaxt@cyon\newif\ifaxt@cyb\def\axt@cyhook{\ifaxt@cyon\global\axt@cybtrue\fi}\def\axt@cyinstall{\everyhbox\expandafter{\expandafter\axt@cyhook\the\everyhbox}\everyvbox\expandafter{\expandafter\axt@cyhook\the\everyvbox}}\axt@cyinstall\AtBeginDocument{\axt@cyinstall}\let\axt@raise\raise\protected\def\axt@raisew{\axt@cyhook\axt@raise}\let\axt@lower\lower\protected\def\axt@lowerw{\axt@cyhook\axt@lower}\let\axt@unhbox\unhbox\protected\def\axt@unhboxw#1{\ifx#1\voidb@x\else\axt@cyhook\fi\axt@unhbox#1}\let\axt@unhcopy\unhcopy\protected\def\axt@unhcopyw#1{\ifx#1\voidb@x\else\axt@cyhook\fi\axt@unhcopy#1}\def\axt@cyset#1#2{\expandafter\ifx\csname#1\endcsname\relax\else\expandafter\global\expandafter\let\csname#1\endcsname#2\fi}\def\axt@cywrap{\global\let\raise\axt@raisew\global\let\lower\axt@lowerw\global\let\unhbox\axt@unhboxw\global\let\unhcopy\axt@unhcopyw\axt@cyset{tex_raise:D}\axt@raisew\axt@cyset{tex_lower:D}\axt@lowerw\axt@cyset{tex_unhbox:D}\axt@unhboxw\axt@cyset{tex_unhcopy:D}\axt@unhcopyw}\def\axt@cyunwrap{\global\let\raise\axt@raise\global\let\lower\axt@lower\global\let\unhbox\axt@unhbox\global\let\unhcopy\axt@unhcopy\axt@cyset{tex_raise:D}\axt@raise\axt@cyset{tex_lower:D}\axt@lower\axt@cyset{tex_unhbox:D}\axt@unhbox\axt@cyset{tex_unhcopy:D}\axt@unhcopy}\def\axtpmd{\ifx\protect\@typeset@protect\expandafter\axt@pmy\else\expandafter\@gobble\fi}\protected\def\axt@pmy{\ifaxt@off\expandafter\@gobble\else\expandafter\axt@pmyb\fi}\def\axt@pmyb{\ifhmode\expandafter\axt@pmyc\else\expandafter\axt@pmv\fi}\def\axt@pmyc{\ifnum\lastnodetype=-1 \expandafter\axt@cnew\else\expandafter\axt@pmyd\fi}\def\axt@pmyd#1{\axt@ifcy{\axt@cadd{#1}}{\axt@pmc@plain{#1}}}\def\axt@ifcy{\ifnum\ifhmode\lastpenalty\else0\fi=10939 \expandafter\@firstoftwo\else\expandafter\axt@ifcyr\fi}\def\axt@ifcyr{\ifnum\ifaxt@cyon\ifaxt@cyb0\else\ifhmode\lastnodetype\else0\fi\fi\else0\fi=1 \expandafter\axt@cyask\else\expandafter\@secondoftwo\fi}\def\axt@cyask#1#2{\space\axt@cyrd{#1}{#2}}\protected\def\axt@cyrd#1#2{\ifnum\lastnodetype=11 \unskip\let\axt@cyig\relax\else\let\axt@cyig\ignorespaces\fi\setbox\axt@cb\lastbox\setbox\axt@cyc\hbox{\axt@unhcopy\axt@cb\xdef\axt@cyv{\the\lastpenalty}}\global\axt@cybfalse\box\axt@cb\ifnum\axt@cyv=10939 \penalty10939 \expandafter\@firstoftwo\else\expandafter\@secondoftwo\fi{#1\axt@cyig}{#2\axt@cyig}}\def\axt@cnew#1{\space\axt@cdo{\hbox{\axt@mark{#1}\penalty10939}\penalty10939\global\axt@cyontrue\global\axt@cybfalse\axt@cywrap\relax}}\def\axt@cadd#1{\space\axt@cdo{\unpenalty\setbox\axt@cb\lastbox\hbox{\axt@unhbox\axt@cb\unpenalty\axt@mark{#1}\penalty10939}\penalty10939\global\axt@cybfalse\relax}}\def\axt@cback{\space\axt@cdo{\unpenalty\setbox\axt@cb\lastbox\global\axt@cyonfalse\axt@cyunwrap\relax}}\protected\def\axt@cdo#1{\ifnum\lastnodetype=11 \unskip#1\else#1\expandafter\ignorespaces\fi}\let\axt@pmc@plain\axt@pmc\def\axt@pmc#1{\axt@ifcy{\axt@cback}{\axt@pmc@plain{#1}}}\let\axt@pm@plain\axt@pm\protected\def\axt@pm#1{\axt@ifcy{\axt@cadd{#1}}{\axt@pm@plain{#1}}}\ifdefined\AddToHook\ifdefined\IndentBox\else\let\axt@pmy\axt@pma\fi\else\let\axt@pmy\axt@pma\fi\AtBeginDocument{\ifdefined\pdfstringdefDisableCommands\pdfstringdefDisableCommands{\let\axtpmd\@gobble}\fi}\ifcsname l_text_case_exclude_arg_tl\endcsname\expandafter\g@addto@macro\csname l_text_case_exclude_arg_tl\endcsname{\axtpmd\axt@pmy}\fi\makeatother`
+export const CARRY_TEX = String.raw`\makeatletter\newbox\axt@cb\newbox\axt@cyc\newif\ifaxt@cyon\newif\ifaxt@cyb\def\axt@cyhook{\ifaxt@cyon\global\axt@cybtrue\fi}\def\axt@cyinstall{\everyhbox\expandafter{\expandafter\axt@cyhook\the\everyhbox}\everyvbox\expandafter{\expandafter\axt@cyhook\the\everyvbox}}\axt@cyinstall\AtBeginDocument{\axt@cyinstall}\let\axt@raise\raise\protected\def\axt@raisew{\axt@cyhook\axt@raise}\let\axt@lower\lower\protected\def\axt@lowerw{\axt@cyhook\axt@lower}\let\axt@unhbox\unhbox\protected\def\axt@unhboxw#1{\ifx#1\voidb@x\else\axt@cyhook\fi\axt@unhbox#1}\let\axt@unhcopy\unhcopy\protected\def\axt@unhcopyw#1{\ifx#1\voidb@x\else\axt@cyhook\fi\axt@unhcopy#1}\def\axt@cyset#1#2{\expandafter\ifx\csname#1\endcsname\relax\else\expandafter\global\expandafter\let\csname#1\endcsname#2\fi}\def\axt@cywrap{\global\let\raise\axt@raisew\global\let\lower\axt@lowerw\global\let\unhbox\axt@unhboxw\global\let\unhcopy\axt@unhcopyw\axt@cyset{tex_raise:D}\axt@raisew\axt@cyset{tex_lower:D}\axt@lowerw\axt@cyset{tex_unhbox:D}\axt@unhboxw\axt@cyset{tex_unhcopy:D}\axt@unhcopyw}\def\axt@cyunwrap{\global\let\raise\axt@raise\global\let\lower\axt@lower\global\let\unhbox\axt@unhbox\global\let\unhcopy\axt@unhcopy\axt@cyset{tex_raise:D}\axt@raise\axt@cyset{tex_lower:D}\axt@lower\axt@cyset{tex_unhbox:D}\axt@unhbox\axt@cyset{tex_unhcopy:D}\axt@unhcopy}${gateTex('axtpmd', 'axt@pmy')}\g@addto@macro\axt@unw{\let\axtpmd\@gobble}\protected\def\axt@pmy{\ifaxt@off\expandafter\@gobble\else\expandafter\axt@pmyb\fi}\def\axt@pmyb{\ifhmode\expandafter\axt@pmyc\else\expandafter\axt@pmv\fi}\def\axt@pmyc{\ifnum\lastnodetype=-1 \expandafter\axt@cnew\else\expandafter\axt@pmyd\fi}\def\axt@pmyd#1{\axt@ifcy{\axt@cadd{#1}}{\axt@pmc@plain{#1}}}\def\axt@ifcy{\ifnum\ifhmode\lastpenalty\else0\fi=10939 \expandafter\@firstoftwo\else\expandafter\axt@ifcyr\fi}\def\axt@ifcyr{\ifnum\ifaxt@cyon\ifaxt@cyb0\else\ifhmode\lastnodetype\else0\fi\fi\else0\fi=1 \expandafter\axt@cyask\else\expandafter\@secondoftwo\fi}\def\axt@cyask#1#2{\space\axt@cyrd{#1}{#2}}\protected\def\axt@cyrd#1#2{\ifnum\lastnodetype=11 \unskip\let\axt@cyig\relax\else\let\axt@cyig\ignorespaces\fi\setbox\axt@cb\lastbox\setbox\axt@cyc\hbox{\axt@unhcopy\axt@cb\xdef\axt@cyv{\the\lastpenalty}}\global\axt@cybfalse\box\axt@cb\ifnum\axt@cyv=10939 \penalty10939 \expandafter\@firstoftwo\else\expandafter\@secondoftwo\fi{#1\axt@cyig}{#2\axt@cyig}}\def\axt@cnew#1{\space\axt@cdo{\hbox{\axt@mark{#1}\penalty10939}\penalty10939\global\axt@cyontrue\global\axt@cybfalse\axt@cywrap\relax}}\def\axt@cadd#1{\space\axt@cdo{\unpenalty\setbox\axt@cb\lastbox\hbox{\axt@unhbox\axt@cb\unpenalty\axt@mark{#1}\penalty10939}\penalty10939\global\axt@cybfalse\relax}}\def\axt@cback{\space\axt@cdo{\unpenalty\setbox\axt@cb\lastbox\global\axt@cyonfalse\axt@cyunwrap\relax}}\protected\def\axt@cdo#1{\ifnum\lastnodetype=11 \unskip#1\else#1\expandafter\ignorespaces\fi}\let\axt@pmc@plain\axt@pmc\def\axt@pmc#1{\axt@ifcy{\axt@cback}{\axt@pmc@plain{#1}}}\let\axt@pm@plain\axt@pm\protected\def\axt@pm#1{\axt@ifcy{\axt@cadd{#1}}{\axt@pm@plain{#1}}}\ifdefined\AddToHook\ifdefined\IndentBox\else\let\axt@pmy\axt@pma\fi\else\let\axt@pmy\axt@pma\fi\AtBeginDocument{\ifdefined\pdfstringdefDisableCommands\pdfstringdefDisableCommands{\let\axtpmd\@gobble}\fi}\ifcsname l_text_case_exclude_arg_tl\endcsname\expandafter\g@addto@macro\csname l_text_case_exclude_arg_tl\endcsname{\axtpmd\axt@pmy}\fi\makeatother`
 /**
  * The carrier's end (CARRY_TEX): at LaTeX's para/end, where the list ends with the carrier (\axt@ifcy), the carrier taken back,
  * so that the paragraph is as empty as the original's and TeX drops it; and no carrier pending after it. Before LAYOUT_TEX in
