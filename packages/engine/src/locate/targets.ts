@@ -9,6 +9,7 @@
 import type { TargetKind } from '@readarxiv/format'
 import type { DestPoint } from './dests.ts'
 import { grow } from './floats.ts'
+import { bracketsOf } from './gaps.ts'
 import type { Box4, FloatBox, Landing, Member, Work } from './work.ts'
 
 export type { Landing }
@@ -119,7 +120,8 @@ export function targetsOf(
         for (const k of el.ink) if (k[0] === page) box = grow(box, [k[1], k[2], k[3], k[4]])
         if (!box) continue
         // (across, its paragraph's measure on the page for its column: a display is centred in it)
-        const ls = mem.lines.filter((l) => l[0] === page)
+        // (its own column's: the lines whose measure holds its ink across, not those of a column the paragraph goes on in)
+        const ls = mem.lines.filter((l) => l[0] === page && l[7] <= box![0] && box![2] <= l[8])
         const x0 = Math.min(box[0], ...ls.map((l) => l[7]))
         const x1 = Math.max(box[2], ...ls.map((l) => l[8]))
         const k = el.ink[0]!
@@ -146,6 +148,18 @@ export function targetsOf(
       }
     itemsByPage.set(page, items)
     return items
+  }
+
+  // (whether a member's line stands in a column's body as TeX's page builder broke it, read by its first glyph's partner on B
+  // inside a `bs<n>`..`be<n>` bracket (gaps.ts bracketsOf): a running head or foot stands outside every body)
+  let bodies: Uint8Array[] | null = null
+  const inBody = (m: Member, i: number): boolean => {
+    const a = m.lineGlyphs?.[i]?.[0]
+    const b = a === undefined ? -1 : (w.ix.m.aToB[a] ?? -1)
+    if (b < 0) return false
+    bodies ??= bracketsOf(w.ix.B, new Set(w.ix.ins.tex.whole ?? [])).inBody
+    const p = (w.ix.pageB[b] as number) - 1
+    return bodies[p]?.[b - (w.ix.m.offB[p] as number)] === 1
   }
 
   const out: Landing[] = []
@@ -231,7 +245,8 @@ export function targetsOf(
 
   /** a heading's window: from its top on the page, across its column's measure, down SECTION_WINDOW of the page's height; where
    *  that passes TeX's text block bottom (the frame's foot), it stops there and runs on, the rest of its height, from the top of
-   *  the next column's text (the frame's next column on the page, else the next page's first) */
+   *  the next column's text (the frame's next column on the page, else the next page's first): its first line in a column's body
+   *  as TeX broke it, never a running head over it */
   function headingOf(dest: string, page: number, mem: Member, line: Member['lines'][number]): Landing {
     const ls = mem.lines.filter((l) => l[0] === page && l[1] === line[1])
     const top = Math.max(...ls.map((l) => l[5]))
@@ -257,8 +272,9 @@ export function targetsOf(
     // (that column's first line of text: the highest of the members' lines there)
     let first: Member['lines'][number] | null = null
     for (const m of members)
-      for (const l of m.lines)
-        if (l[0] === np && l[7] < col[1] && l[8] > col[0] && (!first || l[5] > first[5])) first = l
+      m.lines.forEach((l, i) => {
+        if (l[0] === np && l[7] < col[1] && l[8] > col[0] && inBody(m, i) && (!first || l[5] > first[5])) first = l
+      })
     if (!first) return { dest, kind: 'heading', page, ord: mem.ord, box }
     return {
       dest,

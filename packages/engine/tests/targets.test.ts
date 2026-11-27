@@ -21,8 +21,10 @@ const line = (page: number, y: number, x0 = 72, x1 = 300, m0 = 72, m1 = 300, col
   m1,
   0,
 ]
-type Spec = { kind: string; lines: Line[]; entry?: true; els?: [string, El][] }
-function workOf(specs: Spec[], frames: Map<number, TexFrame> = new Map(), pages = 2): Work {
+type Spec = { kind: string; lines: Line[]; entry?: true; els?: [string, El][]; glyphs?: number[][] }
+/** B's column bodies for the fake: each A glyph's B glyph (`toB`), each B page's glyph count and its body brackets' points */
+type Bodies = { toB: Record<number, number>; pages: { n: number; points: [string, number][] }[] }
+function workOf(specs: Spec[], frames: Map<number, TexFrame> = new Map(), pages = 2, bodies?: Bodies): Work {
   const units: InstrumentUnit[] = specs.map((s, i) => ({
     id: `${i}`.padStart(64, '0'),
     kind: s.kind,
@@ -31,13 +33,43 @@ function workOf(specs: Spec[], frames: Map<number, TexFrame> = new Map(), pages 
   }))
   const members = specs.map(
     (s, ord) =>
-      ({ ord, unit: ord, kind: s.kind, located: true, lines: s.lines, elements: s.els ?? [] }) as unknown as Member,
+      ({
+        ord,
+        unit: ord,
+        kind: s.kind,
+        located: true,
+        lines: s.lines,
+        elements: s.els ?? [],
+        lineGlyphs: s.glyphs ?? [],
+      }) as unknown as Member,
   )
+  const bp = bodies?.pages ?? []
+  const offB = new Int32Array(bp.length + 1)
+  bp.forEach((p, i) => {
+    offB[i + 1] = offB[i]! + p.n
+  })
+  const aToB = new Int32Array(1000).fill(-1)
+  for (const [a, b] of Object.entries(bodies?.toB ?? {})) aToB[Number(a)] = b
+  const pageB = new Int32Array(offB[bp.length]!)
+  bp.forEach((p, i) => pageB.fill(i + 1, offB[i]!, offB[i + 1]!))
+  const B = {
+    pages: bp.map((p) => ({
+      glyphs: { length: p.n },
+      points: p.points.map(([name, glyph]) => ({ name, glyph, box: 0 })),
+    })),
+  }
   const view: [number, number, number, number] = [0, 0, 612, 792]
   return {
     members,
     units,
-    ix: { framesA: frames, inkA: { pages: Array.from({ length: pages }, () => ({ view })) } },
+    ix: {
+      framesA: frames,
+      inkA: { pages: Array.from({ length: pages }, () => ({ view })) },
+      B,
+      ins: { tex: {} },
+      m: { aToB, offB },
+      pageB,
+    },
   } as unknown as Work
 }
 const dests = (o: Record<string, DestPoint | null>) => new Map(Object.entries(o))
@@ -107,12 +139,26 @@ describe('where a destination lands (targets.ts)', () => {
     const w = workOf(
       [
         { kind: 'heading', lines: [line(1, 160, 72, 140, 72, 540)] },
-        { kind: 'para', lines: [line(2, 700, 72, 540, 72, 540), line(2, 688)] },
+        { kind: 'para', lines: [line(2, 700, 72, 540, 72, 540), line(2, 688)], glyphs: [[101], [102]] },
       ],
       new Map([
         [1, frame(107)],
         [2, frame(107)],
       ]),
+      2,
+      {
+        toB: { 101: 3, 102: 4 },
+        pages: [
+          { n: 0, points: [] },
+          {
+            n: 10,
+            points: [
+              ['bs1', 0],
+              ['be1', 10],
+            ],
+          },
+        ],
+      },
     )
     const [t] = targetsOf(w, dests({ s: { page: 1, x: 72, y: 170 } }), [])
     const rest = 107 - (167 - SECTION_WINDOW * 792)
@@ -201,6 +247,62 @@ describe('where a destination lands (targets.ts)', () => {
     const w = workOf([{ kind: 'caption', lines: [line(1, 630, 72, 168)] }])
     const f = floatOf({ page: 1, caption: 0, captions: [0], box: null, cause: 'foreign' })
     expect(targetsOf(w, dests({ caption: { page: 1, x: 72, y: 645 } }), [f])).toEqual([])
+  })
+  it('a display of a paragraph across both columns is in its own column: a point in the other lands nowhere on it', () => {
+    const frames = new Map([
+      [
+        1,
+        {
+          block: [72, 540] as [number, number],
+          columns: [
+            [72, 300],
+            [312, 540],
+          ] as [number, number][],
+        },
+      ],
+    ])
+    const display: El = { kind: 'display', ink: [[1, 150, 600, 250, 615, 607]] }
+    const w = workOf(
+      [
+        {
+          kind: 'para',
+          lines: [line(1, 650, 72, 300, 72, 300, 0), line(1, 700, 312, 540, 312, 540, 1)],
+          els: [['e', display]],
+        },
+      ],
+      frames,
+    )
+    expect(targetsOf(w, dests({ eq: { page: 1, x: 312, y: 625 } }), [])).toEqual([])
+  })
+  it('a heading’s window runs on to the next page’s first line of TeX’s column body, past the running head over it', () => {
+    const frame = (foot: number): TexFrame => ({ block: [72, 540], columns: [[72, 540]], foot })
+    const w = workOf(
+      [
+        { kind: 'heading', lines: [line(1, 160, 72, 140, 72, 540)] },
+        { kind: 'inkheads', lines: [line(2, 745, 72, 300, 72, 540)], glyphs: [[100]] },
+        { kind: 'para', lines: [line(2, 700, 72, 540, 72, 540)], glyphs: [[101]] },
+      ],
+      new Map([
+        [1, frame(107)],
+        [2, frame(107)],
+      ]),
+      2,
+      {
+        toB: { 100: 0, 101: 5 },
+        pages: [
+          { n: 0, points: [] },
+          {
+            n: 10,
+            points: [
+              ['bs1', 2],
+              ['be1', 10],
+            ],
+          },
+        ],
+      },
+    )
+    const [t] = targetsOf(w, dests({ s: { page: 1, x: 72, y: 170 } }), [])
+    expect(t!.next![1][3]).toBe(707)
   })
   it('two columns: a point in the right column never lands on the left column’s member', () => {
     const frames = new Map([

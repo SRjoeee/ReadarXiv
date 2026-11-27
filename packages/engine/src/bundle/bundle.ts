@@ -22,6 +22,7 @@ import {
   sha256Hex,
   type Style,
   type Target,
+  TARGET_DEST_MAX,
   type Unit,
   write,
 } from '@readarxiv/format'
@@ -607,9 +608,11 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
 }
 
 /** the head's targets (docs/PDF-READER.md §20): each landing locate made (locate/targets.ts) as format's Target, sorted by its
- *  destination, each destination once */
+ *  destination, each destination once; a destination past format's TARGET_DEST_MAX left out (its links keep their jump), so
+ *  that no landing can refuse the head */
 export function targetsOf(landings: readonly Landing[]): Target[] {
-  return [...landings]
+  return landings
+    .filter((l) => l.dest.length <= TARGET_DEST_MAX)
     .sort((a, b) => (a.dest < b.dest ? -1 : a.dest > b.dest ? 1 : 0))
     .filter((l, i, all) => i === 0 || all[i - 1]!.dest !== l.dest)
     .map(

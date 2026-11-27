@@ -56,6 +56,7 @@ export {
   Split,
   Style,
   Target,
+  TARGET_DEST_MAX,
   TargetKind,
   Tie,
   toggleKind,

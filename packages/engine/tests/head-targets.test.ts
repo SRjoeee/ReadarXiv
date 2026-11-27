@@ -80,6 +80,11 @@ describe('the head’s targets', () => {
       ['"cite.smith"', 'reference', 1, 0, [72, 698, 174, 707]],
     ])
   })
+  it('a destination past the format’s 2,048 characters is left out, the head written and every other landing kept', () => {
+    const long = `"${'x'.repeat(2047)}"`
+    const head = headOf(objectsOf(new Map([...dests, [long, { page: 1, x: 72, y: 712 }]])))
+    expect(head.targets?.map((t) => t[0])).toEqual(['"cite.jones"', '"cite.smith"'])
+  })
   it('a head of a paper with no landing has no targets field: its bytes the same as a head made with no destination', () => {
     const none = objectsOf(new Map([['"thm.1"', { page: 1, x: 72, y: 652 }]]))
     const head = none.find((o) => o.kind === 'head')!

@@ -616,9 +616,11 @@ export const TargetKind = z.enum(['reference', 'heading', 'footnote', 'display',
  *  (PDF units, y up, x0 y0 x1 y1: a reference's or a note's lines in the column the destination names, a display's ink, a float's
  *  drawing with its caption, a heading's window from its top across its column's measure); for a heading whose window runs
  *  past its page's text foot, the next page and the box there */
+/** the longest destination a Target states (a key past it is left out of the head, its links keeping their jump) */
+export const TARGET_DEST_MAX = 2048
 export const Target = z.union([
-  z.tuple([z.string().max(2048), TargetKind, page, int.min(0), Box]),
-  z.tuple([z.string().max(2048), TargetKind, page, int.min(0), Box, page, Box]),
+  z.tuple([z.string().max(TARGET_DEST_MAX), TargetKind, page, int.min(0), Box]),
+  z.tuple([z.string().max(TARGET_DEST_MAX), TargetKind, page, int.min(0), Box, page, Box]),
 ])
 /** the paper's fonts as A names them (base names, subset tag off), with the glyphs of located units set in each, most first:
  *  what the reader picks its served faces by (typeset-inputs A3, A4) */
