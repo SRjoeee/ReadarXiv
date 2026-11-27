@@ -203,6 +203,8 @@ export interface Located {
   floats: FloatBox[]
   /** where each destination of A's links lands (targets.ts), sorted by destination; one that lands on nothing covered is absent */
   targets: Landing[]
+  /** the time phases 17 and 18 took, where a clock was given (LocateOptions.now): the lab's measure of their cost */
+  linkMs?: { floats: number; targets: number }
   /** per A page (index p - 1): each glyph's and each box's group (the wrap's plan), null for none */
   groups: { glyphs: (string | null)[]; boxes: (string | null)[]; turned: (string | null)[] }[]
   /** groups that are figure texts' (the wrap writes their runs inside a form in the form) */
@@ -377,6 +379,8 @@ export interface LocateOptions {
   /** every destination A's links name, resolved on A (dests.ts destinationsOf), by its key as Link.to.dest writes it: where each
    *  lands is the last phase's (targets.ts). None given, no destination lands */
   dests?: ReadonlyMap<string, DestPoint | null>
+  /** a clock: given, locate states how long its link phases took (Located.linkMs) */
+  now?: () => number
 }
 
 /** the record of a locate: its index, and the fields the phases fill from the start */

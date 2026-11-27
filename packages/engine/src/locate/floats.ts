@@ -57,11 +57,12 @@ export interface FloatBox {
 /** a float bracket's point (marks/marks.ts POINTS `fs<n>`, `fe<n>`; `fn<n>` beside a float of a type with no counter) */
 const COUNTERLESS = /^fn(\d+)$/
 
-/** a level glyph's ink on its page: its outline across where it has one (a form's glyph: its advance; its outline may be a
- *  .notdef's box PDF.js never draws, lines.ts isInk), its own ink up and down */
+/** a level glyph on its page: across, its advance and its outline where it has one (a form's glyph: its advance alone; its
+ *  outline may be a .notdef's box PDF.js never draws, lines.ts isInk), the bundle stating a line's and an element's ink by the
+ *  advance and a glyph's ink may reach past it; up and down, its own ink */
 export function glyphRect(g: DocGlyph): Box4 {
   const across = !g.form && g.ix1 > g.ix0
-  return [across ? g.ix0 : g.x0, g.bottom, across ? g.ix1 : g.x1, g.top]
+  return [across ? Math.min(g.x0, g.ix0) : g.x0, g.bottom, across ? Math.max(g.x1, g.ix1) : g.x1, g.top]
 }
 /** a turned glyph's ink on its page: its run from its origin to its advance's end, across its band (turned-frames.ts's reading) */
 export function turnedRect(t: DocTurned): Box4 {

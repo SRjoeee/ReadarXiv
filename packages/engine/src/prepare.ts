@@ -15,7 +15,7 @@ import { type FrontHalf, originalFactsOf, type PrepareStage, prepareFront, type 
 import type { Compiled, CompileRequest } from './compile/live.ts'
 import { classesOf } from './instrument/instrument.ts'
 import type { Instrument } from './instrument.ts'
-import { destinationsOf, destKeysOf } from './locate/dests.ts'
+import { type DestPoint, destinationsOf, destKeysOf } from './locate/dests.ts'
 import { type Located, type LocateOptions, locate } from './locate/locate.ts'
 import { isMemoryError } from './memory.ts'
 import { FrontRefusal, INSTRUMENT_OBJECTS, type OriginalFacts, type StoredInstrument, short } from './plan.ts'
@@ -57,6 +57,8 @@ export type Tally = {
   recovered?: NonNullable<Head['recovered']>
   /** the intermediate results, for the lab's dumps and proofs (the box drops them); A's pages only where they were kept */
   mapping: Mapping
+  /** every destination of A's links as resolved on A (locate/dests.ts), by its key: the lab's measure of where each lands */
+  dests: ReadonlyMap<string, DestPoint | null>
   locatedAll: Located
   addOn: AddOn | { refused: string; why: string }
   pagesA?: ReadPage<AlignFacts>[]
@@ -135,6 +137,7 @@ export async function* prepareBack(
         : { pagesRefused: [...addOn.pages.values()].filter((x) => !x.ok).length, groups: addOn.groups.size },
     ...(recovered.length ? { recovered } : {}),
     mapping,
+    dests: p.dests,
     locatedAll: located,
     addOn,
     ...(p.pagesA ? { pagesA: p.pagesA } : {}),
@@ -152,6 +155,7 @@ async function placedOf(
 ): Promise<{
   located: Located
   mapping: Mapping
+  dests: ReadonlyMap<string, DestPoint | null>
   wrapPages: (WrapPageA | null)[]
   pages: number
   pagesA: ReadPage<AlignFacts>[] | null
@@ -191,6 +195,7 @@ async function placedOf(
     take: !keep,
     classesOf: deps.classesOf,
     dests,
+    ...(deps.now ? { now: deps.now } : {}),
   })
   const t3 = now()
   // (B's ink and its owners: read by align and locate alone; the bundle reads the instrument's units and TeX's statements)
@@ -203,6 +208,7 @@ async function placedOf(
   return {
     located,
     mapping,
+    dests,
     wrapPages,
     pages: read.doc.pages.length,
     pagesA: keep ? read.pages : null,

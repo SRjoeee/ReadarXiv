@@ -106,9 +106,14 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   rowAligns(w) // 14
   linksOnA(w, owned, o, held) // 15: an annotation over a held unit's turned glyphs its member's
   const frames = frameTurned(w, held) // 16: the units TeX set turned, read in their frames
+  const t0 = o.now?.() ?? 0
   const floats = floatBoxes(w, owned) // 17: each float's box, by its brackets
+  const t1 = o.now?.() ?? 0
   const targets = o.dests ? targetsOf(w, o.dests, floats) : [] // 18: where each destination of A's links lands
-  return close(w, owned, frames, floats, targets)
+  const t2 = o.now?.() ?? 0
+  const located = close(w, owned, frames, floats, targets)
+  if (o.now) located.linkMs = { floats: t1 - t0, targets: t2 - t1 }
+  return located
 }
 
 /** what locate states, read off the record its phases wrote: the wrap's groups, the ownership's check, the counts */
