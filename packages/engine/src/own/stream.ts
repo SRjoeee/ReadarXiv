@@ -1507,8 +1507,13 @@ function* textStarts(pages: readonly StreamPage[], glyphs: readonly Place[], wan
         c = (c.slice(0, 1) + pending + c.slice(1)).normalize('NFD')
         pending = ''
       }
-      // a glyph of several characters (a ligature) may run past the characters looked for
-      if (want.startsWith(c, w) || (w + c.length > want.length && c.startsWith(want.slice(w)))) {
+      // a glyph of several characters (a ligature) may run past the characters looked for, between two of its characters: never
+      // between a letter and its marks, a letter under an accent the text looked for does not write (a spacing accent set on
+      // nothing, `\\^{}`, before the text's last letter is the ink of the piece before it)
+      if (
+        want.startsWith(c, w) ||
+        (w + c.length > want.length && c.startsWith(want.slice(w)) && !/^\p{M}/u.test(c.slice(want.length - w)))
+      ) {
         w += c.length
         continue
       }

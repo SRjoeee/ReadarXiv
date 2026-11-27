@@ -3847,6 +3847,15 @@ export const duplicatesIn = (log: string | null | undefined): string[] => {
   return [...out].filter((n) => MARK_NAME.test(n))
 }
 
+/** the characters of a text an opening point alone is found by (own/stream.ts textAt): its first WANT as set (asSet), NFKC,
+ *  lower case, no white space, and the combining marks of the last of them, never a letter cut from its marks (a letter with no
+ *  precomposed form keeps them: the glyphs are compared letter by letter, marks with their letter) */
+const wantOf = (t: string) => {
+  const s = asSet(t).normalize('NFKC').toLowerCase().replace(/\s/g, '')
+  let k = Math.min(WANT, s.length)
+  while (k < s.length && /\p{M}/u.test(s[k]!)) k++
+  return s.slice(0, k)
+}
 /** the source pieces of a unit that TeX ligatures and LaTeX's quotes set as other characters, as the glyphs have them */
 export const asSet = (s: string): string =>
   s
@@ -3957,7 +3966,7 @@ export function followsOf(
       group.push(`${nameOf(i, q)}a`)
       q++
     }
-    const want = asSet(after).normalize('NFKC').toLowerCase().replace(/\s/g, '').slice(0, WANT)
+    const want = wantOf(after)
     const next = q < u.pieces.length ? nameOf(i, q) : null
     const blocked = !!next && !names.has(`${next}a`)
     // (`through`, the erasure's: past the unmarked visible pieces right after it, nothing but white space between, the next
@@ -3999,7 +4008,7 @@ export function followsOf(
       const fnext = r < u.pieces.length ? nameOf(i, r) : null
       if (/\S/.test(rest))
         trail = {
-          want: asSet(rest).normalize('NFKC').toLowerCase().replace(/\s/g, '').slice(0, WANT),
+          want: wantOf(rest),
           rest: spellOf(rest),
           ends: [...(fnext ? [`${fnext}a`] : []), ...endsOf(i), ...cellEndOf(u, i)],
         }
