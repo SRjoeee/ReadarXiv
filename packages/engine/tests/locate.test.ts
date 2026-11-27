@@ -4120,7 +4120,8 @@ describe('an element’s ink is what TeX set for it', () => {
 
   it("states the ownership's own verdict where it gave one, the unit refused all the same (its reason, no state)", () => {
     // (the ownership had already found a placeholder it could not delimit ('marks') or glyphs that spell no source of the unit
-    // ('spell'): the letters rule refuses the same unit, and the reason given is the ownership's, which came first)
+    // ('spell'): the letters rule refuses the same unit, and the reason states the ownership's verdict first; never the bare
+    // 'marks', which says the unit owns no glyph of B and is asked no row (bundle.ts))
     const B = docOf([{ lines: [{ text: 'Return rank(T) if x', y: 700 }] }])
     for (const why of ['marks', 'spell'] as const) {
       const unit = {
@@ -4134,7 +4135,7 @@ describe('an element’s ink is what TeX set for it', () => {
         why,
       }
       const L = locate(ownedBy(B, [unit], [[[0, T, -1]]]), B, align(B, B))
-      expect(L.members[0]).toMatchObject({ located: false, cause: why })
+      expect(L.members[0]).toMatchObject({ located: false, cause: `${why}: text past its source` })
     }
   })
 })

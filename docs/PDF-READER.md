@@ -10646,7 +10646,9 @@ refused while the source wrote none of the field names). A definition with no op
 **A refusal states the ownership's verdict.** `locate/place.ts` read the instrument's `why` (the ownership's verdict: `marks`, a
 placeholder it could not delimit; `spell`, glyphs that spell no source of the unit; `across`) only for a unit with no glyph; a
 unit with glyphs that its letters rule refused was stated `text past its source` over it. Of the census's 146 such units
-outside one paper, the ownership had refused 135 first. The reason now keeps the verdict that came first; no unit changes state.
+outside one paper, the ownership had refused 135 first. The reason now states the verdict that came first, `marks: text past
+its source`, `spell: text past its source`; never the bare `marks`, which says the unit owns no glyph of B (`bundle/bundle.ts`
+asks no row of a unit every member of which is so). No unit changes state, nor what is asked.
 
 **Not here.** Every kernel text accent read as its letter and Unicode's combining mark (a letter with no precomposed form, or
 one `SETTABLE` leaves a placeholder): the reader's faces do not all hold the marks (`fonts/font-coverage.ts`: Nimbus none of
