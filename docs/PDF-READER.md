@@ -14314,3 +14314,13 @@ measure apart. Not covered, and so no preview (never a wrong one): a caption set
 no bracket, its first and last glyphs on B being level ones; a display kept as a block of its own (no element of a paragraph)
 is no display target. The stored instrument's key, the hash of the compile side's built bundles, computed over this section's
 engine, is the line's: none of these files is in the compile side's closure, so no paper is compiled again.
+
+With the whole box (2026-11-28, the engine of §20.3's whole-box rule against the line before it), over the regression corpus
+of 599 papers from their kept compiles (533 prepared; 519 with a bundle): every unit, part, add-on and prepare dump byte for byte
+the line's, each head the line's but `targets`; the gate passes (0 stated boxes wrong of any kind, 0 landings wrong). Stated:
+references 16,000 (the line 16,405: 201 in two pieces, 186 holding an element of no stated ink, 18 meeting another's ink),
+headings 3,392 (3,508: 114 foreign, 2 unstated), displays 4,329 (4,344: 11 over two pages, 4 foreign), notes 557 (577: 9 in two
+pieces, 9 unstated, 2 foreign), floats 3,184 (unchanged); boxes moved where the whole now holds more (a heading's window round its
+label or its run-in line 557, a reference's element past its line 148, a note's 15). The boxed floats no target states, counted
+apart: 1,509. The 245 papers' stored sources were not at hand for the whole run: over the 114 that ran, the same, byte for byte
+but the heads, the gate passing. The targets phase: 12 ms a paper at the median, 50 at the 95th percentile.
