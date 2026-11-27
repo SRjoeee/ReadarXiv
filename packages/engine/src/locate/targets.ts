@@ -125,15 +125,15 @@ function onPage(mem: Member, b: Box4): Box4 {
   return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]
 }
 /** a piece of a member's ink on A as the bundle states it, on its page: a line's band (its ink across, its band up and down), its
- *  label's ink, an element's ink */
-type Ink = { page: number; box: Box4; line: Line | null }
+ *  label's ink, an element's ink; and the baseline it stands on */
+type Ink = { page: number; box: Box4; line: Line | null; base: number }
 function inkOf(mem: Member): Ink[] {
   const out: Ink[] = []
-  for (const l of mem.lines) out.push({ page: l[0], box: onPage(mem, [l[2], l[6], l[3], l[5]]), line: l })
+  for (const l of mem.lines) out.push({ page: l[0], box: onPage(mem, [l[2], l[6], l[3], l[5]]), line: l, base: l[4] })
   const lab = mem.labelAt?.ink
-  if (lab) out.push({ page: lab[0], box: onPage(mem, [lab[1], lab[2], lab[3], lab[4]]), line: null })
+  if (lab) out.push({ page: lab[0], box: onPage(mem, [lab[1], lab[2], lab[3], lab[4]]), line: null, base: lab[5] })
   for (const [, el] of mem.elements)
-    for (const k of el.ink) out.push({ page: k[0], box: onPage(mem, [k[1], k[2], k[3], k[4]]), line: null })
+    for (const k of el.ink) out.push({ page: k[0], box: onPage(mem, [k[1], k[2], k[3], k[4]]), line: null, base: k[5] })
   return out
 }
 /** an element TeX set whose ink the bundle does not state (format's El): one TeX set outside its unit's text (`keep`; a space sets
@@ -436,7 +436,8 @@ export function targetsOf(
   }
 
   /** a heading's window: from its top on the page, across its column's measure, down SECTION_WINDOW of the page's height, and
-   *  round its own ink whole (a label hung left of the measure, a line past it); where that passes TeX's text block bottom (the
+   *  round its own ink whole (a label hung left of the measure, a line past it), its top round what TeX set on its own lines (a
+   *  paragraph run in on it); where that passes TeX's text block bottom (the
    *  frame's foot), it stops there and runs on, the rest of its height, from the top of the next column's text (the frame's
    *  next column on the page, else the next page's first): its first line in a column's body as TeX broke it, never a running
    *  head over it. None where the heading is not whole on its page, or another member's ink stands in either box but what the
@@ -448,9 +449,16 @@ export function targetsOf(
     const ls = mem.lines.filter((l) => l[0] === page)
     let ink: Box4 | null = null
     for (const k of own) ink = grow(ink, k.box)
-    const top = ink![3]
     const m0 = Math.min(...ls.map((l) => l[7]))
     const m1 = Math.max(...ls.map((l) => l[8]))
+    // (its top holds whole what TeX set on the heading's own lines: another member's ink on one of their baselines whose line's
+    // measure is inside the window's across, a paragraph run in on it, a formula there; never a line set turned)
+    const bases = new Set(ls.map((l) => onGrid(l[4])))
+    const across: Box4 = [Math.min(m0, ink![0]), 0, Math.max(m1, ink![2]), 0]
+    const on = inkOn(page).filter(([m, k]) => m !== mem && !m.dir && bases.has(onGrid(k.base)))
+    const runIn = new Set(on.filter(([, k]) => k.line && measured(k.line, across)).map(([m]) => m))
+    let top = ink![3]
+    for (const [m, k] of on) if (runIn.has(m)) top = Math.max(top, k.box[3])
     const view = w.ix.inkA.pages[page - 1]!.view
     const height = SECTION_WINDOW * (view[3] - view[1])
     const frame = w.ix.framesA.get(page)

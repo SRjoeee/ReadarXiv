@@ -554,15 +554,32 @@ describe('a stated box holds the whole of what it names, or the target is not st
       frames,
     )
     expect(of(wide, 'section.1', { page: 1, x: 72, y: 612 })).toEqual({ t: [], refused: [['heading', 'foreign']] })
-    // (a paragraph run in on the heading's line, its ink a little taller than the heading's)
-    const runIn = workOf(
+    // (the paragraph before it, its last line's descenders reaching under the heading's top)
+    const above = workOf(
       [
+        { kind: 'para', lines: [line(1, 608.5)] },
         { kind: 'heading', lines: [line(1, 600, 72, 140, 72, 300)] },
-        { kind: 'para', lines: [[1, 0, 150, 300, 600, 607.5, 598, 72, 300, 0], line(1, 588)] },
       ],
       frames,
     )
-    expect(of(runIn, 'section.1', { page: 1, x: 72, y: 612 })).toEqual({ t: [], refused: [['heading', 'foreign']] })
+    expect(of(above, 'section.1', { page: 1, x: 72, y: 600 })).toEqual({ t: [], refused: [['heading', 'foreign']] })
+  })
+  it('a heading’s window holds whole what TeX set on its line: a paragraph run in on it, taller than the heading', () => {
+    const frames = new Map([
+      [1, { block: [72, 300] as [number, number], columns: [[72, 300]] as [number, number][], foot: 72 }],
+    ])
+    // (its text a little taller, a formula in it taller still, both on the heading's baseline)
+    const formula: El = { kind: 'other', ink: [[1, 200, 597, 240, 609.25, 600]] }
+    const runIn = workOf(
+      [
+        { kind: 'heading', lines: [line(1, 600, 72, 140, 72, 300)] },
+        { kind: 'para', lines: [[1, 0, 150, 300, 600, 607.5, 598, 72, 300, 0], line(1, 588)], els: [['f', formula]] },
+      ],
+      frames,
+    )
+    expect(of(runIn, 'section.1', { page: 1, x: 72, y: 612 }).t).toMatchObject([
+      { kind: 'heading', box: [72, Math.floor((609.25 - SECTION_WINDOW * 792) * 100) / 100, 300, 609.25] },
+    ])
   })
   it('a member set turned is read on the page: its line, turned back, meeting a note’s box is foreign', () => {
     // (a line of a frame turned a quarter (its x axis the page's y): in the frame x 90..110 at height -160..-150, on the page

@@ -83,7 +83,7 @@ const untold = (el) => !el.ink?.length && (el.keep ? el.kind !== 'space' : INKED
  * - `foreign text`: another member's ink (a line's band, its label's ink, an element's ink) meets the box's inside. A heading's
  *   window holds by design what stands under its top across its column's measure (its section's paragraphs, a float set there):
  *   there, foreign is another's line whose TeX measure is not inside the window's across or whose band reaches above its top
- *   (another column, a block across both, a line run in on the heading's own), and another's label or element ink reaching above
+ *   (another column, a block across both, the text before the heading reaching into it), and another's label or element ink reaching above
  *   the top or whose member has no line in the window that is not foreign (a line set turned has no measure on the page).
  * Each row: the target's dest, kind, page, ord, the member it reads (`by`) and why; one row a member and cause.
  */

@@ -14207,7 +14207,8 @@ What it lands on decides:
   one biblatex entry (`inkreferences`, ink-units.ts rule 1); its box its every ink on A: its lines (each its ink across, its
   band up and down), its label's ink, its elements' ink (a URL's or an italic's reaching past its line's);
 - a heading: its window, from its top across its column's measure down `SECTION_WINDOW` (0.19) of the page's height, round
-  its own ink whole (a label hung left of the measure, a line past it); where
+  its own ink whole (a label hung left of the measure, a line past it), its top holding whole what TeX set on the heading's
+  own lines (a paragraph or a theorem's text run in on it, a formula there, taller than the heading's letters); where
   that passes TeX's text block bottom (the frame's foot) it stops there and runs on, by the rest of its height, from the top of
   the next column's text (the frame's next column on the page, else the next page's first): its first line inside a column's
   body as TeX's page builder broke it (B's `bs<n>`..`be<n>` brackets), never a running head over it: `Target`'s `next`;
@@ -14234,8 +14235,8 @@ jump alone:
   as another, the next line's ascenders over a display's foot). A heading's window holds by design what stands under its top
   across its column's measure (its section's paragraphs, a float TeX set there): there, another's line is foreign where TeX's
   measure for it is not inside the window's across (another column, a caption across both) or its band reaches above the
-  window's top (a paragraph run in on the heading's line, its letters taller than the heading's), and another's label or
-  element ink where it reaches above the top or its member has no such line in the window; in the window and in its `next`.
+  window's top (the text before the heading reaching into it), and another's label or element ink where it reaches above the
+  top or its member has no such line in the window; in the window and in its `next`.
 
 These refusals come after the evidence's: a landing the evidence refuses is counted there.
 
