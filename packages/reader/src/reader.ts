@@ -333,7 +333,11 @@ export function openReader(
     inView: (pl, l: Light) => panes?.inView(pl, l && 'box' in l ? { page: l.page, box: l.box } : null) ?? false,
     focusPage: (side, n) => panes?.focusPage(side, n) ?? false,
   }
-  const jumpLights = (): JumpLights | null => null
+  /** what a jump lights: the highlight's landing and its reading of a point (none before the layer's code is in) */
+  const jumpLights = (): JumpLights | null => {
+    const h = highlight
+    return h ? { litAt: (side, n, x, y, below) => h.litAt(side, n, x, y, below), land: (l) => h.land(l) } : null
+  }
   const oneJump = createOneJump({
     panes: () => (panes ? jumpPanes : null),
     lights: jumpLights,

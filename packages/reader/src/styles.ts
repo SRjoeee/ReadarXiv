@@ -7,8 +7,12 @@
 // <html> (chrome/appearance.ts) whichever element a host made the root (both hosts: <body>), a host with no chrome may write
 // it on the root itself. PDF.js's viewer sheet is linked beside it (kit.ts `sheet`).
 
+import { LAND_FULL, LAND_MS } from './compose/landing.ts'
+
 /** a reader whose pages are dimmed: `data-axt-dim` on its root or on any element above it, as the tokens read `data-theme` */
 const DIMMED = ':is(.axt-reader[data-axt-dim], [data-axt-dim] .axt-reader)'
+/** the band at half its strength: a hovered or held link's tint, on both panes (link previews' §3.7, L13) */
+const HALF = 'color-mix(in oklab, var(--axt-hl-color, var(--axt-green)) calc(var(--axt-hl-mix, 22%) / 2), transparent)'
 
 export const READER_CSS = `
 .axt-reader { --axt-green: oklch(0.693 0.17 162.48); --axt-sk: oklch(0.945 0.004 255); --axt-sk-paper: #fff; }
@@ -110,6 +114,11 @@ ${DIMMED} {
 /* over a dimmed page the band is screened, as it is multiplied over a white one (by its layer: a band's own blend mode mixes
    inside the layer alone) */
 ${DIMMED} .axt-hl-layer { mix-blend-mode: screen; }
+/* "you landed here" (link previews' §3.7): a jump's arrival and its way back, the band itself, full for its first 18 % and then
+   fading, opacity alone (nothing moves, so reduced motion has the same); a box of a page rounded as a mark (4 px) */
+.axt-reader .axt-land { animation: axt-land ${LAND_MS}ms cubic-bezier(0.2, 0, 0, 1) forwards; }
+.axt-reader .axt-land-box { border-radius: 4px; }
+@keyframes axt-land { 0%, ${Math.round(LAND_FULL * 100)}% { opacity: 1; } 100% { opacity: 0; } }
 /* the composed page's overlay over the page view: its frame the page's size at its scale (--axt-frame-w, -h), never the floored box.
    Its text at the weight the page's canvas draws its own (docs/PDF-READER.md §11.8): the browser's own smoothing, and
    geometricPrecision unless the reader's fixed probe said auto (text-rendering.ts, decided once a reader before its first
@@ -165,7 +174,20 @@ ${DIMMED} .axt-over > canvas.axt-crops, ${DIMMED} .axt-over > canvas.axt-crops-d
 .axt-reader .axt-link[data-axt-border="solid"] > .axt-link-box { border: var(--axt-link-border) solid var(--axt-link-colour); }
 .axt-reader .axt-link[data-axt-border="dashed"] > .axt-link-box { border: var(--axt-link-border) dashed var(--axt-link-colour); }
 .axt-reader .axt-link[data-axt-border="underline"] > .axt-link-box { border-bottom: var(--axt-link-border) solid var(--axt-link-colour); }
-@media (hover: hover) { .axt-reader .axt-link:hover > .axt-link-box { background-color: rgb(255 255 0 / 0.2); } }
+/* a hovered or held link (a preview's) takes the band at half, on both panes: the laid links' and PDF.js's own on the left and on a
+   right page not laid, whose yellow wash (pdf_viewer.css: an anchor at 0.2 opacity, a bordered link's 0.2 yellow) gives way,
+   each rule more specific than PDF.js's; multiplied into the page, screened into a dimmed one, as the band is */
+.axt-reader .axt-link > .axt-link-box::after { content: ""; position: absolute; inset: -1.5px -2px; border-radius: 4px; background: transparent; mix-blend-mode: multiply; pointer-events: none; }
+${DIMMED} .axt-link > .axt-link-box::after { mix-blend-mode: screen; }
+@media (hover: hover) {
+  .axt-reader .axt-link:hover > .axt-link-box::after { background: ${HALF}; }
+  .axt-reader .annotationLayer :is(.linkAnnotation, .buttonWidgetAnnotation.pushButton):not(.hasBorder) > a:hover { opacity: 1; background-color: ${HALF}; mix-blend-mode: multiply; }
+  .axt-reader .annotationLayer .linkAnnotation.hasBorder:hover { background-color: ${HALF}; mix-blend-mode: multiply; }
+  ${DIMMED} .annotationLayer :is(.linkAnnotation, .buttonWidgetAnnotation.pushButton):not(.hasBorder) > a:hover, ${DIMMED} .annotationLayer .linkAnnotation.hasBorder:hover { mix-blend-mode: screen; }
+}
+.axt-reader .axt-link[data-axt-held] > .axt-link-box::after { background: ${HALF}; }
+.axt-reader .annotationLayer .linkAnnotation > a[data-axt-held] { opacity: 1; background-color: ${HALF}; mix-blend-mode: multiply; }
+${DIMMED} .annotationLayer .linkAnnotation > a[data-axt-held] { mix-blend-mode: screen; }
 .axt-reader .axt-link { --axt-ring: oklch(0.235 0.012 255); --axt-ring-halo: oklch(1 0 0); }
 ${DIMMED} .axt-link { --axt-ring: oklch(0.935 0.005 255); --axt-ring-halo: oklch(0.255 0.006 255); }
 .axt-reader .axt-link:focus-visible > .axt-link-box { outline: 2px solid var(--axt-ring); outline-offset: 1px; box-shadow: 0 0 0 1px var(--axt-ring-halo), 0 0 0 4px var(--axt-ring-halo); }

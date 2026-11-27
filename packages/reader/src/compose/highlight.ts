@@ -24,7 +24,10 @@
 import type { Panes, Side } from '../panes/panes.ts'
 import type { Clock } from '../stack/clock.ts'
 import type { Composer } from './composer.ts'
+import { LAND_FULL, LAND_MS } from './landing.ts'
 import type { Box, Page } from './page.ts'
+
+export { LAND_FULL, LAND_MS }
 
 /** the pad beside a band, CSS px, its corners, and how long a point that lights nothing keeps what is lit */
 export const PAD = 3
@@ -41,6 +44,13 @@ export interface Highlight {
   light(t: Lit | null): void
   /** what a point of the screen over `side` lights, or null */
   at(side: Side, x: number, y: number): Lit | null
+  /** "you landed here" (link previews' §3.7): the shapes of a lit unit or sentence on both panes, or a box of a page on the panes
+   *  that show it (`side`: that pane alone), in the band's look at full strength for LAND_FULL of LAND_MS, then fading; drawn
+   *  in the highlight's own layer, whatever the hover switch says; a new landing replaces the last */
+  land(what: { lit: Lit } | { page: number; box: Box; side?: Side }): void
+  /** the sentence (or unit, `s` -1) a point of a page lights (PDF units on that pane's page, y up; `x` null: any column),
+   *  else the first member whose box stands at most `below` under it; null where none */
+  litAt(side: Side, page: number, x: number | null, y: number, below?: number): Lit | null
   setOn(on: boolean): void
   /** the shapes each pane shows (the probe's) */
   bands(): Record<Side, number>
@@ -577,8 +587,16 @@ export function createHighlight(o: { panes: Panes; composer: Composer; clock: Cl
     return out
   }
   function paint() {
-    for (const side of ['left', 'right'] as const) for (const l of layers[side].values()) l.replaceChildren()
+    for (const side of ['left', 'right'] as const)
+      for (const l of layers[side].values())
+        for (const c of [...l.children]) if (!c.classList.contains('axt-land')) c.remove()
     if (!lit || !on) return
+    drawLit(lit, '')
+  }
+  /** the shapes of a lit state on both panes, every page that holds its member; `extra`, a class of each shape's beside the
+   *  band's (the landing's); the elements made */
+  function drawLit(lit: Lit, extra: string): Element[] {
+    const made: Element[] = []
     for (const n of pagesOf(lit.id)) {
       const page = composer.page(n) as Page
       const committed = !!composer.laid(n) && !composer.muted(n)
@@ -608,7 +626,8 @@ export function createHighlight(o: { panes: Panes; composer: Composer; clock: Cl
         if (dir)
           for (const r of shapes.flatMap((boxes) => turnedRowsOf(side, n, boxes, lead, dir, pad))) {
             const el = document.createElement('div')
-            el.className = 'axt-hl'
+            el.className = `axt-hl${extra}`
+            made.push(el)
             Object.assign(el.style, {
               left: '0px',
               top: '0px',
@@ -641,10 +660,10 @@ export function createHighlight(o: { panes: Panes; composer: Composer; clock: Cl
           let el: HTMLElement | SVGSVGElement
           if (rows.length === 1) {
             el = document.createElement('div')
-            el.className = 'axt-hl'
+            el.className = `axt-hl${extra}`
           } else {
             el = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
-            el.setAttribute('class', 'axt-hl axt-hl-shape')
+            el.setAttribute('class', `axt-hl axt-hl-shape${extra}`)
             const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
             path.setAttribute('d', shapePath(local, RADIUS))
             el.append(path)
@@ -660,9 +679,88 @@ export function createHighlight(o: { panes: Panes; composer: Composer; clock: Cl
             scale: `calc(var(--total-scale-factor) / ${s0 * (96 / 72)})`,
           })
           layer.append(el)
+          made.push(el)
         }
       }
     }
+    return made
+  }
+  // ---- the landing: one at a time, gone after LAND_MS
+  let landed: Element[] = []
+  let landTimer = 0
+  const unland = () => {
+    clock.clear(landTimer)
+    landTimer = 0
+    for (const el of landed) el.remove()
+    landed = []
+  }
+  /** a box of a page on a pane, as a band of its own (the link's half tint's inset: 1.5 px over and under, 2 px beside) */
+  function drawBox(side: Side, n: number, box: Box): Element | null {
+    const layer = layerOf(side, n)
+    const frame = panes.frameOf(side, n)
+    const r = panes.boxOf(side, n, box, { upright: true })
+    if (!layer || !frame || !r) return null
+    if (frame.turn && layer.dataset.axtTurn !== String(frame.turn)) {
+      layer.dataset.axtTurn = String(frame.turn)
+      layer.style.setProperty('--axt-frame-w', `calc(var(--total-scale-factor) * ${frame.w}px)`)
+      layer.style.setProperty('--axt-frame-h', `calc(var(--total-scale-factor) * ${frame.h}px)`)
+    }
+    const el = document.createElement('div')
+    el.className = 'axt-hl axt-land axt-land-box'
+    const x0 = r.left - 2,
+      y0 = r.top - 1.5
+    Object.assign(el.style, {
+      left: `${x0}px`,
+      top: `${y0}px`,
+      width: `${r.width + 4}px`,
+      height: `${r.height + 3}px`,
+      transformOrigin: `${-x0}px ${-y0}px`,
+      scale: `calc(var(--total-scale-factor) / ${panes.scale * (96 / 72)})`,
+    })
+    layer.append(el)
+    return el
+  }
+  function land(what: { lit: Lit } | { page: number; box: Box; side?: Side }) {
+    if (disposed) return
+    unland()
+    if ('lit' in what) landed = drawLit(what.lit, ' axt-land')
+    else
+      for (const side of what.side ? [what.side] : (['left', 'right'] as const)) {
+        if (side === 'right' && composer.muted(what.page)) continue
+        const el = drawBox(side, what.page, what.box)
+        if (el) landed.push(el)
+      }
+    if (landed.length) landTimer = clock.later(unland, LAND_MS)
+  }
+  function litAt(side: Side, n: number, x: number | null, y: number, below = 0): Lit | null {
+    const page = composer.page(n)
+    if (!page || (side === 'right' && composer.muted(n))) return null
+    const committed = !!composer.laid(n)
+    const across = (b: Box) => x === null || (x >= b[0] && x <= b[2])
+    let best: Lit | null = null,
+      least = Number.POSITIVE_INFINITY,
+      near: Lit | null = null,
+      nearest = Number.POSITIVE_INFINITY
+    for (const m of page.members) {
+      if (m.lit.dir) continue
+      const { per } = entriesOf(page, m.ord, side, committed)
+      const whole = !(per.length > 1 && m.lit.left.length > 1)
+      for (let s = 0; s < per.length; s++)
+        for (const b of per[s] as Box[]) {
+          const t = { id: m.ord, s: whole ? -1 : s }
+          if (across(b) && y >= b[1] && y <= b[3]) {
+            const area = areaOf(per)
+            if (area < least) {
+              least = area
+              best = t
+            }
+          } else if (below > 0 && across(b) && b[3] <= y && y - b[3] <= below && y - b[3] < nearest) {
+            nearest = y - b[3]
+            near = t
+          }
+        }
+    }
+    return best ?? near
   }
   function at(side: Side, x: number, y: number): Lit | null {
     // (the page under the point and the point in its box by arithmetic over the places the panes keep (pointAt), the follower's
@@ -792,6 +890,8 @@ export function createHighlight(o: { panes: Panes; composer: Composer; clock: Cl
     },
     light,
     at,
+    land,
+    litAt,
     setOn(next) {
       if (on === next) return
       on = next
@@ -814,6 +914,7 @@ export function createHighlight(o: { panes: Panes; composer: Composer; clock: Cl
       for (const f of offs) f()
       clock.clear(missTimer)
       clock.cancel(frame)
+      unland()
       for (const side of ['left', 'right'] as const)
         for (const l of layers[side].values()) {
           l.dataset.axtGone = ''
