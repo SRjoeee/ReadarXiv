@@ -43,6 +43,8 @@ export interface FloatBox {
   type: string | null
   /** the union of the A partners of every glyph, turned glyph and box between its two points; null with a cause */
   box: Box4 | null
+  /** that union where it was made, a box or not (the lab's look at a refusal: never stated in the bundle) */
+  union: Box4 | null
   cause: FloatCause | null
   /** the members that own its ink on A, by ord: what is its own beside its partners */
   members: number[]
@@ -159,6 +161,7 @@ export function floatBoxes(w: Work, owned: Owned): FloatBox[] {
       captions,
       type: typeOf(caption),
       box: null,
+      union: null,
       cause,
       members: [],
       foreign: 0,
@@ -314,6 +317,7 @@ export function floatBoxes(w: Work, owned: Owned): FloatBox[] {
       ...base,
       cause,
       box: cause ? null : u,
+      union: u,
       members: [...own].sort((a, b) => a - b),
       foreign,
       cut,

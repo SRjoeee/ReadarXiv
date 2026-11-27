@@ -48,6 +48,7 @@ const floatOf = (o: Partial<FloatBox>): FloatBox => ({
   captions: [],
   type: 'figure',
   box: null,
+  union: null,
   cause: null,
   members: [],
   foreign: 0,
@@ -122,9 +123,37 @@ describe('where a destination lands (targets.ts)', () => {
   it('a display’s point lands on its ink, the paragraph’s measure the column it is found in', () => {
     const display: El = { kind: 'display', ink: [[1, 150, 600, 250, 630, 610]] }
     const w = workOf([{ kind: 'para', lines: [line(1, 650), line(1, 580)], els: [['e1', display]] }])
-    const [t] = targetsOf(w, dests({ 'equation.1': { page: 1, x: 72, y: 640 } }), [])
-    // (no line's band holds the point; the display's top is the first under it, within LAND_BELOW)
+    const [t] = targetsOf(w, dests({ 'equation.1': { page: 1, x: 72, y: 625 } }), [])
+    // (no line's band holds the point; the display's baseline is the first under it, within LAND_BELOW)
     expect(t).toEqual({ dest: 'equation.1', kind: 'display', page: 1, ord: 0, box: [150, 600, 250, 630] })
+  })
+  it('a point raised over a display into the band of the short line before it lands on the display, not on that line', () => {
+    // (hyperref raises an equation's anchor by \baselineskip from the display's baseline, at the display's left edge: here onto
+    // the baseline of the paragraph's last line before it, whose ink ends left of the point)
+    const display: El = { kind: 'display', ink: [[1, 150, 600, 250, 618, 607]] }
+    const w = workOf([{ kind: 'para', lines: [line(1, 640), line(1, 625, 72, 131)], els: [['e1', display]] }])
+    const [t] = targetsOf(w, dests({ 'equation.1': { page: 1, x: 150, y: 625 } }), [])
+    expect(t).toMatchObject({ kind: 'display', box: [150, 600, 250, 618] })
+  })
+  it('a raised anchor in the band of the entry above, left of its ink, lands on the entry under it', () => {
+    // (the entry above ends with a line at the point's height, indented past the point; the entry under begins 18 below it)
+    const [t] = targetsOf(workOf(refs), dests({ 'cite.b': { page: 1, x: 80, y: 688 } }), [])
+    expect(t).toMatchObject({ kind: 'reference', ord: 1 })
+  })
+  it('a destination set on a line, its point on that line’s ink at its baseline, lands on that line’s member', () => {
+    const w = workOf([
+      { kind: 'theorem', lines: [line(1, 700)] },
+      { kind: 'footnote', lines: [line(1, 690)] },
+    ])
+    expect(targetsOf(w, dests({ 'thm.1': { page: 1, x: 100, y: 700 } }), [])).toEqual([])
+  })
+  it('a biblatex entry, one entry a unit made on A, is a reference', () => {
+    const [t] = targetsOf(
+      workOf([{ kind: 'inkreferences', lines: [line(1, 700, 80)] }]),
+      dests({ c: { page: 1, x: 72, y: 712 } }),
+      [],
+    )
+    expect(t).toMatchObject({ kind: 'reference', ord: 0, box: [80, 698, 300, 707] })
   })
   it('a figure’s point at its caption lands on the float’s box; a hypcap point at its top lands on the float', () => {
     const w = workOf([

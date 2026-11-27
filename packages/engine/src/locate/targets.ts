@@ -3,7 +3,9 @@
 // link's (the design's L4: a link's kind is the unit its destination lands on, never the destination's name). A reference
 // entry, a heading, a note, a display and a boxed float are covered; anything else at the point (a theorem, an item, a cell, a
 // float with no box) lands nowhere, and the destination is absent: its links keep their jump alone. Phase 18 of locate, the
-// last, read-only: it reads the members' lines, elements and labels, the page frames and the floats' boxes (floats.ts).
+// last, read-only: it reads the members' lines, elements and labels, the page frames and the floats' boxes (floats.ts). A
+// reference is a member of a bibliography's entry: a source unit that is one (`\bibitem`'s, Unit.entry) or a unit made on A of
+// one biblatex entry (ink-units.ts rule 1, kind `inkreferences`: one entry a unit, cut at the compile's point before it).
 import type { TargetKind } from '@readarxiv/format'
 import type { DestPoint } from './dests.ts'
 import type { Box4, FloatBox } from './floats.ts'
@@ -19,21 +21,35 @@ export interface Landing {
   next?: [page: number, box: Box4]
 }
 
-/** how far under a destination's point the top of what it lands on may stand, PDF units, and how far over it (hyperref raises an
- *  anchor by \baselineskip over the line it marks). Starting values, measured over the corpus (docs/PDF-READER.md §20.3) */
+/** how far under a destination's point the baseline of what it lands on may stand, PDF units: hyperref raises an anchor by the
+ *  \baselineskip in force over the first baseline of what it marks (over the corpus's 245 papers: references 8 to 14 under the
+ *  point, displays 11 to 17, notes 9 to 19, headings 10 to 39, docs/PDF-READER.md §20.3). A starting value, measured there */
 export const LAND_BELOW = 24
-export const LAND_ABOVE = 2
 /** a heading's window: from its top down this share of its page's height, across its column's measure (the approved
  *  prototype's three section targets, whose two segments sum to 0.183-0.192 of the page) */
 export const SECTION_WINDOW = 0.19
 
-/** a thing a point may land on, on one page: a member's line, a display element's ink, a boxed float */
-type Item =
-  | { what: 'line'; mem: Member; line: number; top: number; bottom: number; x0: number; x1: number }
-  | { what: 'display'; mem: Member; box: Box4; top: number; bottom: number; x0: number; x1: number }
-  | { what: 'float'; float: FloatBox; top: number; bottom: number; x0: number; x1: number }
-/** the order a point inside several things lands on them: a float holds its texts, a display stands in its paragraph's lines */
+/** a thing a point may land on, on one page: a member's line or its label, a display element's ink, a boxed float; its
+ *  baseline, its band, its ink across (`ix0`, `ix1`) and what it spans across for its column (`x0`, `x1`: a line's measure) */
+type Item = {
+  base: number
+  top: number
+  bottom: number
+  ix0: number
+  ix1: number
+  x0: number
+  x1: number
+} & (
+  | { what: 'line'; mem: Member; line: number }
+  | { what: 'display'; mem: Member; box: Box4 }
+  | { what: 'float'; float: FloatBox }
+)
+/** the order a point under several things at one height lands on them: a float holds its texts, a display stands in its
+ *  paragraph's lines */
 const RANK = { float: 0, display: 1, line: 2 } as const
+/** a height on the format's grid (the parts' numbers are stated on it: a point and a baseline TeX set at one height compare
+ *  equal there) */
+const onGrid = (v: number) => Math.round(v * 100) / 100
 
 const grow = (u: Box4 | null, r: Box4): Box4 =>
   u ? [Math.min(u[0], r[0]), Math.min(u[1], r[1]), Math.max(u[2], r[2]), Math.max(u[3], r[3])] : [...r]
@@ -65,32 +81,49 @@ export function targetsOf(
     for (const mem of members) {
       if (!mem.located) continue
       mem.lines.forEach((l, i) => {
-        if (l[0] === page)
-          items.push({
-            what: 'line',
-            mem,
-            line: i,
-            top: l[5],
-            bottom: l[6],
-            x0: Math.min(l[2], l[7]),
-            x1: Math.max(l[3], l[8]),
-          })
+        if (l[0] !== page) return
+        const x0 = Math.min(l[2], l[7])
+        const x1 = Math.max(l[3], l[8])
+        items.push({ what: 'line', mem, line: i, base: l[4], top: l[5], bottom: l[6], ix0: l[2], ix1: l[3], x0, x1 })
       })
+      // (its label, on the line it stands on: a reference's number, a heading's, where hyperref's anchor stands before)
+      const lab = mem.labelAt?.ink
+      const on = mem.lines.findIndex((l) => l[0] === page)
+      if (lab && lab[0] === page && on >= 0) {
+        const at = mem.labelAt?.line !== undefined && mem.lines[mem.labelAt.line]?.[0] === page ? mem.labelAt.line : on
+        const l = mem.lines[at]!
+        items.push({
+          what: 'line',
+          mem,
+          line: at,
+          base: lab[5],
+          top: lab[4],
+          bottom: lab[2],
+          ix0: lab[1],
+          ix1: lab[3],
+          x0: Math.min(lab[1], l[7]),
+          x1: Math.max(lab[3], l[8]),
+        })
+      }
       for (const [, el] of mem.elements) {
         if (el.kind !== 'display') continue
         let box: Box4 | null = null
         for (const k of el.ink) if (k[0] === page) box = grow(box, [k[1], k[2], k[3], k[4]])
         if (!box) continue
-        // (across, its paragraph's measure on the page: a display is centred in it, its anchor at the measure's left)
+        // (across, its paragraph's measure on the page for its column: a display is centred in it)
         const ls = mem.lines.filter((l) => l[0] === page)
         const x0 = Math.min(box[0], ...ls.map((l) => l[7]))
         const x1 = Math.max(box[2], ...ls.map((l) => l[8]))
-        items.push({ what: 'display', mem, box, top: box[3], bottom: box[1], x0, x1 })
+        for (const k of el.ink)
+          if (k[0] === page)
+            items.push({ what: 'display', mem, box, base: k[5], top: k[4], bottom: k[2], ix0: k[1], ix1: k[3], x0, x1 })
       }
     }
     for (const f of boxed)
-      if (f.page === page)
-        items.push({ what: 'float', float: f, top: f.box![3], bottom: f.box![1], x0: f.box![0], x1: f.box![2] })
+      if (f.page === page) {
+        const [x0, y0, x1, y1] = f.box!
+        items.push({ what: 'float', float: f, base: y1, top: y1, bottom: y0, ix0: x0, ix1: x1, x0, x1 })
+      }
     itemsByPage.set(page, items)
     return items
   }
@@ -113,36 +146,26 @@ export function targetsOf(
     return [...frame.columns].sort((a, b) => dist(a) - dist(b))[0]!
   }
 
-  /** the thing a point lands on: in its column, one that holds the point's height (a float before a display before a line),
-   *  else the first whose top stands under it within LAND_BELOW (or over it within LAND_ABOVE) */
+  /** the thing a point lands on. A boxed float that holds it. Else a line it stands on: one whose band holds its height and
+   *  whose ink holds its x, its baseline at or over it (an anchor TeX set on that line, not raised over it). Else the first
+   *  thing under it in its column: the highest baseline under its height, within LAND_BELOW (hyperref raises an anchor over
+   *  what it marks, into the band of the line above, which stands at or over the point) */
   function itemAt(page: number, x: number | null, y: number): Item | null {
+    const items = itemsOf(page)
+    const gy = onGrid(y)
+    const holdsY = (it: Item) => it.bottom <= y && y <= it.top
+    const holdsX = (it: Item) => x !== null && it.ix0 <= x && x <= it.ix1
+    const floats = items.filter((it) => it.what === 'float' && holdsY(it) && (x === null || holdsX(it)))
+    if (floats.length) return floats.sort((a, b) => a.top - a.bottom - (b.top - b.bottom))[0]!
+    const on = items.filter((it) => it.what !== 'float' && holdsY(it) && holdsX(it) && onGrid(it.base) >= gy)
+    if (on.length) return on.sort((a, b) => RANK[a.what] - RANK[b.what] || a.top - a.bottom - (b.top - b.bottom))[0]!
     const col = columnOf(page, x)
     const inColumn = (it: Item) =>
       col ? it.x0 < col[1] && it.x1 > col[0] : x === null || it.what === 'float' || (it.x0 <= x && x <= it.x1)
     let best: Item | null = null
-    let bestHolds = false
-    for (const it of itemsOf(page)) {
-      if (!inColumn(it)) continue
-      const holds = it.bottom <= y && y <= it.top
-      const near = it.top <= y + LAND_ABOVE && it.top >= y - LAND_BELOW
-      if (!holds && !near) continue
-      if (!best) {
-        best = it
-        bestHolds = holds
-        continue
-      }
-      if (holds !== bestHolds) {
-        if (holds) {
-          best = it
-          bestHolds = true
-        }
-        continue
-      }
-      const better = holds
-        ? RANK[it.what] < RANK[best.what] ||
-          (RANK[it.what] === RANK[best.what] && it.top - it.bottom < best.top - best.bottom)
-        : it.top > best.top || (it.top === best.top && RANK[it.what] < RANK[best.what])
-      if (better) best = it
+    for (const it of items) {
+      if (!inColumn(it) || onGrid(it.base) >= gy || y - it.base > LAND_BELOW) continue
+      if (!best || it.base > best.base || (it.base === best.base && RANK[it.what] < RANK[best.what])) best = it
     }
     return best
   }
@@ -159,7 +182,11 @@ export function targetsOf(
     const line = mem.lines[it.line]!
     if (mem.kind === 'heading') return headingOf(dest, page, mem, line)
     const kind: TargetKind | null =
-      mem.kind === 'reference' && unit.entry ? 'reference' : mem.kind === 'footnote' ? 'footnote' : null
+      (mem.kind === 'reference' && unit.entry) || mem.kind === 'inkreferences'
+        ? 'reference'
+        : mem.kind === 'footnote'
+          ? 'footnote'
+          : null
     if (!kind) return null
     // (its lines on the page in the line's column, and its label there)
     let box: Box4 | null = null
