@@ -1198,7 +1198,8 @@ export function createComposer(o: ComposerOptions): Composer {
       if (!vp || !slot || (((vp.rotation ?? 0) % 360) + 360) % 360) return null
       const view = slot.querySelector<HTMLElement>('.axt-slot-view > .page')
       const canvas = view?.querySelector<HTMLCanvasElement>('.canvasWrapper canvas') ?? null
-      const over = view?.querySelector<HTMLElement>(':scope > .axt-over') ?? null
+      // (the overlay stands beside the page view in its holder: stack.ts appends it there once the page view has drawn)
+      const over = slot.querySelector<HTMLElement>('.axt-slot-view > .axt-over')
       if (!(view && canvas?.width)) return null
       const [vx0 = 0, , vx1 = 0, vy1 = 0] = vp.viewBox
       const vy0 = vp.viewBox[1] ?? 0

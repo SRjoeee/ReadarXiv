@@ -440,6 +440,8 @@ export function createPreviews(d: PreviewDeps): Previews {
     if (pend?.link.el === l.el || cur?.link.el === l.el) leave()
   })
   on(root, 'focusin', (e) => {
+    // (a narrow screen shows a preview as a sheet, on a tap alone: the focus a closed sheet gives back to its link opens none)
+    if (d.narrow()) return
     const l = linkAt(e.target)
     if (!l) return
     let visible = true

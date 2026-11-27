@@ -2098,7 +2098,7 @@ describe('a page warmed and cut for a preview (link previews: warm, region)', ()
     await settle()
     w.stack.put(2)
     await settle()
-    // (the slot's drawing as the stack holds it: the page view's canvas, the overlay's SVG and crops)
+    // (the slot's drawing as the stack holds it: the page view's canvas, and beside it the overlay's SVG and crops)
     const slot = w.stack.page(2)!
     const holder = document.createElement('div')
     holder.className = 'axt-slot-view'
@@ -2119,8 +2119,9 @@ describe('a page warmed and cut for a preview (link previews: warm, region)', ()
     crops.width = canvas.width
     crops.height = canvas.height
     over.append(svg, crops)
-    view.append(wrap, over)
-    holder.append(view)
+    // (the overlay is the holder's, beside the page view: stack.ts puts it there once the page view has drawn)
+    view.append(wrap)
+    holder.append(view, over)
     slot.append(holder)
     const r = w.composer.region(2, [60, 400, 360, 700], 1)
     expect(r).not.toBeNull()

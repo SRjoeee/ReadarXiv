@@ -120,6 +120,17 @@ describe('the sheet', () => {
     const d = t.root.querySelector('dialog.axt-sheet') as HTMLDialogElement
     expect([...d.querySelectorAll('button')].map((b) => b.textContent)).toEqual([R.preview.go])
   })
+  it('the focus a closed sheet gives back to its link opens no preview over the page (a narrow screen shows none)', async () => {
+    const t = setUp()
+    const rect = (left: number, top: number, width: number, height: number) =>
+      ({ left, top, width, height, right: left + width, bottom: top + height }) as DOMRect
+    vi.spyOn(t.root.firstElementChild as HTMLElement, 'getBoundingClientRect').mockReturnValue(rect(0, 44, 390, 800))
+    vi.spyOn(t.fig, 'getBoundingClientRect').mockReturnValue(rect(100, 200, 10, 12))
+    t.fig.tabIndex = 0
+    t.fig.focus()
+    await settle()
+    expect(t.root.querySelector('.axt-pv')).toBeNull()
+  })
   it('a link with no target jumps on a tap as today (its click not taken)', () => {
     const t = setUp()
     expect(tap(t.thm).defaultPrevented).toBe(false)
