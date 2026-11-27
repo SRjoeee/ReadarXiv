@@ -7181,7 +7181,7 @@ await check(
               () => null,
             )
           const kind = dest.split('.')[0]
-          ;(times[kind] ??= []).push(t1 === null ? null : Math.round(t1 - t0))
+          times[kind] = [...(times[kind] ?? []), t1 === null ? null : Math.round(t1 - t0)]
         }
       const all = Object.values(times)
         .flat()
