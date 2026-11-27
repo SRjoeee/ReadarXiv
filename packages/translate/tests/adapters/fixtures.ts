@@ -718,8 +718,8 @@ export const GOOGLE_REPLIES: { unit: number; raw: string; taken: boolean; why?: 
 /** Replies in the LLM wire's typed tags (adapters/llm-wire.ts) to the tags fixture units, written here in German (no reply
  *  of a model is quoted): the spellings the 11-06 probe met, read tolerantly, and the ones refused. The behaviour digest
  *  LLM_WIRE_DIGEST is taken over these (tests/digests.ts) */
-const FW_OPEN = '＜'
-const FW_CLOSE = '＞'
+const FW_OPEN = String.fromCharCode(0xff1c)
+const FW_CLOSE = String.fromCharCode(0xff1e)
 export const LLM_REPLIES: { unit: number; raw: string; taken: boolean; why?: string }[] = [
   { unit: 0, raw: 'Wir untersuchen das Problem. <x1/>Es ist schwer.', taken: true, why: 'a boundary marker back' },
   { unit: 0, raw: 'Wir untersuchen das Problem. Es ist schwer.', taken: true, why: 'the boundary marker lost' },

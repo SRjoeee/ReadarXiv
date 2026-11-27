@@ -10,8 +10,8 @@ import { DIGESTS } from '../digests.ts'
 import { el, span, t, unit } from '../pieces.ts'
 import { LLM_REPLIES, TAGS_UNITS } from './fixtures.ts'
 
-const FW_OPEN = '＜'
-const FW_CLOSE = '＞'
+const FW_OPEN = String.fromCharCode(0xff1c)
+const FW_CLOSE = String.fromCharCode(0xff1e)
 
 describe('writeTyped', () => {
   it('an element by its kind’s letter and its slot, a span with text as a pair `s`', () => {

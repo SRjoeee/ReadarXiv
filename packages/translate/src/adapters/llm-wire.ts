@@ -69,7 +69,7 @@ export function writeTyped(unit: UnitIn): string {
 
 /** a typed tag as a model may spell it: `<`, `</` or a full-width bracket, spaces anywhere inside, a letter of either
  *  case, the number, `/>` or `>` */
-const LOOSE_TAG = /[<＜]\s*(\/?)\s*([A-Za-z])\s*(\d+)\s*(\/?)\s*[>＞]/g
+const LOOSE_TAG = new RegExp(String.raw`[<\uFF1C]\s*(\/?)\s*([A-Za-z])\s*(\d+)\s*(\/?)\s*[>\uFF1E]`, 'g')
 
 /** spellings a model writes for a tag, made the plan's: a space after `<` or `</`, capitals, full-width brackets
  *  (U+FF1C, U+FF1E), a letter other than the one sent (read by number) */
