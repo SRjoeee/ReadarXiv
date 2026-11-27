@@ -14337,7 +14337,9 @@ Two fields of the typesetter's `Page`, in memory alone (no stored shape, no vers
   right pane as on the left (a citation's card is anchored to the whole bracket). The first four members are what they were.
 - `Laid.extent`: the union of everything a laid member draws on its page as the painter draws it (`lay/extent.ts`): each run
   from its x to its last advance (its characters' own places where it has them), its tracking, or its ink's right where that is
-  further, over and under its baseline by its ink at its size, raised where raised, slanted by the painter's 12° where oblique;
+  further, over and under its baseline by its ink at its size, raised where raised, and its line whole (the band the
+  typesetter sets a line in at the run's size, `tokenBand`: a crop of the ink alone cut a caption's last descenders), slanted by
+  the painter's 12° where oblique;
   each crop's source moved and scaled onto its line; a turned line's along its direction. None for a member not laid or laid
   with nothing on the page. A preview of the right pane cuts round it (the design's L12: what the translation draws, never only
   the original's box).

@@ -3,12 +3,17 @@
 // each item as the reader's painter draws it (packages/reader compose/paint.ts):
 // - a run: from its x to its last advance (its characters' own places `dx` where it has them, the last one's advance after it),
 //   its tracking after each character, or to its ink's right where that is further; over and under its baseline by its ink at
-//   its size (Metrics.ink), raised by its `rise`; an oblique run (`skew`) slanted about its baseline by the painter's 12°;
+//   its size (Metrics.ink), raised by its `rise`, and its line whole: the band the typesetter sets a line in at the run's size
+//   (emit/sentences.ts tokenBand: a Latin run's ascent and descent, a CJK run's em box), wherever its ink stops (a crop round a
+//   caption cut its last line's descenders where the ink alone was read); an oblique run (`skew`) slanted about its baseline by
+//   the painter's 12°;
 // - a crop: its source's box moved and scaled onto its line, its base on the line's baseline (paint.ts placeOf);
 // - a line set along a direction (`dir`: a turned figure text, a frame's line): each of those from the line's origin along it,
 //   its ink across it, the page's box of the turned corners.
 // None for a member not laid, or laid with no item on the page.
 import type { Box } from '@readarxiv/format'
+import { CJK } from '../breaker/script.ts'
+import { tokenBand } from '../emit/sentences.ts'
 import type { Item, Laid, Metrics } from '../types.ts'
 
 /** the painter's slant of an oblique run (reader compose/paint.ts OBLIQUE_DEG) */
@@ -33,7 +38,9 @@ function runFrame(it: Run, lx: number, metrics: Metrics): [number, number, numbe
     lo -= down * OBLIQUE
     hi += up * OBLIQUE
   }
-  return [lo, rise - down, hi, rise + up]
+  // (its line's band at its size, unraised, with its ink)
+  const band = tokenBand({ cls: CJK.test(it.s) ? 'cjk' : 'latin' } as never, { f: it.size }, 0)
+  return [lo, Math.min(rise - down, band.bottom), hi, Math.max(rise + up, band.top)]
 }
 
 /** a box of the frame of direction (ux, uy) on the page: its four corners turned (paint.ts onPage) */

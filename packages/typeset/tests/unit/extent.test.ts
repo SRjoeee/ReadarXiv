@@ -29,7 +29,13 @@ const drawnBox = (it: Item, y: number): Box => {
   const last = it.dx?.length ? it.dx[it.dx.length - 1]! + metrics.advance(it.face, it.size, [...it.s].at(-1)!) : 0
   const w = it.dx?.length ? last + (it.track ?? 0) : metrics.advance(it.face, it.size, it.s) + (it.track ?? 0) * n
   const r = it.rise ?? 0
-  return [it.x, y + r - 0.2 * it.size, it.x + w, y + r + 0.7 * it.size]
+  // (its ink, raised, and its line's band at its size: 0.75 over the baseline, 0.22 under, a Latin line's)
+  return [
+    it.x,
+    Math.min(y + r - 0.2 * it.size, y - 0.22 * it.size),
+    it.x + w,
+    Math.max(y + r + 0.7 * it.size, y + 0.75 * it.size),
+  ]
 }
 const laid = (lines: Laid['lines'], o: Partial<Laid> = {}): Laid => ({
   ord: 0,
@@ -50,7 +56,10 @@ const run = (s: string, x: number, o: Partial<Extract<Item, { face: string }>> =
 
 describe('extentOf: the union of what a laid member draws on its page', () => {
   it('a run: from its x to its advance, its ink over and under the baseline', () => {
-    expect(extentOf(laid([[700, 72, 112, [run('Wort', 72)]]]), metrics)).toEqual([72, 698, 92, 707])
+    const e = extentOf(laid([[700, 72, 112, [run('Wort', 72)]]]), metrics)!
+    expect([e[0], e[2]]).toEqual([72, 92])
+    expect(e[1]).toBeCloseTo(697.8, 9)
+    expect(e[3]).toBeCloseTo(707.5, 9)
   })
   it('a raised run stands raised; a run of its own places (dx) ends at its last character’s advance; tracking widens it', () => {
     const e = extentOf(
@@ -83,10 +92,23 @@ describe('extentOf: the union of what a laid member draws on its page', () => {
   it('a turned line (dir): its runs along it from the line’s origin, their ink across it', () => {
     // (a quarter turn up: along the page's y, ink across to the left (over) and right (under) of the baseline at x 300)
     const e = extentOf(laid([[100, 300, 320, [run('Wort', 300, { dir: [0, 1] })]]]), metrics)!
-    expect(e[0]).toBeCloseTo(300 - 7, 9)
-    expect(e[2]).toBeCloseTo(300 + 2, 9)
+    expect(e[0]).toBeCloseTo(300 - 7.5, 9)
+    expect(e[2]).toBeCloseTo(300 + 2.2, 9)
     expect(e[1]).toBeCloseTo(100, 9)
     expect(e[3]).toBeCloseTo(120, 9)
+  })
+  it('holds its lines whole: a line set at its size reaches the face’s ascent and descent, whatever its ink (the lead’s look at a crop that cut a caption’s descenders)', () => {
+    // (ink that stops on the baseline and under the x-height: the line's own band still holds it, 0.75 of the size over its
+    // baseline and 0.22 under, as the typesetter sets a Latin line; a CJK run its em box)
+    const flat: Metrics = { ...metrics, ink: (_f, size, t) => [0.4 * size, 0, (size * [...t].length) / 2] }
+    const e = extentOf(laid([[700, 72, 112, [run('ace', 72)]]]), flat)!
+    expect(e[1]).toBeCloseTo(700 - 0.22 * 10, 9)
+    expect(e[3]).toBeCloseTo(700 + 0.75 * 10, 9)
+    // (ink past the band still counts: a tall glyph)
+    const tall: Metrics = { ...metrics, ink: (_f, size, t) => [1.2 * size, 0.5 * size, (size * [...t].length) / 2] }
+    const f = extentOf(laid([[700, 72, 112, [run('ace', 72)]]]), tall)!
+    expect(f[1]).toBeCloseTo(695, 9)
+    expect(f[3]).toBeCloseTo(712, 9)
   })
   it('a member not laid, or laid with no line on the page, has none', () => {
     expect(extentOf(laid([[700, 72, 112, [run('Wort', 72)]]], { state: 'none' }), metrics)).toBeUndefined()
