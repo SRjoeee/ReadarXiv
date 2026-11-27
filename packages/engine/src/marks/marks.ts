@@ -2788,8 +2788,8 @@ export function regionsTex(
  *   nothing, and a step that does not expand, \lowercase among them, would leave that space to be set). A class that changes a
  *   stored text's case with TeX's primitive changes every character token's code by its \uccode and no control sequence's name:
  *   textcase's \MakeTextUppercase (REVTeX 4.0's \section) turns `{h5s}` to `{H5S}` and leaves `\axthmark` as it is. Our names
- *   are lower-case letters, digits and full stops, each begun by a letter, which \lowercase turns back exactly (the letters'
- *   codes the format's pairs, the others' none): where the name's first character is a letter not its own \lccode, an
+ *   are lower-case letters, digits and full stops, each begun by a lower-case letter, which \lowercase turns back exactly (the
+ *   letters' codes the format's pairs, the others' none): where the name's first character is not its own \lccode, an
  *   upper-cased name, the command and its argument go through \lowercase, so the point, its alignment (AXT-ALIGN) and its skips
  *   (AXT-SECT) are named as the marking wrote them (amsart's \uppercasenonmath set `H6E` and stated no alignment); every other
  *   name expands as it did
@@ -2892,7 +2892,7 @@ export const LAYOUT_TEX = [
   '\\protected\\def\\axt@gp#1{\\ifaxt@off\\else\\expandafter\\gdef\\csname axt@gp@#1\\endcsname{\\axt@pm{#1}}\\expandafter\\aftergroup\\csname axt@gp@#1\\endcsname\\fi}',
   '\\protected\\def\\axt@hm#1{\\ifaxt@off\\else\\axt@align{#1}\\ifhmode\\relax\\axt@holdtrue\\axt@put{#1}\\axt@holdfalse\\fi\\fi}',
   '\\protected\\def\\axt@colour#1{\\ifaxt@off\\else\\ifdefined\\current@color\\message{^^JAXT-COLOUR #1 \\current@color^^J}\\fi\\fi\\ignorespaces}',
-  '\\def\\axt@lc#1#2{\\axt@lcup#2\\@nil{\\lowercase{#1{#2}}}{#1{#2}}}\\def\\axt@lcup#1#2\\@nil{\\ifnum\\lccode`#1=\\z@\\expandafter\\@secondoftwo\\else\\ifnum\\lccode`#1=`#1 \\expandafter\\expandafter\\expandafter\\@secondoftwo\\else\\expandafter\\expandafter\\expandafter\\@firstoftwo\\fi\\fi}',
+  '\\def\\axt@lc#1#2{\\axt@lcup#2\\@nil{\\lowercase{#1{#2}}}{#1{#2}}}\\def\\axt@lcup#1#2\\@nil{\\ifnum\\lccode`#1=`#1 \\expandafter\\@secondoftwo\\else\\expandafter\\@firstoftwo\\fi}',
   ...GATED_MARKS.filter(([cs]) => cs !== 'axtpmd').map(([cs, inner]) => gateTex(cs, inner)),
   WRITES_TEX,
   '\\ifdefined\\AddToHook\\AddToHook{cmd/@starttoc/before}{\\global\\axt@offtrue}\\AddToHook{cmd/@starttoc/after}{\\global\\axt@offfalse}\\AddToHook{cmd/@outputpage/before}{\\axt@offtrue}',

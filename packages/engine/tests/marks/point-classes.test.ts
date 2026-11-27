@@ -60,8 +60,8 @@ const markedDigests = (paper: ReturnType<typeof openPaper>) =>
 /** the TeX and the marked sources at 7d8fad7c4 (this file's computation run there, before POINT_CLASSES); LAYOUT_TEX's and the
  *  marked sources' taken again where the gated marks became robust (marks.ts GATED_MARKS): the points' and the DVI forms' as they were */
 const AT_BASE = {
-  tex: { points: 'bcedcfb561bf0e88', layout: '61ea2477909fe785', dvi: '651ee0348d79c9fc' },
-  sources: { pdflatex: ['main.tex 7600d6b3fb4173eb'], latex: ['main.tex a78737c562f4e3c6'] },
+  tex: { points: 'bcedcfb561bf0e88', layout: '472d40ec331befca', dvi: '651ee0348d79c9fc' },
+  sources: { pdflatex: ['main.tex 6064a693944f761d'], latex: ['main.tex 485f98f459f93740'] },
 }
 
 describe("no byte of the marked TeX moves (held at 7d8fad7c4, before the points' table)", () => {

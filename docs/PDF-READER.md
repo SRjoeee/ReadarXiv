@@ -10050,9 +10050,9 @@ expansion took off (all in this section's last item), and the rest are the holes
   minitoc reads its part contents back with no `\@starttoc`, and the heading's points were set twice there, the root form's
   regression of the round before). A running head keeps them, set in the output routine with every mark off; a PDF string and
   nameref's titles have them taken out as before. TeX's `\uppercase` turns the argument's letters (`{h5s}` to `{H5S}`) and no
-  control sequence's name; our names are lower-case letters, digits and full stops, each begun by a letter, which `\lowercase`
-  turns back exactly, so where the name begins with an upper-case letter the gate hands the command and its argument through
-  `\lowercase` (`\axt@lc`): the point, its alignment (AXT-ALIGN) and its skips (AXT-SECT) are named as the marking wrote them,
+  control sequence's name; our names are lower-case letters, digits and full stops, each begun by a lower-case letter, which
+  `\lowercase` turns back exactly, so where the name's first letter is not its own lower case the gate hands the command and
+  its argument through `\lowercase` (`\axt@lc`): the point, its alignment (AXT-ALIGN) and its skips (AXT-SECT) are named as the marking wrote them,
   as the reader already read every point's name (`read.ts`, lower case). So amsart's titles and headings, which
   `\uppercasenonmath` set as `H6E` with no alignment stated, state theirs now. Every other name expands as it did, by expansion
   alone: TeX resumes the paragraph after `$$` by reading one token with expansion and dropping a space, and a placeholder's
