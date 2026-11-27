@@ -175,4 +175,38 @@ describe("the text after a display, a letter set by \\accent with each of the ke
     expect(display('An xˇy is', 'An xˇy is')).toBe('a=b')
     expect(display('An x´y is', 'An x´y is')).toBe('a=b')
   })
+
+  it('a letter with no precomposed form under its accent, the last of the characters looked for, is found with its mark', () => {
+    // (m under a circumflex has no precomposed letter: the text after the display, cut at its first WANT characters, keeps the
+    // mark of the last of them)
+    expect(display('An etale\u02c6m', 'An etalem\u0302')).toBe('a=b')
+    expect(display('An etale\u02c6n', 'An etalem\u0302')).toBe(NOT_FOUND)
+  })
+
+  // (a paper's bare `\^{}` sets the spacing accent alone, a placeholder of its own, and the text after it begins at the letter
+  // after: the accent is that placeholder's ink, never taken into the text's last letter looked for as a glyph of several
+  // characters is, a ligature running past the text's end)
+  it.each(KERNEL_ACCENTS)('%s set on nothing before the last letter looked for stays out of the text', (glyph) => {
+    const page = pageOf([
+      { at: 'bs1' },
+      { at: '1s' },
+      'We define',
+      { at: 'p1.1a' },
+      '\na = b\n',
+      `${glyph}m`,
+      { at: '1e' },
+      { at: 'be1' },
+    ])
+    const units = [
+      unit('para', []),
+      unit('para', [
+        { t: 'text', s: 'We define ' },
+        { t: 'ph', src: '\\[ a = b \\]' },
+        { t: 'text', s: '\nm' },
+      ]),
+    ]
+    const follows = followsOf(units as never, new Set(page.points.map((p) => p.name)))
+    const e = ownedOf([page], { follows, erasure: true }).get('p1.1a')!
+    expect(e.how < OWNED ? e.glyphs.map(([, g]) => page.glyphs.u[g]).join('') : OWNED_HOW[e.how]).toBe(`a=b${glyph}`)
+  })
 })
