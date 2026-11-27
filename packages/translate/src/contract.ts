@@ -237,7 +237,9 @@ export interface Translator {
 }
 
 /** this package's adapters, each by the name its translators' identities begin with (adapters/microsoft.ts, google.ts,
- *  chrome.ts: `<name>:<16 hex>`) */
+ *  chrome.ts: `<name>:<16 hex>`), each one endpoint whose limit its translators share. The LLM adapter (adapters/llm.ts,
+ *  `llm:<16 hex>`) is none of them: each model entry is a translator of its own, whose limit is its host's spend port (the
+ *  ledger), and one name for every model would lump their limits together */
 export type Adapter = 'microsoft' | 'google' | 'chrome'
 /** an identity one of this package's adapters makes: its name, then the 16 hex of its digest (tests/index.test.ts holds each
  *  adapter's own identity to it) */

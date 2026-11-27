@@ -1,4 +1,4 @@
-// The key a model request is sent with (the translation policy's design §4): pure, over the policy's keys and what the
+// The key a model request is sent with (DESIGN §8, a host's LLM translator): pure, over the policy's keys and what the
 // host's ledger knows now. Keys of one quota group share its allowance, so room is the group's, never the key's.
 import type { KeyEntry } from './policy.ts'
 

@@ -13,6 +13,7 @@ import {
   replyOf,
   systemOf,
 } from '../../src/adapters/llm-shapes.ts'
+import { MICROSOFT_TARGETS, microsoftServesTarget } from '../../src/adapters/microsoft.ts'
 
 const haiku: LlmEntry = {
   provider: 'anthropic',
@@ -133,14 +134,32 @@ describe('systemOf: context rule v1', () => {
   it('a target the prompt cannot name throws; every named target is in English', () => {
     expect(() => systemOf('xx', undefined)).toThrow()
     expect(LLM_TARGETS['zh-Hans']).toBe('Simplified Chinese')
-    for (const name of Object.values(LLM_TARGETS)) expect(name).toMatch(/^[A-Za-z ()]+$/)
+    for (const name of Object.values(LLM_TARGETS)) expect(name).toMatch(/^[\p{Script=Latin} ()-]+$/u)
+  })
+  it("every target a free adapter of this package names is the LLM's too, under the same tag", () => {
+    // Microsoft's table and the tags it rewrites; Google's rewritten tags (its others it passes through as given); the
+    // Chinese tags the hosts pass: the extension's `zh` and `zh-TW`, the reader's script tags, the website's `zh-CN`
+    const tags = [...MICROSOFT_TARGETS, 'zh-Hans', 'zh-Hant', 'sr-Cyrl', 'mn-Cyrl', 'zh', 'zh-CN', 'zh-TW']
+    for (const tag of tags) {
+      expect(Object.hasOwn(LLM_TARGETS, tag), tag).toBe(true)
+      expect(microsoftServesTarget(tag), tag).toBe(true)
+    }
+    for (const tag of Object.keys(LLM_TARGETS)) expect(microsoftServesTarget(tag), tag).toBe(true)
+  })
+  it('the prompt names Simplified and Traditional Chinese apart, by script or by region', () => {
+    for (const tag of ['zh', 'zh-CN', 'zh-Hans'])
+      expect(systemOf(tag, undefined), tag).toContain('into Simplified Chinese.')
+    for (const tag of ['zh-TW', 'zh-Hant']) expect(systemOf(tag, undefined), tag).toContain('into Traditional Chinese.')
+    expect(systemOf('sr', undefined)).toContain('into Serbian (Cyrillic).')
+    expect(systemOf('sr-Latn', undefined)).toContain('into Serbian (Latin).')
+    expect(systemOf('pt-PT', undefined)).toContain('into European Portuguese.')
   })
   it('a title that holds quotes and line breaks stays inside its JSON string', () => {
     const s = systemOf('de', { title: 'A "quoted"\nTitle' })
     expect(s).toContain(JSON.stringify('A "quoted"\nTitle'))
   })
   it('PROMPT_DIGEST is held: a change to the prompt is a new identity, never silent', () => {
-    expect(PROMPT_DIGEST).toBe('6ae83428551583c4468603bd876dbf761ca0640fb1cd1b56b13ca733de7a1473')
+    expect(PROMPT_DIGEST).toBe('fe005fe16366a6c6189ab227810f78a1511f97cad1215ec71f4e78fe1573f8da')
   })
 })
 
@@ -164,7 +183,9 @@ describe('replyOf', () => {
     expect(
       replyOf('anthropic-messages', JSON.stringify({ ...body, stop_reason: 'model_context_window_exceeded' })).stop,
     ).toBe('length')
-    expect(replyOf('anthropic-messages', JSON.stringify({ ...body, stop_reason: 'refusal' })).stop).toBe('other')
+    // (documented: the Messages API's stop reason `refusal`, the model declining the text on a 200)
+    expect(replyOf('anthropic-messages', JSON.stringify({ ...body, stop_reason: 'refusal' })).stop).toBe('refusal')
+    expect(replyOf('anthropic-messages', JSON.stringify({ ...body, stop_reason: 'pause_turn' })).stop).toBe('other')
     const thinking = {
       ...body,
       usage: { input_tokens: 15, output_tokens: 9, output_tokens_details: { thinking_tokens: 8 } },

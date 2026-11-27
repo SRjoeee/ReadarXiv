@@ -9,6 +9,8 @@ const gateway = (code: number) =>
   JSON.stringify({ success: false, error: [{ code, message: 'x' }], messages: [], result: [] })
 const anthropic = (type: string, extra: Record<string, unknown> = {}) =>
   JSON.stringify({ type: 'error', error: { type, message: 'x', ...extra }, request_id: 'r' })
+const openrouter = (code: number, metadata?: Record<string, unknown>) =>
+  JSON.stringify({ error: { code, message: 'x', ...(metadata ? { metadata } : {}) } })
 const of = (status: number | null, body = '', retryAfter: string | null = null) =>
   refusalOf({ status, body, retryAfter, now: NOW })
 
@@ -103,8 +105,36 @@ describe('refusalOf: a provider', () => {
       known: 'documented',
     })
   })
-  it('documented: a provider 403 is key', () => {
+  it("documented: a provider's 403 is key only where its body names an authentication or permission error", () => {
+    // Anthropic's errors page: 403 permission_error
     expect(of(403, anthropic('permission_error'))).toMatchObject({ class: 'key', who: 'provider', known: 'documented' })
+    expect(of(403, anthropic('authentication_error'))).toMatchObject({ class: 'key', known: 'documented' })
+    // OpenRouter's errors page, its typed error codes: 403 permission_denied (the key lacks a permission)
+    expect(of(403, openrouter(403, { error_type: 'permission_denied' }))).toMatchObject({
+      class: 'key',
+      who: 'provider',
+      known: 'documented',
+    })
+  })
+  it("documented: OpenRouter's moderation block and content refusals are the content's, never the key's", () => {
+    // its errors page: "Moderation errors" (metadata reasons, flagged_input) and the content policy's typed codes
+    const flagged = openrouter(403, {
+      reasons: ['violence'],
+      flagged_input: '...',
+      provider_name: 'p',
+      model_slug: 'm',
+    })
+    expect(of(403, flagged)).toMatchObject({ class: 'content', who: 'provider', known: 'documented' })
+    for (const type of ['content_policy_violation', 'refusal'])
+      expect(of(403, openrouter(403, { error_type: type })), type).toMatchObject({
+        class: 'content',
+        known: 'documented',
+      })
+  })
+  it('a 403 that names neither a key nor the content is unclear: one flagged text never disables a key', () => {
+    expect(of(403, openrouter(403))).toMatchObject({ class: 'unclear', who: 'provider', known: 'neither' })
+    expect(of(403, anthropic('forbidden_whatever'))).toMatchObject({ class: 'unclear', known: 'neither' })
+    expect(of(403, '<html>Forbidden</html>')).toMatchObject({ class: 'unclear', who: 'none' })
   })
   it('documented: a provider 400 is request', () => {
     expect(of(400, anthropic('invalid_request_error'))).toMatchObject({

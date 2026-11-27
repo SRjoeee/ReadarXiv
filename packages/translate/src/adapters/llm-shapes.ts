@@ -13,34 +13,165 @@ import type { ModelEntry } from '../policy.ts'
 import { sha256Hex } from '../sha256.ts'
 
 export type Shape = 'anthropic-messages' | 'openai-chat'
-/** the fields of a model entry that change its text (design §1); a ModelEntry is one */
+/** the fields of a model entry that change its text (llm.ts llmIdentityOf hashes them); a ModelEntry is one */
 export type LlmEntry = Pick<ModelEntry, 'provider' | 'model' | 'upstream' | 'shape' | 'json' | 'reasoning' | 'sampling'>
 
 /** the context a request carries: the paper's title and abstract, in the source language, not to be translated. A
  *  glossary kept across a paper's requests would be `context/2`, another producer */
 export const CONTEXT_RULE = 'context/1'
 
-/** each target the prompt names, by BCP-47, in English; `supports` reads it */
+/** each target the prompt names, by BCP-47, in English; `supports` reads it. Every tag a free adapter of this package
+ *  names, under the same tag: Microsoft's table and the tags it is asked under another (microsoft.ts MICROSOFT_TARGETS),
+ *  which hold Google's rewritten ones and the hosts' Chinese tags (`zh` and `zh-CN` Simplified, `zh-TW` Traditional, as
+ *  both endpoints read them). Each named as CLDR 48 names its tag in English (a rewritten tag by the tag it is rewritten
+ *  to); where CLDR names none, or names two tags alike (`kmr` and `ku`), ISO 639-3's reference name, and ISO 15924's for
+ *  the script CLDR does not name (`Piqd`) */
 export const LLM_TARGETS: Readonly<Record<Lang, string>> = Object.freeze({
+  af: 'Afrikaans',
+  am: 'Amharic',
+  ar: 'Arabic',
+  as: 'Assamese',
+  az: 'Azerbaijani',
+  ba: 'Bashkir',
+  be: 'Belarusian',
+  bg: 'Bulgarian',
+  bho: 'Bhojpuri',
+  bn: 'Bangla',
+  bo: 'Tibetan',
+  brx: 'Bodo',
+  bs: 'Bosnian',
+  ca: 'Catalan',
+  cs: 'Czech',
+  cy: 'Welsh',
+  da: 'Danish',
+  de: 'German',
+  doi: 'Dogri',
+  dsb: 'Lower Sorbian',
+  dv: 'Divehi',
+  el: 'Greek',
+  en: 'English',
+  es: 'Spanish',
+  'es-MX': 'Mexican Spanish',
+  et: 'Estonian',
+  eu: 'Basque',
+  fa: 'Persian',
+  fi: 'Finnish',
+  fil: 'Filipino',
+  fj: 'Fijian',
+  fo: 'Faroese',
+  fr: 'French',
+  'fr-CA': 'Canadian French',
+  ga: 'Irish',
+  gl: 'Galician',
+  gom: 'Konkani',
+  gu: 'Gujarati',
+  ha: 'Hausa',
+  he: 'Hebrew',
+  hi: 'Hindi',
+  hne: 'Chhattisgarhi',
+  hr: 'Croatian',
+  hsb: 'Upper Sorbian',
+  ht: 'Haitian Creole',
+  hu: 'Hungarian',
+  hy: 'Armenian',
+  id: 'Indonesian',
+  ig: 'Igbo',
+  ikt: 'Western Canadian Inuktitut',
+  is: 'Icelandic',
+  it: 'Italian',
+  iu: 'Inuktitut',
+  'iu-Latn': 'Inuktitut (Latin)',
+  ja: 'Japanese',
+  ka: 'Georgian',
+  kk: 'Kazakh',
+  km: 'Khmer',
+  kmr: 'Northern Kurdish',
+  kn: 'Kannada',
+  ko: 'Korean',
+  ks: 'Kashmiri',
+  ku: 'Kurdish',
+  ky: 'Kyrgyz',
+  lb: 'Luxembourgish',
+  lg: 'Ganda',
+  ln: 'Lingala',
+  lo: 'Lao',
+  lt: 'Lithuanian',
+  lug: 'Ganda',
+  lv: 'Latvian',
+  lzh: 'Literary Chinese',
+  mai: 'Maithili',
+  mg: 'Malagasy',
+  mi: 'Māori',
+  mk: 'Macedonian',
+  ml: 'Malayalam',
+  mn: 'Mongolian (Cyrillic)',
+  'mn-Cyrl': 'Mongolian (Cyrillic)',
+  'mn-Mong': 'Mongolian (Mongolian)',
+  mni: 'Manipuri',
+  mr: 'Marathi',
+  ms: 'Malay',
+  mt: 'Maltese',
+  mww: 'Hmong Daw',
+  my: 'Burmese',
+  nb: 'Norwegian Bokmål',
+  ne: 'Nepali',
+  nl: 'Dutch',
+  nso: 'Northern Sotho',
+  ny: 'Nyanja',
+  nya: 'Nyanja',
+  or: 'Odia',
+  otq: 'Querétaro Otomi',
+  pa: 'Punjabi',
+  pl: 'Polish',
+  prs: 'Dari',
+  ps: 'Pashto',
+  pt: 'Portuguese',
+  'pt-PT': 'European Portuguese',
+  ro: 'Romanian',
+  ru: 'Russian',
+  run: 'Rundi',
+  rw: 'Kinyarwanda',
+  sd: 'Sindhi',
+  si: 'Sinhala',
+  sk: 'Slovak',
+  sl: 'Slovenian',
+  sm: 'Samoan',
+  sn: 'Shona',
+  so: 'Somali',
+  sq: 'Albanian',
+  sr: 'Serbian (Cyrillic)',
+  'sr-Cyrl': 'Serbian (Cyrillic)',
+  'sr-Latn': 'Serbian (Latin)',
+  st: 'Southern Sotho',
+  sv: 'Swedish',
+  sw: 'Swahili',
+  ta: 'Tamil',
+  te: 'Telugu',
+  th: 'Thai',
+  ti: 'Tigrinya',
+  tk: 'Turkmen',
+  'tlh-Latn': 'Klingon (Latin)',
+  'tlh-Piqd': 'Klingon (pIqaD)',
+  tn: 'Tswana',
+  to: 'Tongan',
+  tr: 'Turkish',
+  tt: 'Tatar',
+  ty: 'Tahitian',
+  ug: 'Uyghur',
+  uk: 'Ukrainian',
+  ur: 'Urdu',
+  uz: 'Uzbek',
+  vi: 'Vietnamese',
+  xh: 'Xhosa',
+  yo: 'Yoruba',
+  yua: 'Yucateco',
+  yue: 'Cantonese',
+  zh: 'Simplified Chinese',
+  'zh-CN': 'Simplified Chinese',
   'zh-Hans': 'Simplified Chinese',
   'zh-Hant': 'Traditional Chinese',
-  ja: 'Japanese',
-  ko: 'Korean',
-  de: 'German',
-  fr: 'French',
-  es: 'Spanish',
-  id: 'Indonesian',
-  ms: 'Malay',
-  cs: 'Czech',
-  it: 'Italian',
-  nl: 'Dutch',
-  pl: 'Polish',
-  pt: 'Portuguese',
-  sv: 'Swedish',
-  tr: 'Turkish',
-  ru: 'Russian',
-  bg: 'Bulgarian',
-  uk: 'Ukrainian',
+  'zh-TW': 'Traditional Chinese',
+  zu: 'Zulu',
 })
 
 /** the Messages API version every request names (the probe's; Anthropic's versioning page lists a newer one) */
@@ -56,8 +187,9 @@ export interface Reply {
   /** each unit's text by id, the first of an id kept; null where the reply holds no units object */
   units: ReadonlyMap<string, string> | null
   usage: Usage | null
-  /** `length`: the reply stopped at its token limit (or the model's context), so the request was too large */
-  stop: 'end' | 'length' | 'other'
+  /** `length`: the reply stopped at its token limit (or the model's context), so the request was too large; `refusal`:
+   *  the model declined the text (the Messages API's stop reason `refusal`) */
+  stop: 'end' | 'length' | 'refusal' | 'other'
   /** the upstream provider the reply names (OpenRouter's `provider`); null where none is named */
   upstream: string | null
 }
@@ -235,13 +367,16 @@ export function replyOf(shape: Shape, text: string): Reply {
         inTokens !== null && outTokens !== null
           ? { inTokens, outTokens, reasoningTokens: count(details.thinking_tokens) ?? 0 }
           : null,
-      // (the Messages API's stop reasons: `max_tokens` and `model_context_window_exceeded` stop the reply for its size)
+      // (the Messages API's stop reasons: `max_tokens` and `model_context_window_exceeded` stop the reply for its size;
+      // `refusal` is the model declining the text)
       stop:
         b.stop_reason === 'end_turn'
           ? 'end'
           : b.stop_reason === 'max_tokens' || b.stop_reason === 'model_context_window_exceeded'
             ? 'length'
-            : 'other',
+            : b.stop_reason === 'refusal'
+              ? 'refusal'
+              : 'other',
       upstream: null,
     }
   }

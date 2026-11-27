@@ -3,11 +3,18 @@
 // it answers from its ledger. Every request is reserved before it is sent and settled once after; no answer from the
 // port is no request. The request shapes are llm-shapes.ts's, the wire llm-wire.ts's, a refusal read by refusals.ts.
 //
-// Requests multiply where layers retry (design §4: one owner of retries). A request that is sent and gets no answer is
-// sent at most twice: each such fault carries `tries: 2`, and this adapter's own timer fires before the chain's
-// (`callMs`), so the chain's own timeout (3 tries) never decides. A refusal the ledger now knows the wait of (slow, spent,
-// a key) is asked again at once through the ledger, which holds it or picks another key.
-import { realClock } from '../chain.ts'
+// Requests multiply where layers retry. A request that is sent and gets no answer is sent at most twice: each such fault
+// carries `tries: 2`, and this adapter's own timer ends the wait before the chain's (`callMs`), whether or not the host's
+// transport heeds the abort, so the chain's own timeout (3 tries) never decides. A refusal the ledger now knows the wait of
+// (slow, spent, a key) is asked again at once, the batch whole, through the ledger, which picks another key or holds it:
+// at most two requests a `send`, never one a unit. A second such refusal, or the ledger's hold, is a pause past the
+// chain's patience, so the units come back unavailable and the host asks them again in whole batches.
+//
+// The identity names who answers, not the route: the entry's `provider`, `upstream`, `shape` and `model` are hashed, the
+// URL is not. The URL is the host's (its account and its gateway's names, which no identity of this repository holds, and
+// a route's rename must not ask every row again); a deployment that answers otherwise under the same model name is
+// another `provider`, a custom provider's name, never the same name pointed elsewhere.
+import { ATTEMPTS, realClock } from '../chain.ts'
 import {
   Fault,
   type Clock,
@@ -42,8 +49,13 @@ export interface Spend {
 export type Ticket = { ok: true; id: string; headers: Readonly<Record<string, string>> }
 /** no: ask again after this long */
 export type Held = { ok: false; retryAfterMs: number }
-/** what a reservation is settled with: the reported usage (a ticket never used: none), the refusal, or no answer */
-export type Settlement = { usage: Usage; upstream: string | null } | { refusal: Refusal } | { unknown: true }
+/** what a reservation is settled with: the reported usage, the refusal, no answer (`unknown`: it may have reached the
+ *  model), or nothing sent (`unsent`: a ticket granted after this adapter stopped waiting for it, which no request used) */
+export type Settlement =
+  | { usage: Usage; upstream: string | null }
+  | { refusal: Refusal }
+  | { unknown: true }
+  | { unsent: true }
 export interface LlmOptions {
   entry: LlmEntry
   /** the request's URL, whole: the host's (the engine names no gateway) */
@@ -55,19 +67,17 @@ export interface LlmOptions {
   clock?: Clock
 }
 
-/** the lead's starting values (decisions 6 and 9 of the phase 2 plan, from the 11-06 probe: "about 2,500–4,000 characters
- *  a request, three or four in flight"); `chars` and `units` are in the identity, `inFlight` and `callMs` the host's */
+/** starting values from the 11-06 LLM probe ("about 2,500–4,000 characters a request, three or four in flight"); `chars`
+ *  and `units` are in the identity, `inFlight` and `callMs` the host's */
 export const LLM_LIMITS: Limits = Object.freeze({ chars: 3_000, units: 40, inFlight: 3, callMs: 60_000, reask: 1 })
 /** a reserve not answered within this is no answer: no request */
 export const SPEND_MS = 2_000
 /** where the spend port did not answer: the wait before it is asked again */
 export const SPEND_DOWN_MS = 60_000
-/** a refusal the ledger now knows the wait of (slow, spent, key): asked again at once, through the ledger */
-export const RECHECK_MS = 1_000
 /** this adapter's own timer ends a request this long before the chain's `callMs` would (at most half of it) */
 const AHEAD_MS = 5_000
-/** the usage a ticket that was never used is settled with: no request went out */
-const NONE: Settlement = { usage: { inTokens: 0, outTokens: 0, reasoningTokens: 0 }, upstream: null }
+/** requests a `send` makes at most: one, and one more, the batch whole, after a refusal the ledger now knows */
+const REQUESTS = 2
 
 /** a value as JSON with its objects' keys sorted: two entries that differ only in a key's order are one */
 const canonical = (v: unknown): unknown =>
@@ -81,8 +91,9 @@ const canonical = (v: unknown): unknown =>
         )
       : v
 
-/** `llm:<16 hex>` of the hashed fields (the phase 2 plan's versions table): what can change the text, never a key, a
- *  price or a check. The prompt's, the wire's and the context rule's versions, the batching and the output limit's rule */
+/** `llm:<16 hex>` of what can change the text: who answers (provider, upstream, shape, model) and how it is asked (json,
+ *  reasoning, sampling), the prompt's, the wire's and the context rule's versions, the batching and the output limit's
+ *  rule; never the URL (the host's route), a key, a price or a check */
 export function llmIdentityOf(entry: LlmEntry): string {
   const fields = [
     entry.provider,
@@ -141,11 +152,42 @@ const isTicket = (v: unknown): v is Ticket =>
   (v as Ticket).headers !== null
 const isHeld = (v: unknown): v is Held => typeof v === 'object' && v !== null && (v as Held).ok === false
 
+/** a promise raced against a signal: its value, or null once the signal aborts. A transport that does not heed the abort
+ *  is left behind: its late value or failure is taken by the race and changes nothing */
+const until = async <T>(p: Promise<T>, signal: Signal): Promise<{ v: T } | null> => {
+  const aborted = whenAborted(signal)
+  try {
+    return await Promise.race([p.then((v) => ({ v })), aborted.done.then(() => null)])
+  } finally {
+    aborted.off()
+  }
+}
+
+/** a 2xx body that holds only an error object, and the status it names (OpenRouter's errors page: a request not streamed
+ *  that fails after the reply's headers is a 200 whose body holds `error` and no choices, its `code` the HTTP status);
+ *  null for any other body */
+function errorStatusOf(text: string, status: number): number | null {
+  let b: unknown
+  try {
+    b = JSON.parse(text)
+  } catch {
+    return null
+  }
+  if (typeof b !== 'object' || b === null || Array.isArray(b)) return null
+  const body = b as Record<string, unknown>
+  if (typeof body.error !== 'object' || body.error === null || 'choices' in body || 'content' in body) return null
+  const code = (body.error as Record<string, unknown>).code
+  return typeof code === 'number' && Number.isInteger(code) && code >= 400 && code <= 599 ? code : status
+}
+
 export function llm(o: LlmOptions): Translator {
   const clock = o.clock ?? realClock()
   const limits: Limits = { ...LLM_LIMITS, ...o.limits }
   const shape = o.entry.shape
   const identity = llmIdentityOf(o.entry)
+  /** a pause the chain's last translator does not wait out (chain.ts patienceOf: ATTEMPTS tries of its `callMs`), so its
+   *  units come back unavailable rather than asked again one at a time */
+  const pastPatience = ATTEMPTS * limits.callMs + 1
   /** settled once, and never waited on: the ledger's answer changes nothing of the reply */
   const settler = (id: string) => {
     let done = false
@@ -158,7 +200,8 @@ export function llm(o: LlmOptions): Translator {
     }
   }
 
-  /** the spend port's answer within SPEND_MS: a ticket, or a Fault (held, or no answer: no request) */
+  /** the spend port's answer within SPEND_MS: a ticket, or a Fault (held: a pause past the chain's patience; no answer: no
+   *  request) */
   async function reserve(ask: { inTokens: number; maxTokens: number; hash: string }, signal: Signal): Promise<Ticket> {
     const asked = Promise.resolve().then(() => o.spend.reserve(ask, signal))
     const wait = controller()
@@ -177,11 +220,12 @@ export function llm(o: LlmOptions): Translator {
     if ('v' in got && isHeld(got.v)) {
       const ms = got.v.retryAfterMs
       throw new Fault('cool', 'rate', 'llm: the ledger holds the request', {
-        retryAfterMs: Number.isFinite(ms) && ms >= 0 ? ms : SPEND_DOWN_MS,
+        retryAfterMs: Math.max(Number.isFinite(ms) && ms >= 0 ? ms : SPEND_DOWN_MS, pastPatience),
       })
     }
-    // (a ticket that comes after the wait is held by nobody: given back unused as it arrives)
-    if ('late' in got) void asked.then((v) => (isTicket(v) ? settler(v.id)(NONE) : undefined)).catch(() => {})
+    // (a ticket that comes after the wait is held by nobody: given back unsent as it arrives)
+    if ('late' in got)
+      void asked.then((v) => (isTicket(v) ? settler(v.id)({ unsent: true }) : undefined)).catch(() => {})
     if (signal.aborted) throw new Fault('abort', 'aborted', 'llm: aborted')
     throw new Fault('cool', 'rate', 'llm: no answer from the ledger', { retryAfterMs: SPEND_DOWN_MS })
   }
@@ -205,6 +249,7 @@ export function llm(o: LlmOptions): Translator {
       }
       const maxTokens = maxTokensOf(wires.reduce((n, w) => n + w.length, 0))
       const body = bodyOf(o.entry, { system, units: wires.map((text, i) => ({ id: String(i), text })), maxTokens })
+      const ask = { inTokens: utf8Length(body), maxTokens, hash: sha256Hex(body) }
       // the request's own signal: the call's, or this adapter's timer, before the chain's
       const own = controller()
       const forward = () => own.abort()
@@ -217,65 +262,86 @@ export function llm(o: LlmOptions): Translator {
         timedOut = true
         own.abort()
       })
+      /** the fault of a wait the signal ended: the call's abort, or this adapter's timer */
+      const ended = (what: string): Fault =>
+        signal.aborted
+          ? new Fault('abort', 'aborted', 'llm: aborted')
+          : new Fault('again', 'timeout', `llm: ${what} within ${limits.callMs} ms`, { tries: 2 })
       try {
-        let ticket: Ticket
-        try {
-          ticket = await reserve({ inTokens: utf8Length(body), maxTokens, hash: sha256Hex(body) }, own.signal)
-        } catch (e) {
-          if (signal.aborted) throw new Fault('abort', 'aborted', 'llm: aborted')
-          if (timedOut) throw new Fault('again', 'timeout', 'llm: no answer from the ledger in time', { tries: 2 })
-          throw e
-        }
-        const settle = settler(ticket.id)
-        let reply: FetchReply
-        let text: string
-        try {
-          reply = await o.fetch(o.url, {
-            method: 'POST',
-            headers: { ...headersOf(shape), ...ticket.headers },
-            body,
-            signal: own.signal,
-          })
-          text = await reply.text()
-        } catch {
-          // (it may have reached the model: its reservation is kept whole until its window ends)
-          settle({ unknown: true })
-          if (signal.aborted) throw new Fault('abort', 'aborted', 'llm: aborted')
-          if (timedOut) throw new Fault('again', 'timeout', `llm: no answer within ${limits.callMs} ms`, { tries: 2 })
-          throw new Fault('again', 'network', 'llm: the request failed', { tries: 2 })
-        }
-        if (!reply.ok) {
-          const refusal = refusalOf({
-            status: reply.status,
-            body: text,
-            retryAfter: reply.headers.get('retry-after'),
-            now: clock.now(),
-          })
-          settle({ refusal })
-          const what = `llm: ${reply.status} ${refusal.class} (${refusal.who}${refusal.code ? ` ${refusal.code}` : ''}) ${bodyShapeOf(text)}`
-          switch (refusal.class) {
-            case 'slow':
-            case 'spent':
-            case 'key':
-              throw new Fault('cool', 'rate', what, { retryAfterMs: RECHECK_MS })
-            case 'request':
-              throw new Fault('off', 'model', what)
-            case 'ours':
-              throw new Fault('off', 'no-key', what)
-            case 'size':
-              throw new Fault('pass', 'too-large', what)
-            default:
-              throw new Fault('again', 'network', what, { tries: 2 })
+        for (let sent = 1; ; sent++) {
+          let ticket: Ticket
+          try {
+            ticket = await reserve(ask, own.signal)
+          } catch (e) {
+            if (signal.aborted || timedOut) throw ended('no answer from the ledger')
+            throw e
           }
-        }
-        const r = replyOf(shape, text)
-        settle(r.usage ? { usage: r.usage, upstream: r.upstream } : { unknown: true })
-        if (r.stop === 'length') throw new Fault('pass', 'too-large', 'llm: the reply stopped at its token limit')
-        if (!r.units)
-          throw new Fault('again', 'malformed', `llm: no units in the reply ${bodyShapeOf(text)}`, { tries: 2 })
-        for (let i = 0; i < wires.length; i++) {
-          const said = r.units.get(String(i))
-          if (said !== undefined) yield [i, said] as const
+          const settle = settler(ticket.id)
+          let reply: FetchReply
+          let text: string
+          try {
+            const got = await until(
+              o.fetch(o.url, {
+                method: 'POST',
+                headers: { ...headersOf(shape), ...ticket.headers },
+                body,
+                signal: own.signal,
+              }),
+              own.signal,
+            )
+            const read = got && (await until(got.v.text(), own.signal))
+            if (!got || !read) throw ended('no answer')
+            reply = got.v
+            text = read.v
+          } catch (e) {
+            // (it may have reached the model: its reservation is kept whole until its window ends)
+            settle({ unknown: true })
+            if (e instanceof Fault) throw e
+            if (signal.aborted || timedOut) throw ended('no answer')
+            throw new Fault('again', 'network', 'llm: the request failed', { tries: 2 })
+          }
+          const status = reply.ok ? errorStatusOf(text, reply.status) : reply.status
+          if (status !== null) {
+            const refusal = refusalOf({
+              status,
+              body: text,
+              retryAfter: reply.headers.get('retry-after'),
+              now: clock.now(),
+            })
+            settle({ refusal })
+            const what = `llm: ${reply.status}${status !== reply.status ? ` (${status})` : ''} ${refusal.class} (${refusal.who}${refusal.code ? ` ${refusal.code}` : ''}) ${bodyShapeOf(text)}`
+            switch (refusal.class) {
+              case 'slow':
+              case 'spent':
+              case 'key':
+                // (the ledger knows it now: asked again at once, the batch whole, with another key or held)
+                if (sent < REQUESTS) continue
+                throw new Fault('cool', 'rate', what, {
+                  retryAfterMs: Math.max(refusal.retryAfterMs ?? 0, pastPatience),
+                })
+              case 'request':
+                throw new Fault('off', 'model', what)
+              case 'ours':
+                throw new Fault('off', 'no-key', what)
+              case 'size':
+              case 'content':
+                throw new Fault('pass', 'too-large', what)
+              default:
+                throw new Fault('again', 'network', what, { tries: 2 })
+            }
+          }
+          const r = replyOf(shape, text)
+          settle(r.usage ? { usage: r.usage, upstream: r.upstream } : { unknown: true })
+          if (r.stop === 'length') throw new Fault('pass', 'too-large', 'llm: the reply stopped at its token limit')
+          // (the model declined the text: split like a request too large, so a lone unit so refused is passed on)
+          if (r.stop === 'refusal') throw new Fault('pass', 'too-large', 'llm: the model refused the text')
+          if (!r.units)
+            throw new Fault('again', 'malformed', `llm: no units in the reply ${bodyShapeOf(text)}`, { tries: 2 })
+          for (let i = 0; i < wires.length; i++) {
+            const said = r.units.get(String(i))
+            if (said !== undefined) yield [i, said] as const
+          }
+          return
         }
       } finally {
         timer.abort()
