@@ -219,7 +219,7 @@ type Macro = {
   parAfter?: true
 }
 /** a definition a bibliography's head makes (bibDefinitions) */
-type BibDef = { params: number; def: string }
+type BibDef = { params: number; def: string; opt?: boolean }
 /** a table fitted to the line (patch's \\axtfit): its file and range, a tabular*'s body where \\axtstar measures it */
 type Fit = { file: WalkFile; start: number; end: number; star?: number }
 /** a text cell of a table's block (R4, noteBlocks): its units, or a cell of none that prints text */
@@ -5505,13 +5505,18 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
     }
     // in a bibliography entry, a command that sets its text argument as it stands (BIB_TEXT): a pair around it, its other
     // arguments kept with the opening; a \\bibinfo of a field that is no prose (BIB_KEPT_FIELD) one placeholder
-    if (BIB_KINDS.has(b.kind) && BIB_TEXT.has(name)) {
-      const before = BIB_TEXT.get(name)!,
+    // (the call read by the definition in force, as TeX reads it: one whose first argument is optional (`[2][]{#2}`) takes no
+    // braced group for it, so the call's braced groups are its #2, #3, …: `\\bibinfo{author}{Ann}` sets "author", its #2,
+    // and the group after it as text of its own (2509.05371v1's entries); `shift` the arguments the braced groups pass over)
+    const inForce = BIB_KINDS.has(b.kind) && BIB_TEXT.has(name) ? (ctx.macros.get(name) ?? ctx.bibDefs?.get(name)) : undefined
+    const shift = inForce?.opt ? 1 : 0
+    if (BIB_KINDS.has(b.kind) && BIB_TEXT.has(name) && BIB_TEXT.get(name)! >= shift) {
+      const before = BIB_TEXT.get(name)! - shift,
         { args, end: e } = argsAfter(s, end, before + 1),
         reqs = args.filter((a) => a.kind === 'req')
       if (args.length === before + 1 && reqs.length === before + 1) {
         const text = reqs[before]!,
-          field = before ? s.slice(reqs[0]!.start + 1, reqs[0]!.end - 1).trim() : ''
+          field = before && !shift ? s.slice(reqs[0]!.start + 1, reqs[0]!.end - 1).trim() : ''
         endText()
         if (name === 'bibinfo' && BIB_KEPT_FIELD.test(field)) {
           b.ph(s.slice(i, e), i, e)
@@ -5519,13 +5524,13 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
           continue
         }
         // (a command that prints its argument between marks: the marks text, wrapOf; csquotes' \\enquote by its level)
-        const def = ctx.macros.get(name) ?? ctx.bibDefs?.get(name)
-        const marks = wrapOf(def, before + 1) ?? (name === 'enquote' && !def ? quoteMarks(s, end, ctx) : null)
+        const def = inForce
+        const marks = wrapOf(def, before + 1 + shift) ?? (name === 'enquote' && !def ? quoteMarks(s, end, ctx) : null)
         if (marks) {
           i = withMarks(s, i, text.start + 1, text.end - 1, e, marks, b, ctx)
           continue
         }
-        const id = b.open(s.slice(i, text.start + 1), i, identityPair(def, before + 1))
+        const id = b.open(s.slice(i, text.start + 1), i, identityPair(def, before + 1 + shift))
         walk(s, text.start + 1, text.end - 1, b, ctx)
         b.close(id, '}', e)
         i = e
@@ -6636,7 +6641,7 @@ function bibliography(s: string, from: number, to: number, b: Builder, ctx: Ctx)
   const saved = b.kind,
     savedDefs = ctx.bibDefs
   // (what the lines before its first entry define, the style's \providecommand's: an entry's field commands read by them)
-  ctx.bibDefs = bibDefinitions(s.slice(start, items[0]?.at ?? to))
+  ctx.bibDefs = bibDefinitions(s.slice(start, items[0]?.at ?? to), ctx.macros)
   b.flush()
   items.forEach((c, n) => {
     let a = argsOfForm(s, c.end, '[{').end,
@@ -6678,19 +6683,22 @@ function bibliography(s: string, from: number, to: number, b: Builder, ctx: Ctx)
  * \providecommand is taken for it: TeX Live's classes that define these commands define them so (revtex4-2's
  * `\providecommand\bibinfo[2]{#2}`)
  */
-function bibDefinitions(head: string) {
+function bibDefinitions(head: string, defined: ReadonlyMap<string, unknown> = new Map()) {
   const out = new Map<string, BibDef>(),
     t = texUncommented(head)
+  // (LaTeX's \\providecommand defines only what is undefined: the paper's own definition before the bibliography stays in
+  // force; a `[n][default]` makes the first argument optional, as \\newcommand reads it)
   const re =
-    /\\(?:(?:provide|new)command\*?\s*(?:\{\s*\\([A-Za-z@]+)\s*\}|\\([A-Za-z@]+))\s*(?:\[(\d)\])?|[egx]?def\s*\\([A-Za-z@]+)\s*((?:#\d\s*)*))(?=\s*\{)/g
+    /\\(?:(provide|new)command\*?\s*(?:\{\s*\\([A-Za-z@]+)\s*\}|\\([A-Za-z@]+))\s*(?:\[(\d)\])?(\s*\[[^\]]*\])?|[egx]?def\s*\\([A-Za-z@]+)\s*((?:#\d\s*)*))(?=\s*\{)/g
   for (const m of t.matchAll(re)) {
-    const name = (m[1] ?? m[2] ?? m[4])!,
+    const name = (m[2] ?? m[3] ?? m[6])!,
       k = skipSpaces(t, m.index + m[0].length),
       e = t[k] === '{' ? matchGroup(t, k) : -1
-    if (e < 0 || out.has(name)) continue
+    if (e < 0 || out.has(name) || (m[1] === 'provide' && defined.has(name))) continue
     out.set(name, {
-      params: m[4] !== undefined ? (m[5]!.match(/#\d/g) ?? []).length : Number(m[3] ?? 0),
+      params: m[6] !== undefined ? (m[7]!.match(/#\d/g) ?? []).length : Number(m[4] ?? 0),
       def: t.slice(k + 1, e - 1),
+      ...(m[4] && m[5] ? { opt: true } : {}),
     })
   }
   return out
