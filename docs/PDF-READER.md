@@ -10679,12 +10679,12 @@ pieces stand glued in a word with no point of their own, and are TeX's evidence'
 ### 18.119 A paper's macro that opens or closes an environment is that boundary, by its definition in force (the coordinator's ruling of 2026-11-27, the 599-paper census)
 
 The census's lay left 29 paragraphs of 6 papers whole in the original (`unproven`, `lay/entry.ts`): each held a placeholder of a
-paper's macro that stands for an environment's boundary, `\newcommand{\ben}{\begin{enumerate}}`, `\newcommand{\eT}{\end{THM}}`,
-`\newcommand{\beginCBOX}{\begin{mdframed}[backgroundcolor=…]}`, `\def\bal#1\eal{\begin{align}#1\end{align}}`. The source
+paper's macro that stands for an environment's boundary, `\newcommand{\ben}{\begin{enumerate}}`, `\newcommand{\ethm}{\end{theorem}}`,
+`\newcommand{\obox}{\begin{mdframed}[backgroundcolor=…]}`, `\def\bal#1\eal{\begin{align}#1\end{align}}`. The source
 reader knew one form only (`envMacros`): a body that is exactly `\begin{X}` or `\end{X}`, read in no order over every file, and
 used only to open a display, a math or a skipped environment. Every other form stayed a placeholder inside the paragraph, where
 TeX sets no ink for it: a list's, a box's or a theorem's opening or end ran the paragraphs on either side together, a display
-opened by a macro of one argument or by one TeX delimits had its formula read as text, a theorem written `\begin{THM} … \eT`
+opened by a macro of one argument or by one TeX delimits had its formula read as text, a theorem written `\begin{theorem} … \ethm`
 ran to the file's end. Four of the 29 are displays the reader already read as one display (`\be … \ee`); their element is
 unproven downstream of the source reader, and stays so here.
 
@@ -10699,7 +10699,7 @@ one placeholder to its end, the display's end where its closing begins (`PhPiece
 is; any other environment opened ends the paragraph and is read as the written one (a theorem's kind, its title, a float's, a
 list's items), its own arguments read after the call only where the body writes nothing after its `\begin{X}`; one closed ends
 the unit as `\end` does. An environment's end, written or by macro, is found as TeX finds it: its `\end{X}` or a call that
-closes it, the same environment opened inside it passed over (`envEnd`); a written `\begin{THM}` closed by `\eT` ends there.
+closes it, the same environment opened inside it passed over (`envEnd`); a written `\begin{theorem}` closed by `\ethm` ends there.
 
 **In TeX's order** (`preambleMeanings`, `noteDefinition`): the main file's preamble is read in order, each file of the package it
 loads (`\documentclass`, `\usepackage`, `\RequirePackage`, `\input`, `\include`) read where it is loaded; each definition the walk

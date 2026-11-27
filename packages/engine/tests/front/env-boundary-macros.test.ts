@@ -51,8 +51,8 @@ describe("a macro whose body opens or closes a list or a box: the paragraph ends
   it('a box whose options the body writes (`\\begin{mdframed}[…]`): nothing after the call is its argument', () => {
     expect(
       read(
-        'Words before the box.\n\\beginCBOX Boxed words are here.\n\\closeCBOX\nWords after the box.',
-        '\\newcommand{\\beginCBOX}{\\begin{mdframed}[backgroundcolor=blue!3]}\n\\newcommand{\\closeCBOX}{\\end{mdframed}}\n',
+        'Words before the box.\n\\obox Boxed words are here.\n\\cbox\nWords after the box.',
+        '\\newcommand{\\obox}{\\begin{mdframed}[backgroundcolor=blue!3]}\n\\newcommand{\\cbox}{\\end{mdframed}}\n',
       ),
     ).toEqual([
       { kind: 'para', text: 'Words before the box.', phs: [] },
@@ -92,16 +92,16 @@ describe("a macro whose body opens or closes a list or a box: the paragraph ends
 })
 
 describe("a theorem's end by the paper's macro closes the theorem", () => {
-  const THM = '\\newtheorem{THM}{Theorem}\n\\newcommand{\\THEOREM}{\\begin{THM}}\n\\newcommand{\\eT}{\\end{THM}}\n'
+  const THEOREMS = '\\newtheorem{thm}{Theorem}\n\\newcommand{\\bthm}{\\begin{thm}}\n\\newcommand{\\ethm}{\\end{thm}}\n'
   const UNITS = [
     { kind: 'theorem', text: 'Every graph here is fine.', phs: [] },
     { kind: 'para', text: 'Then the text goes on.', phs: [] },
   ]
   it('opened by the written \\begin', () => {
-    expect(read('\\begin{THM} Every graph here is fine.\n\\eT\nThen the text goes on.', THM)).toEqual(UNITS)
+    expect(read('\\begin{thm} Every graph here is fine.\n\\ethm\nThen the text goes on.', THEOREMS)).toEqual(UNITS)
   })
   it("opened by the paper's macro too", () => {
-    expect(read('\\THEOREM Every graph here is fine.\n\\eT\nThen the text goes on.', THM)).toEqual(UNITS)
+    expect(read('\\bthm Every graph here is fine.\n\\ethm\nThen the text goes on.', THEOREMS)).toEqual(UNITS)
   })
 })
 
@@ -207,8 +207,8 @@ describe('a macro that only looks like a boundary stays what it was (the control
   it("a theorem's look-alike end: the written \\end closes it", () => {
     expect(
       read(
-        '\\begin{THM} Every graph here is fine.\n\\eT more words.\n\\end{THM}\nThen the text goes on.',
-        '\\newtheorem{THM}{Theorem}\n\\newcommand{\\eT}{\\texttt{\\string\\end\\{THM\\}}}\n',
+        '\\begin{thm} Every graph here is fine.\n\\ethm more words.\n\\end{thm}\nThen the text goes on.',
+        '\\newtheorem{thm}{Theorem}\n\\newcommand{\\ethm}{\\texttt{\\string\\end\\{thm\\}}}\n',
       ).map((u) => u.kind),
     ).toEqual(['theorem', 'para'])
   })
