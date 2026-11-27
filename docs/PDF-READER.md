@@ -10768,6 +10768,41 @@ body closed by a closing macro of its own sets the environment whole: no opener.
 `\begin{X}` than the environment's own arguments read whole by their declaration (an argument's prose, a table's arguments split
 with the source), and a display's opener whose end this reading does not find, are read as before.
 
+### 18.120 What the marking reads as setting no ink, the instrument states empty (the coordinator's ruling of 2026-11-28, fix phase F4)
+
+The census's lay left paragraphs whole in the original (`unproven`, `lay/entry.ts`) for an element TeX sets no glyph for and the
+marking knows it: an index entry, `word\index{word}`, in every paragraph, theorem and caption of a paper that indexes its terms,
+and a colour given by a model, `\color[HTML]{3366AA}`. The marking (`marks/marks.ts` `classOf`) reads such a placeholder as
+setting no ink by TeX's own tables and gives it no mark: one of TeX's and LaTeX's control words that set none (`INVISIBLE`:
+`\index`, `\label`, `\color`, the phantoms, a skip, a kern), or one the role table proves can set no letters
+(`source/arg-roles.ts` `textless`: a register's or a length's setting, a definition). With no mark it has no point, and no
+compile states its places. The class table (`classesOf`) reads these two as `other`, a class drawn from its ink
+(`locate/work.ts` `INKED_CLASSES`), so the locate found no ink for the element and nothing stated it empty, and the typesetter
+read an inked element whose ink was not found (`lay/read.ts`). The instrument stated empty only a text macro of the marking's
+null (a `.bbl`'s `\newblock`).
+
+**One classification for both readers** (`instrument/instrument.ts` `inklessPieces`): a placeholder the marking reads as setting
+no ink (`INVISIBLE`, `textless`, read from its source as `classOf` reads it) is stated empty, whatever class the element carries,
+where that class is one drawn from its ink; a class that draws none (a space, `zero`) reads no such statement. The locate then
+states it `text: ''`, drawn as nothing, proven. Over the 245 no element moves; over the 599, 112 placeholders of 4 papers (an
+`\index` 104, a `\color` with a model 8) in 65 units, and the 56 of those units the lay held `unproven` are laid; nothing else
+moves. A `\color` at a table cell's head, which TeX sets before the cell's start, was stated as set outside the unit's text
+(`El.keep`) and is now stated empty (the locate reads `empty` first): drawn as nothing either way.
+
+**What it protects.** `unproven` keeps out a unit whose element may set ink the text group erases and nothing draws again (a
+formula, a year, an algorithm's line). These set none by TeX's definition, and only where the command is TeX's or LaTeX's: the
+marking reads the name by its spelling, so a command the paper defines (`instrument/instrument.ts` `ownCommandsOf`: the source
+reader's own reading of the paper's definitions, `\renewcommand{\index}[1]{\textdagger}`, `\let\index…`) is read by its
+definition and is not stated empty, its call held unproven as before (stated empty, the dagger TeX sets would be erased with
+the paragraph and drawn by nothing). One whose definition sets its argument is a span of text, no placeholder (§18.119). The
+text macro of the marking's null stated empty before this item (a `.bbl`'s `\newblock`) is kept as it was: a class's own
+`\newblock`, defined in the paper's files of many papers, sets no ink, and telling which definition sets ink is the
+definition's reading, not this one's. None of the 56 units this item lays stands at a command its paper defines. Of the marking's
+null the rest keep their statements: an alignment's tab, a stray brace, a parameter or a script mark (a table's rows read as
+prose would be laid as prose over a table; a script mark in text sets a formula), and a forced break and a tie, which state
+their own kinds. A paper's macro, a `\rule` the probe asks about, and a register's setting the source reader keeps with the
+command after it (`\looseness=-1 \vspace`, read as a paper's macro) stay unproven where their ink is not found.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server
