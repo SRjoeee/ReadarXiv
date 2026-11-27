@@ -11,14 +11,13 @@
 //
 // 2. A heading's marks are lost where a class expands the heading's argument before it sets it. LAYOUT_TEX's \axthmark (and the
 //    placeholders' \axtpma, \axtpmm, \axtpm) is an expandable gate: \ifx\protect\@typeset@protect it becomes its \protected inner
-//    command, else \@gobble, so that nothing of ours is written into a file or a running head. Under LaTeX's \protected@edef
-//    \protect is \@unexpandable@protect, so a class that stores the argument that way before setting it takes every mark off:
-//    REVTeX 4.0, which carries textcase v0.06 (1998) and sets \section's title through its \MakeTextUppercase (a \protected@edef
-//    and then \uppercase), and thmtools' proof (thm-patch.sty: its optional argument through a \protected@edef). Made robust
-//    alone (\protected), the mark survives the expansion but not the case change: \uppercase turns its name's letters (h5s) to
-//    H5S, a point no reading names. Seventeen headings of four papers of the 245 (every \section of the three REVTeX 4.0 papers
-//    and one proof's note). The property asked here is TeX's: after LaTeX's \protected@edef and \uppercase, the marks the marking
-//    writes into the heading's argument still set the unit's own points, by the same names.
+//    command. Under LaTeX's \protected@edef \protect is \@unexpandable@protect, so a class that stores the argument that way
+//    before setting it takes the gate's other branch: REVTeX 4.0, which carries textcase v0.06 (1998) and sets \section's title
+//    through its \MakeTextUppercase (a \protected@edef and then \uppercase), and thmtools' proof (thm-patch.sty: its optional
+//    argument through a \protected@edef). There the mark must write itself through, as LaTeX's robust commands do, and the
+//    case change after it must not rename it: \uppercase turns its argument's letters (h5s) to H5S. The property asked here is
+//    TeX's: after LaTeX's \protected@edef and \uppercase, the marks the marking writes into the heading's argument still set the
+//    unit's own points, by the same names (tests/pdf-reader/marks-robust.test.ts asks TeX itself, in the pinned image).
 import { describe, expect, it } from 'vitest'
 import { openPaper, originalFiles } from '../src/compile/live.ts'
 import { LAYOUT_CLASSES } from '../src/marks/marks.ts'
@@ -82,25 +81,31 @@ function definitionOf(head: string, cs: string): { protectedDef: boolean; params
   return { protectedDef: !!m[1], params: m[2]!, body: head.slice(from, k - 1) }
 }
 /** LaTeX's \protected@edef over a run of our marks (control word, braced argument), as TeX expands each: a \protected one is
- *  kept as it is; one whose body tests \protect against \@typeset@protect takes \@gobble's branch there, itself and its
- *  argument gone */
+ *  kept as it is; one whose body tests \protect against \@typeset@protect takes its other branch there: kept where that branch
+ *  writes the mark itself through (`\noexpand\<cs>` or `\protect\<cs>`, a robust command's), gone where it is \@gobble's */
 function afterProtectedEdef(head: string, marks: readonly [string, string][]): [string, string][] {
   return marks.filter(([cs]) => {
     const d = definitionOf(head, cs)
     if (!d) throw new Error(`\\${cs} is not defined in the head`)
     if (d.protectedDef) return true
-    if (/\\ifx\\protect\\@typeset@protect.*\\@gobble/.test(d.body)) return false
+    const other = /^\\ifx\\protect\\@typeset@protect.*\\else(.*)\\fi$/.exec(d.body)?.[1]
+    if (other === `\\noexpand\\${cs}` || other === `\\protect\\${cs}`) return true
+    if (other === '\\expandafter\\@gobble') return false
     throw new Error(`\\${cs}: a definition this test does not model`)
   })
 }
 /** TeX's \uppercase over a mark's argument: every letter upper case (its \uccode), every other character as it is */
 const uppercased = (arg: string) => arg.replace(/[a-z]/g, (c) => c.toUpperCase())
 /** the name of the point a mark sets, from its argument as its definition takes it: `\x#1{\inner{<pre>#1<post>}}` the argument
- *  between pre and post; a gate or a command of no parameter, the argument itself */
+ *  between pre and post; a gate or a command of no parameter, the argument itself; and where the gate's typesetting branch hands
+ *  the argument to a command that runs it through TeX's \lowercase (every letter lower case, its \lccode), in lower case */
 function pointName(head: string, cs: string, arg: string): string {
   const d = definitionOf(head, cs)!
   const built = d.params === '#1' ? /^\\[A-Za-z@]+\{([^{}#]*)#1([^{}#]*)\}$/.exec(d.body) : null
-  return built ? `${built[1]}${arg}${built[2]}` : arg
+  const name = built ? `${built[1]}${arg}${built[2]}` : arg
+  const via = /^\\ifx\\protect\\@typeset@protect\\expandafter\\([A-Za-z@]+)\\expandafter/.exec(d.body)?.[1]
+  const lowers = !!via && /\\lowercase\{#1\{#2\}\}/.test(definitionOf(head, via)?.body ?? '')
+  return lowers ? name.toLowerCase() : name
 }
 /** the marks of ours written in the braced argument that follows `opener` in the marked file: [control word, argument] */
 function marksIn(marked: string, opener: string): [string, string][] {
@@ -128,10 +133,8 @@ describe("a heading's marks survive what a class does with the argument before i
       '\\begin{proof}[',
     ],
   ]
-  // (not yet: the gated marks' rename that sets these points (a \protected command, its name's letters in it, its digits its
-  // argument) is held back from this round, PDF-READER §18.111 "What stays": `it.fails` keeps the hole seen until it lands)
   for (const [what, tex, opener] of cases) {
-    it.fails(`${what}: after LaTeX's \\protected@edef and \\uppercase the same points are set, by the same names`, () => {
+    it(`${what}: after LaTeX's \\protected@edef and \\uppercase the same points are set, by the same names`, () => {
       const marked = markedOf(tex)
       const head = marked.slice(0, marked.indexOf('\\begin{document}'))
       const written = marksIn(marked, opener)
