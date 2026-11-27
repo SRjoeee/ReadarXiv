@@ -1,7 +1,9 @@
 // @readarxiv/translate: the translator contract, its adapters and the chain that falls back between them
 // (DESIGN §8). A host makes one chain, `chainOf(ports)`, and translates through it; a row is keyed
 // by `identityOf(translators)` besides unit id and target. A host that chooses among producers reads its translation policy
-// with `parsePolicy`, asks `plan` what to translate next and `select` what to serve.
+// with `parsePolicy`, asks `plan` what to translate next and `select` what to serve. A host that asks a language model
+// makes it with `llm` over its own fetch and a spend port its ledger answers, classifies a refusal with `refusalOf`,
+// picks a key with `pick` and judges a model's check with `checkOf`.
 
 /** What `@readarxiv/translate` is for: the translator contract, its adapters and the chain that falls back between them */
 export const TRANSLATE_PURPOSE =
@@ -29,6 +31,9 @@ export {
 } from './policy.ts'
 export { type Generation, type ProducerId, producerIdentityOf, producerKindOf } from './producers.ts'
 export { select } from './select.ts'
+export { bodyShapeOf, type Refusal as ModelRefusal, type RefusalClass, refusalOf } from './refusals.ts'
+export { type PickState, pick } from './pick.ts'
+export { type CheckSample, CheckSampleSchema, checkAgainstOf, checkOf, sampleDigestOf } from './check.ts'
 export {
   type Adapter,
   adapterOf,
@@ -64,3 +69,15 @@ export {
 export { type ChromeApi, type ChromeOptions, type ChromeSession, chrome, chromeTarget } from './adapters/chrome.ts'
 export { type GoogleOptions, google, tagsWire } from './adapters/google.ts'
 export { type MicrosoftOptions, microsoft, microsoftServesTarget } from './adapters/microsoft.ts'
+export {
+  type Held,
+  LLM_LIMITS,
+  type LlmOptions,
+  llm,
+  llmIdentityOf,
+  type Settlement,
+  SPEND_MS,
+  type Spend,
+  type Ticket,
+} from './adapters/llm.ts'
+export { CONTEXT_RULE, type LlmEntry, LLM_TARGETS, type Usage } from './adapters/llm-shapes.ts'

@@ -373,6 +373,27 @@ export function packageViolations(files, { root = '.' } = {}) {
   return out
 }
 
+/** What names an LLM gateway: AI Gateway's request headers (`cf-aig-…`) and its host. The engine's packages are public and
+ *  host-free: a model is asked at the URL and with the headers its host gives (packages/translate adapters/llm.ts), so
+ *  the gateway's name, URL and headers live in the host alone */
+export const GATEWAY_NAMES = /cf-aig-|gateway\.ai\.cloudflare\.com/i
+
+/** Every line of the files under packages/ among `files` that names an LLM gateway (GATEWAY_NAMES): `{ file, line }`, lines
+ *  from 1. Every file is read from `root` as text; a binary one (a NUL in its first 8 KiB) is passed over */
+export function gatewayNamesIn(files, { root = '.' } = {}) {
+  const out = []
+  for (const file of files) {
+    if (!file.startsWith('packages/')) continue
+    let bytes
+    try { bytes = readFileSync(resolve(root, file)) } catch { continue }
+    if (bytes.subarray(0, 8192).includes(0)) continue
+    bytes.toString('utf8').split('\n').forEach((l, i) => {
+      if (GATEWAY_NAMES.test(l)) out.push({ file, line: i + 1 })
+    })
+  }
+  return out
+}
+
 /** The file a repository path names as the compiler finds it: the path itself, an extension added, an index file, a
  *  TypeScript source behind a `.js` name; null where there is none */
 function sourceOf(path, root) {
@@ -482,4 +503,11 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     process.exit(1)
   }
   console.log(`boundary check: ${packages.length} package files import no extension code, no platform module and only the packages PACKAGES allows, by entry`)
+  const gateway = gatewayNamesIn(packages)
+  if (gateway.length > 0) {
+    console.error('A workspace package names an LLM gateway (its host gives the URL and the headers; the engine names none):')
+    for (const g of gateway) console.error(`  ${g.file}:${g.line}`)
+    process.exit(1)
+  }
+  console.log(`boundary check: ${packages.length} package files name no LLM gateway`)
 }

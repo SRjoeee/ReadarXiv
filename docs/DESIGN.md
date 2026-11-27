@@ -600,6 +600,18 @@ each element its rule-file kind, what it reads as to the tags wire's sentence cu
 numbering label, which reads as a word), and on the markers wire `alone`, a marker of its own (Microsoft's adapter joins
 side-by-side elements for the PDF wire; on the HTML page the live run of 2026-11-07 kept 1,375 of 1,378 placeholders of the
 159 such blocks one marker an element, 1,372 joined).
+**A host's LLM translator** (the website's upgrade job, 2026-11-27) is the package's own, `llm()` (`adapters/llm.ts`): its
+wire is the tags wire's plan written in typed tags (`<m1/>` a formula, `<c3/>` a citation, `<s8>…</s8>` styled words: the
+11-06 LLM probe's form), read back by number and tolerantly (a space after the bracket, capitals, full-width brackets,
+another letter), a reply under 0.2 of a source of 200 characters or more refused (`llm-wire.ts`); its requests are
+Anthropic's Messages API or the OpenAI chat form, as the model entry names, with the paper's title and abstract as context
+not to be translated (context rule v1, `llm-shapes.ts`). It names no gateway and holds no key: the host gives the URL, a
+fetch that adds its headers, and a spend port its ledger answers; a request is reserved before it is sent (no answer, no
+request) and settled once, and one with no answer is sent at most twice. A refusal is classified by who answered and its
+code (`refusals.ts`), a key picked by `pick`, a model's check judged by `checkOf` against the free chain on a fixed sample
+(`check.ts`). Its identity `llm:<16 hex>` hashes what changes the text (`llmIdentityOf`); `LLM_WIRE_DIGEST` and
+`PROMPT_DIGEST` are new, and no other digest moved. `scripts/check-boundary.mjs` refuses a gateway's host or header under
+`packages/`.
 
 ### 8.0 Requests run in the background
 
