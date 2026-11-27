@@ -26,6 +26,8 @@ const ADDED: readonly string[] = [
   "R.export.making('α1', 'α2')",
   'R.export.making(3, 7)',
   'R.export.retry',
+  // S-R-29: the way back (link previews, 2026-11-27; zh-CN the owner's approved prototype's, the other four for his approval)
+  'R.back',
 ]
 
 describe('the string catalogue', () => {
