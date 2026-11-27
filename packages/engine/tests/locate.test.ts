@@ -4117,6 +4117,26 @@ describe('an element’s ink is what TeX set for it', () => {
     expect(L.members[0]).toMatchObject({ located: false, cause: 'text past its source' })
     expect(L.members[1]).toMatchObject({ located: true })
   })
+
+  it("states the ownership's own verdict where it gave one, the unit refused all the same (its reason, no state)", () => {
+    // (the ownership had already found a placeholder it could not delimit ('marks') or glyphs that spell no source of the unit
+    // ('spell'): the letters rule refuses the same unit, and the reason given is the ownership's, which came first)
+    const B = docOf([{ lines: [{ text: 'Return rank(T) if x', y: 700 }] }])
+    for (const why of ['marks', 'spell'] as const) {
+      const unit = {
+        ...paraOf(
+          [text('Return '), el('1', '$\\mathrm{rank}(T)$'), text(' if '), el('3', '$x$')],
+          [
+            ['1', { cls: 'other' }],
+            ['3', { cls: 'other' }],
+          ],
+        ),
+        why,
+      }
+      const L = locate(ownedBy(B, [unit], [[[0, T, -1]]]), B, align(B, B))
+      expect(L.members[0]).toMatchObject({ located: false, cause: why })
+    }
+  })
 })
 
 describe('a member’s style read off all of its glyphs, as TeX set them', () => {
