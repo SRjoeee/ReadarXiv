@@ -257,6 +257,14 @@ export function targetsOf(
     return bodies[p]?.[b - (w.ix.m.offB[p] as number)] === 1
   }
 
+  // (each bibliography key to the units that hold it, and each unit's located members: a citation's entry by identity)
+  const keyed = new Map<string, number[]>()
+  units.forEach((u, i) => {
+    if (u.key !== undefined) (keyed.get(u.key) ?? keyed.set(u.key, []).get(u.key)!).push(i)
+  })
+  const locatedOf = new Map<number, Member[]>()
+  for (const m of members) if (m.located) (locatedOf.get(m.unit) ?? locatedOf.set(m.unit, []).get(m.unit)!).push(m)
+
   // (every member's ink by page, read where a box is judged: inkOn)
   let inkByPage: Map<number, [Member, Ink][]> | null = null
   const out: Landing[] = []
@@ -264,6 +272,16 @@ export function targetsOf(
     if (!pt || pt.y === null) continue
     const item = itemAt(pt.page, pt.x, pt.y)
     const got = item ? landingOf(dest, pt.page, item) : null
+    // (a citation whose name holds one located entry's key: that entry, today's landing its check)
+    const entry = entryOfName(dest)
+    if (entry) {
+      const geometry = got ? (Array.isArray(got) ? got[1] : got.ord) : null
+      const mine = byKeyOf(dest, pt, entry)
+      if (!mine) continue
+      if (Array.isArray(mine)) refused.push([dest, mine[0], mine[2]])
+      else out.push({ ...mine, byKey: { geometry } })
+      continue
+    }
     if (!got) continue
     // (a box that cannot hold the whole of what it names: refused after the evidence, which speaks first)
     const [kind, ord] = Array.isArray(got) ? got : [got.kind, got.ord]
@@ -272,6 +290,49 @@ export function targetsOf(
     else out.push(got as Landing)
   }
   return out
+
+  /** the entry a citation's name names by its key, null where none can be told: the name, as the PDF holds it decoded, equals
+   *  `cite.` and a key byte for byte (hyperref's \\@bibitem and \\@lbibitem, natbib's \\NAT@anchor: `cite.<key>\\@extra@b@citeb`,
+   *  that macro empty) or `cite.`, a key and `@-<n>` (chapterbib's \\@extra@b@citeb inside a \\include'd unit: `@-` and the
+   *  unit's number); one unit holds that key and no other key reads the name; the unit has one located member. Every other
+   *  name is today's rule's: no character is read otherwise than as itself */
+  function entryOfName(dest: string): Member | null {
+    let name: unknown
+    try {
+      name = JSON.parse(dest)
+    } catch {
+      return null
+    }
+    if (typeof name !== 'string' || !name.startsWith('cite.')) return null
+    const rest = name.slice('cite.'.length)
+    const holders = new Set(keyed.get(rest) ?? [])
+    const unit = /^(.*)@-(\d+)$/.exec(rest)
+    if (unit) for (const i of keyed.get(unit[1]!) ?? []) holders.add(i)
+    if (holders.size !== 1) return null
+    const mems = locatedOf.get([...holders][0]!) ?? []
+    return mems.length === 1 ? mems[0]! : null
+  }
+  /** a citation's landing on the entry its key names: refused (`key`) where the entry begins on another page than the point's or
+   *  another member's left edge stands at the point (the edge reading names it); else as any reference, its box holding the whole
+   *  of it or refused */
+  function byKeyOf(dest: string, pt: DestPoint, mem: Member): Landing | [TargetKind, number, Refusal] | null {
+    const l = mem.lines[0]
+    if (!l || l[0] !== pt.page) return ['reference', mem.ord, 'key']
+    const edge = pt.x === null ? null : edgeOf(pt.page, pt.x, pt.y!)
+    if (edge !== null && edge !== mem.ord) return ['reference', mem.ord, 'key']
+    return landingOf(dest, pt.page, {
+      what: 'line',
+      mem,
+      begins: true,
+      base: l[4],
+      top: l[5],
+      bottom: l[6],
+      ix0: l[2],
+      ix1: l[3],
+      x0: l[2],
+      x1: l[3],
+    })
+  }
 
   /** why the engine's own evidence does not let a landing be stated, null where it does: the destination's name is a page's
    *  (hyperref's `page.<n>`: a page, no thing on it); the left edge at its point names another member (`edge`); its name, of a

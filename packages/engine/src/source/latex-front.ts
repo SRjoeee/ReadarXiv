@@ -179,6 +179,9 @@ export type SourceUnit<F extends string | null = string> = {
   ofLabel?: string
   bracketed?: boolean
   cell?: CellPlace
+  /** a bibliography entry's first unit: its `\\bibitem`'s key, which hyperref names the entry's destination by (`cite.<key>`),
+   *  where the argument is characters only (bibKeyOf) */
+  key?: string
 }
 /** the walk's units, of a file or of none */
 type WalkFile = string | null
@@ -7220,8 +7223,13 @@ function bibliography(s: string, from: number, to: number, b: Builder, ctx: Ctx)
   ctx.bibDefs = bibDefinitions(s.slice(start, items[0]?.at ?? to), ctx.macros)
   b.flush()
   items.forEach((c, n) => {
-    let a = argsOfForm(s, c.end, '[{').end,
+    const form = argsOfForm(s, c.end, '[{')
+    let a = form.end,
       z = n + 1 < items.length ? items[n + 1]!.at : to
+    const key = bibKeyOf(
+      s,
+      form.args.find((g) => g.kind === 'req'),
+    )
     const cmds = scan([a, z])
     // (REVTeX's entry: its text between \\BibitemOpen and \\BibitemShut{…})
     const open = cmds.find((x) => x.name === 'BibitemOpen'),
@@ -7232,6 +7240,14 @@ function bibliography(s: string, from: number, to: number, b: Builder, ctx: Ctx)
     b.kind = 'reference'
     walk(s, a, z, b, ctx)
     b.flush()
+    // (its key, on the entry's first unit: where hyperref sets the entry's destination, at the \bibitem, before its text)
+    if (key !== null) {
+      const first = b.units
+        .slice(before)
+        .filter((u) => u.kind === 'reference' && u.file === b.file)
+        .sort((x, y) => x.start - y.start)[0]
+      if (first) first.key = key
+    }
     // (the list backref sets after the entry, the pages that cite it: a piece of the unit that ends the entry's first paragraph,
     // where backref's parscan reads the entry to (`#2\par`) and sets the list, after its numbers are kept, so that it is never
     // what a number stands beside; an entry's later paragraphs, a paper's own \bibitem in a macro (\mbibitem), are TeX's other
@@ -7249,6 +7265,17 @@ function bibliography(s: string, from: number, to: number, b: Builder, ctx: Ctx)
   })
   b.kind = saved
   ctx.bibDefs = savedDefs
+}
+/** a `\\bibitem`'s key (its required argument, `arg`), where the argument is characters only as the source reader reads it: no
+ *  control sequence (`\\`), no group (`{`, `}`), no comment (`%`), no active character (`~`): nothing TeX would expand or read
+ *  otherwise than as the characters written. Every other character is the key's as written; null where there is none. hyperref
+ *  names the entry's destination `cite.<key>` (hyperref.sty's \\@bibitem and \\@lbibitem; natbib's \\NAT@anchor through
+ *  \\hyper@natanchorstart): whether a destination's name equals it is the landing's to read (locate/targets.ts), never a class
+ *  of characters here */
+function bibKeyOf(s: string, arg: GroupArg | undefined): string | null {
+  if (!arg) return null
+  const key = s.slice(arg.start + 1, arg.end - 1)
+  return key.length && !/[\\{}%~]/.test(key) ? key : null
 }
 /**
  * What a bibliography's head (the lines before its first entry, as a style writes them) defines, by name, where it is in force

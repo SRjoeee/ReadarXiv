@@ -10,6 +10,11 @@
 //   anchor (`pages`), another member's left edge at its point (`edge`: the line, label or display whose ink begins at the
 //   destination's x on the format's grid, its baseline the first under the point), its name's claim another kind
 //   (`disagree`), its name claiming nothing and no edge confirming it (`unproven`): the gate fails on any;
+// - a citation whose name holds one unit's key (`keys`, run.mjs: each unit holding a bibliography key, with its one located
+//   member's ord or null): `byKey` where it lands on that member and no edge contradicts it, wrong where it lands on another
+//   (`keyWrong`); each landing by key that today's rule lands elsewhere (`keyGeometry`: [dest, ord, geometry]), each refusal for
+//   the key with the key's member and the edge's (`keyRefused`: [dest, key's ord, edge's ord or null]), and the keys taken
+//   against the citations' names (`keys`: taken, named, matched, the names no key reads, the keys no name reads);
 // - bytes: the head's targets as written, raw and gzipped, and the head gzipped with and without them.
 import { gzipSync } from 'node:zlib'
 
@@ -144,7 +149,20 @@ export function boxesWrongOf({ floats, parts, head }) {
 }
 
 /** the record (above) of a paper's floats, landings and destinations, read against its parts and its head */
-export function linkTargetsOf({ floats, landings, refused = [], dests, parts, head }) {
+/** the ord of the one located member of the one unit whose key a citation's name holds: `cite.` and the key byte for byte, or
+ *  chapterbib's `cite.`, the key and `@-<n>` (the engine's targets.ts entryOfName, read again here); undefined where no one
+ *  unit's key reads it, null where that unit has no one located member */
+function keyOrdOf(dest, keys) {
+  let name = null
+  try { name = JSON.parse(dest) } catch {}
+  if (typeof name !== 'string' || !name.startsWith('cite.')) return undefined
+  const rest = name.slice('cite.'.length)
+  const unit = /^(.*)@-(\d+)$/.exec(rest)
+  const holders = keys.filter(([k]) => k === rest || (unit && k === unit[1]))
+  return holders.length === 1 ? holders[0][1] : undefined
+}
+
+export function linkTargetsOf({ floats, landings, refused = [], dests, parts, head, keys = [] }) {
   const wrong = boxesWrongOf({ floats, parts, head })
   // (the floats a target states)
   const stated = new Set((head?.targets ?? []).filter((t) => t[1] === 'float').map((t) => `${t[2]}|${t[3]}`))
@@ -172,21 +190,43 @@ export function linkTargetsOf({ floats, landings, refused = [], dests, parts, he
     const f = floatOfOrd.get(under[0])
     return f ? f.caption : under[0]
   }
-  const disagree = [], edge = [], unproven = [], pages = []
+  const disagree = [], edge = [], unproven = [], pages = [], keyWrong = [], keyGeometry = []
   const proof = {}
   for (const l of landings) {
     const claim = claimOf(l.dest)
     const e = edgeOf(dests.get(l.dest))
-    const p = (proof[l.kind] ??= { proved: 0, kindOnly: 0, wrong: 0 })
+    const k = keyOrdOf(l.dest, keys)
+    const p = (proof[l.kind] ??= { byKey: 0, proved: 0, kindOnly: 0, wrong: 0 })
     let bad = true
     if (claim === 'page') pages.push([l.dest, l.kind, l.ord])
     else if (e !== null && e !== l.ord) edge.push([l.dest, l.kind, l.ord, e])
     else if (claim && claim !== l.kind) disagree.push([l.dest, l.kind, claim])
+    else if (k !== undefined && k !== null && k !== l.ord) keyWrong.push([l.dest, l.kind, l.ord, k])
     else if (!claim && e !== l.ord) unproven.push([l.dest, l.kind, l.ord])
     else bad = false
     if (bad) p.wrong++
+    else if (k !== undefined && k !== null) p.byKey++
     else if (e === l.ord) p.proved++
     else p.kindOnly++
+    if (!bad && l.byKey && l.byKey.geometry !== l.ord) keyGeometry.push([l.dest, l.ord, l.byKey.geometry])
+  }
+  // (each refusal for the key: the key's member and the edge's at the point)
+  const keyRefused = refused.filter(([, , cause]) => cause === 'key').map(([dest]) => [dest, keyOrdOf(dest, keys) ?? null, edgeOf(dests.get(dest))])
+  // (the keys taken, against the names of the citations' destinations: matched by one unit's key, or not)
+  const citeNames = []
+  for (const [d] of dests) {
+    let name = null
+    try { name = JSON.parse(d) } catch {}
+    if (typeof name === 'string' && name.startsWith('cite.')) citeNames.push([d, name])
+  }
+  const read = new Set()
+  const unmatchedNames = []
+  for (const [d, name] of citeNames) {
+    const rest = name.slice('cite.'.length)
+    const unit = /^(.*)@-(\d+)$/.exec(rest)
+    const by = keys.filter(([k]) => k === rest || (unit && k === unit[1]))
+    if (keyOrdOf(d, keys) === undefined) unmatchedNames.push(name)
+    for (const [k] of by) read.add(k)
   }
   // (each destination with a name hyperref's says a kind of, by that kind: how many, and how many of them landed)
   const named = {}
@@ -218,6 +258,16 @@ export function linkTargetsOf({ floats, landings, refused = [], dests, parts, he
     edge,
     unproven,
     pages,
+    keyWrong,
+    keyGeometry,
+    keyRefused,
+    keys: {
+      taken: keys.length,
+      named: citeNames.length,
+      matched: citeNames.length - unmatchedNames.length,
+      unmatchedNames,
+      unmatchedKeys: keys.map(([k]) => k).filter((k) => !read.has(k)),
+    },
     bytes: {
       targets: targets.length,
       targetsGzip: targets ? gzipSync(targets).length : 0,

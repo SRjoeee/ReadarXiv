@@ -189,3 +189,68 @@ describe('every box a head states, of every kind, read against the parts', () =>
     expect(r.wrong.map((w: { by: number; why: string }) => [w.by, w.why])).toEqual([[1, 'foreign text']])
   })
 })
+
+describe("a citation landed by its entry's key: read again from the keys and the parts", () => {
+  const parts = [partOf(placed(0, 700, 80), placed(1, 676, 80))]
+  /** the record of one landing, the units' keys as run.mjs states them ([key, its one located member's ord or null]) */
+  const at = (dest: string, ord: number, x: number, y: number, keys: [string, number | null][], byKey?: object) =>
+    linkTargetsOf({
+      floats: [],
+      landings: [{ dest, kind: 'reference', page: 1, ord, box: [0, 0, 1, 1], ...(byKey ? { byKey } : {}) }],
+      dests: new Map([[dest, { page: 1, x, y }]]),
+      parts,
+      head: { format: 1 },
+      keys,
+    })
+  const keys: [string, number | null][] = [
+    ['a', 0],
+    ['b', 1],
+  ]
+  it('the entry of the key the name holds: by key; the edge confirming it too: by key all the same', () => {
+    expect(at('"cite.a"', 0, 70, 712, keys, { geometry: 1 })).toMatchObject({ proof: { reference: { byKey: 1, proved: 0, kindOnly: 0, wrong: 0 } } })
+    expect(at('"cite.a"', 0, 80, 712, keys, { geometry: 0 })).toMatchObject({ proof: { reference: { byKey: 1, proved: 0, wrong: 0 } } })
+    expect(at('"cite.a@-3"', 0, 70, 712, keys, { geometry: 1 })).toMatchObject({ proof: { reference: { byKey: 1 } } })
+  })
+  it("the key's check against the geometry: each landing by key that today's rule lands elsewhere is listed", () => {
+    expect(at('"cite.a"', 0, 70, 712, keys, { geometry: 1 }).keyGeometry).toEqual([['"cite.a"', 0, 1]])
+    expect(at('"cite.a"', 0, 70, 712, keys, { geometry: 0 }).keyGeometry).toEqual([])
+  })
+  it('a landing on another member than the one its key names is wrong, and fails the gate', () => {
+    const r = at('"cite.a"', 1, 70, 688, keys)
+    expect(r.keyWrong).toEqual([['"cite.a"', 'reference', 1, 0]])
+    expect(r.proof.reference.wrong).toBe(1)
+    expect(gateOf([['p1', { floats: [], wrong: [], ...r }]]).pass).toBe(false)
+  })
+  it("a name no one unit's key reads (none, two, its member not located): read as before", () => {
+    expect(at('"cite.z"', 0, 70, 712, keys)).toMatchObject({ keyWrong: [], proof: { reference: { kindOnly: 1 } } })
+    expect(at('"cite.a"', 1, 70, 688, [['a', 0], ['a', 1]])).toMatchObject({ keyWrong: [], proof: { reference: { kindOnly: 1 } } })
+    expect(at('"cite.a"', 1, 70, 688, [['a', null]])).toMatchObject({ keyWrong: [], proof: { reference: { kindOnly: 1 } } })
+  })
+  it("the keys taken and the citations' names: those matched, the names no key reads, the keys no name reads", () => {
+    expect(at('"cite.a"', 0, 70, 712, [...keys, ['c', null]], { geometry: 0 }).keys).toEqual({
+      taken: 3,
+      named: 1,
+      matched: 1,
+      unmatchedNames: [],
+      unmatchedKeys: ['b', 'c'],
+    })
+    expect(at('"cite.A_1"', 0, 70, 712, keys).keys).toMatchObject({ named: 1, matched: 0, unmatchedNames: ['cite.A_1'] })
+  })
+  it("a refusal for the key, read again: the key's member and the edge's, for the eye", () => {
+    const r = linkTargetsOf({
+      floats: [],
+      landings: [],
+      refused: [['"cite.a"', 'reference', 'key']],
+      dests: new Map([['"cite.a"', { page: 1, x: 80, y: 688 }]]),
+      parts,
+      head: { format: 1 },
+      keys,
+    })
+    expect(r.keyRefused).toEqual([['"cite.a"', 0, 1]])
+    expect(gateOf([['p1', { floats: [], wrong: [], ...r }]]).proof).toEqual({})
+  })
+  it('the gate sums the proof by key', () => {
+    const r = at('"cite.a"', 0, 70, 712, keys, { geometry: 1 })
+    expect(gateOf([['p1', { floats: [], wrong: [], ...r }]])).toMatchObject({ pass: true, proof: { reference: { byKey: 1 } }, keyGeometry: 1 })
+  })
+})

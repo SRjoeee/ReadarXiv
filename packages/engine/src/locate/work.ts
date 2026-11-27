@@ -221,12 +221,17 @@ export interface Landing {
   ord: number
   box: Box4
   next?: [page: number, box: Box4]
+  /** landed by its name's key (a citation's `cite.<key>`, the entry's \\bibitem's), with the member's ord today's rule lands
+   *  the point on (`geometry`; null where it lands nowhere): the lab's check of the one against the other; the bundle does not
+   *  carry it */
+  byKey?: { geometry: number | null }
 }
 /** why a landing is not stated (targets.ts): the evidence contradicts it (a page's anchor `page`, another member's left edge at
- *  its point `edge`, its name's claim another kind `name`, its name claiming nothing and no edge confirming it `unproven`), or
- *  its box cannot hold the whole of what it names (an element TeX set whose ink the bundle does not state `unstated`, what it
+ *  its point `edge`, its name's claim another kind `name`, its name claiming nothing and no edge confirming it `unproven`; the
+ *  entry its name's key names beginning on another page than the point's, or another member's left edge at the point, `key`),
+ *  or its box cannot hold the whole of what it names (an element TeX set whose ink the bundle does not state `unstated`, what it
  *  names standing in two pieces `pieces`, the box meeting another member's ink `foreign`) */
-export type Refusal = 'page' | 'edge' | 'name' | 'unproven' | 'unstated' | 'pieces' | 'foreign'
+export type Refusal = 'page' | 'edge' | 'name' | 'unproven' | 'key' | 'unstated' | 'pieces' | 'foreign'
 
 export interface Located {
   /** the units the members are of (a member's `unit` its index here): the instrument's, then those locate made on A (ink.ts:

@@ -14189,7 +14189,8 @@ neither its row nor its variant's is read.
 A link inside the paper names a destination (PDF.js's dest: a name such as `cite.x`, or an explicit array); hovering it shows
 the thing it lands on (the link previews' design, phase 1). The prepare states, once a paper, where each destination lands:
 the head's `targets` (format's `Target`), read by the reader at every open, no part fetched. Only the head moves: no unit, unit
-id, row, part, add-on or version, and no compile (the instrument's key reads none of the files below; §20.5).
+id, row, part, add-on or version, and no compile (the instrument's key reads none of the files below; §20.5) but for a
+citation's key, which the source reader keeps (§20.3).
 
 ### 20.1 Each destination, resolved on A
 
@@ -14229,7 +14230,23 @@ point (the design's L4), never its name. hyperref sets an anchor where what it m
 force over its first baseline (over the 245: a reference's 8 to 14 points under the point, a display's 11 to 17, a note's 9 to
 19, a heading's 10 to 39), into the band of the line above it, and past that line's baseline where the raise passes the pitch.
 What a point may land on is a beginning: a member's first line and its label, a display element's first ink, a boxed float.
-In this order, a point lands on:
+A citation lands first on its entry by identity: hyperref names an entry's destination by the paper's own key, `cite.<key>`
+(`hyperref.sty`'s `\@bibitem` and `\@lbibitem`, `cite.#1\@extra@b@citeb`; natbib's `\NAT@anchor` through hyperref's
+`\hyper@natanchorstart`, `cite.#1`; `\@extra@b@citeb` empty but under chapterbib, whose `\the@ipfilectr` is `@-` and the number of
+the `\include`d unit, multibib and bibunits leaving hyperref's own). The source reader keeps each `\bibitem`'s key with the
+entry's first unit (`latex-front.ts` `bibKeyOf`, `InstrumentUnit.key`; the bundle does not carry it) where its argument is
+characters only as it reads them: no control sequence, no group, no comment, no active character, nothing TeX would expand;
+every other character is the key's as written. A destination whose name, as the PDF holds it decoded, equals `cite.` and a key
+byte for byte, case kept (or `cite.`, a key and `@-<n>`, chapterbib's), lands on the one located member of the one unit
+holding that key; where a name of another writing differs in any character, no unit holds it, two do, or its unit is not
+located, the point's rule below decides, and its evidence. No character is read otherwise than as itself, on either side:
+bibtopic's names (its unit's number after the key, bare) are not read as a key's, and its entries come from files the source
+reader does not read. The entry its key names is refused (`key`, the lab's) where it begins on another page than the
+destination's point, or where the edge reading (below) names another member: the two readings of the paper disagreeing, neither
+is stated. Where it lands, the box is a reference's (below), with its refusals. The point's rule is its check: the lab counts
+the landings by key that the rule lands elsewhere (§20.5).
+
+Every other destination, by its point. In this order, a point lands on:
 
 1. a boxed float whose box holds it;
 2. a beginning it stands on: its band holds the point's height and its ink the point's x, its baseline at or over the point on
@@ -14297,9 +14314,8 @@ rule above judge each landing:
 
 A landing is not stated where its name is a page's (a page, no thing on it: the reader gives the jump alone), where the edge
 reading names another member, where its name claims another kind, or where its name claims nothing and the edge reading does
-not confirm its member. The refusals are the lab's (`Located.refusedTargets`), never the bundle's. The reading of a reference's
-own key (`\bibitem`'s, which the source reader reads and keeps nowhere) would prove a citation's member by identity; it moves the
-compile side, and is not here.
+not confirm its member. The refusals are the lab's (`Located.refusedTargets`), never the bundle's. A citation landed by its
+entry's key is proved by that identity (above), the edge reading its contradiction alone.
 
 ### 20.4 The head's targets
 
@@ -14323,7 +14339,12 @@ another member's ink meeting the box's inside (`foreign text`), a heading's wind
 too where the engine counts any of `foreign`, `cut`, `outside` above 0 (none can be boxed so; the check holds the code to it).
 **And no stated landing wrong**,
 read again from the bundle's parts and the destinations: a page anchor, one the edge reading contradicts, one whose name
-claims another kind, one whose name claims nothing and the edge does not confirm. It fails where no paper of the run states a
+claims another kind, a citation landed elsewhere than on the entry its name's key names (the units' keys as `run.mjs` reads
+them off the located units, the name read as §20.3 reads it), one whose name claims nothing and the edge does not confirm. The
+landings are counted by proof: by key, proved by the edge, their kind claimed by their name alone; beside them, never rules,
+each landing by key the point's rule lands elsewhere (`keyGeometry`), each refusal for the key with the key's member and the
+edge's (`keyRefused`), and the keys taken against the citations' names (matched, the names no key reads, the keys no name
+reads). It fails where no paper of the run states a
 record (dumps made before the targets check nothing). The share of figures and tables
 boxed is reported by type with each miss's cause, never gated. Two readings of the landings are reported beside it, never
 rules: each landing whose kind its hyperref name does not say (`cite.` a reference, `figure.`/`table.` a float, `section.` and
