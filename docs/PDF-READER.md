@@ -10803,6 +10803,33 @@ prose would be laid as prose over a table; a script mark in text sets a formula)
 their own kinds. A paper's macro, a `\rule` the probe asks about, and a register's setting the source reader keeps with the
 command after it (`\looseness=-1 \vspace`, read as a paper's macro) stay unproven where their ink is not found.
 
+### 18.121 A note's start bounds a display's ink as a body's end does; a reading past its column's end that the text after it ends keeps its frame (the coordinator's ruling of 2026-11-28, fix phase F4)
+
+A display at a column's foot whose text after it TeX set at the head of the next column is read past its column's end
+(`own/stream.ts` `pastColumn`): what its region holds from its point on, through the bodies' breaks, to the text after it. Two
+shapes of it were refused though TeX's stream states the display's ink, and the paragraph stayed the original's (`text past its
+source`: the display's glyphs counted as its text):
+
+- **A class that sets a column's notes inside the body it brackets** (REVTeX's ltxgrid) ships the notes after the display and
+  before the body's end. The display's next mark in its region was a note's start, no body's end stood before it, and the
+  reading answered nothing; the reading past units shipped whole (`pastUnit`, §18.117) does not take it where a note's ink runs
+  on past its end mark (a placeholder after its last word, with points of its own). Now the note's start bounds the display's
+  ink as the body's end does (`pastNotes`): where every unit started there closes before the body's end on that page and no
+  mark of the display's own unit stands among them, the display owns what its region holds up to the note's start, less the
+  glyphs on the start's line before it (the note's label; words of no label's form there may be the display's own, and then
+  nothing is read) and less the boxes TeX shipped after its last glyph there that stand below that glyph's line (the notes'
+  separator rule, which TeX ships with them under the column's text; a rule on the display's last line, an underline, stays
+  its own); then what its region holds from the body's end on, to the text after it. Everything from the note's start to the
+  body's end is the notes'. A note left open at the body's end (its rest may stand at the next column's head, before the text
+  after it) gives nothing. The page stream waits for the page the text after it stands on (`ownedPages`' stop).
+- **A display holding a draft image frame** (graphicx's draft, the final pass's picture in its place) read past its column's end
+  to the text after it was refused as a reading past a frame that a mark or a column's end ends (FRAME). A `pastColumn` reading
+  that the text after it ends is told as the one to the text after it on its page: the display owns its frame and its number.
+
+**What it protects.** No glyph of a note is the display's (its label, its text, its placeholders, its rule), and a reading that
+runs to a mark or a column's end past a frame stays refused. The rules are outside the marked compile (`own/stream.ts` is not
+in the compile key's closure): no TeX moves, no stored compile is made again.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server
