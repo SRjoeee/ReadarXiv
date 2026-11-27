@@ -21,12 +21,14 @@ import {
   type PrepWhy,
   sha256Hex,
   type Style,
+  Target,
   type Unit,
   write,
 } from '@readarxiv/format'
 import type { Instrument, InstrumentUnit, PieceClass } from '../instrument.ts'
 import { RUNNING } from '../instrument/language.ts'
 import type { Located, Member } from '../locate/locate.ts'
+import type { Landing } from '../locate/targets.ts'
 import { bySentence } from '../locate/words.ts'
 import { namesOf, partNames } from './names.ts'
 import { runInsOf } from './run-in.ts'
@@ -579,6 +581,7 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
     for (const [pg, x] of addOn.pages) if (!x.ok) refused.push([pg, 'page'])
   }
   const { outline, numbers } = outlineOf(members)
+  const targets = targetsOf(input.located.targets)
   const head: Head = {
     format: 1,
     paper,
@@ -597,9 +600,24 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
     ...(numbers.length ? { numbers } : {}),
     ...(input.recovered?.length ? { recovered: input.recovered } : {}),
     ...(input.ins.made.reduced ? { reduced: true as const } : {}),
+    ...(targets.length ? { targets } : {}),
   }
   const { bytes, digest } = write('head', head)
   yield { kind: 'head', bytes, digest, head }
+}
+
+/** the head's targets (docs/PDF-READER.md §20): each landing locate made (locate/targets.ts) as format's Target, sorted by its
+ *  destination, each destination once; one format's Target refuses (a destination past its bound) left out, its links keeping
+ *  their jump, so that no landing can refuse the head */
+export function targetsOf(landings: readonly Landing[]): Target[] {
+  return [...landings]
+    .sort((a, b) => (a.dest < b.dest ? -1 : a.dest > b.dest ? 1 : 0))
+    .filter((l, i, all) => i === 0 || all[i - 1]!.dest !== l.dest)
+    .map(
+      (l): Target =>
+        l.next ? [l.dest, l.kind, l.page, l.ord, l.box, l.next[0], l.next[1]] : [l.dest, l.kind, l.page, l.ord, l.box],
+    )
+    .filter((t) => Target.safeParse(t).success)
 }
 
 /** the paper's fonts as A names them, by the glyphs of located members set in each, most first (at most 24) */

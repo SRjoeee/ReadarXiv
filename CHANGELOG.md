@@ -4,6 +4,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- Fixed: in the PDF reader, a paper that opens or closes a list, a box, a theorem or a displayed formula with a command of its own, such as `\ben` for `\begin{enumerate}` or `\ethm` for `\end{theorem}`, is translated paragraph by paragraph as printed, its formulas kept as printed. Such paragraphs had stayed in the original language, or run together with the formula's text sent to the translator.
 - Fixed: in the PDF reader, a paragraph that goes on after a displayed formula with an accented word, such as "An étale module", is translated; and a bibliography whose paper defines its field command with an optional argument, so that the page prints each field's name before its value, is translated as printed. Both had stayed in the original language.
 - Fixed: in the PDF reader, a page where a paragraph goes on from the page before right after a non-breaking space, such as `Table~\ref{…}` at a column's foot, is translated. Its translation had failed and the whole page had stayed in the original language.
 - Fixed: in the PDF reader, a figure's box of running text whose paragraphs a blank line separates is translated paragraph by paragraph. A paragraph's last line could stay in English, and a sentence was sent to the translator in two halves.

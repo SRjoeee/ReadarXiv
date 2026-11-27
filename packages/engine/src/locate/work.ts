@@ -10,6 +10,8 @@ import type { Instrument, InstrumentUnit, TexFrame } from '../instrument.ts'
 import { fixedFacesOf } from './facts.ts'
 import type { DisplayLine, InkInput, InkStats } from './ink.ts'
 import { r2 } from './lines.ts'
+import type { DestPoint } from './dests.ts'
+import type { TargetKind } from '@readarxiv/format'
 import type { PaintedFrame } from './frames.ts'
 import type { FloatLine } from './ledger.ts'
 import type { Word } from './words.ts'
@@ -166,6 +168,61 @@ export interface Member {
   words?: Word[]
 }
 
+// ---- what locate's last two phases state (floats.ts, targets.ts: link previews, docs/PDF-READER.md §20)
+/** why a float has no box: its caption in no bracket (`unbracketed`: longtable's, which defines no \@captype, a \captionof
+ *  outside a float), its bracket not closed on its page (`unclosed`), some of its ink on B with no partner on A (`unpaired`),
+ *  its ink on two A pages (`pages`), no ink at all (`empty`), its caption not wholly inside its bracket (`caption`), ink on A of
+ *  a member of the float outside the box (`outside`), another's glyph inside the box (`foreign`), A ink none of the float's
+ *  crossing the box's edge (`cut`) */
+export type FloatCause =
+  | 'unbracketed'
+  | 'unclosed'
+  | 'unpaired'
+  | 'pages'
+  | 'empty'
+  | 'caption'
+  | 'outside'
+  | 'foreign'
+  | 'cut'
+export type Box4 = [number, number, number, number]
+export interface FloatBox {
+  /** its bracket's serial (`fs<n>`), -1 for a caption of no bracket */
+  serial: number
+  /** its page on A (1-based); for a float with no partner there, 0 */
+  page: number
+  /** its caption's member ord (the outermost bracket's caption where floats nest; of several, the first not a part of
+   *  another: subcaption's `sub<type>` caption is its float's part), null where it has none */
+  caption: number | null
+  /** every caption member inside its bracket, by ord */
+  captions: number[]
+  /** LaTeX's \@captype as its caption's unit states it (InstrumentUnit.float), null where it has no caption */
+  type: string | null
+  /** the union of the A partners of every glyph, turned glyph and box between its two points; null with a cause */
+  box: Box4 | null
+  /** that union where it was made, a box or not (the lab's look at a refusal: never stated in the bundle) */
+  union: Box4 | null
+  cause: FloatCause | null
+  /** the members that own its ink on A, by ord: what is its own beside its partners */
+  members: number[]
+  /** the measure's counts: A glyphs none of the float's inside `box`; A ink none of the float's crossing its edge; A ink of its
+   *  members outside it; B ink with no partner */
+  foreign: number
+  cut: number
+  outside: number
+  unpaired: number
+}
+
+/** where a destination of A's links lands (targets.ts) */
+export interface Landing {
+  dest: string
+  kind: TargetKind
+  page: number
+  /** the member's ord (a float's: its caption's) */
+  ord: number
+  box: Box4
+  next?: [page: number, box: Box4]
+}
+
 export interface Located {
   /** the units the members are of (a member's `unit` its index here): the instrument's, then those locate made on A (ink.ts:
    *  its ink units, kept blocks and figure texts) */
@@ -196,6 +253,15 @@ export interface Located {
       border?: LinkBorder
     }[]
   >
+  /** each float's box on A, by its brackets on B (floats.ts), and each caption of no bracket, with why it has none */
+  floats: FloatBox[]
+  /** where each destination of A's links lands (targets.ts), sorted by destination; one that lands on nothing covered is absent */
+  targets: Landing[]
+  /** the landings the engine's own evidence does not let it state (targets.ts `contradicted`): each destination, the kind it
+   *  would have had and why not, for the lab's measure; never stated in the bundle */
+  refusedTargets?: [dest: string, kind: TargetKind, cause: 'page' | 'edge' | 'name' | 'unproven'][]
+  /** the time phases 17 and 18 took, where a clock was given (LocateOptions.now): the lab's measure of their cost */
+  linkMs?: { floats: number; targets: number }
   /** per A page (index p - 1): each glyph's and each box's group (the wrap's plan), null for none */
   groups: { glyphs: (string | null)[]; boxes: (string | null)[]; turned: (string | null)[] }[]
   /** groups that are figure texts' (the wrap writes their runs inside a form in the form) */
@@ -367,6 +433,11 @@ export interface LocateOptions {
   /** each A page's closed painted paths that hold text (frames.ts framesOnPage), where the raw pages are not given (`pages`):
    *  read from them where they are */
   frames?: (readonly PaintedFrame[] | null)[]
+  /** every destination A's links name, resolved on A (dests.ts destinationsOf), by its key as Link.to.dest writes it: where each
+   *  lands is the last phase's (targets.ts). None given, no destination lands */
+  dests?: ReadonlyMap<string, DestPoint | null>
+  /** a clock: given, locate states how long its link phases took (Located.linkMs) */
+  now?: () => number
 }
 
 /** the record of a locate: its index, and the fields the phases fill from the start */

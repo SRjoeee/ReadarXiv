@@ -57,7 +57,9 @@ function guarded(ins: Instrument): { ins: Instrument; located: () => void } {
 async function run(ins: Instrument, bytes: Uint8Array, keep: boolean, located = () => {}) {
   let calls = 0
   const now = () => {
-    if (++calls === 4) located()
+    // (the clock's reads up to locate's end: the start, after the read, after A's destinations, after the alignment, locate's
+    // own three round its link phases, and after locate)
+    if (++calls === 8) located()
     return calls
   }
   const digests: string[] = []

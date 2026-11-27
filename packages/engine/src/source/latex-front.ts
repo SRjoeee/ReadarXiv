@@ -257,6 +257,13 @@ type Ctx = {
   /** the paper's macros of no argument that end a paragraph and set no text (parNamesOf) */
   parNames?: ReadonlySet<string>
   envMacros: Map<string, { side: string; env: string }>
+  /** the paper's macros in force where the walk stands, in TeX's order (preambleMeanings, then each definition the walk meets:
+   *  noteDefinition), which tell a call that stands for an environment's boundary (boundaryAt); each walked text's definitions
+   *  by where they start (meaningEvents), read once */
+  meanings?: Map<string, Meaning>
+  meaningEvents?: Map<string, Map<number, { made: Made[]; local: boolean }>>
+  /** each walked text's control words TeX surely acts on, by where they stand (actedOn), read once */
+  acted?: Map<string, Set<number>>
   ifs: Set<string>
   ifValues: Map<string, boolean>
   ends: Map<WalkFile, Set<number>>
@@ -3340,6 +3347,456 @@ function proseInEnvironment(macro: Macro): boolean {
   return false
 }
 
+// ---------------------------------------------------------------- a paper's macro that stands for an environment's boundary
+/** the meaning a paper's macro has where it is in force, read in TeX's order (preambleMeanings, the walk's noteDefinition): its
+ *  parameters as \\newcommand or \\def declares them (an optional first, `dflt` its default; `delim`, a \\def's parameter text
+ *  where a token delimits an argument), its body; 'unsure' where the reading cannot tell what TeX holds there (an \\edef, a
+ *  definition inside a group or an environment, one in a conditional's branch TeX may skip, a \\let of a meaning not read) */
+type Meaning = { params: number; opt: boolean; dflt: string; delim: string | null; body: string } | 'unsure'
+/** what a definition makes: a name, how LaTeX defines it (`new` refuses a name in force, `provide` leaves it, `set` replaces it),
+ *  and its meaning, or the name a \\let copies the meaning of */
+type Made = { name: string; how: 'new' | 'provide' | 'set'; meaning: Meaning | { let: string } }
+/**
+ * A call of the paper's macro as the boundary of an environment it stands for (boundaryAt): `begin` opens `env` (`rest`, what the
+ * body sets after its \\begin{env}, inside the environment), `end` closes it, `whole` sets a display whole around an argument TeX
+ * delimits by a token (`\\def\\bal#1\\eal{\\begin{align}#1\\end{align}}`, `close` where that argument ends in the source); `end`
+ * where the call ends
+ */
+type Boundary = { side: 'begin' | 'end' | 'whole'; env: string; end: number; rest: string; close: number }
+/** the commands whose definitions the boundary reading follows: TeX's \\def family and \\let, LaTeX's definers (DEFINERS:
+ *  \\newcommand's family, \\newenvironment's, xparse's, which definitionAt reads as it can) */
+const definesMeaning = (name: string) => DEF_PRIMITIVES.has(name) || name === 'let' || DEFINERS.test(name)
+/** a control word's name at s[k] (letters and @), or null */
+const wordAt = (s: string, k: number) => {
+  if (s[k] !== '\\') return null
+  const c = commandAt(s, k)
+  return /^[A-Za-z@]+$/.test(c.name) ? c : null
+}
+/** an optional group at s[k] (past white space): its content and end, or null */
+function bracketAt(s: string, k: number) {
+  const k0 = skipSpaces(s, k)
+  if (s[k0] !== '[') return null
+  const e = matchGroup(s, k0, '[', ']')
+  return e < 0 ? null : { text: s.slice(k0 + 1, e - 1), end: e }
+}
+/**
+ * What the definition whose command `name` ends at s[end] makes (Made), as TeX reads it: \\newcommand's family by its name, its
+ * `[n]` and `[default]`, its body; \\def's by its parameter text (delimited where it holds more than `#n`s) and its body, an
+ * \\edef or \\xdef 'unsure' (its body expanded where it stands); \\let a copy of the meaning in force of the name it names;
+ * \\newenvironment the environment's begin part, `\\name`, and its end part, `\\endname`. None where the form is not read whole
+ */
+function definitionAt(s: string, name: string, end: number): Made[] {
+  if (name === 'let') {
+    const a = wordAt(s, skipSpaces(s, end))
+    if (!a) return []
+    let k = skipSpaces(s, a.end)
+    if (s[k] === '=') k = skipSpaces(s, k + 1)
+    const c = wordAt(s, k)
+    return [{ name: a.name, how: 'set', meaning: c ? { let: c.name } : 'unsure' }]
+  }
+  const how = name.startsWith('new') ? 'new' : name.startsWith('provide') ? 'provide' : 'set'
+  // (xparse's definers, whose argument specifications this reading does not take apart: the names they define read 'unsure',
+  // an older meaning no longer in force)
+  if (/Document(?:Command|Environment)$/.test(name)) {
+    const k = skipSpaces(s, end),
+      e = s[k] === '{' ? matchGroup(s, k) : -1
+    const w = e > 0 ? (wordAt(s, skipSpaces(s, k + 1))?.name ?? s.slice(k + 1, e - 1).trim()) : wordAt(s, k)?.name
+    if (!w || !/^[A-Za-z@]+$/.test(w)) return []
+    const names = name.endsWith('Environment') ? [w, `end${w}`] : [w]
+    return names.map((n): Made => ({ name: n, how: 'set', meaning: 'unsure' }))
+  }
+  if (name.endsWith('environment')) {
+    let k = skipSpaces(s, end)
+    if (s[k] === '*') k = skipSpaces(s, k + 1)
+    const e = s[k] === '{' ? matchGroup(s, k) : -1
+    if (e < 0) return []
+    const env = s.slice(k + 1, e - 1).trim(),
+      n = bracketAt(s, e),
+      d = n && bracketAt(s, n.end)
+    const k1 = skipSpaces(s, d?.end ?? n?.end ?? e),
+      e1 = s[k1] === '{' ? matchGroup(s, k1) : -1,
+      k2 = e1 > 0 ? skipSpaces(s, e1) : -1,
+      e2 = s[k2] === '{' ? matchGroup(s, k2) : -1
+    if (!/^[A-Za-z@]+$/.test(env) || e2 < 0 || (n && !/^\s*\d\s*$/.test(n.text))) return []
+    const at = (body: string, params: number, opt: boolean, dflt: string): Meaning => ({
+      params,
+      opt,
+      dflt,
+      delim: null,
+      body,
+    })
+    return [
+      { name: env, how, meaning: at(s.slice(k1 + 1, e1 - 1), n ? Number(n.text) : 0, !!d, d?.text ?? '') },
+      { name: `end${env}`, how, meaning: at(s.slice(k2 + 1, e2 - 1), 0, false, '') },
+    ]
+  }
+  if (DEF_PRIMITIVES.has(name)) {
+    const c = wordAt(s, skipSpaces(s, end))
+    if (!c) return []
+    let k = c.end
+    while (k < s.length && s[k] !== '{' && s[k] !== '%') k++
+    const e = s[k] === '{' ? matchGroup(s, k) : -1
+    if (e < 0) return []
+    if (name === 'edef' || name === 'xdef') return [{ name: c.name, how, meaning: 'unsure' }]
+    const text = s.slice(c.end, k),
+      params = (text.match(/#[1-9]/g) ?? []).length
+    const delim = /^\s*(?:#[1-9]\s*)*$/.test(text) ? null : text.trim()
+    return [{ name: c.name, how, meaning: { params, opt: false, dflt: '', delim, body: s.slice(k + 1, e - 1) } }]
+  }
+  let k = skipSpaces(s, end)
+  if (s[k] === '*') k = skipSpaces(s, k + 1)
+  let c: { name: string; end: number } | null = null
+  if (s[k] === '{') {
+    const e = matchGroup(s, k),
+      w = e > 0 ? wordAt(s, skipSpaces(s, k + 1)) : null
+    if (w && skipSpaces(s, w.end) === e - 1) c = { name: w.name, end: e }
+  } else c = wordAt(s, k)
+  if (!c) return []
+  const n = bracketAt(s, c.end),
+    d = n && bracketAt(s, n.end),
+    k1 = skipSpaces(s, d?.end ?? n?.end ?? c.end),
+    e1 = s[k1] === '{' ? matchGroup(s, k1) : -1
+  if (e1 < 0 || (n && !/^\s*\d\s*$/.test(n.text))) return []
+  const params = n ? Number(n.text) : 0
+  return [
+    {
+      name: c.name,
+      how,
+      meaning: { params, opt: !!d, dflt: d?.text ?? '', delim: null, body: s.slice(k1 + 1, e1 - 1) },
+    },
+  ]
+}
+/**
+ * The definitions of a file TeX acts on where they stand (texCommands: none in a definition's body, a skipped branch, a comment),
+ * by where each starts: what each makes (definitionAt), and whether it is local, which TeX undoes at a group's or an
+ * environment's end, or unsure, in a conditional whose branch the source cannot tell (texCommands' `sure`): either read 'unsure'
+ */
+function meaningEvents(s: string, scan: TexScan): Map<number, { made: Made[]; local: boolean }> {
+  const out = new Map<number, { made: Made[]; local: boolean }>()
+  let envs = 0
+  for (const c of texCommands(s, scan)) {
+    if (c.inDef) continue
+    if ((c.name === 'begin' || c.name === 'end') && c.env !== undefined) {
+      if (c.env !== 'document') envs = Math.max(0, envs + (c.name === 'begin' ? 1 : -1))
+      continue
+    }
+    if (!definesMeaning(c.name)) continue
+    const made = definitionAt(s, c.name, c.end)
+    if (made.length) out.set(c.at, { made, local: c.depth > 0 || envs > 0 || !c.sure })
+  }
+  return out
+}
+/** a definition's meanings put in force where TeX reads it (`meanings`, by name); a local or unsure one leaves its names 'unsure' */
+function applyMade(meanings: Map<string, Meaning>, made: readonly Made[], local: boolean) {
+  BOUNDARY_NAMES.delete(meanings)
+  for (const d of made) {
+    if (local) meanings.set(d.name, 'unsure')
+    else if (d.how === 'set' || !meanings.has(d.name))
+      meanings.set(
+        d.name,
+        typeof d.meaning === 'object' && 'let' in d.meaning ? (meanings.get(d.meaning.let) ?? 'unsure') : d.meaning,
+      )
+  }
+}
+/**
+ * The meanings in force where the document's body begins: the main file's preamble read in TeX's order, each of the package's own
+ * files it loads (\\documentclass, \\LoadClass, \\usepackage, \\RequirePackage, \\input, \\include) read whole where it is loaded
+ * (`read`, the project's reading of a name). A file loaded otherwise, or one the body inputs, is read where the walk meets it
+ */
+function preambleMeanings(
+  main: { rel: string; text: string },
+  body: number,
+  read: (rel: string) => { rel: string; text: string } | null,
+  scan: TexScan,
+): Map<string, Meaning> {
+  const meanings = new Map<string, Meaning>(),
+    seen = new Set([main.rel])
+  const run = (t: string, to: number) => {
+    const events = meaningEvents(t, scan)
+    for (const c of texCommands(t, { ...scan, to })) {
+      const e = events.get(c.at)
+      if (e) applyMade(meanings, e.made, e.local)
+      if (c.inDef || !c.sure || c.depth > 0) continue
+      const ext =
+        c.name === 'documentclass' || c.name === 'LoadClass'
+          ? '.cls'
+          : c.name === 'usepackage' || c.name === 'RequirePackage'
+            ? '.sty'
+            : c.name === 'input' || c.name === 'include'
+              ? ''
+              : null
+      if (ext === null) continue
+      const arg = argsAfter(t, c.end, 2).args.find((a) => a.kind === 'req')
+      if (!arg) continue
+      for (const n of t.slice(arg.start + 1, arg.end - 1).split(ext ? ',' : '\0')) {
+        const f = n.trim() && !NAME_MACRO.test(n) ? read(`${n.trim()}${ext}`) : null
+        if (!f || seen.has(f.rel)) continue
+        seen.add(f.rel)
+        run(f.text, f.text.length)
+      }
+    }
+  }
+  run(main.text, body < 0 ? main.text.length : body)
+  return meanings
+}
+/** a body with each parameter `#n` given the call's argument (`args`, by number), `##` a `#` */
+const substituted = (body: string, args: readonly string[]) =>
+  body.replace(/##|#([1-9])/g, (_m: string, n: string | undefined) => (n ? (args[Number(n)] ?? '') : '#'))
+/**
+ * A call's arguments as TeX takes them for a meaning (`m`) at s[at] (past the name), within `to`: an optional first (its default
+ * where the call writes none), each undelimited one a group or a token past white space, each delimited one (a \\def's parameter
+ * text) the shortest text up to its delimiter outside every group and comment, a delimiter of control words and characters with
+ * no space; with `close` where the last delimiter begins, and `end` the call's. Null where the call is not read whole
+ */
+function meaningCall(s: string, at: number, m: Exclude<Meaning, 'unsure'>, to: number) {
+  const args: string[] = []
+  let k = at,
+    close = at
+  if (!m.delim) {
+    let p = 1
+    if (m.opt) {
+      const o = bracketAt(s, k)
+      args[1] = o ? o.text : m.dflt
+      if (o) k = o.end
+      p = 2
+    }
+    for (; p <= m.params; p++) {
+      const k0 = skipSpaces(s, k)
+      if (k0 >= to || s[k0] === '}') return null
+      const e0 = s[k0] === '{' ? matchGroup(s, k0) : s[k0] === '\\' ? commandAt(s, k0).end : k0 + 1
+      if (e0 < 0 || e0 > to) return null
+      args[p] = s[k0] === '{' ? s.slice(k0 + 1, e0 - 1) : s.slice(k0, e0)
+      k = e0
+    }
+    return { args, end: k, close: k }
+  }
+  // (the parameter text in its parts: a parameter, or a delimiter after it)
+  const parts = m.delim.split(/(#[1-9])/).filter((x) => x !== '')
+  if (parts.some((x) => !x.startsWith('#') && /\s/.test(x))) return null
+  for (let j = 0; j < parts.length; j++) {
+    const x = parts[j]!
+    if (!x.startsWith('#')) {
+      if (!s.startsWith(x, k) || (/[A-Za-z@]$/.test(x) && /[A-Za-z@]/.test(s[k + x.length] ?? ''))) return null
+      k += x.length
+      continue
+    }
+    const delim = parts[j + 1]?.startsWith('#') === false ? parts[j + 1]! : null
+    if (!delim) {
+      const k0 = skipSpaces(s, k)
+      if (k0 >= to || s[k0] === '}') return null
+      const e0 = s[k0] === '{' ? matchGroup(s, k0) : s[k0] === '\\' ? commandAt(s, k0).end : k0 + 1
+      if (e0 < 0 || e0 > to) return null
+      args[Number(x[1])] = s[k0] === '{' ? s.slice(k0 + 1, e0 - 1) : s.slice(k0, e0)
+      k = e0
+      continue
+    }
+    // (the shortest text, its braces balanced, that the delimiter follows)
+    let q = k,
+      depth = 0
+    for (; q < to; q++) {
+      const ch = s[q]
+      if (
+        depth === 0 &&
+        s.startsWith(delim, q) &&
+        !(/[A-Za-z@]$/.test(delim) && /[A-Za-z@]/.test(s[q + delim.length] ?? ''))
+      )
+        break
+      // (a comment's text TeX never reads; a command whole, its name no delimiter's part)
+      if (ch === '%') {
+        q = skipComment(s, q)
+        continue
+      }
+      if (ch === '\\') {
+        q = commandAt(s, q).end - 1
+        continue
+      }
+      if (ch === '{') depth++
+      else if (ch === '}' && --depth < 0) return null
+    }
+    if (q >= to) return null
+    args[Number(x[1])] = s.slice(k, q)
+    close = q
+    k = q + delim.length
+    j++
+  }
+  return { args, end: k, close }
+}
+/** whether the control word at t[at] is one TeX executes there, not an operand of the command before it (`\\string\\end`,
+ *  `\\let\\x\\ethm`: OPERAND_OF, SECOND_OPERAND_OF) */
+function executedAt(t: string, at: number) {
+  const before = t.slice(Math.max(0, at - 80), at),
+    one = /\\([A-Za-z@]+)\s*=?\s*$/.exec(before),
+    two = /\\([A-Za-z@]+)\s*\\[A-Za-z@]+\s*=?\s*$/.exec(before)
+  return !(one && OPERAND_OF.has(one[1]!)) && !(two && SECOND_OPERAND_OF.has(two[1]!))
+}
+/**
+ * Whether a body, its parameters given, stands for an environment's boundary, read from what TeX does with it and never from a
+ * name: its first token `\\begin{env}` with the body leaving `env` open (`begin`, `rest` what follows inside it), or with
+ * `env` closed at the body's end, a display (`whole`, the call's argument in it); its last token `\\end{env}` with no
+ * `\\begin{env}` before it (`end`); either through a call of another of the paper's macros in force whose arguments the body
+ * holds (its first token, or its last, a macro of no argument). A look-alike (`\\begin` in a string, a conditional's branch, an
+ * argument another command takes) begins with another token and is none (null); undefined where the reading cannot tell
+ */
+function bodyBoundary(
+  body: string,
+  ctx: Pick<Ctx, 'meanings' | 'displayEnvs'> & Partial<Pick<Ctx, 'envMacros'>>,
+  depth = 0,
+): Omit<Boundary, 'end' | 'close'> | null | undefined {
+  const t = texUncommented(body).trim()
+  const open = /^\\begin\s*\{([^{}]+)\}/.exec(t)
+  if (open) {
+    const env = open[1]!.trim(),
+      after = open[0].length,
+      [closeAt, past] = endOfEnv(t, after, env)
+    if (closeAt >= t.length) {
+      // (closed in the body by a paper's macro TeX executes there: the body sets the environment whole, no boundary)
+      const rest = t.slice(after)
+      // (a macro whose body may stand for a boundary, boundaryNames; one read unsure that the old reading reads as an end)
+      const names = ctx.meanings ? boundaryNames(ctx.meanings) : new Set<string>()
+      for (const w of rest.matchAll(/\\([A-Za-z@]+)/g)) {
+        const m = ctx.meanings?.get(w[1]!)
+        if (m === 'unsure' && ctx.envMacros?.get(w[1]!)?.side === 'end') return undefined
+        if (!m || m === 'unsure' || !names.has(w[1]!) || !executedAt(rest, w.index)) continue
+        const b = depth < EXPANSION_DEPTH && !m.params && !m.delim ? bodyBoundary(m.body, ctx, depth + 1) : undefined
+        if (b === undefined) return undefined
+        if (b?.side === 'end' && b.env === env) return null
+      }
+      return { side: 'begin', env, rest }
+    }
+    return past === t.length && (displayEnv(env) || ctx.displayEnvs.has(env)) ? { side: 'whole', env, rest: '' } : null
+  }
+  const shut = /\\end\s*\{([^{}]+)\}$/.exec(t)
+  if (shut) {
+    const env = shut[1]!.trim()
+    if (!executedAt(t, shut.index)) return null
+    return new RegExp(String.raw`\\begin\s*\{\s*${env.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\s*\}`).test(
+      t.slice(0, shut.index),
+    )
+      ? null
+      : { side: 'end', env, rest: '' }
+  }
+  if (depth >= EXPANSION_DEPTH) return undefined
+  // (through another of the paper's macros: its call first, its arguments in the body; or last, of no argument)
+  const first = wordAt(t, 0),
+    inner = first && ctx.meanings?.get(first.name)
+  if (inner === 'unsure') return undefined
+  if (inner) {
+    const call = meaningCall(t, first.end, inner, t.length)
+    if (!call) return undefined
+    const b = bodyBoundary(substituted(inner.body, call.args), ctx, depth + 1)
+    if (b?.side === 'begin') return { ...b, rest: b.rest + t.slice(call.end) }
+    if (b?.side === 'end' && !t.slice(call.end).trim()) return b
+    return b === undefined ? undefined : null
+  }
+  const last = /\\([A-Za-z@]+)$/.exec(t),
+    tail = last && ctx.meanings?.get(last[1]!)
+  if (tail === 'unsure') return undefined
+  if (tail && !tail.params && !tail.delim && executedAt(t, last!.index)) {
+    const b = bodyBoundary(tail.body, ctx, depth + 1)
+    if (
+      b?.side === 'end' &&
+      !new RegExp(String.raw`\\begin\s*\{\s*${b.env.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\s*\}`).test(t)
+    )
+      return b
+    return b === undefined ? undefined : null
+  }
+  return null
+}
+/**
+ * A call at s[i] of the paper's macro `name` (its name ending at `end`) as the boundary it stands for, by its meaning in force
+ * there (Ctx.meanings) and its arguments as TeX takes them (meaningCall): a Boundary; null where it stands for none; undefined
+ * where the reading cannot tell (no meaning read, an unsure one, a call not whole), which leaves the call as it was read before
+ */
+function boundaryAt(s: string, end: number, name: string, to: number, ctx: Ctx): Boundary | null | undefined {
+  const m = ctx.meanings?.get(name)
+  if (m === undefined || m === 'unsure') return undefined
+  const call = meaningCall(s, end, m, to)
+  if (!call) return undefined
+  const b = bodyBoundary(substituted(m.body, call.args), ctx)
+  if (!b) return b
+  // (a display set whole: only around an argument TeX delimits, whose end the call states)
+  if (b.side === 'whole') return m.delim ? { ...b, end: call.end, close: call.close } : null
+  return { ...b, end: call.end, close: call.end }
+}
+/** the definition at s[at] the walk meets, put in force (meaningEvents of the walked text, read once; applyMade) */
+function noteDefinition(s: string, at: number, ctx: Ctx) {
+  ctx.meaningEvents ??= new Map()
+  let events = ctx.meaningEvents.get(s)
+  if (!events) {
+    events = meaningEvents(s, { lineEnvs: ctx.lineEnvs, ifs: ctx.ifs, ifValues: ctx.ifValues })
+    ctx.meaningEvents.set(s, events)
+  }
+  const e = events.get(at)
+  if (e) applyMade(ctx.meanings!, e.made, e.local)
+}
+/** the paper's macros in force that may stand for a boundary: a body that writes \\begin or \\end, or calls such a macro first or
+ *  last (to a fixed point); cached on the meanings until a definition changes them */
+const BOUNDARY_NAMES = new WeakMap<Map<string, Meaning>, Set<string>>()
+function boundaryNames(meanings: Map<string, Meaning>): Set<string> {
+  const known = BOUNDARY_NAMES.get(meanings)
+  if (known) return known
+  const out = new Set<string>()
+  for (let moved = true; moved; ) {
+    moved = false
+    for (const [name, m] of meanings) {
+      if (out.has(name) || m === 'unsure') continue
+      const t = texUncommented(m.body).trim(),
+        first = wordAt(t, 0)?.name,
+        last = /\\([A-Za-z@]+)$/.exec(t)?.[1]
+      if (/\\(?:begin|end)(?![A-Za-z@])/.test(t) || (first && out.has(first)) || (last && out.has(last))) {
+        out.add(name)
+        moved = true
+      }
+    }
+  }
+  BOUNDARY_NAMES.set(meanings, out)
+  return out
+}
+/** where the control words of a walked text stand that TeX surely acts on there (texCommands: not in a definition's body, a
+ *  branch it skips, \\verb or a line environment), read once a text */
+function actedOn(s: string, ctx: Ctx): Set<number> {
+  ctx.acted ??= new Map()
+  let out = ctx.acted.get(s)
+  if (!out) {
+    out = new Set(
+      texCommands(s, { lineEnvs: ctx.lineEnvs, ifs: ctx.ifs, ifValues: ctx.ifValues })
+        .filter((c) => !c.inDef && c.sure)
+        .map((c) => c.at),
+    )
+    ctx.acted.set(s, out)
+  }
+  return out
+}
+/**
+ * Where an environment opened at s[from] (past its \\begin and what goes with it) ends as TeX reads it: its \\end{env} written, or
+ * a call of the paper's macro in force that closes it (boundaryAt), the same environment opened inside it either way passed over
+ * whole; [bodyEnd, afterEnd], or the text's end. A comment's are none (endOfEnv)
+ */
+function envEnd(s: string, from: number, env: string, ctx: Ctx): [number, number] {
+  const names = ctx.meanings ? boundaryNames(ctx.meanings) : null
+  if (!names?.size) return endOfEnv(s, from, env)
+  const re = /\\(?:(begin|end)\s*\{([^{}]+)\}|([A-Za-z@]+))/g
+  re.lastIndex = from
+  let depth = 1
+  for (let m = re.exec(s); m; m = re.exec(s)) {
+    if (inComment(s, m.index)) continue
+    if (m[1]) {
+      if (m[2]!.trim() !== env) continue
+      if (m[1] === 'begin') depth++
+      else if (--depth === 0) return [m.index, m.index + m[0].length]
+      continue
+    }
+    // (a call TeX executes there: none in a definition's body, a branch it skips, \\verb, an operand: actedOn, executedAt)
+    if (!names.has(m[3]!) || !actedOn(s, ctx).has(m.index) || !executedAt(s, m.index)) continue
+    const b = boundaryAt(s, m.index + m[0].length, m[3]!, s.length, ctx)
+    if (!b || b.env !== env) continue
+    if (b.side === 'begin') depth++
+    else if (b.side === 'end' && --depth === 0) return [m.index, b.end]
+    re.lastIndex = b.end
+  }
+  return [s.length, s.length]
+}
+
 // ---------------------------------------------------------------- units
 /** the kinds set in the running text, which a display standing alone after them belongs to */
 const IN_TEXT = new Set<string>(['para', 'theorem', 'abstract'] satisfies readonly KnownKind[])
@@ -4969,6 +5426,74 @@ function commandEndsParagraph(name: string, b: Builder, ctx: Ctx): boolean {
   if (b.within === 'author' || AUTHOR_KINDS.has(b.kind ?? '')) return false
   return PAR_COMMANDS.has(name) ? !ctx.macros.has(name) : !!ctx.parNames?.has(name)
 }
+/**
+ * The walk's reading of a call at s[i] of the paper's macro `name` (its name ending at `end`) that stands for an environment's
+ * boundary (boundaryAt: what its body, its arguments given, does with \\begin and \\end, never its name): its call cuts the
+ * text as the written \\begin{…} or \\end{…} would. A display's, a math environment's or a skipped one's opening, to its end
+ * (written, or a macro that closes it: envEnd), one placeholder, a display's ending where its closing begins (PhPiece.closes);
+ * a display set whole around a delimited argument the same; one closed, the unit ends as at \\end: `{ at }`, where the walk goes
+ * on. Any other environment opened: `{ opened }`, read by the walk as the written \\begin is (its own arguments read after the
+ * call only where the body writes nothing after its \\begin{…}). Kept a placeholder inside the paragraph, TeX set no ink for the
+ * call, and the unit could not be proven (lay/entry.ts unproven). Null where the call stands for none; undefined where the
+ * reading cannot tell
+ */
+function boundaryCut(
+  s: string,
+  i: number,
+  end: number,
+  name: string,
+  to: number,
+  b: Builder,
+  ctx: Ctx,
+  endText: () => void,
+  endUnit: () => void,
+):
+  | { at: number; opened?: undefined }
+  | { opened: { env: string; afterBegin: number; argsInBody: boolean }; at?: undefined }
+  | null
+  | undefined {
+  const bound = boundaryAt(s, end, name, to, ctx)
+  if (!bound) return bound
+  if (bound.side === 'end') {
+    endUnit()
+    return { at: bound.end }
+  }
+  const display = displayEnv(bound.env) || ctx.displayEnvs.has(bound.env)
+  if (bound.side === 'whole') {
+    endText()
+    b.ph(s.slice(i, bound.end), i, bound.end, display, undefined, bound.close - i)
+    return { at: bound.end }
+  }
+  if (MATH_ENVS.test(bound.env) || display || SKIP_ENVS.test(bound.env) || ctx.skipEnvs.has(bound.env)) {
+    // (no end found where this reading looks: the call read as before, the old shorthand's reading included)
+    const [close, past] = envEnd(s, bound.end, bound.env, ctx)
+    if (past > to || close >= s.length) return undefined
+    endText()
+    b.ph(s.slice(i, past), i, past, display, undefined, display ? close - i : undefined)
+    return { at: past }
+  }
+  // (what the body sets after its \\begin{…} is the environment's own arguments, read whole by its declaration, or nothing:
+  // anything else, prose of an argument or arguments the source gives the rest of, leaves the call read as before)
+  if (/\S/.test(bound.rest)) {
+    const env = bound.env,
+      params =
+        ctx.envs.get(env) ??
+        (ctx.theorems.has(env) ? THEOREM_PARAMS : null) ??
+        (ctx.ownEnvs.has(env) ? null : environmentParams(env, paper?.bindings ?? null)),
+      r = params && readArgs(bound.rest, 0, params, bound.rest.length)
+    if (!r?.complete || /\S/.test(bound.rest.slice(r.end))) return undefined
+  }
+  return { opened: { env: bound.env, afterBegin: bound.end, argsInBody: /\S/.test(bound.rest) } }
+}
+/** a written \\begin{…} at the walk's command ending at `end`: its environment's name and where its own text begins; null else */
+function begunAt(s: string, end: number): { env: string; afterBegin: number } | null {
+  const m = s.slice(end).match(/^\s*\{([^}]+)\}/)
+  return m ? { env: m[1]!.trim(), afterBegin: end + m[0].length } : null
+}
+/** where a display opened at s[i] ends in its placeholder's source when a paper's macro closes it (bodyEnd, not a written
+ *  \\end{…}: PhPiece.closes, offset in the source from `i`); undefined where its \\end is written, or it is no display */
+const closedAt = (s: string, i: number, bodyEnd: number, afterEnd: number, display: boolean) =>
+  display && afterEnd > bodyEnd && !s.startsWith('\\end', bodyEnd) ? bodyEnd - i : undefined
 /** a table's body walked with its grid known to inGridCell (Builder.cells, §18.75: a `\\` inside a grid cell a forced break of
  *  its text), the grid of the table around it back after */
 function walkInGrid(s: string, from: number, to: number, grid: readonly GridCell[], b: Builder, ctx: Ctx): void {
@@ -5178,6 +5703,8 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
     const { name, end } = then ?? commandAt(s, i)
     thens = then ? thens + 1 : 0
     then = null
+    // (a definition TeX reads here puts its meaning in force from here on: the boundary reading's, in TeX's order)
+    if (definesMeaning(name) && ctx.meanings && !ctx.dry) noteDefinition(s, i, ctx)
     // \\iffalse … \\fi, and \\if followed by words (an author's way of commenting a passage out): nothing there is typeset,
     // so nothing there is a unit — and a mark or a translated first word would change what \\if compares
     if (name === 'iffalse' || (name === 'if' && /^[ \t]*\n?[ \t]*[A-Za-z]{2}/.test(s.slice(end, end + 8)))) {
@@ -5317,7 +5844,15 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
         continue
       }
     }
-    const shorthand = ctx.envMacros.get(name)
+    // a paper's macro that stands for an environment's boundary, by its meaning in force here (boundaryCut, §18.119): read as
+    // the written \\begin{…} or \\end{…}; where the reading cannot tell, the call is read as before (the shorthand's below)
+    const cut = boundaryCut(s, i, end, name, to, b, ctx, endText, endUnit)
+    if (cut?.at !== undefined) {
+      i = cut.at
+      continue
+    }
+    const opened = cut?.opened ?? null
+    const shorthand = cut === undefined ? ctx.envMacros.get(name) : undefined
     if (
       shorthand?.side === 'begin' &&
       (MATH_ENVS.test(shorthand.env) ||
@@ -5342,18 +5877,22 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
       i = stop
       continue
     }
-    if (name === 'begin') {
-      const m = s.slice(end).match(/^\s*\{([^}]+)\}/)
-      if (!m) {
+    if (name === 'begin' || opened) {
+      const begun = opened ?? begunAt(s, end)
+      if (!begun) {
         i = end
         continue
       }
-      const env = m[1]!.trim(),
-        afterBegin = end + m[0].length
-      const [bodyEnd, afterEnd] = endOfEnv(s, afterBegin, env)
+      const { env, afterBegin } = begun
+      // (its end where TeX's is: its \\end{…} written, or a paper's macro that closes it, envEnd; where the paper's macro's body
+      // writes the environment's own arguments, nothing after the call is one: `argsAt`)
+      const [bodyEnd, afterEnd] = envEnd(s, afterBegin, env, ctx)
+      const argsAt = opened?.argsInBody ? afterBegin : null
       if (MATH_ENVS.test(env) || ctx.displayEnvs.has(env)) {
         endText()
-        b.ph(s.slice(i, afterEnd), i, afterEnd, displayEnv(env) || ctx.displayEnvs.has(env))
+        // (closed by a paper's macro, not a written \\end{…}: the display ends where that call begins, PhPiece.closes)
+        const display = displayEnv(env) || ctx.displayEnvs.has(env)
+        b.ph(s.slice(i, afterEnd), i, afterEnd, display, undefined, closedAt(s, i, bodyEnd, afterEnd, display))
         i = afterEnd
         continue
       }
@@ -5361,7 +5900,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
       // cell's entry, its rows the box's lines, as \makecell's and \shortstack's are): its begin and end a pair round them, each
       // row's end a forced break (inGridCell). One of one row is its own cell as before (nothing to join: its pieces, its id and
       // its rows the same); one of several columns a table of its own, below (nestedCellLines)
-      if (nestedCellLines(s, i, afterBegin, bodyEnd, afterEnd, env, b, ctx, endText)) {
+      if (!opened && nestedCellLines(s, i, afterBegin, bodyEnd, afterEnd, env, b, ctx, endText)) {
         i = afterEnd
         continue
       }
@@ -5401,7 +5940,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
         // a table: each cell is a unit of its own; & and \\ end it where they end the grid's cell (a `\\` inside a cell is a
         // forced break of its text: inGridCell). The column specification and width stay as they are. In an author block its
         // cells are the block's units, cut at & and \\ as cells are (blockKind), placed in no grid
-        const argsEnd = tableArgsEnd(s, afterBegin, bodyEnd, env, ctx)
+        const argsEnd = argsAt ?? tableArgsEnd(s, afterBegin, bodyEnd, env, ctx)
         // (the paper's tables numbered in the order they begin, a table nested in a cell after the one it is in)
         const saved = b.kind,
           savedCell = b.cellMode,
@@ -5430,10 +5969,12 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
         const verbatim =
           [...body.matchAll(/\\(?:verb|lstinline|mintinline)(?![A-Za-z])/g)].some(read) ||
           [...body.matchAll(/\\begin\s*\{([^}]+)\}/g)].some((m) => isLineEnv(m[1]!.trim(), ctx.lineEnvs) && read(m))
-        if (/^tabu(lar)?$/.test(env) && !verbatim) ctx.fits.push({ file: b.file, start: i, end: afterEnd })
+        // (not one a paper's macro opens: its call is no \\begin the fit's box can take)
+        if (/^tabu(lar)?$/.test(env) && !verbatim && !opened) ctx.fits.push({ file: b.file, start: i, end: afterEnd })
         if (
           env === 'tabular*' &&
           !verbatim &&
+          !opened &&
           !/^\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}\s*\[/.test(s.slice(afterBegin).trimStart())
         )
           ctx.fits.push({ file: b.file, start: i, end: afterEnd, star: bodyEnd })
@@ -5448,7 +5989,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
           i = afterEnd
           continue
         }
-        const { end: argsEnd } = envArgs(s, afterBegin, bodyEnd, env, ctx)
+        const argsEnd = argsAt ?? envArgs(s, afterBegin, bodyEnd, env, ctx).end
         const saved = b.kind,
           savedCell = b.cellMode,
           first = b.units.length,
@@ -5469,7 +6010,8 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
       // options) — those its definition takes (envArgs), a group after them the body's (\\begin{proof}{…}: 2608.25304's
       // eleven proofs in English) —, but a theorem's title, a heading of its own (\\begin{theorem}[Convergence of X]:
       // the reader sees it as the body's words)
-      const { end: argsEnd, title } = envArgs(s, afterBegin, bodyEnd, env, ctx)
+      const { end: argsEnd, title } =
+        argsAt === null ? envArgs(s, afterBegin, bodyEnd, env, ctx) : { end: argsAt, title: null }
       // (a float's units, and those of whatever it holds, `inFloat`: its type; a part of a float's captions their own type)
       const outside = b.inFloat,
         outsideType = b.captype
@@ -7676,6 +8218,10 @@ function readProject(
       // the document as TeX finds it (documentBounds): its preamble's front matter (frontMatter), then its body up to
       // the \end{document} TeX acts on, where the walk stops too
       const bounds = boundsOf(cmds, text)
+      // (the paper's macros in force where its body begins, its preamble read in TeX's order; the body's definitions put in
+      // force where the walk meets them: noteDefinition)
+      ctx.meanings =
+        bounds.begin >= 0 ? preambleMeanings({ rel: f.rel, text }, bounds.begin, (r) => read(r), scan) : new Map()
       if (bounds.begin >= 0) {
         frontMatter(text, 0, bounds.begin, b, ctx)
         from = bounds.body

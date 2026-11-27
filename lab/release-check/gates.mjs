@@ -997,6 +997,23 @@ export const GATES = [
     },
   },
   {
+    id: 'link-targets',
+    title: "the link targets over this run's prepare: no boxed float wrong (its own ink outside its box, or another's text inside), read by the engine's counts and against the parts; the share of figures and tables boxed and the destinations landed reported (lab/pdf/prepare-back/floats-gate.mjs, docs/PDF-READER.md §20.3)",
+    tier: 'full',
+    stage: 'pipeline',
+    holds: [],
+    after: ['prepare'],
+    steps: ctx => [{ cmd: ['node', 'lab/pdf/prepare-back/floats-gate.mjs', join(ctx.work, 'prepare'), `--json=${join(ctx.work, 'link-targets.json')}`] }],
+    judge: (ctx, steps) => {
+      let n = {}
+      try {
+        const j = JSON.parse(steps[0].text.trim().split('\n')[0])
+        n = { papers: j.papers, wrong: j.wrong, figure: j.shares.figure, table: j.shares.table }
+      } catch {}
+      return { pass: steps[0].exit === 0, numbers: n }
+    },
+  },
+  {
     id: 'translate-equivalence',
     title: "the translate package's adapters against today's readers on recorded replies (lab/translate/equivalence.ts)",
     tier: 'full',
