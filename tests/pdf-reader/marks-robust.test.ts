@@ -179,7 +179,11 @@ describe.skipIf(!docker)("a heading's marks through what a class does with its t
       const points = await pointsOf(r.pdf)
       const heads = headingsOf(r.paper)
       expect(heads.length).toBeGreaterThan(0)
-      for (const h of heads) expect([points.get(`h${h}s`) ?? 0, points.get(`h${h}e`) ?? 0], `${tex.slice(0, 40)} heading ${h}`).toEqual([1, 1])
+      // (a title's start point is set by neither: its first mark stands in vertical mode, where \axt@hm sets none by design,
+      // and the unit is located by its end)
+      const title = (h: number) => JSON.stringify(r.paper.units[h]).includes('A title of our own words')
+      for (const h of heads)
+        expect([points.get(`h${h}s`) ?? 0, points.get(`h${h}e`) ?? 0], `${tex.slice(0, 40)} heading ${h}`).toEqual([title(h) ? 0 : 1, 1])
       expect(await itemsOf(r.pdf)).toEqual(await itemsOf(r.own))
       expect(strays(r.written)).toEqual([])
     }
