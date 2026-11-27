@@ -149,16 +149,14 @@ export function boxesWrongOf({ floats, parts, head }) {
 }
 
 /** the record (above) of a paper's floats, landings and destinations, read against its parts and its head */
-/** the ord of the one located member of the one unit whose key a citation's name holds: `cite.` and the key byte for byte, or
- *  chapterbib's `cite.`, the key and `@-<n>` (the engine's targets.ts entryOfName, read again here); undefined where no one
- *  unit's key reads it, null where that unit has no one located member */
+/** the ord of the one located member of the one unit whose key a citation's name holds: `cite.` and the key byte for byte
+ *  (the engine's targets.ts entryOfName, read again here); undefined where no one unit's key reads it, null where that unit has
+ *  no one located member */
 function keyOrdOf(dest, keys) {
   let name = null
   try { name = JSON.parse(dest) } catch {}
   if (typeof name !== 'string' || !name.startsWith('cite.')) return undefined
-  const rest = name.slice('cite.'.length)
-  const unit = /^(.*)@-(\d+)$/.exec(rest)
-  const holders = keys.filter(([k]) => k === rest || (unit && k === unit[1]))
+  const holders = keys.filter(([k]) => k === name.slice('cite.'.length))
   return holders.length === 1 ? holders[0][1] : undefined
 }
 
@@ -222,9 +220,7 @@ export function linkTargetsOf({ floats, landings, refused = [], dests, parts, he
   const read = new Set()
   const unmatchedNames = []
   for (const [d, name] of citeNames) {
-    const rest = name.slice('cite.'.length)
-    const unit = /^(.*)@-(\d+)$/.exec(rest)
-    const by = keys.filter(([k]) => k === rest || (unit && k === unit[1]))
+    const by = keys.filter(([k]) => k === name.slice('cite.'.length))
     if (keyOrdOf(d, keys) === undefined) unmatchedNames.push(name)
     for (const [k] of by) read.add(k)
   }

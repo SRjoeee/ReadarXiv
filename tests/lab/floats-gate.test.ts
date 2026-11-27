@@ -209,7 +209,8 @@ describe("a citation landed by its entry's key: read again from the keys and the
   it('the entry of the key the name holds: by key; the edge confirming it too: by key all the same', () => {
     expect(at('"cite.a"', 0, 70, 712, keys, { geometry: 1 })).toMatchObject({ proof: { reference: { byKey: 1, proved: 0, kindOnly: 0, wrong: 0 } } })
     expect(at('"cite.a"', 0, 80, 712, keys, { geometry: 0 })).toMatchObject({ proof: { reference: { byKey: 1, proved: 0, wrong: 0 } } })
-    expect(at('"cite.a@-3"', 0, 70, 712, keys, { geometry: 1 })).toMatchObject({ proof: { reference: { byKey: 1 } } })
+    // (a name that is a key with more after it is no key's: read as before)
+    expect(at('"cite.a@-3"', 0, 70, 712, keys)).toMatchObject({ keyWrong: [], proof: { reference: { byKey: 0, kindOnly: 1 } } })
   })
   it("the key's check against the geometry: each landing by key that today's rule lands elsewhere is listed", () => {
     expect(at('"cite.a"', 0, 70, 712, keys, { geometry: 1 }).keyGeometry).toEqual([['"cite.a"', 0, 1]])

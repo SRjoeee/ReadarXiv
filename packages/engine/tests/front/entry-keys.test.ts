@@ -106,3 +106,16 @@ describe('an environment written in an entry is part of it: the entry one unit',
     expect(units).toEqual(['Before it.', 'Inside it.', 'After it.'])
   })
 })
+
+describe('a theorem written in an entry stays a theorem: its title a heading, its body its own (the walk reads it apart)', () => {
+  it('a remark of the paper’s with a title, inside an entry: the title a heading unit, the remark a theorem unit, the entry before it its own', () => {
+    const tex =
+      '\\documentclass{article}\n\\newtheorem{remark}{Remark}\n\\begin{document}\nText.\n\\begin{thebibliography}{9}\n\\bibitem{t}\nAuthor. A title of ours. 2020.\n\\begin{remark}[Limitations of the study]\nA remark of ours.\n\\end{remark}\n\\end{thebibliography}\n\\end{document}\n'
+    const units = openPaper(new Map([['main.tex', enc(tex)]])).units
+    // (its text pieces: the year is a number the entry keeps, a placeholder)
+    const text = (u: (typeof units)[number]) => u.pieces.map((p) => (p.t === 'text' ? p.s : '')).join('').trim()
+    expect(units.filter((u) => u.kind === 'heading').map(text)).toContain('Limitations of the study')
+    expect(units.filter((u) => u.kind === 'theorem').map(text)).toContain('A remark of ours.')
+    expect(units.filter((u) => u.kind === 'reference').map((u) => [u.key, text(u)])).toContainEqual(['t', 'Author. A title of ours.'])
+  })
+})

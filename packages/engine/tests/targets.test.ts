@@ -620,11 +620,14 @@ describe("a citation lands on the entry whose key its name holds (cite.<key>, th
     })
     expect(of(two(), 'cite.b', over).t).toMatchObject([{ ord: 1, byKey: { geometry: 1 } }])
   })
-  it("chapterbib's name, the key and @-<n> (its unit's number): the entry of the key", () => {
-    expect(of(two(), 'cite.a@-2', over).t).toMatchObject([{ ord: 0, byKey: { geometry: 1 } }])
+  it("a name that is the key with more after it (chapterbib's `@-<n>`, a key of its own ending so): no key's, today's rule decides", () => {
+    // (a key 'a' and a name `cite.a@-2`: the entry whose key is `a@-2` may be one no unit holds; never read as a's)
+    const t = of(two(), 'cite.a@-2', over).t
+    expect(t).toMatchObject([{ ord: 1 }])
+    expect(t[0]!.byKey).toBeUndefined()
   })
   it("a name of no key's: today's rule decides (no unit holds it; it differs in a character, in case; not chapterbib's form)", () => {
-    for (const name of ['cite.zz', 'cite.A', 'cite.a@-x', 'cite.a@-', 'cite.a ']) {
+    for (const name of ['cite.zz', 'cite.A', 'cite.a@-x', 'cite.a@-', 'cite.a ', 'cite.a@-1']) {
       const t = of(two(), name, over).t
       expect(t).toHaveLength(1)
       expect(t[0]!.ord).toBe(1)
@@ -634,7 +637,7 @@ describe("a citation lands on the entry whose key its name holds (cite.<key>, th
   it("a key two units hold, or a name two keys read: today's rule decides", () => {
     expect(of(two({}, { key: 'a' }), 'cite.a', over).t).toMatchObject([{ ord: 1 }])
     expect(of(two({}, { key: 'a' }), 'cite.a', over).t[0]!.byKey).toBeUndefined()
-    expect(of(two({}, { key: 'a@-2' }), 'cite.a@-2', over).t[0]!.byKey).toBeUndefined()
+    expect(of(two({}, { key: 'a' }), 'cite.a', over).t[0]!.byKey).toBeUndefined()
   })
   it("the key's unit not located: today's rule decides", () => {
     const t = of(two({ located: false }), 'cite.a', over).t

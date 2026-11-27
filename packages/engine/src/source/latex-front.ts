@@ -5389,8 +5389,8 @@ function nestedCellLines(
  *  nestedCellLines; one written in a bibliography's entry, entryEnvironment); else false, the walk reads it as before */
 const inUnitEnvironment = (...a: Parameters<typeof nestedCellLines>): boolean =>
   nestedCellLines(...a) || entryEnvironment(...a)
-/** an environment written in a bibliography's entry, of none of the kinds the walk reads apart (a table, a picture, a float, one
- *  skipped): part of the entry, its begin and end a pair round its body in the entry's unit, walked, and true; else false, the
+/** an environment written in a bibliography's entry, of none of the kinds the walk reads apart (a table, a picture, a float, a
+ *  theorem, whose title is a heading of its own, one skipped): part of the entry, its begin and end a pair round its body in the entry's unit, walked, and true; else false, the
  *  walk reads it as before. An entry is one unit from its \\bibitem to the next (bibliography); the environments its packages
  *  write there set no paragraph: apacite's APACrefauthors (`\\begingroup \\APACrefauthstyle` … `\\endgroup`), APACrefURL,
  *  APACrefDOI, Springer Nature's barticle, bbook, bchapter, botherref (its style's head: `\\def\\barticle#1{#1}`). Read as a
@@ -5415,6 +5415,7 @@ function entryEnvironment(
     SKIP_ENVS.test(env) ||
     ctx.skipEnvs.has(env) ||
     FLOAT_ENVS.test(env) ||
+    ctx.theorems.has(env) ||
     env === 'tikzpicture' ||
     env === 'thebibliography'
   )

@@ -13719,7 +13719,8 @@ lines) follows it, the original's with it off, translated with it on (the author
   label (`\bibitem`'s optional argument, set in the list's label box) and the key are no piece (the key is kept beside the
   entry's first unit, §20.3); what a style writes before the
   first entry is no unit, nor REVTeX's `\BibitemOpen` and `\BibitemShut`. An environment written in an entry, of none of the
-  kinds the walk reads apart (a table, a picture, a float, one skipped), is part of the entry: its `\begin` and `\end` a pair round
+  kinds the walk reads apart (a table, a picture, a float, a theorem, whose title is a heading of its own, one skipped), is part
+  of the entry: its `\begin` and `\end` a pair round
   its body in the entry's unit. The environments the styles write there set no paragraph (apacite's `APACrefauthors`,
   `\begingroup \APACrefauthstyle` … `\endgroup`, `APACrefURL`, `APACrefDOI`; Springer Nature's `barticle`, `bbook`, `bchapter`,
   `botherref`, its style's head `\def\barticle#1{#1}`): read as a unit of its own, an apacite entry was cut after its authors,
@@ -14240,16 +14241,17 @@ force over its first baseline (over the 245: a reference's 8 to 14 points under 
 What a point may land on is a beginning: a member's first line and its label, a display element's first ink, a boxed float.
 A citation lands first on its entry by identity: hyperref names an entry's destination by the paper's own key, `cite.<key>`
 (`hyperref.sty`'s `\@bibitem` and `\@lbibitem`, `cite.#1\@extra@b@citeb`; natbib's `\NAT@anchor` through hyperref's
-`\hyper@natanchorstart`, `cite.#1`; `\@extra@b@citeb` empty but under chapterbib, whose `\the@ipfilectr` is `@-` and the number of
-the `\include`d unit, multibib and bibunits leaving hyperref's own). The source reader keeps each `\bibitem`'s key with the
+`\hyper@natanchorstart`, `cite.#1`; `\@extra@b@citeb` empty but under a package that writes several bibliographies:
+chapterbib's `\the@ipfilectr`, `@-` and the number of the `\include`d unit, bibtopic's unit number; multibib and bibunits leave
+hyperref's own). The source reader keeps each `\bibitem`'s key with the
 entry's first unit (`latex-front.ts` `bibKeyOf`, `InstrumentUnit.key`; the bundle does not carry it) where its argument is
 characters only as it reads them: no control sequence, no group, no comment, no active character, nothing TeX would expand;
 every other character is the key's as written. A destination whose name, as the PDF holds it decoded, equals `cite.` and a key
-byte for byte, case kept (or `cite.`, a key and `@-<n>`, chapterbib's), lands on the one located member of the one unit
-holding that key; where a name of another writing differs in any character, no unit holds it, two do, or its unit is not
-located, the point's rule below decides, and its evidence. No character is read otherwise than as itself, on either side:
-bibtopic's names (its unit's number after the key, bare) are not read as a key's, and its entries come from files the source
-reader does not read. The entry its key names is refused (`key`, the lab's) where it begins on another page than the
+byte for byte, case kept, lands on the one located member of the one unit holding that key; where a name of another writing differs in any character, no unit holds it, two do, or its unit is not
+located, the point's rule below decides, and its evidence. No character is read otherwise than as itself, on either side,
+and a name that is a key with more after it is no key's: the entry its whole name keys may be one no unit holds. The suffixes
+of chapterbib and bibtopic are such names, and their bibliographies are other jobs' `.bbl` files, which the source reader does
+not read (the prepare's `aux-jobs`): over the regression corpus no citation is named so. The entry its key names is refused (`key`, the lab's) where it begins on another page than the
 destination's point, or where the edge reading (below) names another member: the two readings of the paper disagreeing, neither
 is stated. Where it lands, the box is a reference's (below), with its refusals. The point's rule is its check: the lab counts
 the landings by key that the rule lands elsewhere (§20.5).

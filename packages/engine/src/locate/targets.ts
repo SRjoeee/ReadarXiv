@@ -293,9 +293,10 @@ export function targetsOf(
 
   /** the entry a citation's name names by its key, null where none can be told: the name, as the PDF holds it decoded, equals
    *  `cite.` and a key byte for byte (hyperref's \\@bibitem and \\@lbibitem, natbib's \\NAT@anchor: `cite.<key>\\@extra@b@citeb`,
-   *  that macro empty) or `cite.`, a key and `@-<n>` (chapterbib's \\@extra@b@citeb inside a \\include'd unit: `@-` and the
-   *  unit's number); one unit holds that key and no other key reads the name; the unit has one located member. Every other
-   *  name is the point's rule's: no character is read otherwise than as itself */
+   *  that macro empty but under a package that writes several bibliographies, chapterbib's `@-<n>`, bibtopic's unit number,
+   *  whose entries stand in files the source reader does not read); one unit holds that key; the unit has one located member.
+   *  A name that is a key with more after it is no key's (the entry its whole name keys may be one no unit holds), and every
+   *  other name is the point's rule's: no character is read otherwise than as itself */
   function entryOfName(dest: string): Member | null {
     let name: unknown
     try {
@@ -304,12 +305,9 @@ export function targetsOf(
       return null
     }
     if (typeof name !== 'string' || !name.startsWith('cite.')) return null
-    const rest = name.slice('cite.'.length)
-    const holders = new Set(keyed.get(rest) ?? [])
-    const unit = /^(.*)@-(\d+)$/.exec(rest)
-    if (unit) for (const i of keyed.get(unit[1]!) ?? []) holders.add(i)
-    if (holders.size !== 1) return null
-    const mems = locatedOf.get([...holders][0]!) ?? []
+    const holders = keyed.get(name.slice('cite.'.length)) ?? []
+    if (holders.length !== 1) return null
+    const mems = locatedOf.get(holders[0]!) ?? []
     return mems.length === 1 ? mems[0]! : null
   }
   /** a citation's landing on the entry its key names: refused (`key`) where the entry begins on another page than the point's or
