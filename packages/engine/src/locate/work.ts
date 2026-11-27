@@ -11,6 +11,8 @@ import { fixedFacesOf } from './facts.ts'
 import type { DisplayLine, InkInput, InkStats } from './ink.ts'
 import { r2 } from './lines.ts'
 import type { DestPoint } from './dests.ts'
+import type { FloatBox } from './floats.ts'
+import type { Landing } from './targets.ts'
 import type { PaintedFrame } from './frames.ts'
 import type { FloatLine } from './ledger.ts'
 import type { Word } from './words.ts'
@@ -197,6 +199,10 @@ export interface Located {
       border?: LinkBorder
     }[]
   >
+  /** each float's box on A, by its brackets on B (floats.ts), and each caption of no bracket, with why it has none */
+  floats: FloatBox[]
+  /** where each destination of A's links lands (targets.ts), sorted by destination; one that lands on nothing covered is absent */
+  targets: Landing[]
   /** per A page (index p - 1): each glyph's and each box's group (the wrap's plan), null for none */
   groups: { glyphs: (string | null)[]; boxes: (string | null)[]; turned: (string | null)[] }[]
   /** groups that are figure texts' (the wrap writes their runs inside a form in the form) */
