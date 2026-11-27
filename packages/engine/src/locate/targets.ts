@@ -22,6 +22,45 @@ export const LAND_BELOW = 24
  *  prototype's three section targets, whose two segments sum to 0.183-0.192 of the page) */
 export const SECTION_WINDOW = 0.19
 
+/** why a landing is not stated (targetsOf's `refused`, the lab's measure) */
+export type Refusal = 'page' | 'edge' | 'name' | 'unproven'
+
+/** the kind a destination's name claims, by the scheme of the package that makes the destination (hyperref's `cite.<key>` a
+ *  reference, `Hfootnote.<n>` a note, `page.<n>` a page; `<counter>.<value>` for a counter LaTeX's kernel defines, its
+ *  sectioning a heading, `figure` and `table` a float, `equation` a display): read from a name of that simple shape alone, a
+ *  name read as a format, never as words. A compound name (`equation.3-footnote.1`), a counter a package or the paper defines
+ *  (a theorem's, a list item's `Item.<n>`) and an explicit destination claim nothing */
+const CLAIMS: Readonly<Record<string, TargetKind | 'page'>> = {
+  cite: 'reference',
+  Hfootnote: 'footnote',
+  page: 'page',
+  part: 'heading',
+  chapter: 'heading',
+  section: 'heading',
+  subsection: 'heading',
+  subsubsection: 'heading',
+  paragraph: 'heading',
+  subparagraph: 'heading',
+  appendix: 'heading',
+  figure: 'float',
+  table: 'float',
+  equation: 'display',
+}
+/** a name of the simple shape: `cite.` and its key (whatever the key holds), or a counter's name and its hyperref value (\\theH<counter>:
+ *  digits, letters and dots, `figure.caption.3` hypcap's), nothing after it */
+const SIMPLE_NAME = /^(?:(cite)\.(.+)|([A-Za-z]+)\.([A-Za-z0-9.]+))$/
+function claimOf(dest: string): TargetKind | 'page' | null {
+  let name: unknown
+  try {
+    name = JSON.parse(dest)
+  } catch {
+    return null
+  }
+  const m = typeof name === 'string' ? SIMPLE_NAME.exec(name) : null
+  const scheme = m?.[1] ?? m?.[3]
+  return scheme && Object.hasOwn(CLAIMS, scheme) ? CLAIMS[scheme]! : null
+}
+
 /** a thing a point may land on, on one page, at its beginning (hyperref sets an anchor where what it marks begins): a member's
  *  first line and its label, a display element's first ink, a boxed float's top; its baseline, its band, its ink across (`ix0`,
  *  `ix1`) and what it spans across for its column (`x0`, `x1`: a line's measure). A line that goes on with its member (its
@@ -64,6 +103,7 @@ export function targetsOf(
   w: Work,
   dests: ReadonlyMap<string, DestPoint | null>,
   floats: readonly FloatBox[],
+  refused: [dest: string, kind: TargetKind, cause: Refusal][] = [],
 ): Landing[] {
   const { members, units } = w
   // (the boxed floats, and the float each of their members stands in)
@@ -167,17 +207,65 @@ export function targetsOf(
     if (!pt || pt.y === null) continue
     const item = itemAt(pt.page, pt.x, pt.y)
     const landing = item ? landingOf(dest, pt.page, item) : null
-    if (landing) out.push(landing)
+    if (!landing) continue
+    const cause = contradicted(landing, pt)
+    if (cause) refused.push([dest, landing.kind, cause])
+    else out.push(landing)
   }
   return out
 
-  /** the column a point's x stands in on a page: TeX's column frame that holds it (the nearest where it stands in none: a
-   *  label hung in the margin); none where the page states no frame or the point no x */
+  /** why the engine's own evidence does not let a landing be stated, null where it does: the destination's name is a page's
+   *  (hyperref's `page.<n>`: a page, no thing on it); the left edge at its point names another member (`edge`); its name, of a
+   *  class that claims a kind, claims another (`name`); its name claims nothing and the edge does not confirm it (`unproven`) */
+  function contradicted(l: Landing, pt: DestPoint): Refusal | null {
+    const claim = claimOf(l.dest)
+    if (claim === 'page') return 'page'
+    const edge = pt.x === null ? null : edgeOf(pt.page, pt.x, pt.y!)
+    if (edge !== null && edge !== l.ord) return 'edge'
+    if (claim) return claim === l.kind ? null : 'name'
+    return edge === l.ord ? null : 'unproven'
+  }
+
+  /** the edge reading: the member (a float's: its caption) whose line, label or display ink begins at the point's x on the
+   *  format's grid, its baseline the first under the point within LAND_BELOW, a beginning or not (pdfTeX states a destination
+   *  at the origin of what TeX set next); null where no ink begins there */
+  function edgeOf(page: number, x: number, y: number): number | null {
+    let best: { base: number; mem: Member } | null = null
+    const gx = onGrid(x)
+    const gy = onGrid(y)
+    const take = (mem: Member, ix0: number, base: number) => {
+      if (Math.abs(onGrid(ix0) - gx) > GRID || onGrid(base) >= gy || y - base > LAND_BELOW) return
+      if (!best || base > best.base) best = { base, mem }
+    }
+    for (const mem of members) {
+      if (!mem.located) continue
+      for (const l of mem.lines) if (l[0] === page) take(mem, l[2], l[4])
+      const lab = mem.labelAt?.ink
+      if (lab && lab[0] === page) take(mem, lab[1], lab[5])
+      for (const [, el] of mem.elements)
+        if (el.kind === 'display') for (const k of el.ink) if (k[0] === page) take(mem, k[1], k[5])
+    }
+    if (!best) return null
+    const mem = (best as { mem: Member }).mem
+    const f = floatOf.get(mem.ord)
+    return f ? f.caption : mem.ord
+  }
+
+  /** the column a point's x stands in on a page: TeX's column frame that holds it; in the gutter between two, the right one;
+   *  the nearest where it stands outside them all (a label hung in the margin); none where the page states no frame or the
+   *  point no x */
   function columnOf(page: number, x: number | null): [number, number] | null {
     const frame = w.ix.framesA.get(page)
     if (x === null || !frame?.columns.length) return null
-    const dist = (c: [number, number]) => (x < c[0] ? c[0] - x : x > c[1] ? x - c[1] : 0)
-    return [...frame.columns].sort((a, b) => dist(a) - dist(b))[0]!
+    const cols = [...frame.columns].sort((a, b) => a[0] - b[0])
+    const at = cols.find((c) => c[0] <= x && x <= c[1])
+    if (at) return at
+    // (in the gutter between two columns: the one on its right. TeX sets an anchor at or left of where its text begins, a label
+    // wider than its box carrying it out left of its column, and no text of the left column begins in the gutter)
+    const right = cols.find((c) => x < c[0])
+    if (right && cols.some((c) => c[1] < x)) return right
+    const dist = (c: [number, number]) => (x < c[0] ? c[0] - x : x - c[1])
+    return cols.sort((a, b) => dist(a) - dist(b))[0]!
   }
 
   /** the thing a point lands on, null for none. A boxed float that holds it. A beginning it stands on:

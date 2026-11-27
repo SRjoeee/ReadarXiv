@@ -74,7 +74,10 @@ function workOf(specs: Spec[], frames: Map<number, TexFrame> = new Map(), pages 
     },
   } as unknown as Work
 }
-const dests = (o: Record<string, DestPoint | null>) => new Map(Object.entries(o))
+/** destinations by name, written as Link.to.dest writes them (PDF.js's dest as JSON) */
+const dests = (o: Record<string, DestPoint | null>) =>
+  new Map(Object.entries(o).map(([k, v]) => [JSON.stringify(k), v]))
+const q = (name: string) => JSON.stringify(name)
 const floatOf = (o: Partial<FloatBox>): FloatBox => ({
   serial: 1,
   page: 1,
@@ -100,12 +103,12 @@ describe('where a destination lands (targets.ts)', () => {
   it('a point between two references lands on the one below it; a point just over a reference’s first line lands on it', () => {
     const t = targetsOf(
       workOf(refs),
-      dests({ between: { page: 1, x: 72, y: 682 }, first: { page: 1, x: 72, y: 703 } }),
+      dests({ 'cite.b': { page: 1, x: 72, y: 682 }, 'cite.a': { page: 1, x: 72, y: 703 } }),
       [],
     )
     expect(t).toEqual([
-      { dest: 'between', kind: 'reference', page: 1, ord: 1, box: [80, 656, 300, 677] },
-      { dest: 'first', kind: 'reference', page: 1, ord: 0, box: [80, 686, 300, 707] },
+      { dest: q('cite.a'), kind: 'reference', page: 1, ord: 0, box: [80, 686, 300, 707] },
+      { dest: q('cite.b'), kind: 'reference', page: 1, ord: 1, box: [80, 656, 300, 677] },
     ])
   })
   it('a point over no covered member lands nowhere: a theorem, a page anchor (no height), too far over the next line', () => {
@@ -131,7 +134,7 @@ describe('where a destination lands (targets.ts)', () => {
       new Map([[1, { block: [72, 540], columns: [[72, 300]], foot: 72 }]]),
     )
     const [t] = targetsOf(w, dests({ 'section.1': { page: 1, x: 72, y: 618 } }), [])
-    expect(t).toMatchObject({ dest: 'section.1', kind: 'heading', page: 1, ord: 0 })
+    expect(t).toMatchObject({ dest: q('section.1'), kind: 'heading', page: 1, ord: 0 })
     // (on the format's grid, outward)
     expect(t!.box).toEqual([72, Math.floor((607 - SECTION_WINDOW * 792) * 100) / 100, 300, 607])
     expect(t!.next).toBeUndefined()
@@ -162,7 +165,7 @@ describe('where a destination lands (targets.ts)', () => {
         ],
       },
     )
-    const [t] = targetsOf(w, dests({ s: { page: 1, x: 72, y: 170 } }), [])
+    const [t] = targetsOf(w, dests({ 'section.2': { page: 1, x: 72, y: 170 } }), [])
     const rest = 107 - (167 - SECTION_WINDOW * 792)
     expect(t).toMatchObject({ kind: 'heading', page: 1, box: [72, 107, 540, 167] })
     expect(t!.next![0]).toBe(2)
@@ -173,7 +176,7 @@ describe('where a destination lands (targets.ts)', () => {
     const w = workOf([{ kind: 'para', lines: [line(1, 650), line(1, 580)], els: [['e1', display]] }])
     const [t] = targetsOf(w, dests({ 'equation.1': { page: 1, x: 72, y: 625 } }), [])
     // (no line's band holds the point; the display's baseline is the first under it, within LAND_BELOW)
-    expect(t).toEqual({ dest: 'equation.1', kind: 'display', page: 1, ord: 0, box: [150, 600, 250, 630] })
+    expect(t).toEqual({ dest: q('equation.1'), kind: 'display', page: 1, ord: 0, box: [150, 600, 250, 630] })
   })
   it('a point raised over a display into the band of the short line before it lands on the display, not on that line', () => {
     // (hyperref raises an equation's anchor by \baselineskip from the display's baseline, at the display's left edge: here onto
@@ -228,7 +231,7 @@ describe('where a destination lands (targets.ts)', () => {
   it('a biblatex entry, one entry a unit made on A, is a reference', () => {
     const [t] = targetsOf(
       workOf([{ kind: 'inkreferences', lines: [line(1, 700, 80)] }]),
-      dests({ c: { page: 1, x: 72, y: 712 } }),
+      dests({ 'cite.c': { page: 1, x: 72, y: 712 } }),
       [],
     )
     expect(t).toMatchObject({ kind: 'reference', ord: 0, box: [80, 698, 300, 707] })
@@ -239,16 +242,20 @@ describe('where a destination lands (targets.ts)', () => {
       { kind: 'caption', lines: [line(1, 630, 72, 168)] },
     ])
     const f = floatOf({ page: 1, caption: 1, captions: [1], box: [72, 628, 200, 690] })
-    const t = targetsOf(w, dests({ caption: { page: 1, x: 72, y: 645 }, top: { page: 1, x: 72, y: 700 } }), [f])
+    const t = targetsOf(
+      w,
+      dests({ 'figure.1': { page: 1, x: 72, y: 645 }, 'figure.caption.1': { page: 1, x: 72, y: 700 } }),
+      [f],
+    )
     expect(t).toEqual([
-      { dest: 'caption', kind: 'float', page: 1, ord: 1, box: [72, 628, 200, 690] },
-      { dest: 'top', kind: 'float', page: 1, ord: 1, box: [72, 628, 200, 690] },
+      { dest: q('figure.1'), kind: 'float', page: 1, ord: 1, box: [72, 628, 200, 690] },
+      { dest: q('figure.caption.1'), kind: 'float', page: 1, ord: 1, box: [72, 628, 200, 690] },
     ])
   })
   it('a float with no box lands nowhere, at its caption or at its top', () => {
     const w = workOf([{ kind: 'caption', lines: [line(1, 630, 72, 168)] }])
     const f = floatOf({ page: 1, caption: 0, captions: [0], box: null, cause: 'foreign' })
-    expect(targetsOf(w, dests({ caption: { page: 1, x: 72, y: 645 } }), [f])).toEqual([])
+    expect(targetsOf(w, dests({ 'figure.1': { page: 1, x: 72, y: 645 } }), [f])).toEqual([])
   })
   it('a display of a paragraph across both columns is in its own column: a point in the other lands nowhere on it', () => {
     const frames = new Map([
@@ -274,7 +281,7 @@ describe('where a destination lands (targets.ts)', () => {
       ],
       frames,
     )
-    expect(targetsOf(w, dests({ eq: { page: 1, x: 312, y: 625 } }), [])).toEqual([])
+    expect(targetsOf(w, dests({ 'equation.2': { page: 1, x: 312, y: 625 } }), [])).toEqual([])
   })
   it('a heading’s window runs on to the next page’s first line of TeX’s column body, past the running head over it', () => {
     const frame = (foot: number): TexFrame => ({ block: [72, 540], columns: [[72, 540]], foot })
@@ -303,7 +310,7 @@ describe('where a destination lands (targets.ts)', () => {
         ],
       },
     )
-    const [t] = targetsOf(w, dests({ s: { page: 1, x: 72, y: 170 } }), [])
+    const [t] = targetsOf(w, dests({ 'section.2': { page: 1, x: 72, y: 170 } }), [])
     expect(t!.next![1][3]).toBe(707)
   })
   it('two columns: a point in the right column never lands on the left column’s member', () => {
@@ -326,10 +333,74 @@ describe('where a destination lands (targets.ts)', () => {
       ],
       frames,
     )
-    const [t] = targetsOf(w, dests({ right: { page: 1, x: 312, y: 712 } }), [])
+    const [t] = targetsOf(w, dests({ 'cite.r': { page: 1, x: 312, y: 712 } }), [])
     // (the left column's entry stands right under the point; the right column's 55 pt under it, past LAND_BELOW: nowhere)
     expect(t).toBeUndefined()
-    const [u] = targetsOf(w, dests({ right: { page: 1, x: 312, y: 662 } }), [])
+    const [u] = targetsOf(w, dests({ 'cite.r': { page: 1, x: 312, y: 662 } }), [])
     expect(u).toMatchObject({ ord: 1, kind: 'reference' })
+  })
+})
+
+describe('a landing is stated only on the engine’s own evidence (the lead’s ruling, 2026-11-27)', () => {
+  const two = (gutter: [number, number]) =>
+    new Map([
+      [
+        1,
+        {
+          block: [72, 540] as [number, number],
+          columns: [
+            [72, gutter[0]],
+            [gutter[1], 540],
+          ] as [number, number][],
+        },
+      ],
+    ])
+  it('a point in the gutter between two columns belongs to the column on its right: a label sticking out left of it', () => {
+    // (the right column's entries begin at 330 with labels wider than their box: the anchor at 305, in the gutter 300..320)
+    const w = workOf(
+      [
+        { kind: 'reference', entry: true, lines: [line(1, 690, 72, 300, 72, 300, 0)] },
+        { kind: 'reference', entry: true, lines: [line(1, 692, 330, 540, 320, 540, 1)] },
+      ],
+      two([300, 320]),
+    )
+    const [t] = targetsOf(w, dests({ 'cite.r': { page: 1, x: 305, y: 704 } }), [])
+    expect(t).toMatchObject({ kind: 'reference', ord: 1 })
+  })
+  it('a page anchor is a page, no thing on it: never stated, though a float stands first under it', () => {
+    const w = workOf([{ kind: 'caption', lines: [line(1, 630, 72, 168)] }])
+    const f = floatOf({ page: 1, caption: 0, captions: [0], box: [72, 628, 200, 690] })
+    expect(targetsOf(w, dests({ 'page.1': { page: 1, x: 72, y: 700 } }), [f])).toEqual([])
+  })
+  it('a name of a class that says another kind than what the point lands on is never stated', () => {
+    const w = workOf([{ kind: 'heading', lines: [line(1, 690)] }])
+    expect(targetsOf(w, dests({ 'cite.x': { page: 1, x: 72, y: 702 } }), [])).toEqual([])
+    // (the same point under a name of the heading's class: stated)
+    expect(targetsOf(w, dests({ 'section.3': { page: 1, x: 72, y: 702 } }), [])).toHaveLength(1)
+    // (a key holding a hyphen is still a citation's: the scheme is `cite.` and whatever follows)
+    // (its point left of the entry's ink, at no edge: the name's claim is the only evidence)
+    const r = workOf(
+      [{ kind: 'reference', entry: true, lines: [line(1, 690)] }],
+      new Map([[1, { block: [50, 300], columns: [[50, 300]] }]]),
+    )
+    expect(targetsOf(r, dests({ 'cite.dyer-rnng:16': { page: 1, x: 60, y: 702 } }), [])).toHaveLength(1)
+  })
+  it('a name that claims nothing (an item, a paper’s own counter, a compound name) is stated only where the edge confirms it', () => {
+    const display: El = { kind: 'display', ink: [[1, 150, 600, 250, 618, 607]] }
+    const w = workOf([{ kind: 'para', lines: [line(1, 640), line(1, 580)], els: [['e1', display]] }])
+    // (its point at the display's left edge, the display's baseline the first under it: confirmed)
+    for (const name of ['Item.1', 'lemma.2', 'equation.3-footnote.1'])
+      expect(targetsOf(w, dests({ [name]: { page: 1, x: 150, y: 620 } }), [])).toMatchObject([{ kind: 'display' }])
+    // (its point left of the display, at no edge: the rule alone lands it, and nothing confirms it)
+    expect(targetsOf(w, dests({ 'Item.2': { page: 1, x: 90, y: 620 } }), [])).toEqual([])
+  })
+  it('a landing another member’s left edge at the point contradicts is never stated', () => {
+    // (the point on a reference's first line, at its baseline, over its ink: the rule's landing; another entry's label begins at
+    // the point's x 10 under it: the edge names that entry)
+    const w = workOf([
+      { kind: 'reference', entry: true, lines: [line(1, 700, 60, 300)] },
+      { kind: 'reference', entry: true, lines: [line(1, 690, 100, 300)] },
+    ])
+    expect(targetsOf(w, dests({ 'cite.y': { page: 1, x: 100, y: 700 } }), [])).toEqual([])
   })
 })

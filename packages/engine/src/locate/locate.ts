@@ -109,9 +109,11 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   const t0 = o.now?.() ?? 0
   const floats = floatBoxes(w, owned) // 17: each float's box, by its brackets
   const t1 = o.now?.() ?? 0
-  const targets = o.dests ? targetsOf(w, o.dests, floats) : [] // 18: where each destination of A's links lands
+  const refusedTargets: Located['refusedTargets'] = []
+  const targets = o.dests ? targetsOf(w, o.dests, floats, refusedTargets) : [] // 18: where each destination of A's links lands
   const t2 = o.now?.() ?? 0
   const located = close(w, owned, frames, floats, targets)
+  located.refusedTargets = refusedTargets
   if (o.now) located.linkMs = { floats: t1 - t0, targets: t2 - t1 }
   return located
 }

@@ -257,6 +257,9 @@ export interface Located {
   floats: FloatBox[]
   /** where each destination of A's links lands (targets.ts), sorted by destination; one that lands on nothing covered is absent */
   targets: Landing[]
+  /** the landings the engine's own evidence does not let it state (targets.ts `contradicted`): each destination, the kind it
+   *  would have had and why not, for the lab's measure; never stated in the bundle */
+  refusedTargets?: [dest: string, kind: TargetKind, cause: 'page' | 'edge' | 'name' | 'unproven'][]
   /** the time phases 17 and 18 took, where a clock was given (LocateOptions.now): the lab's measure of their cost */
   linkMs?: { floats: number; targets: number }
   /** per A page (index p - 1): each glyph's and each box's group (the wrap's plan), null for none */
