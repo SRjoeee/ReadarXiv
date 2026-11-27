@@ -69,6 +69,7 @@ export function writeTyped(unit: UnitIn): string {
 
 /** a typed tag as a model may spell it: `<`, `</` or a full-width bracket, spaces anywhere inside, a letter of either
  *  case, the number, `/>` or `>` */
+// biome-ignore lint/complexity/useRegexLiterals: Biome's formatter writes a literal's escapes as the full-width characters, which the English gate counts
 const LOOSE_TAG = new RegExp(String.raw`[<\uFF1C]\s*(\/?)\s*([A-Za-z])\s*(\d+)\s*(\/?)\s*[>\uFF1E]`, 'g')
 
 /** spellings a model writes for a tag, made the plan's: a space after `<` or `</`, capitals, full-width brackets
