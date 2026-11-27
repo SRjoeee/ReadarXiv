@@ -75,7 +75,7 @@ const untold = (el) => !el.ink?.length && (el.keep ? el.kind !== 'space' : INKED
 /**
  * Every box a target of the head states, read against the bundle's parts, by kind (the lead's ruling of 2026-11-28: a stated box
  * holds the whole of what it names or it is not stated). Its own: its member (a float's: its members and captions, as locate
- * states them; a display's: the display element of its member that the box holds). Wrong where:
+ * states them; a display's: the display element of its member sharing the most of the box). Wrong where:
  * - `own ink outside`: any ink of its own (a line's band, its label's ink, an element's ink) stands on a page that is not the
  *   box's (nor its `next`'s), or outside the box there;
  * - `own ink untold`: its member (not a float's, whose box is its bracket's ink, nor a display's) holds an element TeX set whose
@@ -103,8 +103,17 @@ export function boxesWrongOf({ floats, parts, head }) {
     const own = float ? [...float.members, ...float.captions] : [ord]
     let only
     if (kind === 'display') {
+      // (its element: the display element of its member whose ink on the page shares the most of the box; one the box cuts is
+      // found so and read outside below; none sharing any of it: the box holds no display ink of its member, its own outside)
       const pl = byOrd.get(ord)?.pl
-      only = (pl?.els ?? []).find(([, e]) => e.kind === 'display' && (e.ink ?? []).some((k) => k[0] === page && within([k[1], k[2], k[3], k[4]], box)))?.[0] ?? ''
+      const shared = (e) => {
+        let a = 0
+        for (const k of e.ink ?? []) if (k[0] === page) a += Math.max(0, Math.min(k[3], box[2]) - Math.max(k[1], box[0])) * Math.max(0, Math.min(k[4], box[3]) - Math.max(k[2], box[1]))
+        return a
+      }
+      const best = (pl?.els ?? []).filter(([, e]) => e.kind === 'display' && shared(e) > 0).sort((x, y) => shared(y[1]) - shared(x[1]))[0]
+      if (!best) row(ord, 'own ink outside')
+      only = best?.[0] ?? ''
     }
     for (const o of own) {
       const m = byOrd.get(o)

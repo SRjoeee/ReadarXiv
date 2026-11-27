@@ -162,6 +162,12 @@ describe('every box a head states, of every kind, read against the parts', () =>
     expect(judged(['"equation.1"', 'display', 1, 0, [120, 560, 250, 580]], para, placed(1, 575, 260, 280))).toEqual([])
     expect(judged(['"equation.1"', 'display', 1, 0, [120, 560, 250, 580]], para, placed(1, 575, 240, 280))).toEqual([[1, 'foreign text']])
   })
+  it('a display box that cuts its element’s ink, or holds no display ink at all, has its own ink outside', () => {
+    const eq = { kind: 'display', ink: [[1, 120, 560, 250, 580, 565]] }
+    const para = { ord: 0, lines: [[1, 0, 80, 300, 590, 597, 581, 72, 300, 0]], els: [['e', eq]] }
+    expect(judged(['"equation.1"', 'display', 1, 0, [121, 560, 249, 580]], para)).toEqual([[0, 'own ink outside']])
+    expect(judged(['"equation.1"', 'display', 1, 0, [400, 560, 450, 580]], para)).toEqual([[0, 'own ink outside']])
+  })
   it('a heading’s window holds its section by design: what stands under its top across its measure; else foreign, its own whole', () => {
     const win = [72, 450, 300, 607]
     const head = placed(0, 600, 80, 200)
