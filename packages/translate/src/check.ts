@@ -1,4 +1,4 @@
-// The model check (the translation policy's design §6): a fixed, versioned sample of units through a model, judged
+// The model check (DESIGN §8, a host's LLM translator): a fixed, versioned sample of units through a model, judged
 // against the free chain on the same sample. It shows a model keeps the translator's contract; it says nothing about
 // quality. The sample is the host's file (papers of mixed licences stay out of this repository); its schema, its digest
 // and the pass line are here. A check is stored with what it ran against, and lapses when the entry, the prompt, the
@@ -80,7 +80,7 @@ export function checkAgainstOf(entry: LlmEntry, sampleDigest: string): string {
   return `${llmIdentityOf(entry)}|${sampleDigest}`
 }
 
-/** the pass line (design §6): the share of the sample the model's chain accepted (after one re-ask; `by` its identity
+/** the pass line: the share of the sample the model's chain accepted (after one re-ask; `by` its identity
  *  or `runs:` it) is not below the free chain's on the same sample */
 export function checkOf(o: { model: readonly Result[]; free: readonly Result[]; of: number; identity: string }): {
   ok: boolean
@@ -89,6 +89,7 @@ export function checkOf(o: { model: readonly Result[]; free: readonly Result[]; 
   free: number
 } {
   const accepted = o.model.filter((r) => r.ok && (r.by === o.identity || r.by === `runs:${o.identity}`)).length
-  const free = o.free.filter((r) => r.ok).length
+  // (a unit no translator is asked for, `self`, counts for neither side: the model's never counts it either)
+  const free = o.free.filter((r) => r.ok && r.by !== 'self').length
   return { ok: accepted >= free, accepted, of: o.of, free }
 }

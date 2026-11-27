@@ -25,6 +25,12 @@ describe('checkOf: not below the free chain on the same sample', () => {
       true,
     )
   })
+  it('a unit no translator is asked for (`self`: no letter to send) counts for neither side', () => {
+    // 40 units, the last one numbers only: both chains answer it `self`; the model accepts the 39 the free chain does
+    const model = [...results(39, 39, ID), ok('u39', 'self')]
+    const free = [...results(39, 39, 'google:x'), ok('u39', 'self')]
+    expect(checkOf({ model, free, of: 40, identity: ID })).toEqual({ ok: true, accepted: 39, of: 40, free: 39 })
+  })
   it('a result another translator answered (a fallback) is not the model’s; one of its runs is', () => {
     const model = [...results(38, 38, ID), ok('u38', 'google:x'), ok('u39', `runs:${ID}`)]
     expect(checkOf({ model, free: results(40, 39, 'google:x'), of: 40, identity: ID })).toEqual({
