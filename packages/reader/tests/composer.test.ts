@@ -2113,7 +2113,19 @@ describe('a page warmed and cut for a preview (link previews: warm, region)', ()
     const over = document.createElement('div')
     over.className = 'axt-over'
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
-    svg.append(document.createElementNS('http://www.w3.org/2000/svg', 'text'))
+    svg.setAttribute('aria-hidden', 'true')
+    // (a line inside the box (SVG y 300: the page's 500) and one far under it (the page's 100): the copy holds the first alone)
+    const textAt = (x: number, y: number, s: string) => {
+      const t = document.createElementNS('http://www.w3.org/2000/svg', 'text')
+      const span = document.createElementNS('http://www.w3.org/2000/svg', 'tspan')
+      span.setAttribute('x', String(x))
+      span.setAttribute('y', String(y))
+      span.setAttribute('font-size', '9')
+      span.textContent = s
+      t.append(span)
+      return t
+    }
+    svg.append(textAt(80, 300, 'inside'), textAt(80, 700, 'the paragraph under the figure'))
     const crops = document.createElement('canvas')
     crops.className = 'axt-crops'
     crops.width = canvas.width
@@ -2129,7 +2141,9 @@ describe('a page warmed and cut for a preview (link previews: warm, region)', ()
     expect(r!.querySelectorAll('canvas')).toHaveLength(2)
     const copy = r!.querySelector('svg')!
     expect(copy).not.toBe(svg)
-    expect(copy.querySelector('text')).not.toBeNull()
+    expect([...copy.querySelectorAll('text')].map((t) => t.textContent)).toEqual(['inside'])
+    expect(copy.getAttribute('aria-hidden')).toBe('true')
+    expect(r!.textContent).toBe('inside')
     // (the page's top-left at the box's: the box 300 x 300 PDF units at 4/3 CSS px a unit)
     expect(Number.parseFloat(copy.style.left)).toBeCloseTo(-60 * (4 / 3), 3)
     expect(Number.parseFloat(copy.style.top)).toBeCloseTo(-(800 - 700) * (4 / 3), 3)

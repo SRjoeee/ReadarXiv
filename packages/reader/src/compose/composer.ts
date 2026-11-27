@@ -1234,6 +1234,26 @@ export function createComposer(o: ComposerOptions): Composer {
       const svg = over?.querySelector<SVGSVGElement>(':scope > svg') ?? null
       if (svg) {
         const copy = svg.cloneNode(true) as SVGSVGElement
+        // (the box's own lines alone: a line of the page beyond it is no part of what the crop shows, and would be read as the
+        // preview's text by assistive technology (the lead's look at staging, 2026-11-28); in the SVG's units, y down from the
+        // page's top, a line kept where its band (its size over its baseline, a third under) meets the box)
+        const top = vy1 - box[3],
+          bottom = vy1 - box[1],
+          left = box[0] - vx0,
+          right = box[2] - vx0
+        for (const t of [...copy.querySelectorAll('text')]) {
+          const span = t.querySelector('tspan')
+          const at = /translate\(([-\d.]+)[ ,]+([-\d.]+)\)/.exec(t.getAttribute('transform') ?? '')
+          const ys = (span?.getAttribute('y') ?? '').split(/[ ,]+/).map(Number)
+          const xs = (span?.getAttribute('x') ?? '').split(/[ ,]+/).map(Number)
+          const size = Number(span?.getAttribute('font-size')) || 10
+          const y = at ? Number(at[2]) : (ys[0] ?? Number.NaN),
+            x0 = at ? Number(at[1]) : Math.min(...xs),
+            x1 = at ? Number(at[1]) : Math.max(...xs)
+          const meets = y + size / 3 >= top && y - size <= bottom && x1 + 2 * size >= left && x0 <= right
+          if (!(Number.isFinite(y) && meets)) t.remove()
+        }
+        copy.setAttribute('aria-hidden', 'true')
         copy.style.left = `${-l * k}px`
         copy.style.top = `${-t * k}px`
         copy.style.width = `${pw * k}px`
