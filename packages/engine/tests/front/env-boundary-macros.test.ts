@@ -221,3 +221,57 @@ describe('a macro that only looks like a boundary stays what it was (the control
     ])
   })
 })
+
+describe("the review round's cases: a boundary only where TeX executes it, and nothing of the text lost", () => {
+  const THM = '\\newtheorem{thm}{Theorem}\n\\newcommand{\\ethm}{\\end{thm}}\n'
+  const kinds = (body: string, preamble: string) => read(body, preamble).map((u) => [u.kind, u.text])
+  it('a closing macro TeX takes as an operand (`\\let\\dummy\\ethm`) closes nothing', () => {
+    expect(kinds('\\begin{thm} First theorem words. \\let\\dummy\\ethm More theorem words.\n\\end{thm}\nAfter it.', THM)).toEqual([
+      ['theorem', 'First theorem words. More theorem words.'],
+      ['para', 'After it.'],
+    ])
+  })
+  it('a closing macro named in \\verb closes nothing', () => {
+    expect(kinds('\\begin{thm} First theorem words \\verb|\\ethm| more theorem words.\n\\end{thm}\nAfter it.', THM).map((x) => x[0])).toEqual([
+      'theorem',
+      'para',
+    ])
+  })
+  it('a body that prints `\\end{…}` with \\string closes nothing', () => {
+    expect(
+      kinds(
+        '\\begin{thm} First theorem words. \\literal More theorem words.\n\\end{thm}\nAfter it.',
+        '\\newtheorem{thm}{Theorem}\n\\newcommand{\\literal}{\\string\\end{thm}}\n',
+      ),
+    ).toEqual([
+      ['theorem', 'First theorem words. More theorem words.'],
+      ['para', 'After it.'],
+    ])
+  })
+  it("an opening macro whose body sets one of its arguments as prose keeps that prose", () => {
+    expect(
+      read(
+        'Before the quote.\n\\startquote{This is the first quoted sentence.} Other quoted words are here.\n\\end{quote}\nAfter it.',
+        '\\newcommand{\\startquote}[1]{\\begin{quote}#1}\n',
+      ).some((u) => u.text.includes('This is the first quoted sentence.')),
+    ).toBe(true)
+  })
+  it("a table opener whose body gives only some of the table's arguments puts no argument into a cell", () => {
+    const cells = read('\\btab{\\textwidth}{l r}\nOne & Two \\\\\n\\end{tabular*}', '\\newcommand{\\btab}[1]{\\begin{tabular*}{#1}}\n')
+    expect(cells.map((u) => u.text).some((t) => /\bl r\b/.test(t))).toBe(false)
+  })
+  it('a theorem a macro sets whole, closed by a closing macro, takes no prose after it', () => {
+    expect(kinds('\\thmx{The whole theorem is here.}\nThe text after it.', `${THM}\\newcommand{\\thmx}[1]{\\begin{thm}#1\\ethm}\n`)).not.toContainEqual([
+      'theorem',
+      'The text after it.',
+    ])
+  })
+  it('a display opener whose closing macro is defined where the reading cannot tell is read as before, its formula never text', () => {
+    expect(
+      read(
+        'Words before the formula\n\\be\nx = y\n\\ee\nand words after it.',
+        '\\newcommand{\\be}{\\begin{equation}}\n\\AtBeginDocument{\\newcommand{\\ee}{\\end{equation}}}\n',
+      ),
+    ).toEqual([{ kind: 'para', text: 'Words before the formula and words after it.', phs: ['\\be\nx = y\n\\ee'] }])
+  })
+})
