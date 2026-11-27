@@ -5472,6 +5472,7 @@ await check(
       () =>
         getComputedStyle(
           window.__h.panes.right.page(1).querySelector('a.axt-link:hover > .axt-link-box') ?? document.body,
+          '::after',
         ).backgroundColor,
     )
     const ring = await page.evaluate(() => {
@@ -5512,7 +5513,8 @@ await check(
       )
       assert(!!l.border === l.pdfBorder, `border ${JSON.stringify(l)}`)
     }
-    assert(/255, 255, 0, 0\.2/.test(wash), `the wash ${wash}`)
+    // (the band at half its strength, 11 % of the default 22 %, not PDF.js's yellow: link previews' §3.7, PDF-READER §11.9)
+    assert(/[/,] 0\.11\)$/.test(wash) && !/255, 255, 0/.test(wash), `the wash ${wash}`)
     assert(ring.width === '2px' && ring.style === 'solid', `the ring ${JSON.stringify(ring)}`)
     assert(after.line === line0, `a click on a link levelled: ${line0} → ${after.line}`)
     // (a document this short ends before page 2 can stand at the top: the jump brings it into view, the left levelled)
