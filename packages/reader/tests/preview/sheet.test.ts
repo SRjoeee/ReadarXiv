@@ -1,11 +1,11 @@
 // The sheet (preview/sheet.ts; link previews' §3.9, the Modern Web Guidance audit): on a device with no hover, or a pane narrower
 // than the card with its margins, a tap on a link with a target opens its preview as a native modal dialog from the bottom
 // (showModal: the focus held in it, the page inert; closedby="any" where the browser has it, the guide's pointer-position
-// fallback elsewhere), the same content, one row of buttons: 「搜索这篇论文」 (filled, only where SEARCH_URL is set) then 「前往」
-// (quiet, always last) for a citation, 「前往」 alone for a float, a display, a section or a note; named by its target's label;
-// 「前往」 jumps and closes it; a link with no target jumps on a tap as today. Reduced motion: the sheet fades, nothing moves.
+// fallback elsewhere), the same content, one row of buttons: the search (S-R-31: filled, only where SEARCH_URL is set) then the
+// go-to button (S-R-30: quiet, always last) for a citation, the go-to button alone for a float, a display, a section or a note;
+// named by its target's label; the go-to button jumps and closes it; a link with no target jumps on a tap as today. Reduced motion: the sheet fades, nothing moves.
 import type { Target } from '@readarxiv/format'
-import { setLocale } from '@readarxiv/ui'
+import { R, setLocale } from '@readarxiv/ui'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { createPreviews } from '../../src/preview/previews.ts'
 import { createSheet } from '../../src/preview/sheet.ts'
@@ -58,7 +58,7 @@ function setUp() {
     return {
       el,
       kind: target[1] === 'reference' ? ('card' as const) : ('crop' as const),
-      label: target[1] === 'reference' ? '参考文献 2' : '图 1',
+      label: target[1] === 'reference' ? R.preview.reference('2') : R.preview.figure('1'),
       described: el,
     }
   }
@@ -98,27 +98,27 @@ describe('the sheet', () => {
     expect(d).not.toBeNull()
     expect(d.open).toBe(true)
     expect(d.getAttribute('closedby')).toBe('any')
-    expect(d.getAttribute('aria-label')).toBe('图 1')
+    expect(d.getAttribute('aria-label')).toBe(R.preview.figure('1'))
     expect(t.jumps).toEqual([])
   })
-  it('a float’s sheet has 前往 alone; 前往 jumps and closes it', async () => {
+  it('a float’s sheet has the go-to button alone; it jumps and closes it', async () => {
     const t = setUp()
     tap(t.fig)
     await settle()
     const d = t.root.querySelector('dialog.axt-sheet') as HTMLDialogElement
     const buttons = [...d.querySelectorAll('button')]
-    expect(buttons.map((b) => b.textContent)).toEqual(['前往'])
+    expect(buttons.map((b) => b.textContent)).toEqual([R.preview.go])
     buttons[0]!.click()
     expect(t.jumps).toHaveLength(1)
     expect(t.jumps[0]).toMatchObject({ side: 'left', dest: '"figure.1"' })
     expect(d.open).toBe(false)
   })
-  it('no search button while SEARCH_URL is null: a citation’s sheet has 前往 alone too', async () => {
+  it('no search button while SEARCH_URL is null: a citation’s sheet has the go-to button alone too', async () => {
     const t = setUp()
     tap(t.cite)
     await settle()
     const d = t.root.querySelector('dialog.axt-sheet') as HTMLDialogElement
-    expect([...d.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['前往'])
+    expect([...d.querySelectorAll('button')].map((b) => b.textContent)).toEqual([R.preview.go])
   })
   it('a link with no target jumps on a tap as today (its click not taken)', () => {
     const t = setUp()

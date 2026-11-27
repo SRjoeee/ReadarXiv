@@ -3,9 +3,10 @@
 // with a target opens its preview from the bottom as a native modal dialog (showModal: the focus held in it, the page inert, the
 // system's back gesture and Esc close it; closedby="any" for a tap outside where the browser has it, the guide's pointer-position
 // fallback elsewhere), over an 8 % dim (30 % in the dark), at most 80 % of the window. The same content and type, selectable;
-// the head never giving way to the scroller. Here, and only here, actions stand as buttons, one row, 46 px: 「搜索这篇论文」
-// (filled, only where the card's search is set) then 「前往」 (quiet, always last) for a citation; 「前往」 alone for a float, a
-// display, a section or a note. Named by its target's label (never 「参考文献」 for a citation's: §3.13).
+// the head never giving way to the scroller. Here, and only here, actions stand as buttons, one row, 46 px: the search (UI.md
+// S-R-31: filled, only where the card's search is set) then the go-to button (S-R-30: quiet, always last) for a citation; the
+// go-to button alone for a float, a display, a section or a note. Named by its target's label (never by the bibliography's word
+// for a citation's: the design's §3.13).
 import type { Target } from '@readarxiv/format'
 import type { Side } from '../panes/panes.ts'
 import type { PreviewContent, PreviewLink, PreviewWords, SheetHost } from './previews.ts'

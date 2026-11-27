@@ -28,6 +28,14 @@ const ADDED: readonly string[] = [
   'R.export.retry',
   // S-R-29: the way back (link previews, 2026-11-27; zh-CN the owner's approved prototype's, the other four for his approval)
   'R.back',
+  // S-R-30 to S-R-33: the link previews' go-to, search, keep and close, and a target's labels (2026-11-28; zh-CN the owner's
+  // approved prototype's but the equation's, the rest for his approval: UI.md lists them)
+  'R.preview.go',
+  'R.preview.search',
+  ...['keep', 'close', 'figure', 'table', 'section', 'note', 'reference', 'equation'].flatMap((k) => [
+    `R.preview.${k}('α1')`,
+    `R.preview.${k}(3)`,
+  ]),
 ]
 
 describe('the string catalogue', () => {

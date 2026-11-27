@@ -5,7 +5,7 @@
 // the toolbar (KEEP_TOP) and KEEP_EDGE inside the window. Its one control is a round ×, shown on hover and on the keyboard's
 // focus, never on the focus a drag leaves (the sheet's rule). Esc closes the topmost thing (the preview first: previews.ts),
 // the focus back to the link it came from. One at a time: keeping another replaces it. To assistive technology a dialog named
-// by its label, its × "关闭{label}" (S-R-32).
+// by its label, its × named to close it (UI.md S-R-32).
 import type { Clock } from '../stack/clock.ts'
 import type { KeepHost, PreviewContent, PreviewWords } from './previews.ts'
 

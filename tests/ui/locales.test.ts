@@ -76,7 +76,7 @@ describe('locale packs', () => {
   it('Japanese is not Chinese left untranslated: no Simplified-only character, and nothing the Chinese pack says word for word but the few terms the two share', () => {
     const zh = new Map(leaves(LOCALES['zh-CN']))
     // terms Japanese writes as Chinese does
-    const shared = new Set(['原文', '参考文献', '上下', '左右', '原文 PDF'])
+    const shared = new Set(['原文', '参考文献', '上下', '左右', '原文 PDF', '表 1', '脚注 1', '参考文献 1']) // a table's, a note's and a reference's labels, words both write alike (S-R-33)
     for (const [path, text] of leaves(LOCALES.ja)) {
       if (path.endsWith('previewTarget')) continue
       expect([...text].filter(c => SIMPLIFIED_ONLY.includes(c)), `${path}: ${text}`).toEqual([])

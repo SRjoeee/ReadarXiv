@@ -486,6 +486,8 @@ export function createPreviews(d: PreviewDeps): Previews {
   }
   on(document, 'keydown', (e) => {
     if (e.key === 'Escape') {
+      // (a sheet open is a modal dialog: its own Esc closes it, and nothing under it)
+      if (root.querySelector('dialog.axt-sheet[open]')) return
       cancelPending()
       if (pv && cur) {
         const link = cur.link.el

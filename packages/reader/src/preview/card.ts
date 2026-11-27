@@ -1,10 +1,10 @@
-// A citation's card, phase 1 (link previews' §3.3-3.5; the approved prototype's 紧凑 card with no metadata): the reference's own
+// A citation's card, phase 1 (link previews' §3.3-3.5; the approved prototype's compact card with no metadata): the reference's own
 // text, in English, in a scroller of the abstract's type (12.5 px / 1.5, the reading ink, no hyphenation, straight quotes set
 // curly), seven lines in view and the rest scrolling inside the card, each end fading by the scroll's position (one fade,
 // --axt-fade: the head fades in as the first line slides under, the foot out as the end nears, neither pops), the keyboard's
 // ring drawn by the frame round the scroller (the mask would cut it); a Tab stop only where it scrolls; giving way to the room
 // down to three lines. Where SEARCH_URL is set (the owner's (b), held until its reach from mainland China is recorded: Q4), one
-// quiet link at its foot, 「搜索这篇论文 ↗」, opened by the reader's opener. No title, no quiet line, no abstract in phase 1:
+// quiet link at its foot, the search (UI.md S-R-31) and the card's ↗, opened by the reader's opener. No title, no quiet line, no abstract in phase 1:
 // the card's column keeps a head slot (empty) for phase 2's title and quiet line, which slot in without a redesign.
 import type { PreviewWords } from './previews.ts'
 
