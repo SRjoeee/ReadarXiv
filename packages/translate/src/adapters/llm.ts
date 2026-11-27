@@ -5,10 +5,11 @@
 //
 // Requests multiply where layers retry. A request that is sent and gets no answer is sent at most twice: each such fault
 // carries `tries: 2`, and this adapter's own timer ends the wait before the chain's (`callMs`), whether or not the host's
-// transport heeds the abort, so the chain's own timeout (3 tries) never decides. A refusal the ledger now knows the wait of
-// (slow, spent, a key) is asked again at once, the batch whole, through the ledger, which picks another key or holds it:
-// at most two requests a `send`, never one a unit. A second such refusal, or the ledger's hold, is a pause past the
-// chain's patience, so the units come back unavailable and the host asks them again in whole batches.
+// transport heeds the abort, so the chain's own timeout (3 tries) never decides. A refusal the ledger acts on (slow,
+// spent, a key) is asked again, the batch whole, once the ledger has taken its settlement (within SPEND_MS), through the
+// ledger, which picks another key or holds it: at most two requests a `send`, never one a unit. A second such refusal, the
+// ledger's hold, or a settlement not taken in time (SPEND_MS, or before this adapter's own timer ends the request) is a
+// pause past the chain's patience, so the units come back unavailable and the host asks them again in whole batches.
 //
 // The identity names who answers, not the route: the entry's `provider`, `upstream`, `shape` and `model` are hashed, the
 // URL is not. The URL is the host's (its account and its gateway's names, which no identity of this repository holds, and
@@ -188,16 +189,33 @@ export function llm(o: LlmOptions): Translator {
   /** a pause the chain's last translator does not wait out (chain.ts patienceOf: ATTEMPTS tries of its `callMs`), so its
    *  units come back unavailable rather than asked again one at a time */
   const pastPatience = ATTEMPTS * limits.callMs + 1
-  /** settled once, and never waited on: the ledger's answer changes nothing of the reply */
+  /** settled once; resolves true once the ledger has taken it, false where it failed (never rejects). Waited on only before
+   *  a refused batch is asked again: the ledger answers that reserve from what it knows, the refusal too */
   const settler = (id: string) => {
     let done = false
-    return (outcome: Settlement) => {
-      if (done) return
+    return (outcome: Settlement): Promise<boolean> => {
+      if (done) return Promise.resolve(false)
       done = true
-      void Promise.resolve()
+      return Promise.resolve()
         .then(() => o.spend.settle(id, outcome))
-        .catch(() => {})
+        .then(
+          () => true,
+          () => false,
+        )
     }
+  }
+  /** a settlement's end within SPEND_MS, or before the signal aborts: true only where the ledger took it */
+  async function taken(settled: Promise<boolean>, signal: Signal): Promise<boolean> {
+    const wait = controller()
+    const aborted = whenAborted(signal)
+    const got = await Promise.race([
+      settled,
+      clock.sleep(SPEND_MS, wait.signal).then(() => false),
+      aborted.done.then(() => false),
+    ])
+    wait.abort()
+    aborted.off()
+    return got
   }
 
   /** the spend port's answer within SPEND_MS: a ticket, or a Fault (held: a pause past the chain's patience; no answer: no
@@ -308,17 +326,24 @@ export function llm(o: LlmOptions): Translator {
               retryAfter: reply.headers.get('retry-after'),
               now: clock.now(),
             })
-            settle({ refusal })
+            const settled = settle({ refusal })
             const what = `llm: ${reply.status}${status !== reply.status ? ` (${status})` : ''} ${refusal.class} (${refusal.who}${refusal.code ? ` ${refusal.code}` : ''}) ${bodyShapeOf(text)}`
             switch (refusal.class) {
               case 'slow':
               case 'spent':
-              case 'key':
-                // (the ledger knows it now: asked again at once, the batch whole, with another key or held)
-                if (sent < REQUESTS) continue
+              case 'key': {
+                // (asked again, the batch whole, once the ledger has taken the refusal: it gives another key or holds.
+                // A ledger that has not taken it within SPEND_MS, or before this adapter's own timer, would answer the
+                // refused key again: no request, the cool-down, never `again`, which the chain would ask again)
+                if (sent < REQUESTS) {
+                  const known = await taken(settled, own.signal)
+                  if (signal.aborted) throw new Fault('abort', 'aborted', 'llm: aborted')
+                  if (known) continue
+                }
                 throw new Fault('cool', 'rate', what, {
                   retryAfterMs: Math.max(refusal.retryAfterMs ?? 0, pastPatience),
                 })
+              }
               case 'request':
                 throw new Fault('off', 'model', what)
               case 'ours':
