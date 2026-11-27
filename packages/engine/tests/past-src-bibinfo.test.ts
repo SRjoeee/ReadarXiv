@@ -73,3 +73,87 @@ describe('a field command read by the definition TeX keeps', () => {
     expect(textOf(ps)).toContain('authorAnn Lee')
   })
 })
+
+/** the reference units' pieces where the bibliography is the job's .bbl (BibTeX's, as \bibliography reads it), `head` the lines
+ *  before its first entry where a style writes its definitions */
+const bblPieces = (preamble: string, head: string, entries = ENTRIES) => {
+  const units = openPaper(
+    new Map([
+      [
+        'main.tex',
+        enc(`\\documentclass{article}\n${preamble}\\begin{document}\nSome text.\n\\bibliography{refs}\n\\end{document}\n`),
+      ],
+      ['main.bbl', enc(`\\begin{thebibliography}{9}\n${head}\n${entries}\n\\end{thebibliography}\n`)],
+    ]),
+  ).units.filter((x) => x.kind === 'reference')
+  return units.flatMap((u) =>
+    (u.pieces as { t: string; s?: string; src?: string; sets?: number }[]).map((p) =>
+      p.t === 'text' ? p.s! : p.t === 'open' ? `[${p.src}|${p.sets ?? '-'}` : p.t === 'close' ? ']' : `<${p.src}>`,
+    ),
+  )
+}
+const ENTRIES =
+  '\\bibitem{a} \\bibinfo{author}{Ann Lee} \\& \\bibinfo{author}{Bo Chan}\n\\newblock \\bibinfo{journal}{Annals of Things}.'
+const OPTIONAL = '\\providecommand{\\bibinfo}[2][]{#2}\n'
+/** the two-argument field pair, each call read so: no field name in the text */
+const PAIRS = ['[\\bibinfo{author}{|0', '[\\bibinfo{author}{|0', '[\\bibinfo{journal}{|0']
+
+describe("a bibliography head's definitions read in the order TeX runs them", () => {
+  it("a head that replaces the paper's definition: its replacement reads the entries (\\def, \\renewcommand)", () => {
+    for (const head of ['\\def\\bibinfo#1#2{#2}', '\\renewcommand{\\bibinfo}[2]{#2}', '\\gdef\\bibinfo #1#2{#2}']) {
+      const ps = bblPieces(OPTIONAL, head)
+      expect(ps.filter((p) => p.startsWith('[\\bibinfo')), head).toEqual(PAIRS)
+      expect(textOf(ps), head).not.toMatch(/author|journal/)
+    }
+  })
+
+  it('a head that provides, or defines only where undefined, yields to the definition in force', () => {
+    for (const head of [
+      '\\providecommand{\\bibinfo}[2]{#2}',
+      '\\newcommand{\\bibinfo}[2]{#2}',
+      '\\ifx\\bibinfo\\undefined \\def\\bibinfo#1#2{#2}\\fi',
+      '\\expandafter\\ifx\\csname bibinfo\\endcsname\\relax \\def\\bibinfo#1#2{#2}\\fi',
+      '\\@ifundefined{bibinfo}{\\def\\bibinfo#1#2{#2}}{}',
+    ]) {
+      expect(textOf(bblPieces(OPTIONAL, head)), head).toContain('authorAnn Lee')
+    }
+  })
+
+  it("in the head's own order: a later definition replaces an earlier one, a later \\providecommand does not", () => {
+    expect(textOf(bblPieces('', `${OPTIONAL}\\def\\bibinfo#1#2{#2}`))).not.toMatch(/author|journal/)
+    expect(textOf(bblPieces('', `\\def\\bibinfo#1#2{#2}\n${OPTIONAL}`))).not.toMatch(/author|journal/)
+    const first = textOf(bblPieces('', `\\providecommand{\\bibinfo}[2]{#2}\n\\def\\bibinfo#1#2{#1}`))
+    expect(first).toContain('author')
+    expect(first).not.toContain('Ann Lee')
+  })
+})
+
+describe("a field command's call read by its definition: its arguments, the one its body sets", () => {
+  it('an optional-first wrapper of one braced argument sets that argument (\\showarticletitle[2][]{#2})', () => {
+    const ps = bblPieces(
+      '',
+      '\\providecommand{\\showarticletitle}[2][]{#2}',
+      '\\bibitem{a} Ann Lee. \\showarticletitle{A long title of a book}. Annals of Things.',
+    )
+    expect(textOf(ps)).toContain('A long title of a book')
+    expect(ps.filter((p) => p.startsWith('<') && p.includes('long title'))).toEqual([])
+  })
+
+  it('a three-argument field command with an optional first sets its third: the field name is no text ([3][]{#3})', () => {
+    for (const [preamble, head] of [
+      ['\\providecommand{\\bibinfo}[3][]{#3}\n', ''],
+      ['', '\\providecommand{\\bibinfo}[3][]{#3}'],
+    ]) {
+      const ps = bblPieces(preamble!, head!)
+      expect(textOf(ps)).not.toMatch(/author|journal/)
+      expect(textOf(ps)).toContain('Ann Lee')
+      expect(textOf(ps)).toContain('Annals of Things')
+    }
+  })
+
+  it('a definition that sets its first argument of two: the field name is the text, the value TeX drops no text', () => {
+    const ps = bblPieces('', '\\def\\bibinfo#1#2{#1}')
+    expect(textOf(ps)).toContain('author')
+    expect(textOf(ps)).not.toContain('Ann Lee')
+  })
+})
