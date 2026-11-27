@@ -9109,7 +9109,7 @@ run-ins read, and the wire (a display is a break of its sentence, its own marker
 which the typesetter lays a kept display by; and the stop the source sets at the display's end, read by `displayStop` as a
 spelled display's before its `\end{…}`: up to where the paper's own definition closes the display, which the source reader states
 on the placeholder from what it reads of the paper's definitions (`PhPiece.closes`, not enumerable: no unit's hash, JSON or mark
-moves): before the partner macro that ends the environment a macro began (`\be x = y, \ee`: `,`; `latex-front.ts` envMacros), and
+moves): before the partner macro that ends the environment a macro began (`\be x = y, \ee`: `,`; `latex-front.ts` boundaryAt, §18.119, else envMacros), and
 before the end of the argument a macro's body ends a display environment with (`\newcommand{\al}[1]{\begin{align}{#1}\end{align}}`,
 `\al{x = y.}`: `.`; the reader's bodies, `displayArgEnd`). Where the spelling and TeX agree nothing moves.
 
@@ -10675,6 +10675,46 @@ asks no row of a unit every member of which is so). No unit changes state, nor w
 one `SETTABLE` leaves a placeholder): the reader's faces do not all hold the marks (`fonts/font-coverage.ts`: Nimbus none of
 the sixteen, Source Han eleven of them missing, Latin Modern three), so such a letter, drawn, may lose its accent; those
 pieces stand glued in a word with no point of their own, and are TeX's evidence's to give (the marking's look-ahead probe).
+
+### 18.119 A paper's macro that opens or closes an environment is that boundary, by its definition in force (the coordinator's ruling of 2026-11-27, the 599-paper census)
+
+The census's lay left 29 paragraphs of 6 papers whole in the original (`unproven`, `lay/entry.ts`): each held a placeholder of a
+paper's macro that stands for an environment's boundary, `\newcommand{\ben}{\begin{enumerate}}`, `\newcommand{\eT}{\end{THM}}`,
+`\newcommand{\beginCBOX}{\begin{mdframed}[backgroundcolor=…]}`, `\def\bal#1\eal{\begin{align}#1\end{align}}`. The source
+reader knew one form only (`envMacros`): a body that is exactly `\begin{X}` or `\end{X}`, read in no order over every file, and
+used only to open a display, a math or a skipped environment. Every other form stayed a placeholder inside the paragraph, where
+TeX sets no ink for it: a list's, a box's or a theorem's opening or end ran the paragraphs on either side together, a display
+opened by a macro of one argument or by one TeX delimits had its formula read as text, a theorem written `\begin{THM} … \eT`
+ran to the file's end. Four of the 29 are displays the reader already read as one display (`\be … \ee`); their element is
+unproven downstream of the source reader, and stays so here.
+
+**The reading** (`source/latex-front.ts`, `boundaryAt`): a call is read by the meaning its macro has where it stands, its body
+given the call's arguments as TeX takes them (an optional first and its default, undelimited ones, ones a \def's parameter
+text delimits by a token: `meaningCall`). The body opens environment X where its first token is `\begin{X}` and it leaves X
+open; it closes X where its last token is `\end{X}` and no `\begin{X}` comes before it; a body of a delimited macro that is one
+display environment around its argument sets that display whole; either through another of the paper's macros in force, its
+first token with its arguments in the body, or its last, of no argument (`bodyBoundary`). A call that opens or closes X cuts
+the text exactly as the written `\begin{X}` or `\end{X}` does: a display's, a math environment's or a skipped one's opening is
+one placeholder to its end, the display's end where its closing begins (`PhPiece.closes`), in the paragraph as a written display
+is; any other environment opened ends the paragraph and is read as the written one (a theorem's kind, its title, a float's, a
+list's items), its own arguments read after the call only where the body writes nothing after its `\begin{X}`; one closed ends
+the unit as `\end` does. An environment's end, written or by macro, is found as TeX finds it: its `\end{X}` or a call that
+closes it, the same environment opened inside it passed over (`envEnd`); a written `\begin{THM}` closed by `\eT` ends there.
+
+**In TeX's order** (`preambleMeanings`, `noteDefinition`): the main file's preamble is read in order, each file of the package it
+loads (`\documentclass`, `\usepackage`, `\RequirePackage`, `\input`, `\include`) read where it is loaded; each definition the walk
+meets in the body is put in force there. `\newcommand` and `\providecommand` leave a name in force, `\renewcommand`, `\def` and
+`\DeclareRobustCommand` replace it, `\let` copies the meaning in force at the `\let`, `\newenvironment{X}` makes `\X` (its
+begin part) and `\endX` (its end part), used apart. So `\newcommand{\be}[1]{…}` then `\def\be{\begin{equation}}` reads `\be`
+with no argument, and `\renewcommand{\be}{B}` in the body ends the boundary from there on.
+
+**What it protects.** A macro that only looks like a boundary is none: its `\begin` in a string (`\string\begin`), in a
+conditional's branch (`\iffalse\begin{…}\fi`), in an argument another command takes (`\gobble{\begin{…}}`) begins its body with
+another token. Where the reading cannot tell — an `\edef` or `\xdef`, a definition inside a group or an environment (TeX undoes
+it at their end), one in a conditional whose branch the source cannot tell, a `\let` of a meaning not read, a call whose
+arguments are not read whole, a macro whose meaning no file read in order gives — the call is read as before, the old form
+included. A body that sets a display whole around an undelimited argument (`\newcommand{\eqn}[1]{\begin{equation}#1\end{equation}}`)
+is no boundary, read as before (`displayArgEnd`, §18.95).
 
 ## 19. The engine's contract
 
