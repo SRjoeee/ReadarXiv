@@ -103,6 +103,8 @@ export function eventsOf(prev: ReaderState | null, next: ReaderState): SessionEv
     if (!a || a.page !== b.page || a.pages !== b.pages) out.push({ type: 'page', side, page: b.page, pages: b.pages })
   }
   if (!p || p.view.outline !== v.outline) out.push({ type: 'outline', entries: v.outline.map((e) => ({ ...e })) })
+  // (the way back: told where it changed; a first state with none says nothing, the chrome's having none)
+  if (!!v.back !== !!p?.view.back) out.push({ type: 'back', on: !!v.back })
   const l = next.layer,
     pl = p?.layer
   // (the prepare's stage, our server's record's own, as the share of the prepare the progress line stands at: status.ts)

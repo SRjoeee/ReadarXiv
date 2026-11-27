@@ -90,7 +90,8 @@ export function openSession(o: ChromeOpen): (chrome: SessionHost) => Promise<Ses
       setSyncMode: (m) => set({ sync: m === 'same' }),
       zoomBy: (factor) => reader.do({ do: 'zoomBy', factor }),
       zoomTo: (to) => reader.do({ do: 'zoom', to }),
-      goToPage: (side, page) => reader.do({ do: 'page', side, page }),
+      goToPage: (side, page, x) => reader.do({ do: 'page', side, page, ...(x?.jump ? { jump: true as const } : {}) }),
+      back: () => reader.do({ do: 'back' }),
       setPrefs: set,
       // (the translation's file is made by exportPdf: a session of before had pdfBytes alone, S-R-09)
       pdfBytes: async () => null,

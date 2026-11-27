@@ -60,6 +60,8 @@ import {
   stopOf,
   toldWait,
 } from './session/rows.ts'
+import { createJumps, type HostHistory, type Light } from './session/jumps.ts'
+import { createOneJump, type JumpLights, type JumpPanes } from './session/one-jump.ts'
 import { createRuntime, type Handlers, type Runtime } from './session/runtime.ts'
 import { ownedClock } from './stack/clock.ts'
 import { createScheduler } from './stack/scheduler.ts'
@@ -95,6 +97,9 @@ export interface Host {
     target: string,
     o: { signal: AbortSignal; context?: PaperContext },
   ): AsyncIterable<Result>
+  /** the page's history, the reader's jumps' to add to (session/window-history.ts `windowHistory`: PDF-READER §11.9 "The way
+   *  back"); none: the jumps are the reader's alone (the capsule and a scroll back go back, the browser's Back does not) */
+  history?: HostHistory
 }
 
 export type Command =
@@ -102,7 +107,11 @@ export type Command =
   | { do: 'zoom'; to: Zoom }
   | { do: 'zoomBy'; factor: number }
   | { do: 'pinch'; side: Side; factor: number; at: [number, number] }
-  | { do: 'page'; side: Side; page: number }
+  /** a page gone to; `jump`, a page typed (the pill's field): one of the reader's jumps, with its way back; the pill's arrows
+   *  are none */
+  | { do: 'page'; side: Side; page: number; jump?: true }
+  /** one jump back (the capsule's press) */
+  | { do: 'back' }
   | { do: 'unit'; id: number }
   /** a contents entry (its `id`) gone to on both sides, a line of room above its heading; else its page. `focus`: the focus
    *  given to its page on the side read where that side holds a target for it (panes focusPage), the host's own place for it
@@ -175,6 +184,8 @@ export interface ReaderState {
     sides: Record<Side, { page: number; pages: number }>
     /** the contents: the paper's headings, their levels, pages, numbers and titles (translated once their rows are in) */
     outline: readonly OutlineEntry[]
+    /** a jump to go back from (the capsule stands while it is so); absent, none */
+    back?: boolean
   }
   /** our server's document followed, its stream lost while the browser is online and asked again, nothing heard since (the
    *  website says "reconnecting") */
@@ -310,6 +321,28 @@ export function openReader(
     right.className = 'axt-pane right'
     root.append(left, right)
   }
+  // ---- the one jump (session/one-jump.ts): every jump inside the paper, one entry of the jump stack, over the host's history
+  const jumps = createJumps(host.history ? { history: host.history } : {})
+  const jumpPanes: JumpPanes = {
+    resolve: (d) => panes?.resolve(d) ?? Promise.resolve(null),
+    goTo: (t, x) => panes?.goTo(t, x),
+    goToPage: (side, n) => panes?.goToPage(side, n),
+    goToRect: (r) => panes?.goToRect(r),
+    reading: () => panes?.reading() ?? null,
+    goToPlace: (pl) => panes?.goToPlace(pl),
+    inView: (pl, l: Light) => panes?.inView(pl, l && 'box' in l ? { page: l.page, box: l.box } : null) ?? false,
+    focusPage: (side, n) => panes?.focusPage(side, n) ?? false,
+  }
+  const jumpLights = (): JumpLights | null => null
+  const oneJump = createOneJump({
+    panes: () => (panes ? jumpPanes : null),
+    lights: jumpLights,
+    jumps,
+    narrow: () => root.hasAttribute('data-axt-narrow'),
+  })
+  const offDepth = jumps.onDepth(() => tellSoon())
+  /** a frame's look at whether a scroll came back to the place a jump left (one a frame, whatever the scroll events) */
+  let spendFrame = 0
   // ---- PDF.js, the panes, composing: made once the kit is in (the original's first range does not wait for it)
   const kitReady = loadKit(o.pdfjs ?? {})
   let syncAvailable = false
@@ -342,6 +375,7 @@ export function openReader(
       clock,
       pageName: (s, n) => words().pageName(s === 'left' ? 'original' : 'translation', n),
       openExternal: (url) => openExternal(url),
+      jump: (j) => void oneJump.link(j),
     })
     panes.on('drawn', (e) => {
       if (e.side === 'left' && e.page === 1) {
@@ -357,6 +391,14 @@ export function openReader(
     })
     // (the rows made here, the reading place)
     panes.on('page', () => nearSoon())
+    // (a scroll back to the place a jump left spends that jump: looked at once a frame)
+    panes.on('scrolled', () => {
+      if (spendFrame || jumps.depth <= 0) return
+      spendFrame = clock.frame(() => {
+        spendFrame = 0
+        oneJump.scrolled()
+      })
+    })
     return k
   })
   const openExternal = (url: string) => {
@@ -519,6 +561,8 @@ export function openReader(
     const c = contents
     if (!c || !panes) return
     const holder = root.ownerDocument.activeElement
+    // (the place gone from, read at the press: the part read meanwhile moves nothing)
+    const from = oneJump.begin()
     let r = c.firstRect(id)
     const page = c.pageOf(id)
     if (!r && page) {
@@ -526,8 +570,7 @@ export function openReader(
       r = c.firstRect(id)
     }
     if (closed || !panes) return
-    if (r) panes.goToRect(r)
-    else if (page) panes.goToPage(sideRead(), page)
+    oneJump.heading(from ? { ...from, side: sideRead() } : null, r, page)
     const at = r?.[0] ?? page
     if (focus && at && root.ownerDocument.activeElement === holder) panes.focusPage(sideRead(), at)
   }
@@ -778,7 +821,8 @@ export function openReader(
             lang: () => targetOf(rt.state),
             links: {
               open: openExternal,
-              follow: (d, how) => void panes?.follow(d, how),
+              follow: (d, how) =>
+                void oneJump.link({ side: 'right', dest: d, keyboard: how.keyboard, origin: how.origin }),
               unnamed: (to) => words().linkName(to),
             },
             clock,
@@ -1243,6 +1287,7 @@ export function openReader(
           right: { page: p?.pageOf('right') ?? 0, pages: p?.right.pages ?? 0 },
         },
         outline,
+        back: jumps.depth > 0,
       },
       reconnecting: wait.reconnecting,
       network: wait.network,
@@ -1290,7 +1335,10 @@ export function openReader(
       if (c.do === 'zoom') p.zoomTo(c.to)
       else if (c.do === 'zoomBy') p.zoomBy(c.factor)
       else if (c.do === 'pinch') p.pinch(c.side, c.factor, c.at)
-      else if (c.do === 'page') p.goToPage(c.side, c.page)
+      else if (c.do === 'page') {
+        if (c.jump) oneJump.page(c.side, c.page)
+        else p.goToPage(c.side, c.page)
+      } else if (c.do === 'back') oneJump.back()
       else if (c.do === 'lead') p.lead(c.side)
       else if (c.do === 'narrow') p.setNarrow(c.on)
       else if (c.do === 'unit') {
@@ -1355,6 +1403,10 @@ export function openReader(
       closed = true
       unstate()
       unwatch()
+      offDepth()
+      oneJump.dispose()
+      jumps.dispose()
+      clock.cancel(spendFrame)
       document.removeEventListener('visibilitychange', onVisible)
       removeEventListener('online', onOnline)
       removeEventListener('offline', onOffline)

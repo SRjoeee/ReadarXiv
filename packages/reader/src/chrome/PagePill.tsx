@@ -1,6 +1,7 @@
 // A pane's page pill (the reader's design, §6.4): at the pane's bottom centre, ‹ · the page (an input, all of it
 // selected on focus) · / total · ›. Shown while its pane scrolls and 2.5 s after, and while hovered or focused
-// (reader.css); the page is PDF.js's as it reports it, never read ahead of it
+// (reader.css); the page is PDF.js's as it reports it, never read ahead of it. A page typed is one of the reader's jumps (its
+// way back, the capsule 回到原处); the arrows turn a page as a scroll does and are none (link previews' §3.7)
 import { ChevronLeft, ChevronRight } from 'lucide'
 import { forwardRef, useState } from 'react'
 import { R, Icon } from '@readarxiv/ui'
@@ -14,8 +15,10 @@ export const PagePill = forwardRef<HTMLDivElement, { controller: ReaderControlle
 ) {
   const { page, pages } = useReader(controller, (s) => s.sides[side])
   const [draft, setDraft] = useState<string | null>(null)
-  const go = (n: number) => {
-    if (Number.isInteger(n) && n >= 1 && n <= pages) controller.goToPage(side, n)
+  const go = (n: number, jump = false) => {
+    if (!Number.isInteger(n) || n < 1 || n > pages) return
+    if (jump) controller.goToPage(side, n, { jump: true })
+    else controller.goToPage(side, n)
   }
   return (
     <div ref={ref} className="chrome pill">
@@ -34,7 +37,7 @@ export const PagePill = forwardRef<HTMLDivElement, { controller: ReaderControlle
         // the field's own value: the draft's state may not have landed when Enter follows the typing at once
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
-            go(Number(e.currentTarget.value))
+            go(Number(e.currentTarget.value), true)
             setDraft(null)
           } else if (e.key === 'Escape') setDraft(null)
         }}

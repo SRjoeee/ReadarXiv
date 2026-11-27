@@ -2,7 +2,14 @@
 // the place left), over a host's history stood in for by an array (the browser's joint history as a host's pushState and
 // back make it), and with no host at all.
 import { describe, expect, it } from 'vitest'
-import { createJumps, type Entry, type HostHistory, type Light, type Place, type Traversal } from '../src/session/jumps.ts'
+import {
+  createJumps,
+  type Entry,
+  type HostHistory,
+  type Light,
+  type Place,
+  type Traversal,
+} from '../src/session/jumps.ts'
 
 /** a host's history: its entries (each the reader's state, or none), the current one's index, a traversal told as popstate */
 function fakeHistory(start: Entry | null = null) {
@@ -15,7 +22,13 @@ function fakeHistory(start: Entry | null = null) {
     at = to
     for (const f of [...listeners]) f(entries[at] ?? null)
   }
-  const h: HostHistory & { entries: (Entry | null)[]; readonly at: number; forward(): void; marks: number; pushes: number } = {
+  const h: HostHistory & {
+    entries: (Entry | null)[]
+    readonly at: number
+    forward(): void
+    marks: number
+    pushes: number
+  } = {
     entries,
     get at() {
       return at

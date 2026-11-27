@@ -248,3 +248,15 @@ describe("the reader's state as the chrome's", () => {
     expect(faces(eventsOf(base, open))).toEqual([])
   })
 })
+
+describe('the way back', () => {
+  it('is told as the reader’s state has it, once a change, and folded into the chrome’s', () => {
+    const on = { ...base, view: { ...base.view, back: true } }
+    expect(eventsOf(base, on)).toContainEqual({ type: 'back', on: true })
+    expect(eventsOf(on, { ...on }).filter((e) => e.type === 'back')).toEqual([])
+    expect(eventsOf(on, base)).toContainEqual({ type: 'back', on: false })
+    expect(INITIAL.back).toBe(false)
+    expect(reduce(INITIAL, { type: 'back', on: true }).back).toBe(true)
+    expect(reduce(INITIAL, { type: 'back', on: false })).toBe(INITIAL)
+  })
+})

@@ -78,6 +78,9 @@ interface PanesOptions {
   clock: OwnedClock
   pageName(side: Side, n: number): string
   openExternal(url: string): void
+  /** a jump inside the paper of either pane's PDF.js links, handed to the reader's one jump (session/one-jump.ts); none: the
+   *  link service moves its own pane, as PDF.js does */
+  jump?(j: PaneJump): void
   /** no scrollend comes (a test's), else the browser's own */
   scrollEnd?: 'timer' | 'native'
   /** the device pixels of laid pages' drawings the right keeps off the view (a host's own; 0 keeps none) */
@@ -116,6 +119,45 @@ interface Kept {
   across: number
 }
 
+/** a jump inside the paper as a pane's PDF.js links make one: the pane, the destination (a name, or an explicit one), whether a
+ *  pointer made it (else Enter, or an assistive technology's click), the link's own box on its page where known */
+export interface PaneJump {
+  side: Side
+  dest: string | unknown[]
+  keyboard: boolean
+  origin: { side: Side; page: number; box: [number, number, number, number] } | null
+}
+/**
+ * A PDF.js link service's jumps inside the paper handed to the reader's one jump instead of moving its pane (the design's L3):
+ * a link's destination (`goToDestination`) and a page link (`goToPage`, as a destination of that page's top). `click`: the link
+ * clicked for the jump in hand (its pane, its box, whether a pointer made it), read from the click that ran PDF.js's own
+ * handler; null where none was clicked. Links out of the paper stay the host's (addLinkAttributes, below)
+ */
+export function routeInPaper(
+  service: { goToDestination(dest: unknown): unknown; goToPage(val: unknown): unknown },
+  side: Side,
+  jump: (j: PaneJump) => void,
+  click: () => { keyboard: boolean; origin: PaneJump['origin'] } | null,
+): void {
+  service.goToDestination = (dest: unknown) => {
+    if (typeof dest !== 'string' && !Array.isArray(dest)) return Promise.resolve()
+    const c = click()
+    jump({ side, dest, keyboard: c?.keyboard ?? false, origin: c?.origin ?? null })
+    return Promise.resolve()
+  }
+  service.goToPage = (val: unknown) => {
+    const n = typeof val === 'number' ? val : Number(val)
+    if (!Number.isInteger(n) || n < 1) return
+    const c = click()
+    jump({
+      side,
+      dest: [n - 1, { name: 'XYZ' }, null, null, null],
+      keyboard: c?.keyboard ?? false,
+      origin: c?.origin ?? null,
+    })
+  }
+}
+
 export interface Panes {
   readonly right: Stack
   readonly leftViewer: PDFViewer
@@ -143,8 +185,23 @@ export interface Panes {
   focusPage(side: Side, n: number): boolean
   /** a destination inside the paper (a name, or an explicit one) followed on the right; the focus there where by keyboard */
   follow(dest: string | unknown[], how?: { keyboard?: boolean }): Promise<void>
-  /** where the reader is reading: the page at the reading line of the pane read and how far down it */
-  reading(): { page: number; at: number } | null
+  /** a destination inside the paper (a name, or an explicit one) resolved on the original: its page and its explicit form; null
+   *  where it names nothing the paper has */
+  resolve(dest: string | unknown[]): Promise<{ page: number; dest: unknown[] } | null>
+  /** a jump's move: the pane jumped from to a resolved destination (as `follow` reads it), `room` CSS px above its point where
+   *  it names one; the other pane following where the sync is on (the follower's driver) */
+  goTo(t: { page: number; dest: unknown[] }, o: { side: Side; keyboard: boolean; room: number }): void
+  /** a place read before gone back to on the pane it was read on (`side`; the pane read where that one is not shown), the
+   *  other following where the sync is on */
+  goToPlace(place: { page: number; at: number; side: Side }): void
+  /** whether a place is in view on its pane (within a quarter of the view of the reading line), or a box of a page on it (its
+   *  top inside the view) */
+  inView(
+    place: { page: number; at: number; side: Side },
+    box?: { page: number; box: [number, number, number, number] } | null,
+  ): boolean
+  /** where the reader is reading: the page at the reading line of the pane read and how far down it, and that pane */
+  reading(): { page: number; at: number; side: Side } | null
   /** the reader put back at a place read before (a language switch keeps it) */
   putAt(place: { page: number; at: number }): void
   pageOf(side: Side): number
@@ -312,6 +369,46 @@ export function createPanes(o: PanesOptions): Panes {
     abortSignal: signal,
   } as ConstructorParameters<typeof V.PDFViewer>[0])
   linkService.setViewer(viewer)
+  // a jump inside the paper of either pane's PDF.js links goes through the reader's one jump (the design's L3): the link clicked
+  // for it read from the click whose handler PDF.js runs (a capture of each pane's clicks on a link annotation's anchor, read in
+  // the same dispatch), its box on its page from where the annotation layer draws it
+  if (o.jump) {
+    const jump = o.jump
+    let clicked: { s: PaneSide; a: Element; keyboard: boolean } | null = null
+    for (const s of [L, R])
+      s.container.addEventListener(
+        'click',
+        (e) => {
+          const a = (e.target as Element | null)?.closest?.('.annotationLayer a')
+          clicked = a ? { s, a, keyboard: (e as MouseEvent).detail === 0 } : null
+          if (a) queueMicrotask(() => (clicked = null))
+        },
+        { capture: true, signal },
+      )
+    const clickOf = (side: Side) => () => {
+      const c = clicked
+      if (!c || c.s.name !== side) return null
+      return { keyboard: c.keyboard, origin: originOf(c.s, c.a) }
+    }
+    routeInPaper(linkService as never, 'left', jump, clickOf('left'))
+    routeInPaper(rightLinks as never, 'right', jump, clickOf('right'))
+  }
+  /** a PDF.js link's box on its page (PDF units), from where its annotation layer draws it; null where it cannot be read */
+  function originOf(s: PaneSide, a: Element): PaneJump['origin'] {
+    const box = a.closest('section') ?? a.parentElement
+    const layer = a.closest('.annotationLayer')
+    const n = Number((a.closest('.page') as HTMLElement | null)?.dataset.pageNumber)
+    const vp = n ? viewportOf(s, n) : null
+    if (!box || !layer || !vp) return null
+    const lr = layer.getBoundingClientRect(),
+      r = box.getBoundingClientRect()
+    if (!lr.width || !lr.height) return null
+    const kx = vp.width / lr.width,
+      ky = vp.height / lr.height
+    const [ax, ay] = vp.convertToPdfPoint((r.left - lr.left) * kx, (r.bottom - lr.top) * ky) as [number, number]
+    const [bx, by] = vp.convertToPdfPoint((r.right - lr.left) * kx, (r.top - lr.top) * ky) as [number, number]
+    return { side: s.name, page: n, box: [Math.min(ax, bx), Math.min(ay, by), Math.max(ax, bx), Math.max(ay, by)] }
+  }
   // (the page boxes' rounding, one table for both panes: whichever draws page n at a scale first tells it)
   const rounding = roundingTable()
   /** the scale each page of the left was last drawn at, as PDF.js told it drawn (pagerendered): its canvas is that scale's while
@@ -1494,11 +1591,17 @@ export function createPanes(o: PanesOptions): Panes {
       }
     },
     async follow(dest, how = {}) {
+      const at = await panes.resolve(dest)
+      if (!at || disposed) return
+      jump(R, { pageNumber: at.page, destArray: at.dest })
+      if (how.keyboard) right.focus(at.page)
+    },
+    async resolve(dest) {
       const d = doc
-      if (disposed || !d || !laid) return
+      if (disposed || !d || !laid) return null
       try {
         const explicit = typeof dest === 'string' ? await d.getDestination(dest) : dest
-        if (!Array.isArray(explicit) || !explicit.length) return
+        if (!Array.isArray(explicit) || !explicit.length) return null
         const ref = explicit[0]
         const n =
           ref && typeof ref === 'object'
@@ -1506,17 +1609,65 @@ export function createPanes(o: PanesOptions): Panes {
             : Number.isInteger(ref)
               ? (ref as number) + 1
               : null
-        if (disposed || doc !== d || !laid || n === null || n < 1 || n > right.pages) return
-        jump(R, { pageNumber: n, destArray: explicit })
-        if (how.keyboard) right.focus(n)
+        if (disposed || doc !== d || !laid || n === null || n < 1 || n > right.pages) return null
+        return { page: n, dest: explicit as unknown[] }
       } catch (e) {
         warn("a link's destination", e)
+        return null
       }
+    },
+    goTo(t, x) {
+      if (disposed || !laid) return
+      const s = x.side === 'left' && shown(L) ? L : shown(R) ? R : L
+      jump(s, { pageNumber: t.page, destArray: t.dest })
+      // (the room above a point the destination names: the target's line not at the view's very edge)
+      const kind = (t.dest[1] as { name?: string } | undefined)?.name
+      const y =
+        kind === 'XYZ'
+          ? t.dest[3]
+          : kind === 'FitH' || kind === 'FitBH'
+            ? t.dest[2]
+            : kind === 'FitR'
+              ? t.dest[5]
+              : null
+      if (typeof y === 'number' && x.room > 0) s.container.scrollTop = Math.max(0, s.container.scrollTop - x.room)
+    },
+    goToPlace(place) {
+      if (disposed || !laid) return
+      settle()
+      const want = place.side === 'left' ? L : R
+      const s = shown(want) ? want : readSide()
+      const top = pageTop(s, place.page),
+        h = pageHeight(s, place.page)
+      if (top == null || !h) return
+      follower.take(s)
+      s.container.scrollTop = Math.max(0, top + place.at * h - s.container.clientHeight * readingLine)
+    },
+    inView(place, box) {
+      if (disposed || !laid) return false
+      const want = place.side === 'left' ? L : R
+      const s = shown(want) ? want : readSide()
+      const c = s.container,
+        t = c.scrollTop,
+        vh = c.clientHeight
+      if (box) {
+        const top = pageTop(s, box.page),
+          r = panes.boxOf(s.name, box.page, box.box)
+        if (top != null && r) {
+          const y = top + r.top
+          return y > t + 8 && y < t + vh - 60
+        }
+      }
+      const top = pageTop(s, place.page),
+        h = pageHeight(s, place.page)
+      if (top == null || !h) return false
+      return Math.abs(top + place.at * h - (t + vh * readingLine)) < vh / 4
     },
     reading() {
       if (!laid) return null
-      const p = readingPlace(readSide())
-      return p.page ? { page: p.page, at: p.at } : null
+      const s = readSide()
+      const p = readingPlace(s)
+      return p.page ? { page: p.page, at: p.at, side: s.name } : null
     },
     putAt(place) {
       if (!laid) return

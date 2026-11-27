@@ -58,7 +58,7 @@ describe("a pane's page pill (the reader's design, §6.4)", () => {
     expect(isOpen(prev!.nextElementSibling)).toBe(true)
   })
 
-  it('goes to a page typed and entered, not to one out of range; the arrows step a page', async () => {
+  it('goes to a page typed and entered (a jump: its way back), not to one out of range; the arrows step a page (no jump)', async () => {
     const { container, controller } = await mount()
     const input = container.querySelector('input')!
     const type = (v: string) =>
@@ -73,7 +73,7 @@ describe("a pane's page pill (the reader's design, §6.4)", () => {
     prev!.click()
     next!.click()
     expect(controller.goToPage.mock.calls).toEqual([
-      ['right', 12],
+      ['right', 12, { jump: true }],
       ['right', 3],
       ['right', 5],
     ])

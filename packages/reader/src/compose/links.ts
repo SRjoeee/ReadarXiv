@@ -32,7 +32,8 @@ const hashOf = (dest: string) => `#${encodeURIComponent(dest)}`
 
 export interface LinkHooks {
   open(url: string): void
-  follow(dest: string | unknown[], how: { keyboard: boolean }): void
+  /** a link inside the paper followed: `origin` the link's page and its box as drawn there (the reader's one jump) */
+  follow(dest: string | unknown[], how: { keyboard: boolean; origin: { side: 'right'; page: number; box: Box } }): void
   /** the name of a link with no text under it, by where it goes (UI.md S-R-25: the host's words) */
   unnamed(to: { url: string } | { internal: true }): string
   /** not read: a link's text is the page's text layer's under it (kept for a caller written before) */
@@ -166,18 +167,25 @@ export function linkLayer(
     layer.append(a)
   })
   const shown = list.map((x) => x.to)
-  const toOf = (e: Event) => {
+  const boxes = list.map((x) => x.box)
+  const indexOf = (e: Event) => {
     const a = (e.target as Element | null)?.closest?.('a.axt-link') as HTMLElement | null
-    return a && layer.contains(a) ? (shown[Number(a.dataset.axtLink)] ?? null) : null
+    return a && layer.contains(a) ? Number(a.dataset.axtLink) : -1
   }
+  const toOf = (e: Event) => shown[indexOf(e)] ?? null
   layer.addEventListener('click', (e) => {
-    const to = toOf(e)
+    const i = indexOf(e)
+    const to = shown[i]
     if (!to) return
     // (never the browser's own navigation: the reader's frame would leave the reader, a hash would move its address)
     e.preventDefault()
     if ('url' in to) hooks.open(to.url)
     // (a click a pointer did not make: Enter, or an assistive technology's)
-    else hooks.follow(destOf(to.dest), { keyboard: (e as MouseEvent).detail === 0 })
+    else
+      hooks.follow(destOf(to.dest), {
+        keyboard: (e as MouseEvent).detail === 0,
+        origin: { side: 'right', page: page.page, box: boxes[i] as Box },
+      })
   })
   layer.addEventListener('auxclick', (e) => {
     const to = toOf(e)

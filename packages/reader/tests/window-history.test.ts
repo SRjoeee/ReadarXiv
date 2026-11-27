@@ -6,7 +6,8 @@ import type { Entry } from '../src/session/jumps.ts'
 import { windowHistory } from '../src/session/window-history.ts'
 
 const entry = (n: number): Entry => ({ v: 1, n, place: { page: n + 1, at: 0.25, side: 'right' }, light: null })
-const popped = () => new Promise<void>((done) => window.addEventListener('popstate', () => setTimeout(done, 0), { once: true }))
+const popped = () =>
+  new Promise<void>((done) => window.addEventListener('popstate', () => setTimeout(done, 0), { once: true }))
 
 afterEach(() => {
   history.replaceState(null, '')

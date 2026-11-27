@@ -1105,3 +1105,20 @@ describe("the run's count and our server's document not heard, as a host's words
     expect([busy.available, busy.unavailable]).toEqual([true, { why: 'busy', retryAt: 9 }])
   })
 })
+
+describe('the way back through the controller', () => {
+  it('a page typed reaches the session as a jump, an arrow’s as none; the capsule’s press as back', async () => {
+    const session = { ...fakeSession(), back: vi.fn() }
+    const controller = createController({ open: async () => session, paper: '2600.00001v1', defaults: DEFAULTS })
+    await controller.attach(panes())
+    controller.goToPage('left', 3, { jump: true })
+    controller.goToPage('left', 4)
+    controller.back()
+    await Promise.resolve()
+    expect(vi.mocked(session.goToPage).mock.calls).toEqual([
+      ['left', 3, { jump: true }],
+      ['left', 4],
+    ])
+    expect(session.back).toHaveBeenCalledOnce()
+  })
+})

@@ -134,6 +134,8 @@ export type SessionEvent =
   /** a face the translation is set in could not be had this visit (the reader's `faces`), its passages drawn in their fallback
    *  until the page is loaded again: the chrome's own toast says so (S-R-28), in the catalogue's one sentence, for every host */
   | { type: 'faces' }
+  /** a jump to go back from, or none any more (the capsule 回到原处 stands while there is) */
+  | { type: 'back'; on: boolean }
 /** what a session is given: the panes it draws into, and where it tells its events */
 export interface SessionHost {
   left: HTMLElement
@@ -240,6 +242,8 @@ export interface ReaderState {
   exporting: { form: ExportForm; percent: number } | null
   /** the PDF download that failed (its retry offered in the capsule until it is closed or tried again); null while none did */
   exportFailed: ExportForm | null
+  /** a jump inside the paper to go back from: the capsule 回到原处 stands (BackCapsule.tsx, S-R-29) */
+  back: boolean
 }
 /** the files the reader makes (UI.md S-R-09): the translation's, the side-by-side's */
 export type ExportForm = 'translation' | 'side-by-side'
@@ -285,6 +289,7 @@ export const INITIAL: ReaderState = {
   made: false,
   exporting: null,
   exportFailed: null,
+  back: false,
 }
 
 /** the session's commands the controller passes on */
@@ -293,7 +298,10 @@ export interface Session {
   setSyncMode(mode: SyncMode): void
   zoomBy(factor: number): void
   zoomTo(value: number | 'page-width' | 'page-fit' | 'page-actual'): void
-  goToPage(side: Side, page: number): void
+  /** a page gone to; `jump`: a page typed, one of the reader's jumps, with its way back (the arrows' page is none) */
+  goToPage(side: Side, page: number, o?: { jump?: boolean }): void
+  /** one jump back (the capsule's press); a session of before has none */
+  back?(): void
   /** a patch of the preferences, on top of what the store holds when its turn comes */
   setPrefs(patch: PrefsPatch): void
   /** the translation's bytes, to save; null while there are none (a session of before the PDF download: the website's until its
@@ -359,6 +367,8 @@ const withFailures = (state: ReaderState, failures: ReaderState['failures']): Re
  */
 export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
   switch (event.type) {
+    case 'back':
+      return state.back === event.on ? state : { ...state, back: event.on }
     case 'display':
       // an address with no paper has no translated display to be had: the original stays selected, whatever the saved
       // settings ask for (the radio of a display out of reach was left selected, and its pane hidden)
@@ -612,7 +622,10 @@ export interface ReaderController {
   setSync(on: boolean): void
   zoomBy(factor: number): void
   zoomTo(value: number | 'page-width' | 'page-fit' | 'page-actual'): void
-  goToPage(side: Side, page: number): void
+  /** a page gone to; `jump`: a page typed in the pill, one of the reader's jumps (the arrows' page is none) */
+  goToPage(side: Side, page: number, o?: { jump?: boolean }): void
+  /** one jump back: the capsule's press */
+  back(): void
   /** a patch of the preferences, on top of what the store holds when its turn comes */
   setPrefs(patch: PrefsPatch): void
   /** a pinch over a side: both sides zoom together about the pointer, one call a frame (ui/pinch.ts) */
@@ -770,7 +783,9 @@ export function createController({
       set({ zoom: value })
       later((s) => s.zoomTo(value))
     },
-    goToPage: (side, page) => later((s) => s.goToPage(side, page)),
+    goToPage: (side, page, o) =>
+      later((s) => (o?.jump ? s.goToPage(side, page, { jump: true }) : s.goToPage(side, page))),
+    back: () => later((s) => s.back?.()),
     setPrefs: (patch) => later((s) => s.setPrefs(patch)),
     goToHeading: (id, o) => later((s) => s.goToUnit(id, o)),
     lead: (side) => later((s) => s.lead(side)),
