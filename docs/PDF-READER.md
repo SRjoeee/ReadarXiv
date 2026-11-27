@@ -1958,7 +1958,8 @@ the highlight's layer, outside the dark filter (the left's links keep their colo
   `getPageIndex`) and jumped to on the right, the pane clicked, by the view's own jump (its zoom too, as PDF.js takes one):
   the left follows where the sync is on and stays where it is off. Followed by the keyboard, the focus goes to the place
   jumped to, so that reading and Tab go on from there. A link out of the paper, by a click, Enter, a modified or a middle
-  click, goes through the host's `links.openExternal` alone (its policy, its new tab); the browser's own navigation never
+  click, goes through the host's `links.openExternal` alone (its policy, its new tab; on the rebuilt reader the reader's own
+  opener, `reader.ts` `openExternal`: a new tab of the allowed schemes, no opener); the browser's own navigation never
   runs. A click on a link, on either pane, levels nothing (the click's levelling skips a link).
   On the rebuilt reader every jump inside the paper is one jump (`packages/reader` `session/one-jump.ts`, link previews'
   design §3.7, L3): the right's laid links, PDF.js's links on the left and on a right page not laid (both link services'
@@ -14390,6 +14391,12 @@ and its jump. One layer for every kind (`previews.ts`), from the three link sour
   next link (closing it), Shift+Tab back. A crop is `role="img"` named by its label (UI.md S-R-33).
 - **The jump** lands lit by the target the head states (session/one-jump.ts, §17.10): the unit it names (a reference, a note,
   a heading) or its box (a float, a display); nothing lit where the head states none.
+
+**What it costs, measured** (the reader's harness, `packages/reader/e2e/run.mjs` `preview-waits`, s5-links, 2026-11-28): from the
+pointer's entry to a preview shown, every kind on both panes, 18 links: 289 to 298 ms, the median 293 ms (the dwell and a frame);
+none waited past it. A hover sweep over every link fetched no part the reader did not hold, and nothing from any other origin
+(the harness's `a hover sweep` check). Not measured: the same over corpus papers (their stored bundles state no targets until
+they are prepared again at this engine).
 
 Surfaces wear the chrome's tokens `--surface`, `--surface-blur`, `--hairline`, `--shadow`, `--shadow-lift`, `--ink-read`
 (packages/ui tokens.ts; the reader core reads them with the prototype's values as fallbacks); reduced motion keeps opacity
