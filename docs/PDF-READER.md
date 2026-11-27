@@ -10613,6 +10613,41 @@ was accepted, by the cause its member states (`rows.original`: the prepare's `un
 the composer itself, since a page whose every translated member is held settles as arXiv's with no commit, told `settled`, not
 `laid`). State alone: nothing is drawn or said of it. A unit the prepare located nowhere has no member on any page and is not in it.
 
+### 18.118 The text after a piece compared as Unicode decomposes it; a field command read by the definition in force; a refusal states the ownership's verdict (the coordinator's ruling of 2026-11-27, the 599-paper census)
+
+The census of the owner's 599 papers found 556 units refused `text past its source` in 74 papers (294 not references, 262
+bibliography entries). Three readings of these are fixed here; the rest wait on TeX's evidence for unmarked placeholders.
+
+**The text after a piece, an accent of its own glyph.** TeX's `\accent` sets an accented letter as two glyphs, the accent's own (a
+spacing accent, U+00B4 ´) and the letter, where the font has no precomposed glyph or the encoding sets it so (OT1's `\'`). An
+opening point alone (a display's: TeX sets no closing point after a display) is read to the text after it, its first WANT
+characters (`marks.ts` followsOf); they were compared glyph by glyph in NFKC (`own/stream.ts` textStarts, charOf), where the
+spacing accent is a combining mark alone and never the source's precomposed letter: "An étale" after a display was not found,
+the display LOST, its rows left in the unit's text, the unit refused (2608.01567v1 p7's two paragraphs; 15 units in 11 of the
+census's papers). Both sides are now compared as Unicode decomposes them (NFKD, the equivalence Unicode defines, nothing tabled):
+a mark set as a glyph of its own stands with its letter, after the letter where the text looked for puts it there (a cedilla
+a font composes under its letter), else with the letter after it (`\accent` sets the accent first), in canonical order. A text
+with no accent compares as before; another letter under the same accent, or the letter under another accent, is no match.
+The ownership alone moves: no marked TeX, no compile, no unit's id.
+
+**A field command read by the definition in force.** In a bibliography entry a field command (`BIB_TEXT`: REVTeX's
+`\bibinfo{field}{…}`, a `.bbl`'s `\showarticletitle`) is read by the definition TeX uses: the paper's own first (`paperMacros`,
+where `\providecommand` defines only what is undefined), then the bibliography head's (`bibDefinitions`, which now reads
+`[n][default]` and leaves a `\providecommand` of a command the paper defined). An optional first argument takes no braced group,
+so the call's braced groups are its #2, #3, …: under `\providecommand{\bibinfo}[2][]{#2}`, `\bibinfo{author}{Ann Lee}` sets
+"author", the pair's argument, and `{Ann Lee}` is a group after it, as arXiv's page prints them (2509.05371v1's 221 entries,
+refused while the source wrote none of the field names). A definition with no optional argument reads as before.
+
+**A refusal states the ownership's verdict.** `locate/place.ts` read the instrument's `why` (the ownership's verdict: `marks`, a
+placeholder it could not delimit; `spell`, glyphs that spell no source of the unit; `across`) only for a unit with no glyph; a
+unit with glyphs that its letters rule refused was stated `text past its source` over it. Of the census's 146 such units
+outside one paper, the ownership had refused 135 first. The reason now keeps the verdict that came first; no unit changes state.
+
+**Not here.** Every kernel text accent read as its letter and Unicode's combining mark (a letter with no precomposed form, or
+one `SETTABLE` leaves a placeholder): the reader's faces do not all hold the marks (`fonts/font-coverage.ts`: Nimbus none of
+the sixteen, Source Han eleven of them missing, Latin Modern three), so such a letter, drawn, may lose its accent; those
+pieces stand glued in a word with no point of their own, and are TeX's evidence's to give (the marking's look-ahead probe).
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server
