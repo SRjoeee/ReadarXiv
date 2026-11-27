@@ -864,11 +864,14 @@ function breakLines(
       // (and a tie, the source's `~`: TeX's \penalty10000 and its interword glue, a space no line breaks at: the group runs on
       // through its space, the token after it and what is glued to that; the space stays in the group, drawn and stretched as
       // the line's spaces are (groupOf's `sp`). A tied group longer than the line is broken at `own`, as a joined one is)
+      // (never on past a break of the unit's own after the tie, `textless`: a frame's page break (B.cuts, set where a lay broke
+      // the tied group at `own`), a kept region's, a forced one: the loop reads it as a break, and taken into the group it would
+      // stand on the line as an item that draws nothing and has no face, which D.display read and threw on)
       const own = j
       if (!tokens[i]!.space)
         for (;;) {
           let q = j
-          if (q + 1 < tokens.length && tokens[q]!.tie && !tokens[q + 1]!.space) {
+          if (q + 1 < tokens.length && tokens[q]!.tie && !textless(tokens[q + 1]!)) {
             j = q + 2
             while (j < tokens.length && holds(tokens[j]!)) j++
             continue
