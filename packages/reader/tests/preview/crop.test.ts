@@ -124,7 +124,10 @@ describe('cropContent', () => {
     )
     expect(s.warm).toHaveBeenCalledWith(3, expect.anything())
     expect(s.region).toHaveBeenCalled()
-    expect(s.region.mock.calls[0]![1]).toEqual([60, 380, 560, 700])
+    // (the region widened by the caption's extent, and one CSS px of the page round it at the crop's scale (1: 0.75 PDF units):
+    // its drawing's antialiased edge, where a descender's last pixel falls)
+    const [x0, y0, x1, y1] = s.region.mock.calls[0]![1]
+    expect([x0, y0, x1, y1].map((v) => Math.round(v * 100) / 100)).toEqual([59.25, 379.25, 560.75, 700.75])
     expect(c?.kind).toBe('crop')
     expect(c?.el.querySelector('.seg')).not.toBeNull()
     // (named by its label; kept by a button named for keeping it)

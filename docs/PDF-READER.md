@@ -14373,7 +14373,8 @@ and its jump. One layer for every kind (`previews.ts`), from the three link sour
   its ink, which a caption's last line with no descender meets at its baseline). The left's and a right page not laid: arXiv's drawing (the left's
   canvas where it is drawn at the crop's scale or finer, else a fresh PDF.js drawing of the region); a laid right page: the
   composer's `region` (its page view's pixels, its crops and its SVG copied), after `warm` lays and draws a far page off the view
-  as the pages ahead are. At the page's own scale, smaller where the pane less 24 px (and 640 px of height) holds it not; a
+  as the pages ahead are. One CSS px of the page round it (its drawing's antialiased edge, where a descender's last pixel
+  falls). At the page's own scale, smaller where the pane less 24 px (and 640 px of height) holds it not; a
   section's window runs on to the next page's head and fades at its foot; a figure, a table or a display never fades. None
   where any part of it cannot be drawn (a page turned by /Rotate included): the jump stays.
 - **Keeping** (`keep.ts`): a click or Enter on a crop keeps it where it stands (a dialog named by its label), lifted then

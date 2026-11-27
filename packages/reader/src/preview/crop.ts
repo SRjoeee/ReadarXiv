@@ -126,8 +126,14 @@ export async function cropContent(
   if (!(w > 0 && h > 0)) return null
   const k = PDF_TO_CSS
   const own = d.scale() * (o.sheet ? SHEET_SCALE : 1)
-  const scale = Math.min(own, o.max.width / (w * k), o.max.height / (h * k))
-  if (!(scale > 0)) return null
+  const fit = Math.min(own, o.max.width / (w * k), o.max.height / (h * k))
+  if (!(fit > 0)) return null
+  // (one CSS px of the page round each segment at the crop's scale: its drawing's antialiased edge, where a line's last pixel
+  // falls (a descender drawn to the band's foot), as a page's own crops keep theirs (paint.ts); the scale made to hold it)
+  const edge = 1 / (k * fit)
+  const scale = Math.min(own, o.max.width / ((w + 2 * edge) * k), o.max.height / ((h + 2 * edge * segs.length) * k))
+  const pad = 1 / (k * scale)
+  for (const sg of segs) sg[1] = [sg[1][0] - pad, sg[1][1] - pad, sg[1][2] + pad, sg[1][3] + pad]
   const drawn = await Promise.all(segs.map(([p, b]) => segmentOf(o.side, p, b, scale, o.signal, d)))
   if (o.signal.aborted || drawn.some((x) => !x)) return null
   const label = d.label(t)
@@ -140,8 +146,8 @@ export async function cropContent(
     const [, b] = segs[i]!
     const seg = el as HTMLElement
     seg.classList.add('axt-pv-seg')
-    seg.style.width = `${Math.round((b[2] - b[0]) * k * scale)}px`
-    seg.style.height = `${Math.round((b[3] - b[1]) * k * scale)}px`
+    seg.style.width = `${Math.ceil((b[2] - b[0]) * k * scale)}px`
+    seg.style.height = `${Math.ceil((b[3] - b[1]) * k * scale)}px`
     crop.append(seg)
   })
   if (o.sheet) {
