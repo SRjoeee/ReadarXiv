@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
+  gatewayNamesIn,
   PACKAGE_WITHIN,
   PACKAGES,
   packageFiles,
@@ -206,5 +207,34 @@ describe('the repository\'s own packages', () => {
       expect(files.has(`packages/${pkg}/src/index.ts`)).toBe(true)
       expect(files.has(`packages/${pkg}/tests/index.test.ts`)).toBe(true)
     }
+  })
+})
+
+describe('the packages name no LLM gateway: no gateway URL, no gateway header (the engine is public; the host holds them)', () => {
+  // (the names written in pieces, so that this file holds neither)
+  const header = ['cf', 'aig', 'byok-alias'].join('-')
+  const host = ['gateway', 'ai', 'cloudflare', 'com'].join('.')
+  const found = (files: Record<string, string>) => {
+    const t = tree(files)
+    return (gatewayNamesIn(t.files, { root: t.root }) as { file: string; line: number }[]).map(h => [h.file, h.line])
+  }
+  it("a gateway's header or host under packages/ is refused, by file and line", () => {
+    expect(
+      found({
+        'packages/translate/src/a.ts': `const ok = 1\nconst h = '${header}'\n`,
+        'packages/translate/tests/b.test.ts': `fetch('https://${host}/v1/x')\n`,
+        'packages/README.md': `the ${host} gateway\n`,
+      }),
+    ).toEqual([
+      ['packages/translate/src/a.ts', 2],
+      ['packages/translate/tests/b.test.ts', 1],
+      ['packages/README.md', 1],
+    ])
+  })
+  it('outside packages/, and a file with neither, nothing', () => {
+    expect(found({ 'src/x.ts': `'${header}'`, 'packages/translate/src/c.ts': "const url = 'https://llm.invalid'\n" })).toEqual([])
+  })
+  it("the repository's packages name none", () => {
+    expect(gatewayNamesIn(packageFiles())).toEqual([])
   })
 })

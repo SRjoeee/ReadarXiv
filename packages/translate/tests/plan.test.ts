@@ -22,7 +22,9 @@ const policy = (o: { upgrade?: Policy['default']['upgrade']; pauseLlm?: boolean 
       shape: 'anthropic-messages',
       json: 'schema',
       billing: { mode: 'paid', usdPerMTokIn: 1, usdPerMTokOut: 5 },
-      checks: { 'zh-CN': { at: '2026-11-26T00:00:00Z', ok: true, accepted: 40, of: 40 } },
+      checks: {
+        'zh-CN': { at: '2026-11-26T00:00:00Z', ok: true, accepted: 40, of: 40, against: 'llm:0123456789abcdef|0' },
+      },
     },
   ],
   groups: [],

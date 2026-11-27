@@ -4595,7 +4595,10 @@ breaks at: break.mjs's group runs on through it, the token after it and what is 
 by the tie itself; the space is drawn and stretched as the line's other spaces are, as TeX draws it, and where a rule of the
 target sets no space there (after a full-width closing mark, before one no line opens with) the no-break stays, what follows
 glued. A translator's U+00A0 is the translator's, no tie. A tied group longer than the line is broken where its glue alone
-ends, as a mark's joined group is. Before, a tie was an ordinary space, and a reply that set the source's stop after the mark
+ends, as a mark's joined group is. The group never runs on past a break of the unit's own after the tie (a frame's page break
+that B.cuts set where a lay broke the tied group so, a kept region's, a forced one): the breaker reads that token as the
+break it is, never as an item of the line; taken into the group, it stood on the line with no face and the drawing's runs threw
+on it, the page shown as arXiv's (2608.17587v2 p8). Before, a tie was an ordinary space, and a reply that set the source's stop after the mark
 began a line with it (2111.09276v1 p5, round B14: the paragraph's last line ending in its word, the mark 12 and the stop
 opening the next, §18.66). Over the 90 pairs (the reader gate's runner, 2026-11-13): with the door's rows 251 of 23,016 units lay
 otherwise (a line broken elsewhere 214, a line more or fewer 14; zh 237, ja 8, es 6, de and pl none), 2 a size step down; with
