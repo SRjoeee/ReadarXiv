@@ -16,9 +16,16 @@ import { failureWidget } from '@/core/renderer/failed'
 import { lookSheet } from '@/core/renderer/page'
 import { installFigureViewer, SPOT_CLASS, VIEWER_CLASS } from '@/core/viewer'
 import { enableDebug } from '@/entrypoints/content/debug'
+import { READER_CSS } from '../../packages/reader/src/styles.ts'
 
-/** the extension's sheets, and the kit's and the tokens' that moved into the interface package (packages/ui) */
-const STYLES = [join(import.meta.dirname, '../../src/styles'), join(import.meta.dirname, '../../packages/ui/src')]
+/** the extension's sheets, and the kit's and the tokens' that moved into the interface package (packages/ui), and the reader
+ *  chrome's (packages/reader's chrome/reader.css: the extension's reader page injects it, as it does the reader core's sheet,
+ *  READER_CSS, checked below; the link previews' plan, R5) */
+const STYLES = [
+  join(import.meta.dirname, '../../src/styles'),
+  join(import.meta.dirname, '../../packages/ui/src'),
+  join(import.meta.dirname, '../../packages/reader/src/chrome'),
+]
 
 describe('the injected style sheets', () => {
   const files = STYLES.flatMap(dir => readdirSync(dir).filter(f => f.endsWith('.css')).sort().map(f => join(dir, f)))
@@ -38,6 +45,11 @@ describe('the injected style sheets', () => {
 // (The floating button's sheet is checked where its harness is, tests/entry/floating-button.test.ts.)
 describe('the style sheets built in TypeScript', () => {
   const withoutComments = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, '')
+
+  it("the reader core's sheet (packages/reader styles.ts READER_CSS: the page stack, the highlight, the links, the previews)", () => {
+    expect(READER_CSS.length).toBeGreaterThan(1000)
+    expect(withoutComments(READER_CSS)).not.toContain(':has(')
+  })
 
   afterEach(() => {
     document.head.innerHTML = ''

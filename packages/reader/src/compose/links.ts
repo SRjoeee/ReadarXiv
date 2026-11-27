@@ -120,8 +120,9 @@ export function linkLayer(
   content: TextContent | null = null,
 ): HTMLElement | null {
   const list = page.links
-    .filter(([b, to]) => b[2] > b[0] && b[3] > b[1] && ('url' in to ? urlAllowed(to.url) : !!to.dest))
-    .map(([box, to, , border], i) => ({ box, to, border, i, ...textUnder(content, box) }))
+    .map(([box, to, , border], at) => ({ box, to, border, at }))
+    .filter(({ box: b, to }) => b[2] > b[0] && b[3] > b[1] && ('url' in to ? urlAllowed(to.url) : !!to.dest))
+    .map((x, i) => ({ ...x, i, ...textUnder(content, x.box) }))
   if (!list.length) return null
   const layer = document.createElement('div')
   layer.className = 'axt-links'
@@ -129,7 +130,7 @@ export function linkLayer(
   for (const x of list) if (x.at < 0) x.at = placeOf(content, x.box)
   list.sort((a, b) => a.at - b.at || b.box[3] - a.box[3] || a.box[0] - b.box[0] || a.i - b.i)
 
-  list.forEach(({ box, to, border, name }, i) => {
+  list.forEach(({ box, to, border, name, at }, i) => {
     const [ax, ay] = vp.convertToViewportPoint(box[0], box[3]) as [number, number],
       [bx, by] = vp.convertToViewportPoint(box[2], box[1]) as [number, number]
     const left = Math.min(ax, bx),
@@ -139,6 +140,8 @@ export function linkLayer(
     const a = document.createElement('a')
     a.className = 'axt-link'
     a.dataset.axtLink = String(i)
+    // (its place in Page.links: the previews read its owner and piece there, the numbers of one citation one bracket)
+    a.dataset.axtAt = String(at)
     // (the name as an attribute's text: never markup, whatever characters it holds)
     a.setAttribute('aria-label', name || hooks.unnamed('url' in to ? { url: to.url } : { internal: true }))
     if ('url' in to) {

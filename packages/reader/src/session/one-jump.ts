@@ -8,7 +8,7 @@
 // What lights: arriving, the unit at the destination's point, whole (the first at or just below it: hyperref raises an anchor
 // above its text; LAND_BELOW), or a contents entry's heading's first rectangle; a page typed, nothing. Coming back, the
 // sentence under the link left where the highlight lights one there, else the link's own box, never a whole paragraph (open
-// item 7). A link previewed knows its target's box (R5's table) and lights that instead.
+// item 7). A link whose destination the head states (Head.targets, the previews' table) lights that target's own box instead.
 import type { Rect, Jumps, Light, Place, PlaceSide } from './jumps.ts'
 
 /** CSS px left above a target gone to, wide and narrow [start, P5 app.js:457] */
@@ -96,6 +96,9 @@ export function createOneJump(d: {
   lights: () => JumpLights | null
   jumps: Jumps
   narrow: () => boolean
+  /** the box the head states a destination lands on (link previews: Head.targets), lit on arrival in place of the unit at its
+   *  point; none where the head states none */
+  target?: (dest: string | unknown[]) => { page: number; box: Rect } | null
 }): OneJump {
   const { jumps } = d
   /** the light of a link left: the sentence under its centre where one is known, else its own box on its pane */
@@ -135,6 +138,9 @@ export function createOneJump(d: {
       run({ place: q.reading(), light: leftLight(o.origin) }, () => {
         q.goTo(at, { side: o.side, keyboard: o.keyboard, room: d.narrow() ? ROOM_NARROW : ROOM_WIDE })
         if (o.keyboard && o.side === 'right') q.focusPage('right', at.page)
+        // (a target the head states: its own box, on the panes that show its page)
+        const t = d.target?.(o.dest) ?? null
+        if (t && t.page === at.page) return { page: t.page, box: t.box }
         const pt = pointOf(at.dest)
         // (the unit the destination lands on, lit whole; read on the original's page, whose units the point names)
         const lit = pt ? (d.lights()?.litAt('left', at.page, pt.x, pt.y, LAND_BELOW) ?? null) : null

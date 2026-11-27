@@ -357,6 +357,18 @@ const R: Locale['R'] = {
   leave: '既定のビューアで開く',
   pill: { original: '原文のページ', translation: '訳文のページ', previous: '前のページ', next: '次のページ' },
   back: '元の位置に戻る',
+  preview: {
+    go: '移動',
+    search: 'この論文を検索',
+    keep: label => `${label}：画面に残す`,
+    close: label => `${label}を閉じる`,
+    figure: n => `図 ${n}`,
+    table: n => `表 ${n}`,
+    section: n => `第${n}節`,
+    note: n => `脚注 ${n}`,
+    reference: n => `参考文献 ${n}`,
+    equation: n => `式 (${n})`,
+  },
   fold: { expand: '展開', collapse: '折りたたむ' },
   linkName: { internal: 'この論文内の別の場所', site: site => `${site} を開く`, email: address => `${address} にメールを送信`, fallback: 'リンク' },
   // no space between a digit and the Japanese after it (UI.md §1, the Japanese line)

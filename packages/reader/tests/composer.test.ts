@@ -2075,3 +2075,63 @@ describe("the base's crops past PDF.js's canvas cap, cut away under the detail's
     expect(again.style.clipPath).toBe('')
   })
 })
+
+describe('a page warmed and cut for a preview (link previews: warm, region)', () => {
+  it('a far right page is laid and drawn off the view, then is laid; a page with no part is not', async () => {
+    const w = world()
+    w.stack.setNear([1])
+    open(w, rowsOf('de', allIds(w), true))
+    await settle()
+    w.stack.put(1)
+    await settle()
+    expect(w.composer.laid(4)).toBeNull()
+    const signal = new AbortController().signal
+    expect(await w.composer.warm(4, signal)).toBe(true)
+    expect(w.stack.ahead.mock.calls.map((c) => c[0])).toContain(4)
+    expect(w.composer.laid(4)).not.toBeNull()
+    expect(await w.composer.warm(9, signal)).toBe(false)
+  })
+  it('a region copies what the right draws of a page inside a box: its pixels, its crops, its translation; none undrawn', async () => {
+    const w = world()
+    w.stack.setNear([2])
+    open(w, rowsOf('de', allIds(w), true))
+    await settle()
+    w.stack.put(2)
+    await settle()
+    // (the slot's drawing as the stack holds it: the page view's canvas, the overlay's SVG and crops)
+    const slot = w.stack.page(2)!
+    const holder = document.createElement('div')
+    holder.className = 'axt-slot-view'
+    const view = document.createElement('div')
+    view.className = 'page'
+    const wrap = document.createElement('div')
+    wrap.className = 'canvasWrapper'
+    const canvas = document.createElement('canvas')
+    canvas.width = 1600
+    canvas.height = Math.round(1600 * (800 / 600))
+    wrap.append(canvas)
+    const over = document.createElement('div')
+    over.className = 'axt-over'
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+    svg.append(document.createElementNS('http://www.w3.org/2000/svg', 'text'))
+    const crops = document.createElement('canvas')
+    crops.className = 'axt-crops'
+    crops.width = canvas.width
+    crops.height = canvas.height
+    over.append(svg, crops)
+    view.append(wrap, over)
+    holder.append(view)
+    slot.append(holder)
+    const r = w.composer.region(2, [60, 400, 360, 700], 1)
+    expect(r).not.toBeNull()
+    expect(r!.classList.contains('axt-pv-region')).toBe(true)
+    expect(r!.querySelectorAll('canvas')).toHaveLength(2)
+    const copy = r!.querySelector('svg')!
+    expect(copy).not.toBe(svg)
+    expect(copy.querySelector('text')).not.toBeNull()
+    // (the page's top-left at the box's: the box 300 x 300 PDF units at 4/3 CSS px a unit)
+    expect(Number.parseFloat(copy.style.left)).toBeCloseTo(-60 * (4 / 3), 3)
+    expect(Number.parseFloat(copy.style.top)).toBeCloseTo(-(800 - 700) * (4 / 3), 3)
+    expect(w.composer.region(3, [60, 400, 360, 700], 1)).toBeNull()
+  })
+})

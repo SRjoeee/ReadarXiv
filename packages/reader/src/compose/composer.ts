@@ -41,7 +41,7 @@ import type { ClassName } from '../prefs.ts'
 import type { Kit } from '../pdfjs/kit.ts'
 import type { Clock } from '../stack/clock.ts'
 import { onOf } from '../listeners.ts'
-import type { DetailArea, PageContent, SlotAt, Stack } from '../stack/stack.ts'
+import { type DetailArea, type PageContent, PDF_TO_CSS, type SlotAt, type Stack } from '../stack/stack.ts'
 import { kindShown, sameClasses } from './classes.ts'
 import type { Faces } from './faces.ts'
 import type { Groups } from './groups.ts'
@@ -145,6 +145,14 @@ export interface Composer {
   page(n: number): Page | null
   /** whether page n shows a drawing of another generation (another target's, the toggles' before), nothing of it lit or hit */
   muted(n: number): boolean
+  /** page n laid and drawn into a drawing kept off the view, as the pages ahead are (a far page a preview cuts from: the link
+   *  previews' crop of the right pane); its drawing of this generation in place already, at once. False where it cannot be: no
+   *  translation shown, no part, nothing of its own laid, waiting, failed, not kept, or the generation changed */
+  warm(n: number, signal: AbortSignal): Promise<boolean>
+  /** a copy of what the right draws of page n inside `box` (PDF units) at `scale` (the zoom): its page view's pixels, its crops
+   *  and its translation's drawing, the page's top-left placed at the box's; null where page n shows no drawing of this
+   *  generation now (or a page turned by /Rotate: none rather than a doubtful one) */
+  region(n: number, box: [number, number, number, number], scale: number): HTMLElement | null
   /** whether page n stays the original's for now */
   settled(n: number): boolean
   /** every member of the layer laid so far, by ord (the parts' Placed) */
@@ -1162,6 +1170,77 @@ export function createComposer(o: ComposerOptions): Composer {
       if (!on) stopAhead()
     },
     laid: (n) => commits.get(n)?.page ?? null,
+    async warm(n, signal) {
+      if (disposed || !shown || !composed || !groups || !layer || signal.aborted) return false
+      const mine = gen
+      const c = commits.get(n)
+      if (c && c.gen === mine && stack.showing(n) === keyOf(c)) return true
+      if (!c || c.gen !== mine) {
+        if (settledOriginal(n)) return false
+        const part = await partFor(n).catch(() => null)
+        if (!part || signal.aborted || mine !== gen || disposed) return false
+        const now = commits.get(n)
+        if (!now || now.gen !== mine) {
+          const got = layRead(part)
+          if (!committed(got.page) || !got.page.members.some((x) => x.state === 'laid' && x.off)) return false
+          pages.set(n, got.page)
+          commit(n, got.page, got.read, got.lost)
+        }
+      }
+      const done = await stack.ahead(n, signal).catch(() => false)
+      return done && mine === gen && !disposed
+    },
+    region(n, box, scale) {
+      const c = commits.get(n)
+      if (!c || c.gen !== gen || !shown || stack.showing(n) !== keyOf(c)) return null
+      const vp = stack.viewport(n) as unknown as { viewBox: number[]; rotation?: number } | null
+      const slot = stack.page(n)
+      if (!vp || !slot || (((vp.rotation ?? 0) % 360) + 360) % 360) return null
+      const view = slot.querySelector<HTMLElement>('.axt-slot-view > .page')
+      const canvas = view?.querySelector<HTMLCanvasElement>('.canvasWrapper canvas') ?? null
+      const over = view?.querySelector<HTMLElement>(':scope > .axt-over') ?? null
+      if (!(view && canvas?.width)) return null
+      const [vx0 = 0, , vx1 = 0, vy1 = 0] = vp.viewBox
+      const vy0 = vp.viewBox[1] ?? 0
+      // (the page at the stack's scale now, CSS px a PDF unit; the copy at the scale asked)
+      const u = stack.scale * PDF_TO_CSS,
+        k = scale / stack.scale
+      const pw = (vx1 - vx0) * u,
+        ph = (vy1 - vy0) * u
+      const l = (box[0] - vx0) * u,
+        t = (vy1 - box[3]) * u,
+        w = (box[2] - box[0]) * u,
+        h = (box[3] - box[1]) * u
+      if (!(w > 0 && h > 0 && pw > 0)) return null
+      const el = document.createElement('div')
+      el.className = 'axt-pv-region'
+      el.style.width = `${w * k}px`
+      el.style.height = `${h * k}px`
+      const dpr = globalThis.devicePixelRatio || 1
+      /** a canvas of the page's frame cut to the box, at its own pixels or the device's at the scale asked, whichever is fewer */
+      const cut = (src: HTMLCanvasElement, cls: string) => {
+        const d = src.width / pw
+        const out = document.createElement('canvas')
+        out.className = cls
+        out.width = Math.max(1, Math.round(w * Math.min(d, k * dpr)))
+        out.height = Math.max(1, Math.round(h * Math.min(d, k * dpr)))
+        out.getContext('2d')?.drawImage(src, l * d, t * d, w * d, h * d, 0, 0, out.width, out.height)
+        el.append(out)
+      }
+      cut(canvas, 'axt-pv-page')
+      const crops = over?.querySelector<HTMLCanvasElement>(':scope > canvas.axt-crops') ?? null
+      if (crops?.width) cut(crops, 'axt-pv-crops')
+      const svg = over?.querySelector<SVGSVGElement>(':scope > svg') ?? null
+      if (svg) {
+        const copy = svg.cloneNode(true) as SVGSVGElement
+        copy.style.left = `${-l * k}px`
+        copy.style.top = `${-t * k}px`
+        copy.style.width = `${pw * k}px`
+        copy.style.height = `${ph * k}px`
+        el.append(copy)
+      }
+      return el
+    },
     page: (n) => pages.get(n) ?? commits.get(n)?.page ?? null,
     muted: (n) => {
       const c = commits.get(n)

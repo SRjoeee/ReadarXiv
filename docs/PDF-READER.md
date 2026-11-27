@@ -14338,3 +14338,53 @@ Two fields of the typesetter's `Page`, in memory alone (no stored shape, no vers
   each crop's source moved and scaled onto its line; a turned line's along its direction. None for a member not laid or laid
   with nothing on the page. A preview of the right pane cuts round it (the design's L12: what the translation draws, never only
   the original's box).
+
+### 20.7 The previews in the reader
+
+`packages/reader/src/preview/` (a chunk of its own, imported once the composer is made). A link inside the paper whose destination
+`Head.targets` states (`targets.ts`: a laid link's href and PDF.js's own anchor's, `getDestinationHash`'s `escape`d name or
+array, read back to the key `Link.to.dest` writes) shows what it lands on; any other link shows nothing and keeps its half tint
+and its jump. One layer for every kind (`previews.ts`), from the three link sources alike:
+
+- **Timing** [approved]: shown after a 280 ms dwell of the pointer (or the keyboard's focus) on the link, at once and with no
+  motion within 400 ms of another; its content asked at the pointer's entry (the dwell its head start), shown once both the dwell
+  has passed and the content is drawn, while the pointer is still there, with no spinner and no time bound. It leaves 200 ms
+  after the pointer left both the link and it (a 10 px bridge between), or on Esc (the focus back on its link, which opens
+  nothing again). A scroll never closes it: it rides with its link and goes when its link leaves the pane or it would cross the
+  pane's head or the reader's foot. One at a time.
+- **Placement** (`place.ts`, the reader's own script, one path): under the link's line, above it where there is no room below;
+  12 px inside the pane; never over the reader's 54 px foot (the pills, the way back); its text from the bracket's left. A
+  citation's card is anchored to its whole bracket (the links of one owner's one element on the page: `Link.owner` on the left
+  and on a right page not laid, `Page.links`' fifth member on a laid one), its bottom at least its line's foot under a raised
+  number; moving along the bracket swaps its content in place, with no motion.
+- **The card** (`card.ts`, `reference-text.ts`; phase 1): the reference's own text in English (its unit's text pieces, each
+  element by its copy text as the part states it, never its TeX source; an element of none counted), 12.5 px / 1.5 in the
+  reading ink, seven lines in view and the rest scrolling, each end fading by the scroll's position (20 px), a Tab stop only
+  where it scrolls, giving way to the room down to three lines. Its search link at the foot only once `SEARCH_URL` is set
+  (none in phase 1). Text behaves as text: a selection in it or a drag begun in it keeps it; a press elsewhere clears that
+  selection and lets it go.
+- **A crop** (`crop.ts`): the target's box on A, on a laid right page widened by the drawn extent (`Laid.extent`, §20.6) of each
+  member laid there whose every line on A stands inside it. The left's and a right page not laid: arXiv's drawing (the left's
+  canvas where it is drawn at the crop's scale or finer, else a fresh PDF.js drawing of the region); a laid right page: the
+  composer's `region` (its page view's pixels, its crops and its SVG copied), after `warm` lays and draws a far page off the view
+  as the pages ahead are. At the page's own scale, smaller where the pane less 24 px (and 640 px of height) holds it not; a
+  section's window runs on to the next page's head and fades at its foot; a figure, a table or a display never fades. None
+  where any part of it cannot be drawn (a page turned by /Rotate included): the jump stays.
+- **Keeping** (`keep.ts`): a click or Enter on a crop keeps it where it stands (a dialog named by its label), lifted then
+  settled in 240 ms; moved by a drag or the arrows (16 px), below the toolbar's 52 px and 8 px inside the window; its round ×
+  shown on hover and on the keyboard's focus; Esc closes the preview first, then the kept panel; one at a time.
+- **The sheet** (`sheet.ts`), where the device has no hover or the pane is narrower than the card with its margins (the lead's
+  ruling on open item 8; the reader's own one-pane switch at 840 px is not moved): a tap on a link with a target opens a native
+  modal `<dialog>` (`showModal`, `closedby="any"`, the pointer-position fallback where the browser lacks it) from the bottom,
+  over an 8 % dim, the same content, one row of buttons: the search (UI.md S-R-31, only once `SEARCH_URL` is set) then the
+  go-to button (S-R-30), which jumps and closes it. A link with no target jumps on a tap.
+- **To assistive technology** a preview is a tooltip of its link: `role="tooltip"`, the link `aria-describedby` it while it is
+  open, never `aria-expanded`, the focus never moved by its showing; Tab from the link goes into it, past its last stop to the
+  next link (closing it), Shift+Tab back. A crop is `role="img"` named by its label (UI.md S-R-33).
+- **The jump** lands on a target the head states with that target's own box lit (session/one-jump.ts), in place of the unit at
+  its point.
+
+Surfaces wear the chrome's tokens `--surface`, `--surface-blur`, `--hairline`, `--shadow`, `--shadow-lift`, `--ink-read`
+(packages/ui tokens.ts; the reader core reads them with the prototype's values as fallbacks); reduced motion keeps opacity
+alone; forced colours draw the surfaces as `Canvas` with a `CanvasText` border. Nothing new is fetched but a target page's part
+from our own storage, which the reader fetches anyway on reaching that page, asked at the pointer's first entry on a link to it.

@@ -408,6 +408,21 @@ const R = {
   leave: '在默认查看器中打开', // S-R-10
   pill: { original: '原文页码', translation: '译文页码', previous: '上一页', next: '下一页' }, // S-R-11
   back: '回到原处', // S-R-29: the way back, one jump (link previews' §3.7)
+  // link previews (UI.md S-R-30 to S-R-33): 前往 the narrow sheet's one verb for going to the target in this paper; the card's search
+  // (shown only once its address is decided); a crop's keep button, the kept panel's name and its close; a target's label, each
+  // an accessible name, never shown. {n} as the paper prints it
+  preview: {
+    go: '前往', // S-R-30
+    search: '搜索这篇论文', // S-R-31
+    keep: (label: string): string => `${label}：留在屏幕上`, // S-R-32
+    close: (label: string): string => `关闭${label}`, // S-R-32
+    figure: (n: string): string => `图 ${n}`, // S-R-33
+    table: (n: string): string => `表 ${n}`,
+    section: (n: string): string => `第 ${n} 节`,
+    note: (n: string): string => `脚注 ${n}`,
+    reference: (n: string): string => `参考文献 ${n}`,
+    equation: (n: string): string => `公式 (${n})`, // NEW
+  },
   fold: { expand: '展开', collapse: '收起' }, // the folds of the outline kept for the website's import contract (UI.md S-R-02a)
   // S-R-25: a layer's link with no text under it, named by where it goes and said to screen
   // readers; `site` is the address's host, `address` the mail address

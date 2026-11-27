@@ -14,6 +14,116 @@ const DIMMED = ':is(.axt-reader[data-axt-dim], [data-axt-dim] .axt-reader)'
 /** the band at half its strength: a hovered or held link's tint, on both panes (link previews' §3.7, L13) */
 const HALF = 'color-mix(in oklab, var(--axt-hl-color, var(--axt-green)) calc(var(--axt-hl-mix, 22%) / 2), transparent)'
 
+/** the previews (preview/previews.ts; link previews' §3, the approved prototype's style.css): one surface for the preview, the
+ *  kept panel and the sheet (the chrome's tokens where the host's chrome gives them, the prototype's values else); a crop on the
+ *  page's own paper, dimmed as the page is; the card's text in the reading ink, its two ends fading by position (--axt-ft, --axt-fb
+ *  0 to 1, set by the card's script); two tempos, what follows the pointer quick (120 ms in, 80 out), what comes once the
+ *  capsules' (240 in, 160 out); reduced motion, opacity alone; forced colours, the system's Canvas and CanvasText */
+const PREVIEW_CSS = `
+.axt-reader {
+  --axt-pv-surface: var(--surface, color-mix(in oklab, #fff 96%, transparent));
+  --axt-pv-blur: var(--surface-blur, blur(16px) saturate(1.5));
+  --axt-pv-shadow: var(--shadow, 0 0 0 0.5px oklch(0.235 0.012 255 / 0.11), 0 1px 2px oklch(0 0 0 / 0.05), 0 6px 24px -4px oklch(0 0 0 / 0.1));
+  --axt-pv-lift: var(--shadow-lift, 0 0 0 0.5px oklch(0.235 0.012 255 / 0.2), 0 2px 4px oklch(0 0 0 / 0.06), 0 16px 40px -6px oklch(0 0 0 / 0.2));
+  --axt-pv-ink: var(--ink, oklch(0.235 0.012 255));
+  --axt-pv-ink-2: var(--ink-2, oklch(0.505 0.014 255));
+  --axt-pv-ink-3: var(--ink-3, oklch(0.62 0.012 255));
+  --axt-pv-read: var(--ink-read, oklch(0.39 0.012 255));
+  --axt-pv-fill: var(--fill, oklch(0.935 0.006 255));
+  --axt-pv-focus: var(--focus, oklch(0.235 0.012 255));
+  --axt-pv-paper: #fff;
+  --axt-pv-ease: cubic-bezier(0.2, 0, 0, 1);
+  --axt-fade: 20px;
+}
+
+.axt-reader .axt-pv-layer { position: fixed; inset: 0; z-index: 30; pointer-events: none; }
+.axt-reader .axt-pv-layer > * { pointer-events: auto; }
+.axt-reader .axt-pv, .axt-reader .axt-sheet { background: var(--axt-pv-surface); -webkit-backdrop-filter: var(--axt-pv-blur); backdrop-filter: var(--axt-pv-blur); box-shadow: var(--axt-pv-shadow); color: var(--axt-pv-ink); font: 13px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+.axt-reader .axt-pv { position: fixed; box-sizing: border-box; border-radius: 12px; animation: axt-pv-in 120ms ease-out; }
+.axt-reader .axt-pv[data-axt-quiet] { animation: none; }
+.axt-reader .axt-pv[data-axt-out] { animation: axt-pv-out 80ms ease-out forwards; pointer-events: none; }
+/* the bridge: the pointer travels from the line into the preview */
+.axt-reader .axt-pv::before { content: ""; position: absolute; inset-inline: 0; height: 10px; }
+.axt-reader .axt-pv[data-axt-at="below"]::before { top: -10px; }
+.axt-reader .axt-pv[data-axt-at="above"]::before { bottom: -10px; }
+@keyframes axt-pv-in { from { opacity: 0; translate: 0 4px; } }
+@keyframes axt-pv-out { to { opacity: 0; } }
+/* the citation's card (the compact one the owner chose): 416 px, never wider than the pane less 24 px; its text the abstract's type, seven lines in view */
+.axt-reader .axt-pv[data-axt-kind="card"] { width: min(416px, calc(100vw - 24px)); padding: 11px 14px 12px; cursor: auto; }
+.axt-reader .axt-pv-head[hidden] { display: none; }
+.axt-reader .axt-pv-textf { border-radius: 4px; }
+.axt-reader .axt-pv-textf[data-axt-ring] { outline: 2px solid var(--axt-pv-focus); outline-offset: 3px; }
+.axt-reader .axt-pv-text { --axt-ft: 0; --axt-fb: 0; max-height: calc(7 * 1.5 * 12.5px); overflow-y: auto; overscroll-behavior: contain; outline: none; scrollbar-width: thin;
+  -webkit-mask-image: linear-gradient(to bottom, rgb(0 0 0 / calc(1 - var(--axt-ft))), #000 var(--axt-fade), #000 calc(100% - var(--axt-fade)), rgb(0 0 0 / calc(1 - var(--axt-fb))));
+  mask-image: linear-gradient(to bottom, rgb(0 0 0 / calc(1 - var(--axt-ft))), #000 var(--axt-fade), #000 calc(100% - var(--axt-fade)), rgb(0 0 0 / calc(1 - var(--axt-fb)))); }
+.axt-reader .axt-pv-ref { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--axt-pv-read); text-wrap: pretty; hyphens: none; -webkit-user-select: text; user-select: text; cursor: text; }
+.axt-reader .axt-pv-search { display: inline-block; margin-top: 7px; font-size: 12px; line-height: 1.35; color: var(--axt-pv-ink-2); text-decoration: none; cursor: pointer; }
+.axt-reader .axt-pv-ne { display: inline-block; width: 0.5em; height: 0.5em; margin-inline-start: 0.28em; vertical-align: 0.02em; overflow: visible; fill: none; stroke: var(--axt-pv-ink-3); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+@media (hover: hover) { .axt-reader .axt-pv-search:hover { text-decoration: underline; text-decoration-thickness: from-font; text-underline-offset: 0.16em; text-decoration-color: color-mix(in oklab, currentColor 45%, transparent); } }
+/* a crop: the page's own cut, on the page's own paper, dimmed as the page is; a click keeps it */
+.axt-reader .axt-pv[data-axt-kind="crop"] { background: var(--axt-pv-paper); -webkit-backdrop-filter: none; backdrop-filter: none; }
+.axt-reader .axt-pv-keep { display: block; margin: 0; padding: 10px; border: 0; border-radius: inherit; background: none; font: inherit; color: inherit; cursor: pointer; }
+.axt-reader .axt-pv-keep:focus-visible { outline: 2px solid var(--axt-pv-focus); outline-offset: -2px; }
+.axt-reader .axt-pv-crop { display: flex; flex-direction: column; background: #fff; }
+.axt-reader .axt-pv-seg { position: relative; display: block; overflow: hidden; flex: none; }
+.axt-reader .axt-pv-seg > canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+.axt-reader .axt-pv-crop[data-axt-fade] { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - var(--axt-fade)), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - var(--axt-fade)), transparent); }
+${DIMMED} .axt-pv-crop { filter: invert(88.8%) hue-rotate(180deg); }
+${DIMMED} .axt-pv[data-axt-kind="crop"], ${DIMMED} .axt-pv-paper { background: rgb(29 29 29); }
+/* a right page's drawing copied (composer.ts region): its page view's pixels, its crops darkened in, its translation's SVG */
+.axt-reader .axt-pv-region { position: relative; overflow: hidden; background: #fff; }
+.axt-reader .axt-pv-region > canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+.axt-reader .axt-pv-region > canvas.axt-pv-crops { mix-blend-mode: darken; }
+.axt-reader .axt-pv-region > svg { position: absolute; overflow: visible; font-synthesis: none; text-rendering: geometricPrecision; pointer-events: none; }
+.axt-reader .axt-pv-region > svg text { white-space: pre; fill: #000; }
+/* kept: the same cut on the same surface, felt once by a settle from lifted; moved by a drag (grab, grabbing) or the arrows */
+.axt-reader .axt-pv.axt-pv-kept { padding: 10px; cursor: grab; touch-action: none; -webkit-user-select: none; user-select: none; outline: none; animation: axt-pv-settle 240ms var(--axt-pv-ease); transition: box-shadow 160ms ease-out; }
+.axt-reader .axt-pv.axt-pv-kept[data-axt-drag] { cursor: grabbing; box-shadow: var(--axt-pv-lift); transition-duration: 120ms; }
+.axt-reader .axt-pv.axt-pv-kept[data-axt-out] { animation: axt-pv-out 160ms ease-out forwards; }
+.axt-reader .axt-pv.axt-pv-kept:focus-visible { outline: 2px solid var(--axt-pv-focus); outline-offset: 2px; }
+.axt-reader .axt-pv.axt-pv-kept::before { content: none; }
+@keyframes axt-pv-settle { from { box-shadow: var(--axt-pv-lift); } }
+/* its one control: round, on the surface, shown on hover and on the keyboard's focus (never on the focus a drag leaves) */
+.axt-reader .axt-pv-x { position: absolute; top: 6px; inset-inline-end: 6px; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; margin: 0; padding: 0; border: 0; border-radius: 999px; background: var(--axt-pv-surface); box-shadow: var(--axt-pv-shadow); color: var(--axt-pv-ink-2); opacity: 0; transition: opacity 120ms ease-out, color 120ms ease-out; cursor: pointer; }
+.axt-reader .axt-pv-x::before { content: ""; position: absolute; inset: -8px; }
+.axt-reader .axt-pv-x svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; }
+.axt-reader .axt-pv-kept:hover .axt-pv-x, .axt-reader .axt-pv-kept:focus-visible .axt-pv-x, .axt-reader .axt-pv-x:focus-visible { opacity: 1; }
+@media (hover: hover) { .axt-reader .axt-pv-x:hover { color: var(--axt-pv-ink); } }
+/* narrow, or no hover: the sheet from the bottom, a native modal dialog over an 8 % dim (30 % dark) */
+.axt-reader .axt-sheet { position: fixed; inset: auto 0 0 0; box-sizing: border-box; width: 100%; max-width: none; max-height: 80%; margin: 0; display: flex; flex-direction: column; border: 0; border-radius: 28px 28px 0 0; padding: 16px 16px calc(16px + env(safe-area-inset-bottom)); animation: axt-sheet-in 240ms var(--axt-pv-ease); }
+.axt-reader .axt-sheet:not([open]) { display: none; }
+.axt-reader .axt-sheet[data-axt-out] { animation: axt-sheet-out 160ms ease-out forwards; }
+.axt-reader .axt-sheet::backdrop { background: oklch(0 0 0 / 0.08); animation: axt-fade-in 240ms var(--axt-pv-ease); }
+${DIMMED} .axt-sheet::backdrop, :root[data-theme="dark"] .axt-reader .axt-sheet::backdrop { background: oklch(0 0 0 / 0.3); }
+.axt-reader .axt-sheet-body { display: flex; flex-direction: column; min-height: 0; overflow: auto; }
+.axt-reader .axt-sheet .axt-pv-card { display: flex; flex-direction: column; min-height: 0; padding: 4px 4px 0; }
+.axt-reader .axt-sheet .axt-pv-textf { display: flex; flex-direction: column; min-height: 0; }
+.axt-reader .axt-sheet .axt-pv-text { max-height: none; min-height: 0; }
+.axt-reader .axt-sheet .axt-pv-card > :not(.axt-pv-textf) { flex: none; }
+.axt-reader .axt-pv-paper { display: flex; justify-content: center; background: #fff; border-radius: 12px; padding: 12px; }
+.axt-reader .axt-sheet-acts { display: flex; gap: 8px; margin-top: 16px; flex: none; }
+.axt-reader .axt-sheet-go { flex: 1; height: 46px; margin: 0; border: 0; border-radius: 12px; background: var(--axt-pv-fill); color: var(--axt-pv-ink); font: 500 15px/1 -apple-system, BlinkMacSystemFont, system-ui, sans-serif; transition: scale 150ms ease-out; cursor: pointer; }
+.axt-reader .axt-sheet-go[data-axt-primary] { background: var(--axt-pv-ink); color: var(--raised, #fff); }
+.axt-reader .axt-sheet-go:active { scale: 0.96; }
+.axt-reader .axt-sheet-go:focus-visible { outline: 2px solid var(--axt-pv-focus); outline-offset: 2px; }
+@keyframes axt-sheet-in { from { translate: 0 100%; } }
+@keyframes axt-sheet-out { to { translate: 0 100%; } }
+@keyframes axt-fade-in { from { opacity: 0; } }
+/* links' hit areas on a narrow screen widened (7 px above and below, 3 px at the sides) [start: checked against 24 px] */
+.axt-reader[data-axt-narrow] .axt-link > .axt-link-box::before { content: ""; position: absolute; inset: -7px -3px; }
+@media (prefers-reduced-motion: reduce) {
+  @keyframes axt-pv-in { from { opacity: 0; } }
+  @keyframes axt-sheet-in { from { opacity: 0; } }
+  @keyframes axt-sheet-out { to { opacity: 0; } }
+  .axt-reader .axt-sheet-go:active { scale: 1; }
+}
+@media (forced-colors: active) {
+  .axt-reader .axt-pv, .axt-reader .axt-sheet { background: Canvas; color: CanvasText; border: 1px solid CanvasText; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .axt-reader .axt-pv-x, .axt-reader .axt-pv-ne { color: CanvasText; stroke: CanvasText; }
+  .axt-reader .axt-pv-text { -webkit-mask-image: none; mask-image: none; }
+}
+`
+
 export const READER_CSS = `
 .axt-reader { --axt-green: oklch(0.693 0.17 162.48); --axt-sk: oklch(0.945 0.004 255); --axt-sk-paper: #fff; }
 ${DIMMED} { --axt-sk: oklch(0.275 0.004 255); --axt-sk-paper: rgb(29 29 29); }
@@ -195,7 +305,7 @@ ${DIMMED} .axt-link { --axt-ring: oklch(0.935 0.005 255); --axt-ring-halo: oklch
   .axt-reader .axt-link > .axt-link-box { outline: 1.5px solid LinkText; }
   .axt-reader .axt-link:focus-visible > .axt-link-box { outline: 2px solid Highlight; box-shadow: none; }
 }
-`
+${PREVIEW_CSS}`
 
 /** the reader's sheets in its root: PDF.js's viewer sheet (`sheet`) and its own; removed with the root's content */
 export function addSheets(root: HTMLElement, sheet: string): void {

@@ -9,7 +9,7 @@
 // after the left's first page or 1.5 s), the composed document (the add-on by ranges over the same store, its groups, composing
 // switched on), the rows (the server's objects, or the host's translate), the timers. The first range of the original is asked
 // before openReader returns.
-import { BOUNDS, type Head, type Part, read, type Row, type Unit, type Units } from '@readarxiv/format'
+import { BOUNDS, type Head, type Part, read, type Row, type Target, type Unit, type Units } from '@readarxiv/format'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import { composedSource } from './bytes/composed.ts'
 import { openRanged } from './bytes/ranged.ts'
@@ -62,6 +62,7 @@ import {
 } from './session/rows.ts'
 import { createJumps, type HostHistory, type Light } from './session/jumps.ts'
 import { createOneJump, type JumpLights, type JumpPanes } from './session/one-jump.ts'
+import { targetsOf } from './preview/targets.ts'
 import { createRuntime, type Handlers, type Runtime } from './session/runtime.ts'
 import { ownedClock } from './stack/clock.ts'
 import { createScheduler } from './stack/scheduler.ts'
@@ -338,11 +339,21 @@ export function openReader(
     const h = highlight
     return h ? { litAt: (side, n, x, y, below) => h.litAt(side, n, x, y, below), land: (l) => h.land(l) } : null
   }
+  /** the head's targets (link previews: where each destination lands, Head.targets), read anew with each head */
+  let targetsHeld: { head: Head | null; map: ReadonlyMap<string, Target> } = { head: null, map: new Map() }
+  const targetsNow = () => {
+    if (targetsHeld.head !== head) targetsHeld = { head, map: targetsOf(head) }
+    return targetsHeld.map
+  }
   const oneJump = createOneJump({
     panes: () => (panes ? jumpPanes : null),
     lights: jumpLights,
     jumps,
     narrow: () => root.hasAttribute('data-axt-narrow'),
+    target: (dest) => {
+      const t = targetsNow().get(JSON.stringify(dest))
+      return t ? { page: t[2], box: [...t[4]] as [number, number, number, number] } : null
+    },
   })
   const offDepth = jumps.onDepth(() => tellSoon())
   /** a frame's look at whether a scroll came back to the place a jump left (one a frame, whatever the scroll events) */
@@ -355,7 +366,8 @@ export function openReader(
   let kit: Kit | null = null,
     panes: Panes | null = null,
     composer: Composer | null = null,
-    highlight: Highlight | null = null
+    highlight: Highlight | null = null,
+    previews: import('./preview/previews.ts').Previews | null = null
   /** the served faces and the reader's Metrics over them, the reader's own typesetter's (no engine of the host's), with the code */
   let served: import('./compose/served.ts').Served | null = null
   /** the typesetter's chunk, asked with the code; the target its first reads were asked ahead for (warmSoon) */
@@ -844,6 +856,24 @@ export function openReader(
             rt.input({ i: 'panes.laid', laid: composer?.probe().laidPages as number, total: head?.paper.pages ?? 0 }),
           )
           highlight = H.createHighlight({ panes, composer, clock, on: rt.state.prefs.value.highlight.on })
+          // (the previews, a chunk of their own: what each link of the paper lands on, shown at the reader's dwell)
+          void import('./preview/wire.ts').then(
+            (W) => {
+              if (signal.aborted || !panes || previews) return
+              previews = W.wirePreviews({
+                root,
+                panes,
+                clock,
+                composer: () => composer,
+                head: () => head,
+                part: (n) => partOf(n),
+                units: () => unitsRead,
+                jump: (j) => void oneJump.link(j),
+                open: openExternal,
+              })
+            },
+            () => {},
+          )
           composer.setDocuments({ original: original?.doc ?? null, composed: null, groups: null })
           mark('code')
           emit({ i: 'code.loaded', t })
@@ -851,6 +881,8 @@ export function openReader(
         () => emit({ i: 'code.failed', t }),
       )
       return () => {
+        previews?.dispose()
+        previews = null
         composer?.dispose()
         highlight?.dispose()
         // (the faces out of the document with the code that added them: faces.ts's promise)

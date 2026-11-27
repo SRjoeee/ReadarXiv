@@ -358,6 +358,18 @@ const R: Locale['R'] = {
   leave: '기본 뷰어에서 열기',
   pill: { original: '원문 페이지', translation: '번역문 페이지', previous: '이전 페이지', next: '다음 페이지' },
   back: '원래 위치로',
+  preview: {
+    go: '이동',
+    search: '이 논문 검색',
+    keep: label => `${label}: 화면에 고정`,
+    close: label => `${label} 닫기`,
+    figure: n => `그림 ${n}`,
+    table: n => `표 ${n}`,
+    section: n => `${n}절`,
+    note: n => `각주 ${n}`,
+    reference: n => `참고문헌 ${n}`,
+    equation: n => `식 (${n})`,
+  },
   fold: { expand: '펼치기', collapse: '접기' },
   linkName: { internal: '이 논문의 다른 위치', site: site => `${site} 열기`, email: address => `${address}에게 이메일 보내기`, fallback: '링크' },
   // the number attaches to its counter (UI.md §1, the Korean line)

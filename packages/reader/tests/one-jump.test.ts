@@ -286,3 +286,24 @@ describe('the way back', () => {
     expect(t.landed.length).toBe(lands)
   })
 })
+
+describe('a jump to a target the head states (link previews)', () => {
+  it('lands with the target’s own box on both panes, not the unit at its point; a destination the head states nothing of as before', async () => {
+    const t = standIn()
+    const target = (dest: string | unknown[]) =>
+      JSON.stringify(dest) === JSON.stringify('cite.a')
+        ? { page: 9, box: [72, 600, 300, 640] as [number, number, number, number] }
+        : null
+    const one = createOneJump({
+      panes: () => t.panes,
+      lights: () => ({ litAt: () => ({ id: 7, s: 0 }), land: (l) => t.landed.push(l) }),
+      jumps: t.jumps,
+      narrow: () => false,
+      target,
+    })
+    await one.link({ side: 'left', dest: 'cite.a', keyboard: false, origin: null })
+    expect(t.landed.at(-1)).toEqual({ page: 9, box: [72, 600, 300, 640] })
+    await one.link({ side: 'left', dest: 'section.2', keyboard: false, origin: null })
+    expect(t.landed.at(-1)).toEqual({ lit: { id: 7, s: -1 } })
+  })
+})

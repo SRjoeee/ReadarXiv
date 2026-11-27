@@ -56,6 +56,24 @@ export const ROLES = {
     light: '0 0 0 0.5px oklch(0 0 0 / 0.08), 0 12px 32px oklch(0 0 0 / 0.14)',
     dark: '0 0 0 0.5px oklch(1 0 0 / 0.1), 0 14px 36px oklch(0 0 0 / 0.5)',
   },
+  // the link previews' one surface (the approved prototype's, the lead's ruling 9 of 2026-11-27): the preview, the kept panel and
+  // the sheet float on it; raised above a dimmed page in the dark, never a light surface dimmed. The reading ink of their text
+  /** the surface's own colour before its 96 % */
+  raised: { light: '$n-0', dark: 'oklch(0.29 0.007 255)' },
+  surface: 'color-mix(in oklab, $raised 96%, transparent)',
+  'surface-blur': 'blur(16px) saturate(1.5)',
+  hairline: { light: 'oklch(0.235 0.012 255 / 0.11)', dark: 'oklch(1 0 0 / 0.12)' },
+  shadow: {
+    light: '0 0 0 0.5px $hairline, 0 1px 2px oklch(0 0 0 / 0.05), 0 6px 24px -4px oklch(0 0 0 / 0.1)',
+    dark: '0 0 0 0.5px $hairline, 0 1px 2px oklch(0 0 0 / 0.3), 0 8px 28px -4px oklch(0 0 0 / 0.5)',
+  },
+  /** lifted: while a kept panel is in the hand, and the instant it is kept, from which it settles */
+  'shadow-lift': {
+    light:
+      '0 0 0 0.5px oklch(0.235 0.012 255 / 0.2), 0 2px 4px oklch(0 0 0 / 0.06), 0 16px 40px -6px oklch(0 0 0 / 0.2)',
+    dark: '0 0 0 0.5px oklch(1 0 0 / 0.22), 0 2px 4px oklch(0 0 0 / 0.35), 0 18px 44px -6px oklch(0 0 0 / 0.65)',
+  },
+  'ink-read': { light: 'oklch(0.39 0.012 255)', dark: 'oklch(0.84 0.008 255)' },
   // the extension's other surfaces (the popup, the settings page, the floating button)
   page: '$n-1',
   /** the popup's grouped rows and its notes */
