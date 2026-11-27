@@ -354,3 +354,37 @@ describe.skipIf(!docker)("what the marks do where LaTeX stores a heading and set
     expect(strays(r.written)).toEqual([])
   }, 900_000)
 })
+
+describe.skipIf(!docker)('a gated mark expands where TeX scans past it as it did', () => {
+  it("a paragraph TeX resumes after a display (\\[ \\], $$ $$, equation, align): the space after the display skipped, every word where the paper's own compile sets it", async () => {
+    // (a placeholder's closing mark right after a display must expand to nothing on the empty list TeX resumes the paragraph
+    // with, so that TeX's skip of the space after the display sees past it: a step that does not expand stops the skip, and
+    // the line after the display begins with a space)
+    const r = await prepared(
+      [
+        '\\documentclass{article}',
+        '\\usepackage{amsmath}',
+        '\\begin{document}',
+        'Our own first paragraph sets a formula, \\[ a = b + c \\]',
+        'where the words go on after it and fill a line of our own.',
+        '',
+        'Our own paragraph sets one as plain TeX does,',
+        '$$',
+        'g(p) = f(b) \\, .',
+        '$$',
+        'where $x$ solves it and the words go on after it.',
+        '',
+        'Our own second paragraph numbers one,',
+        '\\begin{equation} f(x) = x^2 \\end{equation}',
+        'or, equivalently, the words go on after it again.',
+        '',
+        'Our own third paragraph aligns two,',
+        '\\begin{align} u &= v \\\\ w &= z \\end{align}',
+        'and hence the words go on after them too.',
+        '\\end{document}',
+        '',
+      ].join('\n'),
+    )
+    expect(await itemsOf(r.pdf)).toEqual(await itemsOf(r.own))
+  }, 900_000)
+})
