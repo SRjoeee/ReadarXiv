@@ -10050,13 +10050,18 @@ expansion took off (all in this section's last item), and the rest are the holes
   minitoc reads its part contents back with no `\@starttoc`, and the heading's points were set twice there, the root form's
   regression of the round before). A running head keeps them, set in the output routine with every mark off; a PDF string and
   nameref's titles have them taken out as before. TeX's `\uppercase` turns the argument's letters (`{h5s}` to `{H5S}`) and no
-  control sequence's name; our names are lower-case letters, digits and full stops, which `\lowercase` turns back exactly, so
-  the gate hands its argument to its command through `\lowercase` (`\axt@lc`, `\protected`): the point, its alignment
-  (AXT-ALIGN) and its skips (AXT-SECT) are named as the marking wrote them, as the reader already read every point's name
-  (`read.ts`, lower case). So amsart's titles and headings, which `\uppercasenonmath` set as `H6E` with no alignment stated,
-  state theirs now. What a file holds of our other marks is as before: a caption's own `\axtmark` and `\axtend` and its
-  `\axtlines` in its list entry's text (`compile/guard.ts` `inText`), a babel name's marks (`NAME_MARK_FILE`), an author's
-  call (`\axtcall`); and `\index` reads its own argument verbatim (`\@sanitize`), as the paper wrote it. A package that
+  control sequence's name; our names are lower-case letters, digits and full stops, each begun by a letter, which `\lowercase`
+  turns back exactly, so where the name begins with an upper-case letter the gate hands the command and its argument through
+  `\lowercase` (`\axt@lc`): the point, its alignment (AXT-ALIGN) and its skips (AXT-SECT) are named as the marking wrote them,
+  as the reader already read every point's name (`read.ts`, lower case). So amsart's titles and headings, which
+  `\uppercasenonmath` set as `H6E` with no alignment stated, state theirs now. Every other name expands as it did, by expansion
+  alone: TeX resumes the paragraph after `$$` by reading one token with expansion and dropping a space, and a placeholder's
+  closing mark there expands to nothing; a first form that sent every name through `\lowercase` (a step that does not expand)
+  left that space to be set, the line after such a display a space to the right (one paper of the lab's 245, 299 text items
+  on 15 pages; a red test now holds the case). What a file holds of our marks is as before, byte for byte: a caption's own
+  `\axtmark` and `\axtend` and its `\axtlines` in its list entry's text (`compile/guard.ts` `inText`), a babel name's marks
+  (`NAME_MARK_FILE`), an author's call (`\axtcall`), and the gated marks a package writes unexpanded into a list entry's text
+  (thmtools' list of theorems, a caption's colour); `\index` reads its own argument verbatim (`\@sanitize`). A package that
   writes a text it stored by `\protected@edef` with a `\write` of its own, not LaTeX's, would write a gated mark now; the
   layout guard reads every written file for marks out of a list entry's text (`marksOutOfPlace`) as before.
 - **Round 3's native cases and corpus** (E, F, G; our own content, the four engines with hyperref and without, every text item of

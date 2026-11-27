@@ -515,7 +515,7 @@ describe("the probe's raw log, returned beside the answers read from it", () => 
  *  every result as it was */
 const GOLDEN_AT_BASE: Record<string, unknown> = {
   'a paper: the probe, every pass, the final pass': {
-    asked: ['cc35aca081aecb4c', '626005bfe3b5a139', '4b6652a21a1aa44d'],
+    asked: ['0407d8a60544940f', '411fbb833039a89d', 'dc5b8e75e5582c7d'],
     made: {
       pdf: 'ba5627208b38c012',
       log: 'ee997e55c8c8064b',
@@ -530,7 +530,7 @@ const GOLDEN_AT_BASE: Record<string, unknown> = {
     },
   },
   'its bibliography shipped': {
-    asked: ['cc35aca081aecb4c', '5f3dcae9ab5d120e', '4b6652a21a1aa44d'],
+    asked: ['0407d8a60544940f', '5dafb103ac48d0d8', 'dc5b8e75e5582c7d'],
     made: {
       pdf: 'ba5627208b38c012',
       log: 'ee997e55c8c8064b',
@@ -545,7 +545,7 @@ const GOLDEN_AT_BASE: Record<string, unknown> = {
     },
   },
   'a mark printed: the guard compiles it again, the final pass over the second': {
-    asked: ['cc35aca081aecb4c', '626005bfe3b5a139', 'a30fef2c6293072c', 'e66a67b60315b833'],
+    asked: ['0407d8a60544940f', '411fbb833039a89d', '1cced72e2612b1ee', 'efc62da086b58123'],
     made: {
       pdf: 'bca44c74041aebf9',
       log: 'ee997e55c8c8064b',
@@ -565,7 +565,7 @@ const GOLDEN_AT_BASE: Record<string, unknown> = {
     },
   },
   'under latex: the driver output read': {
-    asked: ['40dfa89ca28b5e06', 'd8b96914f4eb033a', '7e7e1ddf4ae5fb2d'],
+    asked: ['6fc55e4bc884e4e8', 'bb51fe87405b2fb3', '0fee5a7aae21b983'],
     made: {
       pdf: 'ba5627208b38c012',
       log: 'ee997e55c8c8064b',
@@ -580,7 +580,7 @@ const GOLDEN_AT_BASE: Record<string, unknown> = {
     },
   },
   'no final pass asked': {
-    asked: ['cc35aca081aecb4c', 'abefe6db0e27395e'],
+    asked: ['0407d8a60544940f', '264cbc954b62781d'],
     made: {
       pdf: 'ba5627208b38c012',
       log: 'ee997e55c8c8064b',

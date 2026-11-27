@@ -2225,7 +2225,7 @@ export function readMarkProbe(
  *   taken out first, at gettitlestring and where nameref sanitizes a title whoever set it (titlesec). What does the work
  *   is \protected, so an expansion (an \edef, a case change's) never runs it, and a case change leaves its name as it is
  *   (l3text's \l_text_case_exclude_arg_tl; TeX's own \uppercase turns its argument's letters, which the gate's \axt@lc
- *   turns back): a heading set in capitals keeps its marks' names.
+ *   turns back where the name begins with an upper-case letter): a heading set in capitals keeps its marks' names.
  * - **The points.** Beside each destination, a point (POINTS_TEX): a rendering intent named after it, `/axt-<name> ri`,
  *   in each engine's literal (pdfTeX's and LuaTeX's `direct`, xdvipdfmx's `pdf:code`), which PDF.js keeps in the operator
  *   list in its place among the glyphs (it drops DP and MP, and splits its text items at a BMC: tokens moved by up to
@@ -2782,13 +2782,17 @@ export function regionsTex(
 /**
  * The gated marks (LAYOUT_TEX's, and CARRY_TEX's \axtpmd), each with the \protected command that sets its point: robust, as
  * LaTeX's robust commands are, in every expansion, and kept out of every file LaTeX writes (PDF-READER §18.111).
- * - **Where LaTeX typesets** (\protect is \@typeset@protect) the gate expands to its command, its argument handed on in lower
- *   case (\axt@lc: TeX's \lowercase over the command and its argument, inside a \protected command, so that an expansion keeps
- *   it as it is). A class that changes a stored text's case with TeX's primitive changes every character token's code by its
- *   \uccode and no control sequence's name: textcase's \MakeTextUppercase (REVTeX 4.0's \section) turns `{h5s}` to `{H5S}`
- *   and leaves `\axthmark` as it is. Our names are lower-case letters, digits and full stops, which \lowercase turns back
- *   exactly (the letters' codes the format's pairs, the others' none), so the point, its alignment (AXT-ALIGN) and its
- *   skips (AXT-SECT) are named as the marking wrote them: amsart's \uppercasenonmath set `H6E` and stated no alignment.
+ * - **Where LaTeX typesets** (\protect is \@typeset@protect) the gate expands to its command and its argument, as before: by
+ *   expansion alone (\axt@lc, a macro), so that where TeX reads past a mark by expanding it it still does (TeX resumes the
+ *   paragraph after `$$` by reading one token with expansion and dropping a space: a placeholder's closing mark there expands to
+ *   nothing, and a step that does not expand, \lowercase among them, would leave that space to be set). A class that changes a
+ *   stored text's case with TeX's primitive changes every character token's code by its \uccode and no control sequence's name:
+ *   textcase's \MakeTextUppercase (REVTeX 4.0's \section) turns `{h5s}` to `{H5S}` and leaves `\axthmark` as it is. Our names
+ *   are lower-case letters, digits and full stops, each begun by a letter, which \lowercase turns back exactly (the letters'
+ *   codes the format's pairs, the others' none): where the name's first character is a letter not its own \lccode, an
+ *   upper-cased name, the command and its argument go through \lowercase, so the point, its alignment (AXT-ALIGN) and its skips
+ *   (AXT-SECT) are named as the marking wrote them (amsart's \uppercasenonmath set `H6E` and stated no alignment); every other
+ *   name expands as it did
  * - **Anywhere else** (\protected@edef's \@unexpandable@protect, \typeout's \string, the output routine's \noexpand) it
  *   writes itself through, unexpanded (`\noexpand\axthmark`): a class that stores a text by \protected@edef before it sets it
  *   (textcase's \MakeTextUppercase, thmtools' proof's optional title) keeps the marks in it, and they set their points where
@@ -2798,7 +2802,8 @@ export function regionsTex(
  *   kernel defines one), the one path of \addtocontents, \addcontentsline, \label, \index and \glossary, lets each gated mark be
  *   \@gobble in its own group, before its \edef: in a contents line, a list's entry, a label, an index entry, as raw text or
  *   stored by a \protected@edef first, no gated mark is written, as when the gate took itself off there. A file a pass writes
- *   holds what it held. A running head (\markboth's \mark) keeps them, set with every mark off (the output routine's
+ *   holds what it held, byte for byte (a package that writes a text unexpanded, thmtools' list of theorems, a caption's colour
+ *   in a list's entry, holds the marks it held, in the entry's text). A running head (\markboth's \mark) keeps them, set with every mark off (the output routine's
  *   \axt@off); a PDF string has them taken out (\pdfstringdefDisableCommands); nameref's titles too (\axt@unmark)
  */
 export const GATED_MARKS = [
@@ -2811,8 +2816,8 @@ export const GATED_MARKS = [
   ['axtcolour', 'axt@colour'],
   ['axtpmd', 'axt@pmy'],
 ] as const
-/** a gated mark's gate (GATED_MARKS): its command with its argument in lower case where LaTeX typesets, itself unexpanded
- *  anywhere else */
+/** a gated mark's gate (GATED_MARKS): its command with its argument where LaTeX typesets (an upper-cased name lowered:
+ *  \axt@lc), itself unexpanded anywhere else */
 const gateTex = (cs: string, inner: string): string =>
   `\\def\\${cs}{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@lc\\expandafter\\${inner}\\else\\noexpand\\${cs}\\fi}`
 /**
@@ -2887,7 +2892,7 @@ export const LAYOUT_TEX = [
   '\\protected\\def\\axt@gp#1{\\ifaxt@off\\else\\expandafter\\gdef\\csname axt@gp@#1\\endcsname{\\axt@pm{#1}}\\expandafter\\aftergroup\\csname axt@gp@#1\\endcsname\\fi}',
   '\\protected\\def\\axt@hm#1{\\ifaxt@off\\else\\axt@align{#1}\\ifhmode\\relax\\axt@holdtrue\\axt@put{#1}\\axt@holdfalse\\fi\\fi}',
   '\\protected\\def\\axt@colour#1{\\ifaxt@off\\else\\ifdefined\\current@color\\message{^^JAXT-COLOUR #1 \\current@color^^J}\\fi\\fi\\ignorespaces}',
-  '\\protected\\def\\axt@lc#1#2{\\lowercase{#1{#2}}}',
+  '\\def\\axt@lc#1#2{\\axt@lcup#2\\@nil{\\lowercase{#1{#2}}}{#1{#2}}}\\def\\axt@lcup#1#2\\@nil{\\ifnum\\lccode`#1=\\z@\\expandafter\\@secondoftwo\\else\\ifnum\\lccode`#1=`#1 \\expandafter\\expandafter\\expandafter\\@secondoftwo\\else\\expandafter\\expandafter\\expandafter\\@firstoftwo\\fi\\fi}',
   ...GATED_MARKS.filter(([cs]) => cs !== 'axtpmd').map(([cs, inner]) => gateTex(cs, inner)),
   WRITES_TEX,
   '\\ifdefined\\AddToHook\\AddToHook{cmd/@starttoc/before}{\\global\\axt@offtrue}\\AddToHook{cmd/@starttoc/after}{\\global\\axt@offfalse}\\AddToHook{cmd/@outputpage/before}{\\axt@offtrue}',
