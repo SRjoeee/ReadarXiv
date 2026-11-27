@@ -79,8 +79,10 @@ describe('a tie before a break of the unit’s own lays no break token as an ite
     })
   }
   it('keeps the tie where no break stands after it: the word and the token after the tie on one line', () => {
-    const tokens = [word('Table'), tie, word('3'), space, word('and'), space, word('more')]
-    const l = layoutUnit2(tokens, [block(1, 700, 3)], S, P)!
-    expect(texts(l)[0]).toMatch(/^Table 3/)
+    // ("See Table~3" in lines of 45 pt: "See Table" is 42.5 pt and fits, "See Table 3" is 50 and does not; a plain space
+    // there would break after "Table" and leave "3" alone, the tie carries "Table" down with it)
+    const tokens = [word('See'), space, word('Table'), tie, word('3')]
+    const l = layoutUnit2(tokens, [block(1, 700, 3, 45)], S, P)!
+    expect(texts(l)).toEqual(['See', 'Table 3'])
   })
 })
