@@ -47,6 +47,24 @@ the line out and go on to a second line.
 \end{document}
 `
 
+/** a paper whose own package defines the bibliography's separator inside the bibliography environment's definition, to print a
+ *  bullet: the source reader cannot read that definition where the separator is used (it is made when the environment begins), and
+ *  the class's own separator, in force before it, sets no ink. TeX's answer where the document uses it decides */
+const BIB_PAPER = String.raw`\documentclass{article}
+\usepackage{ours}
+\begin{document}
+Our paragraph of words of our own cites a book of ours \cite{a} and goes on with more words of ours to fill the line out.
+
+\begin{thebibliography}{9}
+\bibitem{a} A.~Writer. \newblock A title of ours that runs on for a while. \newblock Our Own Press, 2020.
+\end{thebibliography}
+\end{document}
+`
+const BIB_STY = String.raw`\ProvidesPackage{ours}
+\let\oursbibliography\thebibliography
+\renewcommand{\thebibliography}[1]{\oursbibliography{#1}\def\newblock{\textbullet\ }}
+`
+
 /** one compile in the image: latexmk with pdflatex, `files` every file it left */
 async function compile(sources: Map<string, Uint8Array>, req: { rerun: boolean; files?: boolean; date?: number }) {
   const dir = mkdtempSync(join(tmpdir(), 'axt-own-no-ink-'))
@@ -78,8 +96,8 @@ async function compile(sources: Map<string, Uint8Array>, req: { rerun: boolean; 
 
 type Made = { units: Unit[]; parts: Part[] }
 /** the prepare over the paper: arXiv's PDF its own compile, every object it makes read back */
-async function prepared(tex: string): Promise<Made> {
-  const files = new Map([['main.tex', enc(tex)]])
+async function prepared(tex: string, more: readonly [string, string][] = []): Promise<Made> {
+  const files = new Map([['main.tex', enc(tex)], ...more.map(([f, t]): [string, Uint8Array] => [f, enc(t)])])
   const A = (await compile(files, { rerun: true })).pdf
   if (!A) throw new Error('the paper made no PDF')
   const made: Made = { units: [], parts: [] }
@@ -170,6 +188,20 @@ describe.skipIf(!docker)("a name of the marking's no-ink lists the paper defines
         else expect(g.state).not.toBe('laid')
       }
     })
+  describe('a separator the paper defines inside its bibliography environment’s definition, to print a bullet', () => {
+    let bib: Made
+    beforeAll(async () => {
+      bib = await prepared(BIB_PAPER, [['ours.sty', BIB_STY]])
+    }, 900_000)
+    it('its glyph drawn where TeX set it, or its entry the original’s', () => {
+      const got = readerGets(bib, '\\newblock')
+      expect(got.length).toBeGreaterThan(0)
+      for (const g of got) {
+        if (g.state === 'laid') expect({ ...g, inkStated: g.ink > 0 }).toMatchObject({ inkStated: true })
+        else expect(g.state).not.toBe('laid')
+      }
+    })
+  })
   it("a \\label the paper defines to print its key: the source reader reads the definition in force, its printed text the unit's", () => {
     // (no placeholder: the key TeX prints is text of the unit, sent and laid as its words are)
     expect(made.units.some((u) => elsOf(u.content).some((e) => e.src.startsWith('\\label')))).toBe(false)
