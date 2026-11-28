@@ -50,6 +50,7 @@ export type PhPiece = {
   readonly brk?: true
   readonly closes?: number
   readonly own?: OwnReading
+  readonly opensIf?: true
 }
 /**
  * How the source reader reads a placeholder whose leading command the paper itself defines (arg-roles.ts paperOf's `own`), by
@@ -5805,10 +5806,10 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
       continue
     }
     // a command, or the one a macro's call ends in (goOn)
-    const { name: called, end } = then ?? commandAt(s, i)
+    const { name: called, end }: { name: string; end: number } = then ?? commandAt(s, i)
     // (a paper's macro whose meaning in force is one of TeX's conditionals and nothing else, `\\def\\iffa{\\iffalse}`: that
     // conditional, as TeX reads it (conditionalMeaning))
-    const name = conditionalMeaning(called, ctx) ?? called
+    const name: string = conditionalMeaning(called, ctx) ?? called
     thens = then ? thens + 1 : 0
     then = null
     // (a definition TeX reads here puts its meaning in force from here on: the boundary reading's, in TeX's order)
