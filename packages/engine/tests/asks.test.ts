@@ -213,6 +213,40 @@ describe('the asks’ answers, read from the pass’s log', () => {
     expect(useAnswersOf(log, asked)).toEqual({ inkless: ['\\a{}', '\\b{}', '\\c{}'], inked: ['\\d{}'] })
     expect(readInkProbe(log, asked)).toEqual([])
   })
+  it("reads a node's line TeX's log broke at its 79 columns as that node: a long write sets no ink, a long special or a glyph beside it does", () => {
+    /** a node's line as the log holds it: broken at max_print_line's 79 columns, the rest on the lines below, no dots */
+    const wrap = (line: string) => line.match(/.{1,79}/g)!
+    // (a label's write as the loop's first pass lists it, its token list cut by TeX at max_print_line-10 and `\ETC.}` after)
+    const write =
+      '.\\write1{\\newlabel{our-own-key}{{1}{\\thepage }{The words of a heading of ours}{section.1}{}\\ETC.}'
+    const special = '.\\special{ps: a string of words of our own that runs on past the columns of the log}'
+    const PARA = [
+      '.\\penalty 10000',
+      '.\\glue(\\parskip) 0.0',
+      '.\\hbox(0.0+0.0)x345.0, glue set 345.0fil',
+      '..\\penalty 10000',
+      '..\\glue(\\parfillskip) 0.0 plus 1.0fil',
+      '..\\glue(\\rightskip) 0.0',
+    ]
+    expect(wrap(write).length).toBe(2)
+    const log = [
+      listing(0, NONE, wrap(write)),
+      // (a sample used in a paragraph: its vertical box, the paragraph the document goes on with)
+      listing(1, '\\vbox(0.0+0.0)x345.0', [...wrap(write), ...PARA]),
+      // (a special may draw: not known, wrapped or not)
+      listing(2, NONE, wrap(special)),
+      listing(3, '\\hbox(4.3+0.0)x5.8', [...wrap(write), '.\\T1/cmr/m/n/10 x']),
+      // (a node's line of the 79 columns TeX did not break: the next line, a node of its own, is read as one)
+      listing(4, NONE, [`.\\write1{${'w'.repeat(69)}}`, '.\\T1/cmr/m/n/10 x']),
+    ].join('\n')
+    expect(`.\\write1{${'w'.repeat(69)}}`.length).toBe(79)
+    const asked = ['\\label{one}', '\\label{two}', '\\ourspecial', '\\ourmark', '\\ourwrite']
+    expect(readInkProbe(log, asked)).toEqual(['\\label{one}', '\\label{two}'])
+    expect(useAnswersOf(log, asked)).toMatchObject({
+      inkless: ['\\label{one}', '\\label{two}'],
+      inked: ['\\ourspecial', '\\ourmark', '\\ourwrite'],
+    })
+  })
   it('gives no answer for a sample that took the token after it as its argument: it read past its own source', () => {
     // (the row ASK_TEX writes before the listing where the token after the sample was never reached)
     const eaten = (i: number) => listing(i, NONE, [], [`LAYOUT-PROBE 1 ink-eaten ${i}`])

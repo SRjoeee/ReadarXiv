@@ -65,6 +65,42 @@ const BIB_STY = String.raw`\ProvidesPackage{ours}
 \renewcommand{\thebibliography}[1]{\oursbibliography{#1}\def\newblock{\textbullet\ }}
 `
 
+/** a paper whose own package makes `\label` a write to the aux file alone and `\index` a write with a dagger after it, each
+ *  inside another definition's body (the source reader cannot read them where they are used), each write's token list longer
+ *  than the log's 79 columns: TeX's log breaks the listed write's line and goes on on the next. The label stands after a
+ *  heading, its paragraph's first piece */
+const WRITE_PAPER = String.raw`\documentclass{article}
+\usepackage{ourwrites}
+\begin{document}
+\section{A heading of ours}\label{sec:our-own-key}
+Our paragraph of words of our own follows the heading and its label, and more words of ours after it to fill the line out
+and go on to a second line.
+
+Our second paragraph of words of our own holds an entry\index{entry} standing in it, and more words of ours after it to fill
+the line out and go on to a second line.
+\end{document}
+`
+const WRITE_STY = String.raw`\ProvidesPackage{ourwrites}
+\newcommand{\ourwrites}{%
+  \renewcommand{\label}[1]{\@bsphack\protected@write\@auxout{}{\string\newlabel{##1}{{\@currentlabel}{\thepage}{the words of a heading of ours that run on}{}}}\@esphack}%
+  \renewcommand{\index}[1]{\protected@write\@auxout{}{\string\ourentry{##1}{the words of an entry of ours that run on past the columns}}\textdagger}}
+\ourwrites
+`
+/** a paper whose own package defines `\label` inside a definition the paper never calls, so that the label in force is
+ *  hyperref's: a write alone, its fields filled in the loop's first pass past the log's columns */
+const HYPER_PAPER = String.raw`\documentclass{article}
+\usepackage{ourtables}
+\usepackage{hyperref}
+\begin{document}
+\section{A heading of ours with words}\label{sec:our-own-key}
+Our paragraph of words of our own follows the heading and its label, and more words of ours after it to fill the line out
+and go on to a second line.
+\end{document}
+`
+const TABLES_STY = String.raw`\ProvidesPackage{ourtables}
+\newcommand{\ourtable}[1]{\setcounter{table}{#1}\def\label##1{\textdagger}}
+`
+
 /** one compile in the image: latexmk with pdflatex, `files` every file it left */
 async function compile(sources: Map<string, Uint8Array>, req: { rerun: boolean; files?: boolean; date?: number }) {
   const dir = mkdtempSync(join(tmpdir(), 'axt-own-no-ink-'))
@@ -152,7 +188,7 @@ function readerGets(m: Made, head: string) {
   const el = elsOf(u.content).find((e) => e.src.startsWith(head))!
   const row: Row = { id: u.id, ok: true, by: 'test', content: echo(u.content) }
   const rows: Rows = { get: (k) => (k === row.id ? row : undefined), done: true }
-  const out: { state: string; why: string | null; ink: number; text: string | undefined }[] = []
+  const out: { state: string; why: string | null; ink: number; text: string | undefined; kind?: string; unknown?: number }[] = []
   for (const part of m.parts) {
     const mine = part.flows.flat().filter((x: Placed) => x.text === u.id)
     if (!mine.length) continue
@@ -164,6 +200,8 @@ function readerGets(m: Made, head: string) {
         why: x.why ?? null,
         ink: stated?.ink?.length ?? 0,
         text: stated?.text,
+        ...(stated?.kind ? { kind: stated.kind } : {}),
+        ...(stated?.unknown ? { unknown: stated.unknown } : {}),
       })
     }
   }
@@ -206,5 +244,39 @@ describe.skipIf(!docker)("a name of the marking's no-ink lists the paper defines
     // (no placeholder: the key TeX prints is text of the unit, sent and laid as its words are)
     expect(made.units.some((u) => elsOf(u.content).some((e) => e.src.startsWith('\\label')))).toBe(false)
     expect(made.units.some((u) => u.content.some((p) => p.t === 'text' && p.s.includes('label[key] standing')))).toBe(true)
+  })
+})
+
+// (TeX's file whatsits draw nothing: a `\write`, `\openout` or `\closeout` node is no ink, read so however long the log's line of
+// it runs: TeX's log breaks a line at its 79 columns, max_print_line, and the listed write's rest stands on the next line)
+describe.skipIf(!docker)('a name the paper defines to write to a file, its listed write past the log’s columns', () => {
+  let writes: Made
+  let hyper: Made
+  beforeAll(async () => {
+    writes = await prepared(WRITE_PAPER, [['ourwrites.sty', WRITE_STY]])
+    hyper = await prepared(HYPER_PAPER, [['ourtables.sty', TABLES_STY]])
+  }, 900_000)
+  // (TeX's answer of no ink: the class table's no-ink reading stands, as for the kernel's name; read as a node not known, the
+  // element was a paper's own macro no table renders, `umacro` and `unknown`, its ink to be found)
+  it('a write alone: TeX answers it sets no ink, its unit laid and the element stated with none', () => {
+    const got = readerGets(writes, '\\label')
+    expect(got.length).toBeGreaterThan(0)
+    for (const g of got) {
+      expect(g).toMatchObject({ state: 'laid', ink: 0, kind: 'zero' })
+      expect(g.unknown).toBeUndefined()
+    }
+  })
+  it('a name the paper defines but never puts in force: the label in force is a write alone, answered as one', () => {
+    const got = readerGets(hyper, '\\label')
+    expect(got.length).toBeGreaterThan(0)
+    for (const g of got) {
+      expect(g).toMatchObject({ state: 'laid', ink: 0, kind: 'zero' })
+      expect(g.unknown).toBeUndefined()
+    }
+  })
+  it('a write with a dagger after it: TeX answers it sets ink, its glyph drawn where TeX set it', () => {
+    const got = readerGets(writes, '\\index')
+    expect(got.length).toBeGreaterThan(0)
+    for (const g of got) expect({ ...g, inkStated: g.ink > 0 }).toMatchObject({ state: 'laid', inkStated: true })
   })
 })
