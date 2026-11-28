@@ -936,11 +936,11 @@ export function ownOf(
       if (unitOf.has(id)) unit(id).unhidden ??= 'marks'
       continue
     }
-    let e: (Taken & { how?: number }) | null = null
+    let e: (Taken & { how?: number; toText?: true }) | null = null
     let lost = false
     if (owned) {
       const x = owned.get(name)
-      if (x && x.how < OWNED) e = { glyphs: x.glyphs, boxes: x.boxes, how: x.how }
+      if (x && x.how < OWNED) e = { ...x }
       else if (x && x.how > OWNED) lost = true
     } else if (list.length === 1) {
       const close = where.get(`${m[1]}${m[2]}.${m[3]}b`) ?? []
@@ -987,8 +987,8 @@ export function ownOf(
     }
     // (an image its own only where its reading is bounded by TeX's facts on both sides: its closing point, or the text after it in
     // its unit; one that runs on to its unit's next mark may pass over a figure TeX set there, 2010.11929v2's wrapfigure after
-    // `\subsection{Inspecting \oursfull{}}`)
-    if (e) claim(e, `u${id}.p`, BOUNDED.has(e.how) ? 'p' : 'q')
+    // `\subsection{Inspecting \oursfull{}}`; one past its column's end to the text after it is bounded: stream.ts Owned.toText)
+    if (e) claim(e, `u${id}.p`, BOUNDED.has(e.how) || e.toText ? 'p' : 'q')
     // a placeholder whose ink cannot be told apart is in the text's range: hidden with it, it could not be kept in place, and the
     // spell check reads no symbol (=, ×, †): its unit is the original's
     else if (lost && unitOf.has(id) && !unitOf.get(id)!.unhidden && textOf.has(id)) unit(id).unhidden = 'marks'
