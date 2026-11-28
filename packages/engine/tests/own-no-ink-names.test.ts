@@ -119,24 +119,33 @@ describe('what a translator is told of such a name: its spelling’s kind, whate
   // it, `other` an element that sets no word; the source's units are told it before any compile (front.ts sourceUnitsOf), so it
   // cannot be TeX's answer: it stays the spelling's, as before the rule, and only the layout reads the definition)
   it('a size switch, a separator, an \\index and a \\label the paper defines are `other` to the translator, as before', () => {
-    const switched = read(`${WORDS} with a switch \\footnotesize standing in it.`, '\\renewcommand{\\footnotesize}{\\textsection}\n')
+    const switched = read(
+      `${WORDS} with a switch \\footnotesize standing in it.`,
+      '\\renewcommand{\\footnotesize}{\\textsection}\n',
+    )
     expect(switched.at('\\footnotesize')).toMatchObject({ marking: 'macro', kind: 'other' })
     const indexed = read(`${WORDS} with an entry\\index{entry} in it.`, '\\renewcommand{\\index}[1]{\\textdagger}\n')
     expect(indexed.at('\\index')).toMatchObject({ marking: 'macro', kind: 'other' })
     const labelled = read(`${WORDS} with a label\\label{here} in it.`, '\\renewcommand{\\label}[1]{}\n')
     expect(labelled.at('\\label')).toMatchObject({ marking: 'macro', kind: 'other' })
     const sty = '\\ProvidesPackage{ours}\n\\newcommand{\\oursmall}{\\def\\footnotesize{\\textsection}}\n'
-    const inner = read(`${WORDS} with a switch \\footnotesize standing in it.`, '\\usepackage{ours}\n', [['ours.sty', sty]])
+    const inner = read(`${WORDS} with a switch \\footnotesize standing in it.`, '\\usepackage{ours}\n', [
+      ['ours.sty', sty],
+    ])
     expect(inner.at('\\footnotesize')).toMatchObject({ marking: 'macro', kind: 'other' })
   })
 
   it('the same names the paper does not define are `other` too (the control)', () => {
-    expect(read(`${WORDS} with a switch \\footnotesize standing in it.`).at('\\footnotesize')).toMatchObject({ kind: 'other' })
+    expect(read(`${WORDS} with a switch \\footnotesize standing in it.`).at('\\footnotesize')).toMatchObject({
+      kind: 'other',
+    })
     expect(read(`${WORDS} with an entry\\index{entry} in it.`).at('\\index')).toMatchObject({ kind: 'other' })
   })
 
   it('a paper’s macro of a name no list holds stays `macro` to the translator', () => {
-    expect(read(`${WORDS} with \\ours standing in it.`, '\\newcommand{\\ours}{\\textsection}\n').at('\\ours')).toMatchObject({
+    expect(
+      read(`${WORDS} with \\ours standing in it.`, '\\newcommand{\\ours}{\\textsection}\n').at('\\ours'),
+    ).toMatchObject({
       marking: 'macro',
       kind: 'macro',
     })
