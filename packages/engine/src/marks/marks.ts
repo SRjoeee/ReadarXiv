@@ -3299,20 +3299,16 @@ const LOOKS_AHEAD = (p: PieceLike | null | undefined): boolean => {
   if (tailPiece(p)) return false
   // (a name of the no-ink lists the paper defines (ownNoInk): its definition decides where the source reader reads it, one that
   // takes a parameter may read what follows it, one of none reads nothing; one the reader does not hold reads as the name did,
-  // nothing after it (the compile guard the backstop, as for the name itself))
-  if (ownNoInk(p)) return ownReading(p) === 'args'
+  // nothing after it (the compile guard the backstop, as for the name itself); a prefix, whatever its definition, still applies
+  // to the token after it)
+  if (ownNoInk(p)) return ownReading(p) === 'args' || PREFIX_END.test(p!.src ?? '')
   const cls = classOf(p)
-  // (the prefixes: xspace.sty's \xspace, latex.ltx's \protect, TeX's primitives \noexpand, \expandafter, \string, \global, \long,
-  // \outer, \immediate and e-TeX's \unexpanded, \detokenize, \protected)
-  return (
-    cls === 'macro' ||
-    cls === 'footnote' ||
-    (p?.t === 'ph' &&
-      /\\(?:xspace\*?|protect|noexpand|expandafter|string|unexpanded|detokenize|global|long|outer|protected|immediate)$/.test(
-        p.src ?? '',
-      ))
-  )
+  return cls === 'macro' || cls === 'footnote' || (p?.t === 'ph' && PREFIX_END.test(p.src ?? ''))
 }
+/** a source that ends in a prefix that applies to the next token: xspace.sty's \xspace, latex.ltx's \protect, TeX's primitives
+ *  \noexpand, \expandafter, \string, \global, \long, \outer, \immediate and e-TeX's \unexpanded, \detokenize, \protected */
+const PREFIX_END =
+  /\\(?:xspace\*?|protect|noexpand|expandafter|string|unexpanded|detokenize|global|long|outer|protected|immediate)$/
 /** a placeholder that reads nothing after it, whatever else it is: a LaTeX text symbol (source/text-symbols.ts: `\S`, `\%`, `\_`,
  *  each one character by the kernel's own definition, no argument and no look ahead), where LOOKS_AHEAD's class of a macro
  *  takes it for a paper's macro. The piece right after it keeps its marks ("\S\ref{sec:a}"); its ink is read as any macro's

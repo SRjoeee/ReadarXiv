@@ -134,6 +134,11 @@ describe('what keeps its reading (controls)', () => {
     expect(r.at('\\cite')).toMatchObject({ marking: 'cite' })
   })
 
+  it('a prefix the paper defines (\\protect) still applies to the token after it: nothing of ours between them', () => {
+    const r = read(`${WORDS} with \\protect\\ref{a} in it.`, '\\def\\protect{\\noexpand\\protect\\noexpand}\n')
+    expect(r.at('\\protect')).toMatchObject({ looks: true })
+  })
+
   it('a paper’s macro of a name no list holds keeps its reading: it may read what follows it', () => {
     const r = read(`${WORDS} with our \\sys{} in it.`, '\\newcommand{\\sys}{SysName}\n')
     expect(r.at('\\sys')).toMatchObject({ marking: 'macro', looks: true, asked: true })
