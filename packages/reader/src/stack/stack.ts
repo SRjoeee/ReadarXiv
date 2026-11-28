@@ -371,6 +371,13 @@ export interface Stack {
    * read after a null asks again
    */
   read<T>(n: number, key: string, signal: AbortSignal, f: (d: Drawn) => T): Promise<T | null>
+  /**
+   * `draw` run as a drawing of the scheduler's, in the turn of what is on the screen (rank 0): one at a time with the panes'
+   * drawings, never beside them. For a drawing of slot n's content `key` that the stack does not hold (a link preview's region
+   * drawn at a scale of its own, by its owner). Its result; null where at its turn the slot is to show another content or the
+   * stack went, or where `signal` gave it up before it ran
+   */
+  turn<T>(n: number, key: string, signal: AbortSignal, draw: () => Promise<T>): Promise<T | null>
   page(n: number): HTMLElement | null
   viewport(n: number): PageViewport | null
   /** the content key slot n shows, or null */
@@ -1490,6 +1497,34 @@ export function createStack(o: StackOptions): Stack {
         // (a near slot's drawing at its own turn, a far one's now)
         if (s.near) want(s)
         else drive(s)
+      })
+    },
+    turn(n, key, signal, draw) {
+      if (disposed || !slots[n - 1] || signal.aborted) return Promise.resolve(null)
+      return new Promise((done, fail) => {
+        const off = () => {
+          scheduler.forget(job)
+          done(null)
+        }
+        const job: Job = {
+          rank: () => (disposed || signal.aborted ? null : 0),
+          order: () => n + 0.75,
+          run: async () => {
+            signal.removeEventListener('abort', off)
+            if (disposed || signal.aborted || contentOf(n)?.key !== key) return done(null)
+            try {
+              done(await draw())
+            } catch (e) {
+              fail(e)
+            }
+          },
+          dropped: () => {
+            signal.removeEventListener('abort', off)
+            done(null)
+          },
+        }
+        signal.addEventListener('abort', off, { once: true })
+        scheduler.want(job)
       })
     },
     dropKept(drop = () => true) {

@@ -2,7 +2,8 @@
 // figure's, a table's, a display's, a section's or a note's preview keeps it where it stands, the same cut at the same size (the
 // owner's (e), judged on staging). Keeping is felt, not explained: it starts lifted and settles in the capsules' tempo, then
 // looks like any preview. It moves by a drag anywhere on it (grabbed, lifted in the hand) and by the arrows while it has the
-// focus (KEEP_STEP), through the one rule for where it may be (panel.ts placeKept). Its close is a round ×, shown on hover and
+// focus (KEEP_STEP), through the one rule for where it may be (panel.ts placeKept), which a resize of the reader's window
+// applies again (its size brought down to the new window's most where it is past it). Its close is a round ×, shown on hover and
 // on the keyboard's focus, never on the focus a drag leaves (the sheet's rule). Esc closes the topmost thing (the preview first:
 // previews.ts), the focus back to the link it came from. One at a time: keeping another replaces it. To assistive technology a
 // dialog named by its label, its × named to close it (UI.md S-R-32).
@@ -11,11 +12,12 @@
 // never the browser's page, between the size it opened at and its most (panel.ts mostScale), the image always whole; the keys
 // + and - by the panes' tenth, 0 back. While a gesture runs its drawing is scaled (a transform, on the compositor); settled, the
 // crop is drawn again at that scale (the content's own `zoom.draw`: the left's arXiv drawing, the right's page through the
-// stack's one read) and the drawing it replaces is let go. Its percentage (UI.md S-R-34, the chip) at the top-left, opposite
-// the ×: `data-axt-chip` none | live (a zoom running: digits at full ink, no pointer events) | ghost (glass: for CHIP_AFTER_MS
-// after a zoom, and while the size is not the opening one and the pointer or the keyboard's focus is on the panel) | awake (the
-// pointer within WAKE_PX of it, or the keyboard on it: the ×'s own dress, pressable); a press returns it to the size it opened
-// at in RESET_MS. Where it opened at its most a gesture does nothing and no chip shows.
+// stack's one read, its box drawn anew at the device's pixels past the pane's own), swapped in with one replaceChildren in the
+// box the bitmap was scaled in, and the drawing it replaces is let go. Its percentage (UI.md S-R-34, the chip) at the top-left,
+// opposite the ×: `data-axt-chip` none | live (a zoom running: digits at full ink, no pointer events) | ghost (glass: for
+// CHIP_AFTER_MS after a zoom, and while the size is not the opening one and the pointer or the keyboard's focus is on the panel)
+// | awake (the pointer within WAKE_PX of it, or the keyboard on it: the ×'s own dress, pressable); a press returns it to the size
+// it opened at in RESET_MS. Where it opened at its most a gesture does nothing and no chip shows.
 import type { Clock } from '../stack/clock.ts'
 import { isZoomWheel, readGestureZoom, zoomFactor } from '../zoom-gesture.ts'
 import {
@@ -85,6 +87,8 @@ interface Zoom {
   near: boolean
   settleT: number
   chipT: number
+  /** the drawing again at the size a resize of the window brought it down to, once the window stands */
+  fitT: number
   anim: number
   wheel: { f: number; x: number; y: number; frame: number }
   redraw: AbortController | null
@@ -263,6 +267,29 @@ export function createKeep(o: {
     zm.after = false
     animate(el, zm, zm.s0, reduced() ? 0 : RESET_MS, () => corner(zm))
   }
+  /** the reader's window resized: its most the new window's, a size past it brought down to it at once (about its image's
+   *  top-left corner, as the chip's return shrinks) and drawn again once the window has stood SETTLE_MS; its place through the
+   *  one rule (the drag guide's re-clamp after a viewport change). Never grown, never moved where it still fits */
+  function refit(el: HTMLElement, zm: Zoom | null) {
+    if (zm) {
+      zm.max = mostScale({ s0: zm.s0, extent: zm.z.extent, segs: zm.z.segs, area: area() })
+      if (zm.s > zm.max) {
+        clock.cancel(zm.anim)
+        zm.anim = 0
+        zm.redraw?.abort()
+        zm.redraw = null
+        apply(el, zm, zm.max, ...corner(zm))
+        clock.clear(zm.fitT)
+        zm.fitT = clock.later(() => {
+          zm.fitT = 0
+          if (kept?.zoom === zm && !zm.zooming) redraw(zm)
+        }, SETTLE_MS)
+        return
+      }
+    }
+    const p = zm ? { left: zm.left, top: zm.top } : at(el)
+    put(el, zm, p.left, p.top)
+  }
 
   /** the zoom of a kept crop: its image in a box of its own size, the chip, the gestures, the keys */
   function zoomOf(el: HTMLElement, content: PreviewContent, signal: AbortSignal): Zoom | null {
@@ -301,6 +328,7 @@ export function createKeep(o: {
       near: false,
       settleT: 0,
       chipT: 0,
+      fitT: 0,
       anim: 0,
       wheel: { f: 1, x: 0, y: 0, frame: 0 },
       redraw: null,
@@ -401,6 +429,7 @@ export function createKeep(o: {
     clock.cancel(zm.wheel.frame)
     clock.clear(zm.settleT)
     clock.clear(zm.chipT)
+    clock.clear(zm.fitT)
     zm.redraw?.abort()
   }
   return {
@@ -521,6 +550,8 @@ export function createKeep(o: {
         },
         { signal },
       )
+      // (the reader's window resized: the one rule applied again, in the resize's own turn, before the frame it is drawn in)
+      window.addEventListener('resize', () => refit(pv, zoom), { signal })
       if (byKey) pv.focus({ preventScroll: true })
     },
     esc() {

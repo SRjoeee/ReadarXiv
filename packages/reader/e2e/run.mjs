@@ -7667,6 +7667,275 @@ await check(
     return out
   },
 )
+// ---------------------------------------------------------------- a kept panel's sharpness at a scale past its pane's, and its window
+/** each canvas of the kept panel's image: its backing pixels against its shown box in device pixels */
+const pvBacking = (page) =>
+  page.evaluate(() =>
+    [...document.querySelectorAll('.axt-pv-kept:not([data-axt-out]) .axt-pv-kv canvas')].map((c) => {
+      const r = c.getBoundingClientRect()
+      return {
+        cls: c.className,
+        px: [c.width, c.height],
+        shown: [Math.round(r.width * devicePixelRatio), Math.round(r.height * devicePixelRatio)],
+        dpr: devicePixelRatio,
+      }
+    }),
+  )
+/** whether every canvas of a kept panel's image holds its shown size's device pixels, within a CSS px either way (a segment's
+ *  box is its region's rounded up to a whole CSS px, crop.ts: 2,515 device px of a box 1,257.6 CSS px across shown in 1,258) */
+const pvBacked = (b) =>
+  b.length > 0 &&
+  b.every((c) => {
+    const d = Math.max(1, Math.ceil(c.dpr))
+    return Math.abs(c.px[0] - c.shown[0]) <= d && Math.abs(c.px[1] - c.shown[1]) <= d
+  })
+/** the kept panel's crop drawn again in place after a gesture (no transform left on it), waited for */
+const pvSettled = (page, ms = 8000) =>
+  waitFor(
+    page,
+    () => {
+      const c = document.querySelector('.axt-pv-kept:not([data-axt-out]) .axt-pv-crop')
+      return !!c && c.style.transform === ''
+    },
+    null,
+    ms,
+  )
+/** the kept panel's image as shown, its screenshot decoded in the page (device pixels): the figure's frame found by its top
+ *  rule (the first dark pixel down the middle column), then its left rule along a row inside the frame, 30 % of the image down
+ *  from that rule: the rule's darkest luma (Rec. 709) and, on each side of it, the pixels between the paper and that ink (an
+ *  edge's own pixels: one where the rule is drawn at the device's pixels, several where a coarser drawing is scaled up); the
+ *  row's place (CSS px) for a close-up. Null where no frame is found */
+async function pvRule(page) {
+  const clip = await page.evaluate(() => {
+    const b = document.querySelector('.axt-pv-kept:not([data-axt-out]) .axt-pv-kv').getBoundingClientRect()
+    return { x: b.left, y: b.top, width: b.width, height: b.height }
+  })
+  const buf = await page.screenshot({ clip })
+  const r = await page.evaluate(async (b64) => {
+    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))
+    const bmp = await createImageBitmap(new Blob([bytes], { type: 'image/png' }))
+    const W = bmp.width,
+      H = bmp.height
+    const c = new OffscreenCanvas(W, H)
+    const x = c.getContext('2d')
+    x.drawImage(bmp, 0, 0)
+    const d = x.getImageData(0, 0, W, H).data
+    const at = (i, j) => 0.2126 * d[(j * W + i) * 4] + 0.7152 * d[(j * W + i) * 4 + 1] + 0.0722 * d[(j * W + i) * 4 + 2]
+    let top = -1
+    for (let j = 0; j < H; j++)
+      if (at(W >> 1, j) < 128) {
+        top = j
+        break
+      }
+    if (top < 0) return null
+    const y = Math.min(H - 1, top + Math.round(H * 0.3))
+    const row = Array.from({ length: W }, (_, i) => at(i, y))
+    const first = row.findIndex((v) => v < 200)
+    if (first < 1) return null
+    const paper = Math.max(...row.slice(0, first))
+    const ink = Math.min(...row.slice(first, first + 24))
+    const span = paper - ink
+    // (the rule's band: the run of pixels darker than the paper by a tenth of the span; its edges: those of it lighter than the
+    // ink by a tenth)
+    let a = first
+    while (a > 0 && row[a - 1] < paper - 0.1 * span) a--
+    let b = first
+    while (b + 1 < W && row[b + 1] < paper - 0.1 * span) b++
+    const dark = []
+    for (let i = a; i <= b; i++) if (row[i] <= ink + 0.1 * span) dark.push(i)
+    const lo = dark[0] ?? a,
+      hi = dark.at(-1) ?? b
+    return {
+      W,
+      H,
+      y,
+      paper: Math.round(paper),
+      ink: Math.round(ink),
+      band: b - a + 1,
+      edges: [lo - a, b - hi],
+      profile: row.slice(Math.max(0, a - 2), b + 3).map(Math.round),
+      at: { x: a, y },
+    }
+  }, buf.toString('base64'))
+  if (!r) return null
+  const dpr = clip.width ? r.W / clip.width : 1
+  return { ...r, css: { x: clip.x + r.at.x / dpr, y: clip.y + r.at.y / dpr } }
+}
+/** a close-up of the page round (x, y) CSS px, `w` x `h` of them, at the device's pixels each drawn 8 x 8, as a PNG at `path` */
+async function pvCloseUp(page, x, y, w, h, path) {
+  const buf = await page.screenshot({
+    clip: { x: Math.max(0, x - w / 2), y: Math.max(0, y - h / 2), width: w, height: h },
+  })
+  const b64 = await page.evaluate(async (s) => {
+    const bytes = Uint8Array.from(atob(s), (c) => c.charCodeAt(0))
+    const bmp = await createImageBitmap(new Blob([bytes], { type: 'image/png' }))
+    const c = new OffscreenCanvas(bmp.width * 8, bmp.height * 8)
+    const x2 = c.getContext('2d')
+    x2.imageSmoothingEnabled = false
+    x2.drawImage(bmp, 0, 0, c.width, c.height)
+    const blob = await c.convertToBlob({ type: 'image/png' })
+    const u = new Uint8Array(await blob.arrayBuffer())
+    let bin = ''
+    for (let i = 0; i < u.length; i += 0x8000) bin += String.fromCharCode(...u.subarray(i, i + 0x8000))
+    return btoa(bin)
+  }, buf.toString('base64'))
+  ;(await import('node:fs')).writeFileSync(path, Buffer.from(b64, 'base64'))
+}
+await check(
+  'previews: a kept panel zoomed to its most is drawn at the device’s pixels on both panes (2x): each canvas of its image backed by its shown size times the device pixel ratio, the figure’s rule an edge of one device pixel (not the pane’s drawing scaled up); the drawing it replaced let go when it is zoomed again; its cost (pixels, the time from the gesture’s last event to the sharp drawing in place)',
+  async () => {
+    const out = {}
+    const { page, context, errors } = await chromeLaid('s5-links', { ui: 'zh-CN' }, { dpr: 2 })
+    try {
+      for (const side of ['left', 'right']) {
+        const k0 = await pvKeep(page, side, 'figure.1')
+        assert(k0?.img, `${side}: not kept`)
+        // (the crop's replacements watched: when the sharp drawing came, after the gesture's last wheel)
+        await page.evaluate(() => {
+          const kv = document.querySelector('.axt-pv-kept:not([data-axt-out]) .axt-pv-kv')
+          window.__swaps = []
+          window.__lastWheel = 0
+          new MutationObserver((rs) => {
+            for (const r of rs)
+              window.__swaps.push({ t: performance.now(), added: r.addedNodes.length, gone: r.removedNodes.length })
+          }).observe(kv, { childList: true })
+          kv.addEventListener('wheel', () => {
+            window.__lastWheel = performance.now()
+          })
+        })
+        await pvPinch(page, k0.img.left + k0.img.w / 2, k0.img.top + k0.img.h / 2, 60, -40, 0)
+        await pvSettled(page)
+        await page.mouse.move(2, 300)
+        await page.waitForTimeout(400)
+        const k = await pvKept(page)
+        const backing = await pvBacking(page)
+        const rule = await pvRule(page)
+        const t = await page.evaluate(() => ({ swaps: window.__swaps, last: window.__lastWheel }))
+        const sharp = t.swaps.filter((s) => s.t >= t.last).at(-1)
+        out[side] = {
+          pct: k.pct,
+          img: [Math.round(k.img.w), Math.round(k.img.h)],
+          backing,
+          px: k.px,
+          mib: +((k.px * 4) / 2 ** 20).toFixed(1),
+          sharpMs: sharp ? Math.round(sharp.t - t.last) : null,
+          // (each replacement one mutation that takes the old drawing out and puts the new in: no frame without a drawing)
+          swaps: t.swaps.map((s) => `${s.added}/${s.gone}`),
+          rule: rule && { ink: rule.ink, paper: rule.paper, band: rule.band, edges: rule.edges, profile: rule.profile },
+        }
+        if (PV_SHOTS && rule) {
+          mkdirSync(PV_SHOTS, { recursive: true })
+          await page.screenshot({ path: join(PV_SHOTS, `most-figure-${side}.png`) })
+          await pvCloseUp(page, rule.css.x + 4, rule.css.y, 32, 16, join(PV_SHOTS, `most-figure-${side}-edge-8x.png`))
+        }
+        // (zoomed again: drawn again, the drawing it replaced let go at once)
+        await page.evaluate(() => {
+          window.__was = [...document.querySelectorAll('.axt-pv-kept:not([data-axt-out]) .axt-pv-kv canvas')]
+        })
+        await pvPinch(page, k.img.left + k.img.w / 2, k.img.top + k.img.h / 2, 6, 40, 0)
+        await pvSettled(page)
+        out[side].heldAfterZoom = await page.evaluate(() => window.__was.reduce((a, c) => a + c.width * c.height, 0))
+        await pvClose(page)
+      }
+      const bad = []
+      for (const side of ['left', 'right']) {
+        const o = out[side]
+        if (o.pct !== '300%') bad.push(`${side}: not at its most`)
+        if (!pvBacked(o.backing)) bad.push(`${side}: drawn at fewer pixels than shown`)
+        if (!(o.rule && o.rule.ink <= 60 && o.rule.edges.every((e) => e <= 1))) bad.push(`${side}: the rule smeared`)
+        if (o.heldAfterZoom !== 0) bad.push(`${side}: ${o.heldAfterZoom} pixels held by the drawing replaced`)
+        if (!o.swaps.every((s) => s === '1/1')) bad.push(`${side}: a replacement not in one mutation`)
+      }
+      assert(!bad.length, `${bad.join('; ')} ${JSON.stringify(out)}`)
+      assert(!errors.length, errors.join('; '))
+    } finally {
+      await context.close()
+    }
+    return out
+  },
+)
+await check(
+  'previews: a kept panel stays whole inside the one rule when the reader’s window shrinks: its place clamped again, a size past the new most brought down to it and drawn again at it, its × reachable; growing back moves nothing',
+  async () => {
+    const out = {}
+    const inside = (k) =>
+      k.box.left >= 8 - 0.5 && k.box.top >= 52 - 0.5 && k.box.right <= k.W - 8 + 0.5 && k.box.bottom <= k.H - 8 + 0.5
+    const { page, context, errors } = await chromeLaid('s5-links', { ui: 'zh-CN' })
+    try {
+      // (a figure at its most, dragged to the window's foot and right, then the window made smaller than it)
+      const k0 = await pvKeep(page, 'right', 'figure.1')
+      assert(k0?.img, 'figure: not kept')
+      await pvPinch(page, k0.img.left + k0.img.w / 2, k0.img.top + k0.img.h / 2, 60, -40, 900)
+      await pvSettled(page)
+      const k1 = await pvDragTo(page, 'br')
+      await page.setViewportSize({ width: 1000, height: 640 })
+      await page.waitForTimeout(900)
+      await pvSettled(page).catch(() => {})
+      const k2 = await pvKept(page)
+      const x = await page.evaluate(() => {
+        const r = document.querySelector('.axt-pv-kept:not([data-axt-out]) .axt-pv-x').getBoundingClientRect()
+        const cx = r.left + r.width / 2,
+          cy = r.top + r.height / 2
+        return { cx, cy, hit: !!document.elementFromPoint(cx, cy)?.closest('.axt-pv-x') }
+      })
+      const backing = await pvBacking(page)
+      out.zoomed = {
+        before: { pct: k1.pct, box: k1.box },
+        after: { pct: k2.pct, box: k2.box, img: [Math.round(k2.img.w), Math.round(k2.img.h)], W: k2.W, H: k2.H },
+        x,
+        backing,
+      }
+      if (PV_SHOTS) {
+        mkdirSync(PV_SHOTS, { recursive: true })
+        await page.screenshot({ path: join(PV_SHOTS, 'resize-zoomed-after.png') })
+      }
+      assert(inside(k2), `zoomed: past the rule after the shrink ${JSON.stringify(out.zoomed)}`)
+      // (its most at the new window: the room less its padding and one pixel a segment, mostScale)
+      assert(
+        k2.img.w <= k2.W - 2 * 8 - 2 * 10 - 1 + 1 && k2.img.h <= k2.H - 52 - 8 - 2 * 10 - 1 + 1,
+        `zoomed: not brought down to the new most ${JSON.stringify(out.zoomed)}`,
+      )
+      assert(Number.parseFloat(k2.pct) < Number.parseFloat(k1.pct), `zoomed: its size kept ${k1.pct} -> ${k2.pct}`)
+      assert(pvBacked(backing), `zoomed: not drawn again at its new size ${JSON.stringify(backing)}`)
+      assert(
+        x.cx > 0 && x.cx < k2.W && x.cy > 0 && x.cy < k2.H && x.hit,
+        `zoomed: its × out of reach ${JSON.stringify(x)}`,
+      )
+      await page.mouse.move(x.cx, x.cy)
+      await page.waitForTimeout(200)
+      await page.mouse.click(x.cx, x.cy)
+      await page.waitForTimeout(500)
+      assert(!(await pvKept(page)), 'zoomed: its × did not close it')
+      // (a panel at its opening size, at the window's corner, the window shrunk again: its place alone moved; then grown back:
+      // nothing moves)
+      const t0 = await pvKeep(page, 'left', 'table.1')
+      assert(t0?.img, 'table: not kept')
+      const t1 = await pvDragTo(page, 'br')
+      await page.setViewportSize({ width: 900, height: 600 })
+      await page.waitForTimeout(700)
+      const t2 = await pvKept(page)
+      await page.setViewportSize({ width: 1400, height: 900 })
+      await page.waitForTimeout(700)
+      const t3 = await pvKept(page)
+      out.opening = {
+        before: { pct: t1.pct, box: t1.box },
+        shrunk: { pct: t2.pct, box: t2.box, W: t2.W, H: t2.H },
+        grown: { pct: t3.pct, box: t3.box },
+      }
+      if (PV_SHOTS) await page.screenshot({ path: join(PV_SHOTS, 'resize-opening-grown.png') })
+      assert(inside(t2) && t2.pct === t1.pct, `opening: ${JSON.stringify(out.opening)}`)
+      assert(
+        Math.abs(t3.box.left - t2.box.left) < 0.5 && Math.abs(t3.box.top - t2.box.top) < 0.5 && t3.pct === t2.pct,
+        `opening: moved as the window grew ${JSON.stringify(out.opening)}`,
+      )
+      await pvClose(page)
+      assert(!errors.length, errors.join('; '))
+    } finally {
+      await context.close()
+    }
+    return out
+  },
+)
 // (AXT_SHOTS=<dir>: the kept panel's shots in the cases of the approved prototype's own, at its window, 1512 x 818 at 2x: the
 // section window's chip in its three states and the whole panel, light and dark; the figure and the table zoomed to their most
 // from each pane, light, and from the right dark; the note at its most at 1512 and at 2560 x 1440; the narrow sheet, dark)
@@ -8362,6 +8631,11 @@ const PV_DISTURB = [
       await pvPinch(page, r.x, r.y, 6, -40, 600)
       const k1 = await pvKept(page)
       if (!(k1.img.w > k0.img.w || k1.pct === k0.pct)) throw new Error(`kept-zoomed: not zoomed ${k0.pct} -> ${k1.pct}`)
+      // (drawn again at its new size's device pixels, whichever pane it is cut from)
+      await pvSettled(page)
+      const backing = await pvBacking(page)
+      if (!pvBacked(backing))
+        throw new Error(`kept-zoomed: drawn at fewer pixels than shown ${JSON.stringify(backing)}`)
       await page.mouse.move(2, 300)
       await page.keyboard.press('Escape')
       await page.waitForTimeout(600)
@@ -8386,7 +8660,7 @@ const PV_DISTURB = [
 ]
 for (const side of ['left', 'right'])
   await check(
-    `previews: show, disturb, show again on the ${side} pane: each kind (a card, a figure's, a table's, a display's, a section's window, a note's crop) with its target in view, near and far, shown, then shown again at its own link after each of: a wheel away and back (a little; several pages), a zoom and back, a jump and its return, a resize, the other pane scrolled alone, a kept panel opened and closed, a kept panel zoomed and closed, twenty hovers; nothing left behind (surfaces, kept panels, listeners); a link with no target shows nothing and jumps (staging, 2026-11-28: a right crop gone for good after a scroll)`,
+    `previews: show, disturb, show again on the ${side} pane: each kind (a card, a figure's, a table's, a display's, a section's window, a note's crop) with its target in view, near and far, shown, then shown again at its own link after each of: a wheel away and back (a little; several pages), a zoom and back, a jump and its return, a resize, the other pane scrolled alone, a kept panel opened and closed, a kept panel zoomed (drawn again at its new size's device pixels) and closed, twenty hovers; nothing left behind (surfaces, kept panels, listeners); a link with no target shows nothing and jumps (staging, 2026-11-28: a right crop gone for good after a scroll)`,
     async () => {
       const { page, context, errors } = await chromeLaid('s5-links', { ui: 'zh-CN' })
       const cdp = await context.newCDPSession(page)

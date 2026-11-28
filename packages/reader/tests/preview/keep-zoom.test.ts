@@ -7,7 +7,7 @@
 // opening size is already the most, a gesture does nothing and no chip shows. Over stand-ins, the clock run by hand.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createKeep } from '../../src/preview/keep.ts'
-import { KEEP_EDGE, KEEP_TOP, PANEL_PAD } from '../../src/preview/panel.ts'
+import { KEEP_EDGE, KEEP_TOP, mostScale, PANEL_PAD, SETTLE_MS } from '../../src/preview/panel.ts'
 import type { PreviewContent } from '../../src/preview/previews.ts'
 import type { Clock } from '../../src/stack/clock.ts'
 import { READER_CSS } from '../../src/styles.ts'
@@ -75,10 +75,22 @@ function cropAt(s: number, w: number, h: number) {
   return crop
 }
 
-function setUp(o: { w?: number; h?: number; s0?: number; left?: number; top?: number; reduced?: boolean } = {}) {
+function setUp(
+  o: {
+    w?: number
+    h?: number
+    s0?: number
+    left?: number
+    top?: number
+    reduced?: boolean
+    /** the reader's window, which a test may resize (default AREA) */
+    area?: { width: number; height: number }
+  } = {},
+) {
   const w = o.w ?? 200,
     h = o.h ?? 100,
     s0 = o.s0 ?? 1
+  const area = o.area ?? AREA
   const { clock, pass } = testClock()
   const draw = vi.fn(async (s: number, _signal: AbortSignal) => cropAt(s, w, h))
   const pv = document.createElement('div')
@@ -107,7 +119,7 @@ function setUp(o: { w?: number; h?: number; s0?: number; left?: number; top?: nu
   const link = document.createElement('a')
   link.href = '#x'
   document.body.append(link)
-  const k = createKeep({ clock, words: () => words, area: () => AREA, reduced: () => !!o.reduced })
+  const k = createKeep({ clock, words: () => words, area: () => area, reduced: () => !!o.reduced })
   k.keep(pv, content, link, false)
   const kv = () => pv.querySelector<HTMLElement>('.axt-pv-kv')!
   const chip = () => pv.querySelector<HTMLButtonElement>('button.axt-pv-chip')!
@@ -356,6 +368,91 @@ describe('the keys and the chip', () => {
     const t = setUp({ w: 400, h: 300, left: 900, top: 300 })
     for (let i = 0; i < 40; i++) t.key('ArrowRight')
     expect(t.at().left).toBe(AREA.width - KEEP_EDGE - 400 - 2 * PANEL_PAD)
+  })
+})
+
+describe('a kept panel when the reader’s window is resized (the one rule applied again: the drag guide’s re-clamp)', () => {
+  const resize = () => window.dispatchEvent(new Event('resize'))
+  /** whether the panel at (left, top) with its image `s` stands whole inside the rule in `area` */
+  const whole = (p: { left: number; top: number }, s: { width: number; height: number }, area: typeof AREA) =>
+    p.left >= KEEP_EDGE &&
+    p.top >= KEEP_TOP &&
+    p.left + s.width + 2 * PANEL_PAD <= area.width - KEEP_EDGE &&
+    p.top + s.height + 2 * PANEL_PAD <= area.height - KEEP_EDGE
+
+  it('the window shrunk: the panel back inside the rule at once, at its size where that still fits', async () => {
+    const area = { ...AREA }
+    // (its box 220 x 120 at 1,100, 600: whole in 1,400 x 900, past the right and the foot of 1,000 x 700)
+    const t = setUp({ area, left: 1100, top: 600 })
+    expect(t.at()).toEqual({ left: 1100, top: 600 })
+    area.width = 1000
+    area.height = 700
+    resize()
+    expect(t.at()).toEqual({ left: 1000 - KEEP_EDGE - 220, top: 700 - KEEP_EDGE - 120 })
+    expect(t.size()).toEqual({ width: 200, height: 100 })
+    expect(t.draw).not.toHaveBeenCalled()
+  })
+  it('zoomed past the smaller window’s most: brought down to it at once (its percentage too), drawn again at it once the window stands, the drawing it replaced let go; a gesture then stops there', async () => {
+    const area = { ...AREA }
+    const t = setUp({ area })
+    for (let i = 0; i < 40; i++) {
+      t.wheel(210, 260)
+      await t.pass(16)
+    }
+    await t.pass(400)
+    expect(t.size()).toEqual({ width: 600, height: 300 })
+    const was = t.kv().querySelector('canvas')!
+    expect(was.width).toBeGreaterThan(0)
+    t.draw.mockClear()
+    // (two steps of a window's drag, 50 ms apart: placed at each, drawn once, SETTLE_MS after the last)
+    area.width = 700
+    area.height = 600
+    resize()
+    await t.pass(50)
+    area.width = 500
+    area.height = 400
+    resize()
+    const most = mostScale({ s0: 1, extent: { width: 200, height: 100 }, segs: 1, area })
+    expect(most).toBeLessThan(3)
+    const s = { width: Math.ceil(200 * most - 1e-9), height: Math.ceil(100 * most - 1e-9) }
+    expect(t.size()).toEqual(s)
+    expect(whole(t.at(), s, area)).toBe(true)
+    expect(t.chip().textContent).toBe(`${Math.round(most * 100)}%`)
+    await t.pass(SETTLE_MS - 20)
+    expect(t.draw).not.toHaveBeenCalled()
+    await t.pass(60)
+    expect(t.draw).toHaveBeenCalledTimes(1)
+    expect(t.draw.mock.calls[0]![0]).toBe(most)
+    expect(was.width).toBe(0)
+    // (its most is the new window's: a gesture past it stops there)
+    t.wheel(210, 260)
+    await t.pass(400)
+    expect(t.size()).toEqual(s)
+  })
+  it('the window grown back: nothing moves and nothing grows', async () => {
+    const area = { ...AREA }
+    const t = setUp({ area, left: 1100, top: 600 })
+    area.width = 1000
+    area.height = 700
+    resize()
+    const p = t.at(),
+      s = t.size()
+    area.width = 1400
+    area.height = 900
+    resize()
+    await t.pass(400)
+    expect(t.at()).toEqual(p)
+    expect(t.size()).toEqual(s)
+    expect(t.draw).not.toHaveBeenCalled()
+  })
+  it('closed, it hears no resize: its listener goes with it', async () => {
+    const add = vi.spyOn(window, 'addEventListener')
+    const t = setUp()
+    const call = add.mock.calls.find((c) => c[0] === 'resize')
+    const signal = (call?.[2] as AddEventListenerOptions | undefined)?.signal
+    expect(signal?.aborted).toBe(false)
+    expect(t.k.esc()).toBe(true)
+    expect(signal?.aborted).toBe(true)
   })
 })
 

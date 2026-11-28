@@ -4,7 +4,8 @@
 // note: what the translation draws, never only the original's box). The left's crop is arXiv's drawing (the left's own canvas
 // where it is drawn, else a fresh drawing of the region); the right's is what that pane draws: a laid page's drawing (the
 // composer's `lay`, then its `region`, which reads the page's drawing wherever it stands: in view, parked off the view, or drawn
-// for the read where it is not), else what it shows for a page not laid, arXiv's drawing, never waiting for a translation. A section's window runs on to the next page and fades at its foot (the one
+// for the read where it is not, and draws the box anew at a scale past that drawing's pixels), else what it shows for a page not
+// laid, arXiv's drawing, never waiting for a translation. A section's window runs on to the next page and fades at its foot (the one
 // fade); a figure, a table or a display never fades. Drawn at the page's own scale, widened past the card up to the pane less
 // its margins, smaller where it would not fit; on the page's own paper (it is a cut of the page), dimmed as the page is. Null
 // where it cannot be drawn: no preview, the jump stays (never a doubtful one).

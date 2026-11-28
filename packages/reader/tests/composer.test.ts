@@ -21,6 +21,7 @@ import { cropsAway, detailBoxOf, holeOf } from '../src/compose/paint.ts'
 import { createServed, type Served } from '../src/compose/served.ts'
 import { PROBE_TEXT } from '../src/compose/text-rendering.ts'
 import { BACKOFF_MS } from '../src/session/machine.ts'
+import type { Kit } from '../src/pdfjs/kit.ts'
 import type { Clock } from '../src/stack/clock.ts'
 import { layPage, rulesFor } from '@readarxiv/typeset'
 import { kindShown, leftKinds } from '../src/compose/classes.ts'
@@ -109,6 +110,10 @@ function fakeStack(pages: number): FakeStack {
       const d = st.drawn.get(n)
       return d && (shown.get(n) === key || contentOf(n)?.key === key) ? f(d) : null
     }),
+    // (the scheduler's turn: at once here, none where the slot is to show another content or the signal gave it up)
+    turn: vi.fn(async <T>(n: number, key: string, s: AbortSignal, f: () => Promise<T>) =>
+      s.aborted || (shown.get(n) !== key && contentOf(n)?.key !== key) ? null : f(),
+    ),
     page: (n: number) => slots[n - 1] ?? null,
     viewport: () => ({ viewBox: [0, 0, 600, 800], rotation: 0 }) as never,
     showing: (n: number) => shown.get(n) ?? null,
@@ -322,6 +327,7 @@ function world(
     lay?: ReturnType<typeof standInLay>
     faces?: ReturnType<typeof facesStub>
     root?: HTMLElement
+    kit?: Kit
   } = {},
 ): World {
   const parts =
@@ -337,7 +343,7 @@ function world(
   const failing = new Set<number>()
   const composer = createComposer({
     stack: stack as unknown as Stack,
-    kit: {} as never,
+    kit: o.kit ?? ({} as never),
     faces,
     lay,
     unlaid: 'original',
@@ -2175,5 +2181,154 @@ describe('a page laid and cut for a preview (link previews: lay, region)', () =>
     } finally {
       spy.mockRestore()
     }
+  })
+})
+
+describe("a region at a scale past what its page's drawing holds, drawn anew at the device's pixels (a kept panel zoomed past its pane)", () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+  const BOX: [number, number, number, number] = [60, 400, 360, 700]
+  /** page 2 (600 x 800 pt) laid and drawn at the stack's scale 1 on a screen of 2 device px a CSS px (its page view's canvas 1,600
+   *  px across its 800 CSS px), drawn under a canvas cap of `cap` pixels; the composed document's page a stand-in of PDF.js's whose
+   *  renders are recorded (failing where `fail`); a crop of the original (20 x 20 pt) on member 20's line where `crop` */
+  async function drawn(o: { cap?: number; fail?: boolean; crop?: boolean } = {}) {
+    vi.stubGlobal('devicePixelRatio', 2)
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(
+      () => ({ drawImage() {}, save() {}, restore() {}, beginPath() {}, rect() {}, clip() {} }) as never,
+    )
+    const renders: { scale: number; transform: number[] | undefined; config: unknown; px: [number, number] }[] = []
+    const vpAt = (s: number) => ({
+      width: 600 * s,
+      height: 800 * s,
+      scale: s,
+      rotation: 0,
+      viewBox: [0, 0, 600, 800],
+      convertToViewportPoint: (x: number, y: number) => [x * s, (800 - y) * s],
+    })
+    const pdfPage = {
+      getViewport: ({ scale }: { scale: number }) => vpAt(scale),
+      render: (p: {
+        canvas: HTMLCanvasElement
+        viewport: { scale: number }
+        transform?: number[]
+        optionalContentConfigPromise?: unknown
+      }) => {
+        renders.push({
+          scale: p.viewport.scale,
+          transform: p.transform,
+          config: p.optionalContentConfigPromise,
+          px: [p.canvas.width, p.canvas.height],
+        })
+        return { promise: o.fail ? Promise.reject(new Error('the worker')) : Promise.resolve(), cancel() {} }
+      },
+    }
+    const lay = standInLay()
+    const withCrop = ((part: Part, rows: Rows) => {
+      const p = lay(part, rows)
+      if (o.crop)
+        for (const m of p.members)
+          if (m.state === 'laid' && m.ord === 20)
+            m.lines = [
+              [600, 72, 300, [{ s: 'x', x: 100, src: [2, 100, 590, 120, 610, 600], k: 1, piece: '1' }]],
+            ] as never
+      return p
+    }) as unknown as ReturnType<typeof standInLay>
+    withCrop.calls = 0
+    const g = groupsStub()
+    const w = world({
+      lay: withCrop,
+      kit: { lib: { OutputScale: { capPixels: (max: number) => max } } } as unknown as Kit,
+    })
+    w.composer.setDocuments({ original: {} as never, composed: { getPage: async () => pdfPage } as never, groups: g })
+    w.stack.setNear([2])
+    open(w, rowsOf('de', allIds(w), true))
+    await settle()
+    w.stack.put(2)
+    await settle()
+    const view = document.createElement('div')
+    view.className = 'page'
+    const wrap = document.createElement('div')
+    wrap.className = 'canvasWrapper'
+    const canvas = document.createElement('canvas')
+    canvas.width = 1600
+    canvas.height = Math.round((1600 * 800) / 600)
+    wrap.append(canvas)
+    view.append(wrap)
+    const over = document.createElement('div')
+    over.className = 'axt-over'
+    over.append(document.createElementNS('http://www.w3.org/2000/svg', 'svg'))
+    w.stack.drawn.set(2, {
+      view: { div: view, maxCanvasPixels: o.cap ?? 2 ** 25, capCanvasAreaFactor: -1 } as never,
+      over,
+    })
+    return { w, g, renders }
+  }
+  const canvases = (r: HTMLElement | null) =>
+    [...(r?.querySelectorAll('canvas') ?? [])].map((c) => [c.className, c.width, c.height])
+
+  it("drawn anew where its drawing holds fewer pixels than the scale asks: the composed page with its laid groups off on the box alone, at the device's pixels, in the scheduler's turn; its translation copied", async () => {
+    const { w, g, renders } = await drawn()
+    const signal = new AbortController().signal
+    // (the box 300 x 300 pt at 300 %: 1,200 CSS px, 2,400 device px; the drawing holds 2 a CSS px of the stack's, 6 asked)
+    const r = await w.composer.region(2, BOX, 3, signal)
+    expect(w.stack.turn).toHaveBeenCalledWith(2, w.stack.showing(2), signal, expect.any(Function))
+    expect(renders).toHaveLength(1)
+    const k = 3 * (96 / 72) * 2
+    expect(renders[0]!.scale).toBeCloseTo(k, 9)
+    expect(renders[0]!.transform?.map((v) => Math.round(v * 1e6) / 1e6)).toEqual([
+      1,
+      0,
+      0,
+      1,
+      -60 * 8,
+      -(800 - 700) * 8,
+    ])
+    expect(renders[0]!.config).toBe(g.laid)
+    expect(renders[0]!.px).toEqual([2400, 2400])
+    expect(canvases(r)).toEqual([['axt-pv-page', 2400, 2400]])
+    expect(Number.parseFloat(r!.style.width)).toBeCloseTo(1200, 6)
+    expect(r!.querySelector('svg')).not.toBeNull()
+  })
+  it("its crops cut at that resolution on the box's own grid, from the crop configuration's render (the page's detail crops' means)", async () => {
+    const { w, g, renders } = await drawn({ crop: true })
+    const r = await w.composer.region(2, BOX, 3, new AbortController().signal)
+    expect(renders.map((x) => x.config)).toEqual([g.laid, g.crops])
+    expect(canvases(r)).toEqual([
+      ['axt-pv-page', 2400, 2400],
+      ['axt-pv-crops', 2400, 2400],
+    ])
+  })
+  it('where its drawing holds the pixels the scale asks: its copy, as before, nothing drawn', async () => {
+    const { w, renders } = await drawn()
+    const r = await w.composer.region(2, BOX, 1, new AbortController().signal)
+    expect(renders).toHaveLength(0)
+    expect(w.stack.turn).not.toHaveBeenCalled()
+    expect(canvases(r)).toEqual([['axt-pv-page', 800, 800]])
+  })
+  it('within the canvas cap its page view is drawn under: past it, the best it can; where the cap gives no more than the copy, the copy', async () => {
+    const a = await drawn({ cap: 1_000_000 })
+    const r = await a.w.composer.region(2, BOX, 3, new AbortController().signal)
+    // (sqrt(1,000,000 / 1,200²) = 0.83 device px a CSS px: 1,000 px across, over the copy's 800)
+    expect(canvases(r)).toEqual([['axt-pv-page', 1000, 1000]])
+    expect(a.renders[0]!.scale).toBeCloseTo(3 * (96 / 72) * (1000 / 1200), 9)
+    vi.restoreAllMocks()
+    document.body.replaceChildren()
+    const b = await drawn({ cap: 400_000 })
+    expect(canvases(await b.w.composer.region(2, BOX, 3, new AbortController().signal))).toEqual([
+      ['axt-pv-page', 800, 800],
+    ])
+    expect(b.renders).toHaveLength(0)
+  })
+  it('a drawing that fails keeps the copy (never nothing); one given up answers nothing', async () => {
+    const a = await drawn({ fail: true })
+    expect(canvases(await a.w.composer.region(2, BOX, 3, new AbortController().signal))).toEqual([
+      ['axt-pv-page', 800, 800],
+    ])
+    const ac = new AbortController()
+    const p = a.w.composer.region(2, BOX, 3, ac.signal)
+    ac.abort()
+    expect(await p).toBeNull()
   })
 })

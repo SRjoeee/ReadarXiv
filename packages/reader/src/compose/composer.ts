@@ -153,8 +153,11 @@ export interface Composer {
   /** a copy of what the right draws of page n inside `box` (PDF units) at `scale` (the zoom): its page view's pixels, its crops
    *  and its translation's drawing, the page's top-left placed at the box's. Its drawing is read through the stack's `read`, the
    *  one answer to whether it can be read: where it is parked off the view it is read there, where it is not drawn it is drawn
-   *  (as a page ahead is) and read once whole. Null where it cannot be had now (not laid in this generation, its drawing failed,
-   *  `signal` aborted, a page turned by /Rotate: none rather than a doubtful one); nothing is remembered of a null */
+   *  (as a page ahead is) and read once whole. Where that drawing holds fewer pixels than the scale asks (a kept panel zoomed
+   *  past the pane's scale), the box's pixels and crops are drawn anew at the device's, in the scheduler's turn (`stack.turn`),
+   *  each canvas within the cap its page view is drawn under; the copy where that gives no more or fails. Null where it cannot
+   *  be had now (not laid in this generation, its drawing failed, `signal` aborted, a page turned by /Rotate: none rather than a
+   *  doubtful one); nothing is remembered of a null */
   region(
     n: number,
     box: [number, number, number, number],
@@ -895,10 +898,28 @@ export function createComposer(o: ComposerOptions): Composer {
   }
 
   // ---------------------------------------------------------------- a link preview's copy of a region (region)
+  /** the most device pixels one canvas of page view `view` may hold: PDF.js's cap its canvases are drawn under (its
+   *  maxCanvasPixels within capCanvasAreaFactor of the screen, OutputScale.capPixels), none known: no bound */
+  const capOf = (view: Drawn['view']): number => {
+    const v = view as unknown as { maxCanvasPixels?: number; capCanvasAreaFactor?: number }
+    const lib = (o.kit as { lib?: Partial<Kit['lib']> }).lib
+    const cap: unknown = lib?.OutputScale?.capPixels(v.maxCanvasPixels ?? -1, v.capCanvasAreaFactor ?? -1)
+    return typeof cap === 'number' && cap > 0 ? cap : Number.POSITIVE_INFINITY
+  }
+  /** every canvas of a region let go */
+  const dropAll = (el: HTMLElement) => {
+    for (const c of el.querySelectorAll('canvas')) dropCanvas(c)
+  }
   /** what the right draws of page n inside `box` at `scale`, copied from its drawing `d` read whole (stack.read): its page view's
    *  pixels, its crops (their canvas, or while the page is parked off the view the copy it keeps of them) and its translation's
-   *  drawing; null for a page turned by /Rotate or a box of no size */
-  function regionOf(n: number, d: Drawn, box: [number, number, number, number], scale: number): HTMLElement | null {
+   *  drawing; with the device pixels across its copy of the page holds (`px`), its size (CSS px) and the cap its page view's
+   *  canvases are drawn under. Null for a page turned by /Rotate or a box of no size */
+  function regionOf(
+    n: number,
+    d: Drawn,
+    box: [number, number, number, number],
+    scale: number,
+  ): { el: HTMLElement; px: number; size: [number, number]; cap: number } | null {
     const vp = stack.viewport(n) as unknown as { viewBox: number[]; rotation?: number } | null
     if (!vp || (((vp.rotation ?? 0) % 360) + 360) % 360) return null
     const canvas = d.view.div.querySelector<HTMLCanvasElement>('.canvasWrapper canvas')
@@ -968,7 +989,88 @@ export function createComposer(o: ComposerOptions): Composer {
       copy.style.height = `${ph * k}px`
       el.append(copy)
     }
-    return el
+    const copied = el.querySelector<HTMLCanvasElement>(':scope > canvas.axt-pv-page')
+    return { el, px: copied?.width ?? 0, size: [w * k, h * k], cap: capOf(d.view) }
+  }
+  /**
+   * What the right draws of page n inside `box` drawn anew at `scale`, `r` device pixels a CSS px (a link preview's region past
+   * what its page's drawing holds): the composed document's page with its laid groups off (its page view's own document and
+   * configuration) rendered on the box alone, and the crops whose places meet the box cut on the box's own grid at that
+   * resolution from the crop configuration's render (paint.ts detailCropsFor, the means of the page's own detail crops). Its
+   * canvases (the page's, then the crops' where any meets the box); null where `signal` gave it up; it throws where it fails
+   */
+  async function drawnAt(
+    n: number,
+    page: Page,
+    box: [number, number, number, number],
+    scale: number,
+    r: number,
+    signal: AbortSignal,
+  ): Promise<HTMLCanvasElement[] | null> {
+    const doc = composed,
+      g = groups
+    if (!doc || !g) return null
+    const pdfPage = await doc.getPage(n)
+    if (signal.aborted) return null
+    const u = scale * PDF_TO_CSS
+    const vp = pdfPage.getViewport({ scale: u })
+    const dev = pdfPage.getViewport({ scale: u * r })
+    const [ax, ay] = vp.convertToViewportPoint(box[0], box[3]) as [number, number],
+      [bx, by] = vp.convertToViewportPoint(box[2], box[1]) as [number, number]
+    const area: DetailArea = {
+      left: Math.min(ax, bx),
+      top: Math.min(ay, by),
+      width: Math.abs(bx - ax),
+      height: Math.abs(by - ay),
+      px: [Math.max(1, Math.round(Math.abs(bx - ax) * r)), Math.max(1, Math.round(Math.abs(by - ay) * r))],
+    }
+    const out = document.createElement('canvas')
+    out.className = 'axt-pv-page'
+    out.width = area.px[0]
+    out.height = area.px[1]
+    const ctx = out.getContext('2d', { alpha: false })
+    if (!ctx) return null
+    const drop = () => {
+      out.width = 0
+      out.height = 0
+    }
+    const task = pdfPage.render({
+      canvas: out,
+      canvasContext: ctx,
+      viewport: dev,
+      transform: [1, 0, 0, 1, -area.left * r, -area.top * r],
+      optionalContentConfigPromise: g.laid,
+      annotationMode: 0,
+    } as Parameters<typeof pdfPage.render>[0])
+    const stop = () => task.cancel()
+    signal.addEventListener('abort', stop, { once: true })
+    try {
+      await task.promise
+    } catch (e) {
+      drop()
+      if (signal.aborted) return null
+      throw e
+    } finally {
+      signal.removeEventListener('abort', stop)
+    }
+    let crops: HTMLCanvasElement | null
+    try {
+      crops = await detailCropsFor(page, (k) => doc.getPage(k), vp, g.crops, area, signal, undefined, 'area')
+    } catch (e) {
+      drop()
+      throw e
+    }
+    if (signal.aborted) {
+      drop()
+      if (crops) dropCanvas(crops)
+      return null
+    }
+    if (!crops) return [out]
+    // (laid on the page canvas as the region's own crops canvas is: its sheet's box and blend, none of the page's)
+    crops.className = 'axt-pv-crops'
+    crops.removeAttribute('style')
+    delete crops.dataset.axtScale
+    return [out, crops]
   }
 
   // ---------------------------------------------------------------- the pages ahead
@@ -1275,9 +1377,39 @@ export function createComposer(o: ComposerOptions): Composer {
       for (;;) {
         const c = commits.get(n)
         if (!c || c.gen !== gen || !shown || signal.aborted || disposed) return null
-        const got = await stack.read(n, keyOf(c), signal, (d) => regionOf(n, d, box, scale))
-        // (laid again while it was read, another generation's: the new one read)
-        if (got || signal.aborted || commits.get(n) === c) return got
+        const key = keyOf(c)
+        const got = await stack.read(n, key, signal, (d) => regionOf(n, d, box, scale))
+        if (signal.aborted) {
+          if (got) dropAll(got.el)
+          return null
+        }
+        if (!got) {
+          // (laid again while it was read, another generation's: the new one read)
+          if (commits.get(n) === c) return null
+          continue
+        }
+        // (its drawing holds fewer pixels than the scale asks (a kept panel zoomed past the pane's scale, a page view past PDF.js's
+        // canvas cap): the box drawn anew at the device's pixels, in the scheduler's turn, each canvas within the cap its page
+        // view is drawn under (the best it can past it); its copy where that gives it no more pixels, or where the drawing fails)
+        const dpr = globalThis.devicePixelRatio || 1
+        const r = Math.min(dpr, Math.sqrt(got.cap / (got.size[0] * got.size[1])))
+        if (Math.max(1, Math.round(got.size[0] * r)) <= got.px) return got.el
+        const drawn = await stack
+          .turn(n, key, signal, () => drawnAt(n, c.page, box, scale, r, signal))
+          .catch((e: unknown) => {
+            warnOnce("a preview's region drawn anew", e)
+            return null
+          })
+        if (signal.aborted) {
+          for (const x of drawn ?? []) dropCanvas(x)
+          dropAll(got.el)
+          return null
+        }
+        if (drawn) {
+          for (const x of got.el.querySelectorAll<HTMLCanvasElement>(':scope > canvas')) dropCanvas(x)
+          got.el.prepend(...drawn)
+        }
+        return got.el
       }
     },
     page: (n) => pages.get(n) ?? commits.get(n)?.page ?? null,

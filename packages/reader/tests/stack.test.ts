@@ -430,3 +430,69 @@ describe("a crop-only detail cut dropped while its page was out of view is asked
     expect(cuts).toBe(1)
   })
 })
+
+describe("a drawing in the scheduler's turn for a slot's content (a link preview's region drawn at a scale of its own: stack.turn)", () => {
+  let stack: Stack
+  afterEach(() => {
+    stack.dispose()
+    vi.unstubAllGlobals()
+  })
+  it("runs one at a time with the panes' drawings, in the turn of what is on the screen; none where the slot is to show another content at its turn, or the signal gave it up", async () => {
+    PageView.all = []
+    Observer.all = []
+    vi.stubGlobal('IntersectionObserver', Observer)
+    const scroller = document.createElement('div')
+    document.body.append(scroller)
+    stack = createStack({
+      scroller,
+      kit,
+      scheduler: createScheduler(),
+      clock: handClock(),
+      name: (n) => `page ${n}`,
+      links: null,
+      keepPixels: 0,
+    })
+    let content = (n: number) => (n === 1 ? laid('t') : view('original'))
+    stack.contentOf = (n) => content(n)
+    await stack.layout(doc as never, 1)
+    const [near, inView] = Observer.all as [Observer, Observer]
+    const slots = [stack.page(1), stack.page(2)] as HTMLElement[]
+    near.cb(slots.map((target) => ({ target, isIntersecting: true })))
+    inView.cb(slots.map((target, i) => ({ target, isIntersecting: i === 0 })))
+    await settle()
+    // (page 1's page view drawing, the scheduler's job running: the turn waits for it)
+    const drawing = PageView.all.find((v) => v.task)!
+    expect(drawing).toBeDefined()
+    const ran: string[] = []
+    const a = stack.turn(1, 't', new AbortController().signal, async () => {
+      ran.push('a')
+      return 'drawn'
+    })
+    await settle()
+    expect(ran).toEqual([])
+    for (let i = 0; i < 10; i++) {
+      await settle()
+      for (const v of PageView.all.filter((x) => x.task)) v.task?.done(true)
+    }
+    expect(await a).toBe('drawn')
+    expect(ran).toEqual(['a'])
+    // (another content's key: none, never run)
+    expect(await stack.turn(1, 'another', new AbortController().signal, async () => ran.push('b'))).toBeNull()
+    // (given up before its turn: none, never run)
+    stack.setScale(2)
+    await settle()
+    const ac = new AbortController()
+    const c = stack.turn(1, 't', ac.signal, async () => ran.push('c'))
+    ac.abort()
+    expect(await c).toBeNull()
+    // (the slot to show another content by its turn: none, never run)
+    const d = stack.turn(1, 't', new AbortController().signal, async () => ran.push('d'))
+    content = () => view('original')
+    for (let i = 0; i < 10; i++) {
+      await settle()
+      for (const v of PageView.all.filter((x) => x.task)) v.task?.done(true)
+    }
+    expect(await d).toBeNull()
+    expect(ran).toEqual(['a'])
+  })
+})

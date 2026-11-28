@@ -14576,7 +14576,13 @@ and its jump. One layer for every kind (`previews.ts`), from the three link sour
   settled in 240 ms; its round × shown on hover and on the keyboard's focus; Esc closes the preview first, then the kept
   panel; one at a time. **One rule for where it may be** (`panel.ts` `placeKept`): whole inside the reader's window, 8 px
   from its sides and foot, under the toolbar's 52 px; a drag, the arrows (16 px) and its zoom all pass through it, and
-  nothing else moves it.
+  nothing else moves it. A resize of the reader's window applies it again in the resize's own turn (before the frame the new
+  window is drawn in: the drag guide of Chrome's Modern Web Guidance asks for the re-clamp after a viewport change; the
+  approved prototype never resized): the panel's most is the new window's, a size past it is brought down to it at once about
+  its image's top-left corner and drawn again once the window has stood 150 ms, and its place is clamped; where it still fits
+  nothing moves or grows, and the window growing back moves nothing. Its least is still the size it opened at, so a window
+  smaller than that size cannot hold it whole: the rule then keeps its top-left inside and its × may stand past the window's
+  right edge (Esc still closes it). Not decided here: whether such a panel may go under its opening size.
 - **A kept panel's own zoom** (the owner's approved eighth prototype, 2026-11-28: no scrolling inside the panel, one plain
   limit on its size, its place its natural behaviour): a zoom gesture with the pointer on it (§6.8's one reading,
   `zoom-gesture.ts`: Ctrl and the wheel, a trackpad's pinch in Chrome; WebKit's `gesturestart`/`gesturechange`/`gestureend`;
@@ -14591,12 +14597,28 @@ and its jump. One layer for every kind (`previews.ts`), from the three link sour
   drawn again at the settled scale by the same segments (`zoom.draw`: the left's arXiv drawing, a fresh PDF.js render at that
   scale where the left's canvas is not fine enough; the right's laid page through the stack's `read`, `composer.region`), the
   drawing it replaces let go at once (its canvases emptied), as is the panel's on closing. A drawing that cannot be had keeps
-  the scaled one and is asked again at the next settle. **Its sharpness on the right**: `region` copies the page's drawing at
-  its own pixels or the device's at the scale, whichever is fewer, so a right crop zoomed past the pane's scale shows the
-  page's pixels upscaled (its translation's SVG stays sharp); the left's is drawn at the scale. **Its cost at the most**
-  (the harness, 1,400 x 900 at 1x): the left's table at 300 % 426,123 device pixels (its 1,258 x 339 CSS px whole), the right's
-  figure at 300 % 120,646; at most the rule's room times the device's pixels squared on the left (1,364 x 820 x 4 = 4.5
-  million at 2x).
+  the scaled one and is asked again at the next settle. The drawing replaces the scaled one with no frame between: it is made
+  whole off the document (its canvases drawn, its SVG copied), then put in the image's box, whose size is already the settled
+  one, by one `replaceChildren` in one task (the harness reads each replacement as one mutation, the old out and the new in).
+  **Its sharpness on the right**: where the page's drawing holds fewer pixels than the scale asks, `region` draws the box anew
+  at the device's pixels in the scheduler's turn (`stack.turn`, rank 0: one drawing at a time with the panes', never beside
+  them): the composed document's page with its laid groups off (its page view's own document and configuration) rendered on
+  the box alone, and the crops whose places meet the box cut at that resolution on the box's own grid (paint.ts
+  `detailCropsFor`, the page's own detail crops' means); its translation's SVG copied as before. Each canvas within the cap
+  its page view is drawn under (PDF.js's `maxCanvasPixels` within `capCanvasAreaFactor`, `OutputScale.capPixels`): past it
+  the best density the cap allows; the copy where that gives no more pixels, or where the drawing fails (never nothing). It is
+  the left's rule, so it holds wherever a right crop asks more than the pane's drawing holds: a kept panel zoomed past the
+  pane's scale, the sheet's crop (up to 1.7 times the page's scale), a pane zoomed past PDF.js's canvas cap. Before it a right
+  figure at 300 % showed the pane's drawing at 80 % scaled up 3.75 times, its frame's rule a grey ramp several device pixels
+  wide (the translation's SVG stayed sharp). **Its cost at the most** (the harness, s5-links' figure at 300 %, 1,400 x 900 at
+  2x): 2,515 x 1,336 device pixels on either pane (3.36 million, 12.8 MiB, held while it is shown); in place 161 ms after the
+  gesture's last event on the right (the 150 ms settle and some 11 ms of drawing; the left's 169 ms); its frame's rule the
+  same on both panes, across it 117, 0, 0, 0, 136 (one edge pixel each side). At 1x the right's figure 839,676 pixels (120,646
+  before), the left's table 426,123. Let go (its canvases emptied) as the panel is zoomed again or closed. At most the rule's
+  room times the device's pixels squared (1,364 x 820 x 4 = 4.5 million at 2x), under the canvas cap on a desktop's screen;
+  PDF.js's cap on iOS and Android is 5,242,880, which a whole iPad window at 2x (1,366 x 1,024: a panel of 5.0 million at
+  most) stays under. The keep's budget (§11.8) bounds drawings kept off the view and does not count a panel on the screen; no
+  budget is raised. Not measured: the sheet's crop drawn anew on the right.
 - **Its percentage** (UI.md S-R-34, never shown as words): a chip at the top-left, 6 px in, opposite the × (which is unchanged),
   24 px high, at least 46 px wide (as wide as 000 %, tabular digits, 11 px / 500). It exists only while a zoom runs and 1.2 s
   after, or while the size is not the opening one and the pointer (or the keyboard's focus) is on the panel; three states on

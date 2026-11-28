@@ -472,7 +472,8 @@ export async function cropsFor(
  * render of the region its sources span at that resolution, darkened in as the page's crops are. So a crop past the cap is as
  * sharp as the page around it; below the cap there is no detail canvas and none is made. A source region past four times the
  * box's pixels (crops whose sources stand far apart) is rendered crop by crop. Null where no crop meets the area. `told`
- * counts the pixels of the source regions rendered for it (each let go once cut).
+ * counts the pixels of the source regions rendered for it (each let go once cut). `frame` 'area': the canvas the area's own
+ * pixels, its top-left the area's (a link preview's region drawn anew, whose page canvas it lies on pixel for pixel)
  */
 export async function detailCropsFor(
   page: Page,
@@ -482,6 +483,7 @@ export async function detailCropsFor(
   area: DetailArea,
   signal?: AbortSignal,
   told?: { srcPx: number },
+  frame: 'places' | 'area' = 'places',
 ): Promise<HTMLCanvasElement | null> {
   const sx = area.px[0] / area.width,
     sy = area.px[1] / area.height
@@ -507,12 +509,13 @@ export async function detailCropsFor(
   })
   if (!list.length || signal?.aborted) return null
   // (the canvas the box of those crops' places within the area, whole device pixels of the detail's grid: the area's own
-  // pixels are some three screens', most of them no crop's)
+  // pixels are some three screens', most of them no crop's; or the area itself)
   const places = list.map((c) => at(c.at))
-  const ox = Math.max(ax, Math.floor(Math.min(...places.map((r) => r[0])))),
-    oy = Math.max(ay, Math.floor(Math.min(...places.map((r) => r[1]))))
-  const ow = Math.min(ax + aw, Math.ceil(Math.max(...places.map((r) => r[0] + r[2])))) - ox,
-    oh = Math.min(ay + ah, Math.ceil(Math.max(...places.map((r) => r[1] + r[3])))) - oy
+  const onArea = frame === 'area'
+  const ox = onArea ? ax : Math.max(ax, Math.floor(Math.min(...places.map((r) => r[0])))),
+    oy = onArea ? ay : Math.max(ay, Math.floor(Math.min(...places.map((r) => r[1]))))
+  const ow = onArea ? aw : Math.min(ax + aw, Math.ceil(Math.max(...places.map((r) => r[0] + r[2])))) - ox,
+    oh = onArea ? ah : Math.min(ay + ah, Math.ceil(Math.max(...places.map((r) => r[1] + r[3])))) - oy
   if (ow <= 0 || oh <= 0) return null
   const out = document.createElement('canvas')
   out.className = 'axt-crops-detail'
