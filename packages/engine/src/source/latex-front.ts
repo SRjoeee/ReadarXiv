@@ -50,6 +50,24 @@ export type PhPiece = {
   readonly brk?: true
   readonly closes?: number
 }
+/**
+ * How the source reader reads a placeholder whose leading command the paper itself defines (arg-roles.ts paperOf's `own`), by
+ * the definition in force where the walk meets the call (Ctx.meanings): `none`, one that takes no parameter, which reads nothing
+ * after it; `args`, one that takes a parameter (or a \\def's parameter text), which may read what follows it; `unread`, one the
+ * reader does not hold there (defined inside another definition's body, in a branch or a group it cannot settle, by a form it
+ * does not read, or later in the paper), whose reading is the name's as if the paper had not defined it. Stated on the piece
+ * (Builder.ph, beside the piece's properties: ownReading): the marking reads a name of its no-ink lists so stated by its definition,
+ * never by its spelling (marks/marks.ts classOf, LOOKS_AHEAD; PDF-READER §18.122)
+ */
+export type OwnReading = 'none' | 'args' | 'unread'
+/** the reader's statements on its placeholders beside their properties (a piece's own properties are what its unit's JSON, its
+ *  hash and every recorded call read): how it reads a command the paper defines (ownReading), and a macro whose meaning opens a
+ *  conditional it does not close (opensIf) */
+const OWN = new WeakMap<object, OwnReading>(),
+  OPENS_IF = new WeakSet<object>()
+/** the source reader's reading of a placeholder of a command the paper defines (ownReading), or undefined for any other piece */
+export const ownReading = (p: { t?: string } | null | undefined): OwnReading | undefined =>
+  p?.t === 'ph' ? OWN.get(p) : undefined
 /** a forced break's source: `\\\\`, its star, its optional argument; \\newline; LaTeX's
  *  `\\break`, which ends the line it stands in in a paragraph (PDF-READER §18.77: the marked compile
  *  states where, BREAKS_TEX's point; amsart's `\\hfill\\break\\indent` in 2608.03841v2's addresses) */
@@ -115,6 +133,8 @@ export const forcedBreak = (p: { t?: string } | null | undefined): boolean =>
 /** a copy of a piece (an object spread takes no property that is not enumerable), stating what the piece states */
 function restated<P extends object>(copy: P, of: { t?: string }): P {
   if (forcedBreak(of)) Object.defineProperty(copy, 'brk', { value: true })
+  const own = ownReading(of)
+  if (own) OWN.set(copy, own)
   return copy
 }
 /** a pair's open (`sets` 0: its command sets its argument and nothing else, identityPair; not enumerable) and its close, by id */
@@ -2046,6 +2066,27 @@ function citationArgs(s: string, i: number, name: string): { args: GroupArg[]; e
  *  whose arguments the table cannot know (melba.cls's \\def\\firstname{…}, which LaTeXML's moderncv gives one). Set for
  *  the time a project is read — loadProject is synchronous —, else null: the kernel's forms and those written out */
 let paper: ArgPaper | null = null
+/** the walk's meanings in force (Ctx.meanings) for the time a project is read (readProject), else null: what Builder.ph reads a
+ *  call of the paper's own command by (ownOf) */
+let walking: Pick<Ctx, 'meanings' | 'ifs'> | null = null
+/** whether a placeholder's leading control word is a paper's macro whose meaning in force opens a conditional it does not close
+ *  (opensConditional: `\\def\\iffa{\\iffalse}`, `\\def\\opn{\\ifnum1=1 }`): no probe asks it (opensIf, marks.ts) */
+function opensIfOf(src: string): boolean {
+  const name = /^\\([A-Za-z@]+)/.exec(src)?.[1]
+  const m = name === undefined ? undefined : walking?.meanings?.get(name)
+  return m !== undefined && m !== 'unsure' && opensConditional(m.body, walking?.ifs)
+}
+/** whether a placeholder is a call of a macro whose meaning in force opens a conditional it does not close, as the reader stated
+ *  it where it made the piece (Builder.ph): set in a box of the probe's it would skip or take what follows the box */
+export const opensIf = (p: { t?: string } | null | undefined): boolean => p?.t === 'ph' && OPENS_IF.has(p)
+/** how the reader reads a placeholder whose leading control word the paper defines (OwnReading), by the meaning in force where
+ *  the walk stands; undefined where the paper does not define it, or no project is read */
+function ownOf(src: string): OwnReading | undefined {
+  const name = /^\\([A-Za-z@]+)/.exec(src)?.[1]
+  if (name === undefined || !paper?.own.has(name)) return undefined
+  const m = walking?.meanings?.get(name)
+  return m === undefined || m === 'unsure' ? 'unread' : m.params > 0 || m.delim !== null ? 'args' : 'none'
+}
 /**
  * A command's arguments: a citation's every adjacent one, its notes in angle brackets or parentheses with them
  * (citationArgs); one whose parameters the role table knows (arg-roles.ts), exactly those as TeX takes them — a group
@@ -4019,6 +4060,9 @@ class Builder<F extends WalkFile = WalkFile> {
     if (!this.cur) this.cur = { file: this.file, kind: this.kind ?? 'para', start, end, pieces: [] }
     const p = brk ? phPiece(src, true) : phPiece(src)
     if (closes !== undefined) Object.defineProperty(p, 'closes', { value: closes })
+    const own = ownOf(src)
+    if (own) OWN.set(p, own)
+    if (opensIfOf(src)) OPENS_IF.add(p)
     const glue = glueBody(src, this.macros)
     if (glue !== null) Object.defineProperty(p, 'glue', { value: glue })
     if (display) this.displays.add(p)
@@ -4715,6 +4759,85 @@ const consumes = (s: string, from: number, to: number) =>
 function testEnd(name: string, s: string, end: number) {
   const k = skipSpaces(s, end)
   return (name === 'if' || name === 'ifx') && ifChars(s, end) ? k + 2 : end
+}
+/** the conditional a paper's macro stands for where its meaning in force (Ctx.meanings) is one of TeX's conditionals and nothing
+ *  else, no parameter (`\\def\\iffa{\\iffalse}`, `\\def\\iftr{\\iftrue}`): that conditional's name, which the walk reads it as;
+ *  else null */
+function conditionalMeaning(name: string, ctx: Pick<Ctx, 'meanings' | 'ifs'>): string | null {
+  const m = ctx.meanings?.get(name)
+  if (m === undefined || m === 'unsure' || m.params > 0 || m.delim !== null || m.opt) return null
+  const w = /^\s*\\([A-Za-z@]+)\s*$/.exec(m.body)?.[1]
+  return w !== undefined && w !== name && isConditional(w, ctx.ifs) ? w : null
+}
+/**
+ * The conditional a call of a paper's macro at s[i] stands for (conditionalMeaning; its name ends at `end`) where the reader
+ * reads that conditional whole as TeX does: its \\fi found before `to` (conditionalAt), nothing in its span TeX reads otherwise
+ * than as tokens (consumes), and in each branch TeX sets (both, where its own text does not decide its test: conditionalValue,
+ * `\\unless`) no call of a paper's macro whose meaning opens or closes a conditional (callsConditional). TeX expands such a call
+ * in a branch it sets and counts the conditional it opens, where the scan (branchEnd) counts conditionals by their names alone and
+ * would take an inner \\else or \\fi for this one's; in a branch it skips TeX expands nothing, and counts the call no more than
+ * the scan does. Else null: the call is read as the paper's macro, as it was before any macro was read as a conditional
+ */
+function conditionalCall(called: string, s: string, i: number, end: number, to: number, ctx: Ctx): string | null {
+  const w = conditionalMeaning(called, ctx)
+  if (w === null) return null
+  const c = conditionalAt(s, end, to, ctx.ifs)
+  if (!c || consumes(s, end, c.end)) return null
+  const value = /\\unless\s*$/.test(s.slice(Math.max(0, i - 12), i))
+    ? null
+    : w === 'iffalse'
+      ? false
+      : conditionalValue(w, s, end)
+  const set: [number, number][] =
+    value === null
+      ? [
+          [c.thenFrom, c.thenTo],
+          [c.elseFrom, c.elseTo],
+        ]
+      : value
+        ? [[c.thenFrom, c.thenTo]]
+        : [[c.elseFrom, c.elseTo]]
+  return set.some(([from, upto]) => from >= 0 && callsConditional(s, from, upto, ctx)) ? null : w
+}
+/** whether s[from, to) calls a paper's macro whose meaning in force opens or closes a conditional (unbalancedConditional), or
+ *  one the reader cannot read ('unsure'); a name the scan counts as a conditional itself (TeX's, the paper's \\newif ones)
+ *  apart */
+function callsConditional(s: string, from: number, to: number, ctx: Pick<Ctx, 'meanings' | 'ifs'>): boolean {
+  for (let k = from; k < to; k++) {
+    if (s[k] === '%') {
+      k = skipComment(s, k)
+      continue
+    }
+    if (s[k] !== '\\') continue
+    const { name, end } = commandAt(s, k)
+    const m = ctx.meanings?.get(name)
+    if (m !== undefined && !isConditional(name, ctx.ifs) && (m === 'unsure' || unbalancedConditional(m.body, ctx.ifs)))
+      return true
+    k = end - 1
+  }
+  return false
+}
+/** whether a body leaves open a conditional it opens, or holds a \\fi, \\else or \\or outside one of its own: a call of it opens
+ *  or closes one where TeX expands it */
+function unbalancedConditional(body: string, ifs: ReadonlySet<string>): boolean {
+  let depth = 0
+  for (const m of body.matchAll(/\\([A-Za-z@]+)/g)) {
+    if (isConditional(m[1]!, ifs)) depth++
+    else if (m[1] === 'fi') {
+      if (depth-- === 0) return true
+    } else if ((m[1] === 'else' || m[1] === 'or') && depth === 0) return true
+  }
+  return depth > 0
+}
+/** whether a body opens more of TeX's conditionals than it closes (`\\ifnum1=1 `, `\\iffalse`): a macro of such a meaning,
+ *  set in a box of the probe's, skips or takes what follows the box as TeX's conditional does */
+export function opensConditional(body: string, ifs: ReadonlySet<string> = new Set()): boolean {
+  let depth = 0
+  for (const m of body.matchAll(/\\([A-Za-z@]+)/g)) {
+    if (m[1] === 'fi') depth--
+    else if (isConditional(m[1]!, ifs)) depth++
+  }
+  return depth > 0
 }
 /** a control word TeX takes as a conditional, which a \\fi ends: TeX's own, the paper's \\newif ones, LaTeX's internal
  *  \\if@… — not etoolbox's \\ifdefempty{…}{…}{…} and the like, macros that no \\fi ends */
@@ -5547,6 +5670,29 @@ function walkInGrid(s: string, from: number, to: number, grid: readonly GridCell
   walk(s, from, to, b, ctx)
   b.cells = savedCells
 }
+/**
+ * \\bibliography{…} at the walk's command ending at `end`: TeX reads the job's .bbl there, which the package holds (BibTeX's
+ * output, shipped, or the one BibTeX writes in the prepare's first pass: compile/paper.ts madeBibliography), its thebibliography
+ * a paragraph's end (its heading's); none read, it sets nothing, and the paragraph before it ends there all the same, so that the
+ * source's units are the same with the .bbl and without it (`bibliography`, the names it reads: whether the paper has one to
+ * make). The unit before it ended (endUnit), the names noted and the .bbl walked; the call's end, or null where no group follows
+ * (the command read as any other)
+ */
+function bibliographyCall(s: string, end: number, b: Builder, ctx: Ctx, endUnit: () => void): number | null {
+  const { args, end: e } = argsAfter(s, end, 1)
+  const arg = args[0]
+  if (arg?.kind !== 'req') return null
+  endUnit()
+  ctx.bibliography.push(
+    ...s
+      .slice(arg.start + 1, arg.end - 1)
+      .split(',')
+      .map((x) => x.trim())
+      .filter(Boolean),
+  )
+  if (ctx.bbl) ctx.visit(ctx.bbl, [], b.inFloat)
+  return e
+}
 function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
   let i = from,
     textStart = -1
@@ -5745,14 +5891,18 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
       continue
     }
     // a command, or the one a macro's call ends in (goOn)
-    const { name, end } = then ?? commandAt(s, i)
+    const { name: called, end }: { name: string; end: number } = then ?? commandAt(s, i)
+    // (a paper's macro whose meaning in force is one of TeX's conditionals and nothing else, `\\def\\iffa{\\iffalse}`: that
+    // conditional, as TeX reads it, where the reader reads it whole; else the paper's macro, as before (conditionalCall))
+    const name: string = conditionalCall(called, s, i, end, to, ctx) ?? called
     thens = then ? thens + 1 : 0
     then = null
     // (a definition TeX reads here puts its meaning in force from here on: the boundary reading's, in TeX's order)
     if (definesMeaning(name) && ctx.meanings && !ctx.dry) noteDefinition(s, i, ctx)
     // \\iffalse … \\fi, and \\if followed by words (an author's way of commenting a passage out): nothing there is typeset,
-    // so nothing there is a unit — and a mark or a translated first word would change what \\if compares
-    if (name === 'iffalse' || (name === 'if' && /^[ \t]*\n?[ \t]*[A-Za-z]{2}/.test(s.slice(end, end + 8)))) {
+    // so nothing there is a unit — and a mark or a translated first word would change what \\if compares. The written \\if: one
+    // a paper's macro stands for compares its two characters below, as TeX does (conditionalValue)
+    if (name === 'iffalse' || (called === 'if' && /^[ \t]*\n?[ \t]*[A-Za-z]{2}/.test(s.slice(end, end + 8)))) {
       const stop = branchEnd(s, end, to, ctx.ifs)
       if (stop > 0) {
         endUnit()
@@ -6100,25 +6250,11 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
       }
       continue
     }
-    // \\bibliography{…}: TeX reads the job's .bbl there, which the package holds (BibTeX's output, shipped, or the one BibTeX
-    // writes in the prepare's first pass: compile/paper.ts madeBibliography), its thebibliography a paragraph's end (its
-    // heading's); none read, it sets nothing, and the paragraph before it ends there all the same, so that the source's units
-    // are the same with the .bbl and without it (`bibliography`, the names it reads: whether the paper has one to make)
-    if (name === 'bibliography') {
-      const { args, end: e } = argsAfter(s, end, 1)
-      if (args[0]?.kind === 'req') {
-        endUnit()
-        ctx.bibliography.push(
-          ...s
-            .slice(args[0].start + 1, args[0].end - 1)
-            .split(',')
-            .map((x) => x.trim())
-            .filter(Boolean),
-        )
-        if (ctx.bbl) ctx.visit(ctx.bbl, [], b.inFloat)
-        i = e
-        continue
-      }
+    // \\bibliography{…}: the job's .bbl, read there (bibliographyCall)
+    const bibEnd = name === 'bibliography' ? bibliographyCall(s, end, b, ctx, endUnit) : null
+    if (bibEnd !== null) {
+      i = bibEnd
+      continue
     }
     // csquotes' \\enquote{…} (the paper defining none): its quotation marks text around its argument, by its level (quoteMarks)
     if (name === 'enquote' && !ctx.macros.has('enquote') && !ctx.bibDefs?.has('enquote') && !BIB_KINDS.has(b.kind)) {
@@ -7976,7 +8112,8 @@ export function loadProject(fsys: Fsys, main: string, { tables = false } = {}) {
     .filter((f) => /\.(tex|sty|cls)$/i.test(f))
     .map((f) => ({ file: f, text: sourceText(f) }))
   const outer = paper,
-    outerDecoders = decoders
+    outerDecoders = decoders,
+    outerWalking = walking
   paper = paperOf(own.map((x) => x.text))
   // (the job's .bbl, which \\bibliography reads, decoded as the package's own TeX is: BibTeX writes it in the .bib's bytes, the
   // encoding the paper declares; it is read as none of the package's own files otherwise)
@@ -7988,6 +8125,7 @@ export function loadProject(fsys: Fsys, main: string, { tables = false } = {}) {
   } finally {
     paper = outer
     decoders = outerDecoders
+    walking = outerWalking
   }
 }
 /** each of the package's files that is not UTF-8, by its normalized name, with its decoding (INPUT_ENCODINGS): the one the
@@ -8256,6 +8394,8 @@ function readProject(
     quotes: csquotesOf(ownTexts),
     ...tblrOf(sources.map(sourceText)),
   }
+  // (the meanings the walk puts in force, read where a placeholder of the paper's own command is made: ownOf)
+  walking = ctx
   // (the author block's commands of a class the paper ships that the role table does not know: ownAuthorsOf)
   ctx.ownAuthors = ownAuthorsOf(own, ctx.macros)
   // (the labels the authors' texts request, which a note attached by its label waits for: tieLabels)

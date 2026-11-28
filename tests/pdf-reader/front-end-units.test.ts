@@ -92,7 +92,8 @@ describe('the document as TeX finds it (documentBounds): a match of the raw text
   it('what TeX does not run as it stands: \\iffalse in a \\def with a \\fi after it, a \\def\\x#1\\end{document}\'s parameter text (\\end its delimiter, {document} its body), \\verb (review I5)', () => {
     const iffa = doc('Body words.\n\n\\iffa hidden \\fi\n\nMore words.', '\\def\\iffa{\\iffalse}')
     expect(documentBounds(iffa).begin).toBe(iffa.indexOf('\\begin{document}'))
-    expect(texts(project(iffa))).toEqual(['Body words.', 'hidden', 'More words.'])
+    // (the paper's macro whose meaning is \iffalse is read as the conditional it is: the passage TeX skips is no unit's, §18.123)
+    expect(texts(project(iffa))).toEqual(['Body words.', 'More words.'])
     expect(texts(project(doc('Words.\n\\def\\stop#1\\end{document}\nMore words.')))).toEqual(['Words. More words.'])
     expect(texts(project(doc('Use \\verb|\\end{document}| to end.\n\nMore words.')))).toEqual(['Use to end.', 'More words.'])
   })

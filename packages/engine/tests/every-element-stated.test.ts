@@ -100,14 +100,14 @@ describe('what keeps its statement (controls)', () => {
   })
 
   it('an \\index the paper defines to print a mark (its argument unused: still a placeholder) is not stated empty', () => {
-    // (the marking reads `\\index` by its spelling and gives it no mark; TeX sets the dagger. Stated empty, the paragraph would
-    // be laid and the dagger, in its text's range, erased with it and drawn by nothing: the paper's own command is read by its
-    // definition, never by its spelling)
+    // (TeX sets the dagger. Stated empty, the paragraph would be laid and the dagger, in its text's range, erased with it and
+    // drawn by nothing: the paper's own command is read by its definition, never by its spelling; the marking asks TeX about it
+    // as the paper's macro it is, own-no-ink-names.test.ts)
     const r = stated(
       `${WORDS} with an entry\\index{entry} in it and more words after it.`,
       '\\renewcommand{\\index}[1]{\\textdagger}\n',
     )
-    expect(r.at('\\index')).toMatchObject({ marking: null, cls: 'other', empty: false })
+    expect(r.at('\\index')).toMatchObject({ marking: 'macro', cls: 'other', empty: false })
     const s = stated(
       `${WORDS} with an entry\\index{entry} in it and more words after it.`,
       '\\let\\index\\textdagger\n',

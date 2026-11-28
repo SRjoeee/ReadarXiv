@@ -251,8 +251,12 @@ export { LayoutRefusal } from './json.mjs'
   after a pair's prose argument a piece of its own, and the marking asks TeX about a placeholder after a paper's macro (a
   front unit's with its lead) and about each such tail, marks a look-ahead answer's piece only inside its unit and a tail
   inside its braces on TeX's answer (PDF-READER §18.115), so that a file of 47 holds such a paper with those pieces unmarked
-  or cut as before */
-export const LAYOUT = '48'
+  or cut as before; 49 (with PIPELINE 132): the marking, which this maker calls (layoutMarking), reads a name of its no-ink
+  lists the paper itself defines by TeX's answer, a row stating it EMPTY where TeX answers it sets no ink (the base record's
+  `inkless` naming it) and its marks where TeX answers ink (PDF-READER §18.122), and its marked TeX sets a box's first piece's
+  opening point and begins the paragraph a pended opening mark's piece begins (§18.123), so that a file of 48 holds such a
+  paper with no row for those names, read by their spelling, and without those points */
+export const LAYOUT = '49'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour
  *  piece's run's fill [unit, k, 0xRRGGBB], a key the file holds only where it has a row; and, of a maker of 18 on, `unlaid`,

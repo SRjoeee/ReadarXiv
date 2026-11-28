@@ -24,6 +24,8 @@ import {
   lastTexLog,
   markUnits,
   NO_ARG_COMMANDS,
+  opensIf,
+  ownReading,
   START_LEAD,
   tailPiece,
   writtenSource,
@@ -183,6 +185,23 @@ export const backrefPiece = (p: PieceLike | null | undefined): boolean => p?.t =
 /** a piece's class, or null where it is not marked (text, a group's open or close, an invisible placeholder) */
 /** \\rule's call: what TeX's ink section measures, not the role table (a strut, \\rule{0pt}{2ex}, none; a bar, ink) */
 export const RULE = /^\s*\\rule\b/
+/** whether a source is one the marking reads by its spelling as setting no ink: one of TeX's and LaTeX's own that set none or a
+ *  control word of the lists (INVISIBLE), or one the role table proves can set no letters (textless) but \\rule, which TeX is
+ *  asked about */
+export const spelledNoInk = (src: string | undefined): boolean =>
+  INVISIBLE.test(src ?? '') || (textless(src ?? '') && !RULE.test(src ?? ''))
+/**
+ * Whether a placeholder is a call of a command the paper itself defines (the source reader's statement, ownReading) whose
+ * spelling the marking would read as setting no ink (spelledNoInk): `\\renewcommand{\\footnotesize}{\\textsection}`, a class's
+ * `\\def\\newblock{\\textbullet\\ }` inside its bibliography's definition. Its spelling says nothing of what the paper's
+ * definition sets: it is the paper's macro (classOf `macro`), asked of TeX (inkSamples, and where the document uses it); with
+ * TeX's answer of no ink it gets no mark and is stated empty, as the spelling read it; with ink, it is marked and its ink found;
+ * with no answer (past INK_BUDGET), an inked class whose ink is found by its points or not at all, its unit then the original's.
+ * Whether it reads what follows it is its definition's (LOOKS_AHEAD). Never a forced break or a structure character, which
+ * classOf reads first (PDF-READER §18.122)
+ */
+export const ownNoInk = (p: PieceLike | null | undefined): boolean =>
+  ownReading(p) !== undefined && spelledNoInk(p!.src)
 export function classOf(piece: PieceLike | null | undefined): MarkClass | null {
   if (piece?.t === 'nested') return 'footnote'
   if (piece?.t !== 'ph') return null
@@ -193,7 +212,11 @@ export function classOf(piece: PieceLike | null | undefined): MarkClass | null {
   const src = piece.src ?? ''
   // (a forced break sets no ink, and a mark there would move a line: as the source reader states it (forcedBreak, `\\\\` and a
   // paper's row-ending macro inside a grid cell, §18.75), among what INVISIBLE reads)
-  if (forcedBreak(piece) || INVISIBLE.test(src) || STRUCTURE.test(src)) return null
+  if (forcedBreak(piece) || STRUCTURE.test(src)) return null
+  // (a name of these lists the paper itself defines is read by its definition, not by its spelling: the paper's macro, which TeX
+  // is asked about (inkSamples), stated empty where it answers no ink and marked where it answers ink (ownNoInk, §18.122))
+  if (ownNoInk(piece)) return 'macro'
+  if (INVISIBLE.test(src)) return null
   // a placeholder that can set no letters is no text rendering: never ink, never LOST — one of the commands the role
   // table proves so (source/arg-roles.ts textless: rules, space, a length's or a counter's setting, a definition, a register's
   // assignment; a strut's \\rule{0pt}{2.2ex}, \\specialrule{1pt}{-1pt}{0pt}, \\addlinespace[2pt]), its arguments all there.
@@ -294,7 +317,8 @@ export const commandOf = (p: PieceLike | null | undefined): string | null =>
  * (`complete`: source/latex-front.ts completeMacros), by its first call that holds them (completeCall), at most COMPLETE_PROBE_MAX:
  * what follows such a call may still be looked at by what its body sets (a citation under cite's superscripts, a footnote
  * under fnpct, a kern after its last letter), and only TeX's answer says a closing mark there moves nothing. The asked
- * classes' first, then the paper's own (`own`), which markProbeTex asks about last
+ * classes' first, then the paper's own (`own`), which markProbeTex asks about last. None of these, nor a call's glued follower
+ * or a front piece, whose leading macro's meaning opens a conditional it does not close (opensIf), as no section asks one
  */
 export function probeSamples(units: readonly Unit[], complete: CompleteGiven | null = null): ProbeSample[] {
   const seen = new Map<string, CommandSample>(),
@@ -305,7 +329,8 @@ export function probeSamples(units: readonly Unit[], complete: CompleteGiven | n
     for (const [k, p] of u.pieces.entries()) {
       const cmd = commandOf(p),
         cls = classOf(p)
-      if (!cmd) continue
+      // (none whose meaning opens a conditional it does not close, opensIf: set in a box, it would skip every sample after it)
+      if (!cmd || opensIf(p)) continue
       if (ASKED.has(cls)) {
         if (seen.has(cmd) || seen.size >= PROBE_MAX) continue
         const src = p.t === 'nested' ? `${p.pre}A note.${p.post}` : p.src!
@@ -324,6 +349,7 @@ export function probeSamples(units: readonly Unit[], complete: CompleteGiven | n
           glued =
             next?.t === 'ph' &&
             typeof next.src === 'string' &&
+            !opensIf(next) &&
             fit(next.src.replace(/(?<!\\)((?:\\\\)*)\\[%#]/g, '$1')) &&
             next.src.length <= COMPLETE_SRC_MAX
               ? next.src
@@ -338,7 +364,8 @@ export function probeSamples(units: readonly Unit[], complete: CompleteGiven | n
   for (const u of units)
     for (const k of betweenOf(u, !!isFront(u as Parameters<typeof isFront>[0]))) {
       const p = u.pieces[k]!
-      if (p.t !== 'ph' || classOf(p) !== 'macro' || !fit(p.src!) || p.src!.length > COMPLETE_SRC_MAX) continue
+      if (p.t !== 'ph' || classOf(p) !== 'macro' || opensIf(p) || !fit(p.src!) || p.src!.length > COMPLETE_SRC_MAX)
+        continue
       const key = frontKey(p.src!)
       if (!fronts.has(key) && fronts.size < FRONT_PROBE_MAX)
         fronts.set(key, { command: key, src: p.src!, call: false, own: true, front: true })
@@ -389,6 +416,8 @@ export function aheadSamples(units: readonly Unit[]): AheadSample[] {
         next = pieces[q]!
       if (
         !pair ||
+        opensIf(pair[0]) ||
+        opensIf(next) ||
         !AHEAD_FOLLOWS.has(classOf(next)) ||
         READS_NOTHING(next) ||
         prefixWord(next.src) ||
@@ -640,7 +669,8 @@ export function aheadSection(samples: readonly AheadSample[]): string {
 export const INK_BUDGET = 65536
 /**
  * The ink section's samples: the source of each of the paper's macros (classOf 'macro'), once, that TeX can set in a box of its
- * own (no comment or parameter sign, no \verb, its braces balanced, no environment, no paragraph's end): the body's in the
+ * own (no comment or parameter sign, no \verb, its braces balanced, no environment, no paragraph's end, no macro whose meaning
+ * opens a conditional it does not close, opensIf, which would skip every sample after it): the body's in the
  * order the paper writes them, then a bibliography's entries' — first their leads, whose ink only their own text finds
  * (instrument/instrument.ts glyphPiecesOf), then each further call, in order —, while their code units fit INK_BUDGET. A call
  * past it is no sample: no answer of another call is carried to it (no ink and a box begun apart may hang on its
@@ -661,7 +691,8 @@ export function inkSamples(units: readonly Unit[]): string[] {
         tailPiece(p) ||
         backrefPiece(p) ||
         symbolText(p.src) !== null ||
-        !boxable(p.src)
+        !boxable(p.src) ||
+        opensIf(p)
       )
         return
       if (BIB(u) && k < head) leads.add(p.src)
@@ -755,6 +786,7 @@ export function leadSamples(units: readonly Unit[], asked: readonly string[] = i
         seen.has(p.src) ||
         symbolText(p.src) !== null ||
         !boxable(p.src) ||
+        opensIf(p) ||
         p.src!.length > room
       )
         continue
@@ -1095,8 +1127,10 @@ const OWN_NODE =
  * §18.80: read "never inkless", such a macro would be given a mark it has no ink after, its element no ink and no text, its
  * unit the original's); an `\\item` a paper's macro makes is inked by the label LaTeX
  * sets at the next paragraph's start, which the ask sets in its box. With `ask` (useAnswersOf: the loop's first pass, the marked files), the marks' own points and
- * destinations in the box are no ink (OWN_NODE). A sample with no listing, an error, a line cut short or a node not known is
- * no answer: what it sets is not known
+ * destinations in the box are no ink (OWN_NODE). A node's line TeX's log broke at max_print_line (PRINT_LINE) goes on on the
+ * lines below it, which hold no dots: they are that node's, read on its first line (a label's `\\write`, its token list cut by
+ * TeX with `\\ETC.}`, stays a write, which draws nothing; a `\\special` stays a node not known). A sample with no listing, an
+ * error, a line cut short or a node not known is no answer: what it sets is not known
  */
 export function readInkProbe(
   log: string | null | undefined,
@@ -1110,7 +1144,9 @@ export function readInkProbe(
     bad = false,
     done = false,
     /** the listing's box is a vertical one (an ask's in a paragraph or between them) */
-    vertical = false
+    vertical = false,
+    /** the listing's line before this one */
+    prev = ''
   for (const line of (log ?? '').split('\n')) {
     const [r] = /^LAYOUT-PROBE /.test(line) ? readProbe(line) : []
     if (r && (r.tag === 'ink-at' || r.tag === 'ink-end') && r.fields.length === 1) {
@@ -1121,6 +1157,7 @@ export function readInkProbe(
         bad = false
         done = false
         vertical = false
+        prev = ''
         continue
       }
       if (at === i && nodes && !bad && !eaten.has(i) && samples[i] !== undefined) out.push(samples[i])
@@ -1140,9 +1177,14 @@ export function readInkProbe(
     }
     if (/^> \\box\d+=/.test(line)) {
       nodes = []
+      prev = ''
       continue
     }
     if (nodes === null) continue
+    // (a line of the log's columns goes on on the next where that holds no dots: the same node, its kind read on its first line)
+    const wrapped = prev.length >= PRINT_LINE && !line.startsWith('.')
+    prev = line
+    if (wrapped) continue
     if (/^\\[hv]box\(/.test(line) && !nodes.length) {
       vertical = line.startsWith('\\v')
       nodes.push(line)
@@ -2173,7 +2215,13 @@ export function readMarkProbe(
  *   specification." owned by the $\mathcal{T}$ that opens the paragraph after it, until \axt@hold held a heading's and a
  *   babel name's marks) and its placeholders' (2610.21085v1's \paragraph{What $\cand$ is, …} set u44's point at its
  *   $\cand$: the piece $\cand(q)$ owned the heading's text, LOST, and the paragraph was the original's). Elsewhere, in
- *   vertical mode, it still waits for the next mark that is set, but a heading's or a babel name's (\axt@hold).
+ *   vertical mode, it looks at the token after it (\futurelet, as \axthpk does): a letter, another character or a math shift,
+ *   each of which TeX answers in vertical mode by beginning a paragraph, begins it first (\leavevmode) and the point is set
+ *   before the piece's first glyph (a formula first on a centred line after its `\\`, whose two points had both stood after its
+ *   glyphs); before anything else (\noindent, \par, \vspace, a display, a group) it waits for the next mark that is set, but a
+ *   heading's or a babel name's (\axt@hold), as before. In a box of its own (\ifinner: an \mbox, a cell's box) it is set on
+ *   the box's empty list too, as \axthpk's is: no paragraph resumes there after a display (`\mbox{\texttt{…}}`, whose opening
+ *   point had been gobbled, its closing one alone).
  * - **\axtpmm{name}, before an inline formula** (its source begins $, \( or \ensuremath): \axtpma, but set on the empty
  *   list too. The formula's math-on node follows the mark at once, so the paragraph TeX resumes after a display is no
  *   empty one either way (no line is made), and no \ignorespaces is cut short of a space it would have skipped: the
@@ -2878,10 +2926,11 @@ export const LAYOUT_TEX = [
   '\\def\\axt@pmgo{\\ifx\\axt@back\\@empty\\ifcase\\lastnodetype\\axt@pmglued\\or\\or\\or\\or\\or\\or\\or\\axt@pmglued\\fi\\fi\\ifx\\axt@pmhow\\relax\\axt@put{\\axt@name}\\else\\axt@putbox{\\axt@name}\\fi\\let\\axt@pmhow\\relax\\axt@back}',
   '\\let\\axt@pmhow\\relax\\def\\axt@pmglued{\\ifnum\\axt@boxy=1 \\let\\axt@pmhow\\hbox\\fi}',
   '\\def\\axt@pmh{\\relax\\let\\axt@back\\@empty\\axt@take\\futurelet\\axt@next\\axt@pmgo}',
-  '\\def\\axt@pmv#1{\\ifvmode\\xdef\\axt@pend{#1}\\fi}',
+  '\\def\\axt@pmv#1{\\ifvmode\\expandafter\\axt@pmvv\\else\\expandafter\\@gobble\\fi{#1}}\\def\\axt@pmvv#1{\\def\\axt@pvn{#1}\\futurelet\\axt@pvt\\axt@pmvd}',
+  '\\def\\axt@pmvd{\\let\\axt@pvgo\\axt@pmvp\\ifcat\\noexpand\\axt@pvt a\\let\\axt@pvgo\\axt@pmvg\\fi\\ifcat\\noexpand\\axt@pvt 0\\let\\axt@pvgo\\axt@pmvg\\fi\\ifcat\\noexpand\\axt@pvt $\\let\\axt@pvgo\\axt@pmvg\\fi\\axt@pvgo}\\def\\axt@pmvg{\\leavevmode\\axt@put{\\axt@pvn}}\\def\\axt@pmvp{\\xdef\\axt@pend{\\axt@pvn}}',
   '\\def\\axt@pmd#1{\\def\\axt@name{#1}\\axt@pmh}',
   '\\def\\axt@pmc{\\ifnum\\lastnodetype=-1 \\expandafter\\@gobble\\else\\expandafter\\axt@pmd\\fi}',
-  '\\def\\axt@pmb{\\ifhmode\\expandafter\\axt@pmc\\else\\expandafter\\axt@pmv\\fi}',
+  '\\def\\axt@pmb{\\ifhmode\\expandafter\\axt@hpkh\\else\\expandafter\\axt@pmv\\fi}',
   '\\protected\\def\\axt@pma{\\ifaxt@off\\expandafter\\@gobble\\else\\expandafter\\axt@pmb\\fi}',
   '\\def\\axt@pmn{\\ifhmode\\expandafter\\axt@pmd\\else\\expandafter\\axt@pmv\\fi}',
   '\\protected\\def\\axt@pmm{\\ifaxt@off\\expandafter\\@gobble\\else\\expandafter\\axt@pmn\\fi}',
@@ -3268,18 +3317,18 @@ const BETWEEN_TEXTS = (p: Piece): boolean =>
 const LOOKS_AHEAD = (p: PieceLike | null | undefined): boolean => {
   // (a pair's tail argument is read as the pair's close is: what follows the call is read by its macro as before)
   if (tailPiece(p)) return false
+  // (a name of the no-ink lists the paper defines (ownNoInk): its definition decides where the source reader reads it, one that
+  // takes a parameter may read what follows it, one of none reads nothing; one the reader does not hold reads as the name did,
+  // nothing after it (the compile guard the backstop, as for the name itself); a prefix, whatever its definition, still applies
+  // to the token after it)
+  if (ownNoInk(p)) return ownReading(p) === 'args' || PREFIX_END.test(p!.src ?? '')
   const cls = classOf(p)
-  // (the prefixes: xspace.sty's \xspace, latex.ltx's \protect, TeX's primitives \noexpand, \expandafter, \string, \global, \long,
-  // \outer, \immediate and e-TeX's \unexpanded, \detokenize, \protected)
-  return (
-    cls === 'macro' ||
-    cls === 'footnote' ||
-    (p?.t === 'ph' &&
-      /\\(?:xspace\*?|protect|noexpand|expandafter|string|unexpanded|detokenize|global|long|outer|protected|immediate)$/.test(
-        p.src ?? '',
-      ))
-  )
+  return cls === 'macro' || cls === 'footnote' || (p?.t === 'ph' && PREFIX_END.test(p.src ?? ''))
 }
+/** a source that ends in a prefix that applies to the next token: xspace.sty's \xspace, latex.ltx's \protect, TeX's primitives
+ *  \noexpand, \expandafter, \string, \global, \long, \outer, \immediate and e-TeX's \unexpanded, \detokenize, \protected */
+const PREFIX_END =
+  /\\(?:xspace\*?|protect|noexpand|expandafter|string|unexpanded|detokenize|global|long|outer|protected|immediate)$/
 /** a placeholder that reads nothing after it, whatever else it is: a LaTeX text symbol (source/text-symbols.ts: `\S`, `\%`, `\_`,
  *  each one character by the kernel's own definition, no argument and no look ahead), where LOOKS_AHEAD's class of a macro
  *  takes it for a paper's macro. The piece right after it keeps its marks ("\S\ref{sec:a}"); its ink is read as any macro's
@@ -3573,9 +3622,17 @@ export function layoutMarking(
       // call's too, which its own answer leaves none there; its closing mark is its own answer's. A front unit's as well: its
       // marks robust (`lead`), the probe's boxes set them so (aheadSection), the answer keyed by the lead: an answer about
       // another token list is none)
+      // (and right after one that has no mark of its own by the marking's own rules: passed over at its unit's head, before the
+      // start mark (a cell's \\boldmath, an author's \\IEEEauthorrefmark{2}), or one TeX answered sets no ink (`none`: a
+      // reference's \\doiprefix). TeX's 0 or 1 was answered with that macro's opening mark before it, a mark before the macro that
+      // reads none of what follows it: the mark the answer allows on the placeholder is given there too)
       const pairSaid = inside(k) ? aheadSaid(u.pieces, k, lead) : null
+      const unmarkedLead = !!pairSaid && !opened.has(after) && (!!passed?.has(pairSaid.at) || none.has(pairSaid.m.src))
       const ahead =
-        !!pairSaid && pairSaid.m === after && opened.has(after) && (pairSaid.code === '0' || pairSaid.code === '1')
+        !!pairSaid &&
+        pairSaid.m === after &&
+        (opened.has(after) || unmarkedLead) &&
+        (pairSaid.code === '0' || pairSaid.code === '1')
       // (`reads`: the piece before this one may read what follows it, so that nothing of ours may stand between them)
       const reads =
         LOOKS_AHEAD(after) && !READS_NOTHING(after) && !free(after, p) && !opensAfter(after!, spaced) && !ahead
