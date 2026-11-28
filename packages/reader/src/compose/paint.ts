@@ -586,6 +586,76 @@ export async function detailCropsFor(
   return out
 }
 
+/**
+ * A laid page's region drawn anew at a resolution of its own (a link preview's region past what the page's drawing holds): the
+ * page rendered in the configuration its page view draws it in (`laid`: its laid units' groups off) on the box alone (PDF units),
+ * `css` CSS px a PDF unit at `r` device px a CSS px, and the crops whose places meet the box cut on the box's own grid at that
+ * resolution from the crop configuration's render (`crops`; detailCropsFor, its canvas the box's own pixels, lying on the page's
+ * pixel for pixel, its place left to the caller). Its canvases (the page's, then the crops' where any meets the box); null where
+ * `signal` gave it up; it throws where a render fails
+ */
+export async function regionAnew(
+  page: Page,
+  pageOf: (n: number) => Promise<PDFPageProxy>,
+  box: readonly [number, number, number, number],
+  o: {
+    css: number
+    r: number
+    laid: Promise<OptionalContentConfig>
+    crops: Promise<OptionalContentConfig>
+    signal: AbortSignal
+  },
+): Promise<HTMLCanvasElement[] | null> {
+  const { r, signal } = o
+  const pdfPage = await pageOf(page.page)
+  if (signal.aborted) return null
+  const vp = pdfPage.getViewport({ scale: o.css })
+  const [ax, ay] = vp.convertToViewportPoint(box[0], box[3]) as [number, number],
+    [bx, by] = vp.convertToViewportPoint(box[2], box[1]) as [number, number]
+  const area: DetailArea = {
+    left: Math.min(ax, bx),
+    top: Math.min(ay, by),
+    width: Math.abs(bx - ax),
+    height: Math.abs(by - ay),
+    px: [Math.max(1, Math.round(Math.abs(bx - ax) * r)), Math.max(1, Math.round(Math.abs(by - ay) * r))],
+  }
+  const out = document.createElement('canvas')
+  out.width = area.px[0]
+  out.height = area.px[1]
+  const ctx = out.getContext('2d', { alpha: false })
+  if (!ctx) return null
+  const task = pdfPage.render({
+    canvas: out,
+    canvasContext: ctx,
+    viewport: pdfPage.getViewport({ scale: o.css * r }),
+    transform: [1, 0, 0, 1, -area.left * r, -area.top * r],
+    optionalContentConfigPromise: o.laid,
+    annotationMode: 0,
+  } as Parameters<PDFPageProxy['render']>[0])
+  const stop = () => task.cancel()
+  signal.addEventListener('abort', stop, { once: true })
+  let crops: HTMLCanvasElement | null = null
+  try {
+    await task.promise
+    crops = await detailCropsFor(page, pageOf, vp, o.crops, area, signal, undefined, 'area')
+  } catch (e) {
+    dropCanvas(out)
+    if (signal.aborted) return null
+    throw e
+  } finally {
+    signal.removeEventListener('abort', stop)
+  }
+  if (signal.aborted) {
+    dropCanvas(out)
+    if (crops) dropCanvas(crops)
+    return null
+  }
+  if (!crops) return [out]
+  crops.removeAttribute('style')
+  delete crops.dataset.axtScale
+  return [out, crops]
+}
+
 /** each detail crops' canvas's box in the page view's viewport (CSS px) and its pixels */
 const detailBoxes = new WeakMap<HTMLCanvasElement, DetailArea>()
 /** a detail crops' canvas's box (detailCropsFor's), where its crops are drawn */
