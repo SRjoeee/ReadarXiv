@@ -10825,6 +10825,9 @@ source`: the display's glyphs counted as its text):
 - **A display holding a draft image frame** (graphicx's draft, the final pass's picture in its place) read past its column's end
   to the text after it was refused as a reading past a frame that a mark or a column's end ends (FRAME). A `pastColumn` reading
   that the text after it ends is told as the one to the text after it on its page: the display owns its frame and its number.
+  The stream states that bound (`Owned.toText`), and the ownership's claim (`own/own.ts`) takes an image's box for such a reading
+  as for one bounded by its closing point or by the text after it on its page: in the final pass the picture is an image, and
+  it is the display's as its number is. A reading past its column's end to its unit's next mark or its column's end takes none.
 
 Over the 245 no object moves. Over the 599, 11 paragraphs of 4 papers are laid where they had stayed the original's (9 past
 the notes, 2 past a frame), and nothing else's state moves; a paragraph above one of them now has it below in place of the
