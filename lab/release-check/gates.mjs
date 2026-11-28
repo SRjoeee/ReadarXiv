@@ -998,7 +998,7 @@ export const GATES = [
   },
   {
     id: 'link-targets',
-    title: "the link targets over this run's prepare: no boxed float wrong (its own ink outside its box, or another's text inside), read by the engine's counts and against the parts; the share of figures and tables boxed and the destinations landed reported (lab/pdf/prepare-back/floats-gate.mjs, docs/PDF-READER.md §20.3)",
+    title: "the link targets over this run's prepare: no box a head's target states wrong, of any kind (its own ink outside it or untold, or another's ink inside), read against the parts and, a float's, by the engine's counts; no stated landing the evidence contradicts; the share of figures and tables boxed, the boxed floats no target states and the destinations landed reported (lab/pdf/prepare-back/floats-gate.mjs, docs/PDF-READER.md §20.3, §20.5)",
     tier: 'full',
     stage: 'pipeline',
     holds: [],
@@ -1008,7 +1008,7 @@ export const GATES = [
       let n = {}
       try {
         const j = JSON.parse(steps[0].text.trim().split('\n')[0])
-        n = { papers: j.papers, wrong: j.wrong, figure: j.shares.figure, table: j.shares.table }
+        n = { papers: j.papers, wrong: j.wrong, landingsWrong: j.landingsWrong, boxedUnstated: j.boxedUnstated, figure: j.shares.figure, table: j.shares.table }
       } catch {}
       return { pass: steps[0].exit === 0, numbers: n }
     },

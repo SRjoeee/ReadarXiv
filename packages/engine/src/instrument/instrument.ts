@@ -33,6 +33,7 @@ import {
 import { groupFacts } from '../marks/faces.ts'
 import { holdsLetter } from '../locate/figure-lines.ts'
 import { isInk } from '../locate/lines.ts'
+import { INKED_CLASSES } from '../locate/work.ts'
 import { linkTargetOf, unicodeOf } from '../locate/ink.ts'
 import { ownersOf, ROLE } from '../instrument.ts'
 import { readPdf } from '../read.ts'
@@ -44,6 +45,7 @@ import {
   followsOf,
   headEnd,
   INK_ANY,
+  INVISIBLE,
   joinedRead,
   leadStep,
   probeFactsOf,
@@ -54,7 +56,8 @@ import {
 } from '../marks/marks.ts'
 import { ownOf } from '../own/own.ts'
 import { READ_ALONE, regionsOf, WANT } from '../own/stream.ts'
-import { BACKREF_LIST, forcedBreak, lastTexLog, startOf, statedGlue } from '../source/latex-front.ts'
+import { BACKREF_LIST, forcedBreak, lastTexLog, startOf, statedGlue, texFilesOf } from '../source/latex-front.ts'
+import { paperOf, textless } from '../source/arg-roles.ts'
 import { bundleUnitsOf } from './units.ts'
 import { phClass, texToText } from './layer1.ts'
 import { textPieceOf } from '../source/text-piece.ts'
@@ -71,7 +74,7 @@ import type { PdfJs } from '../read.ts'
 import type { BlockCell } from './language.ts'
 import type { Ownership } from '../own/own.ts'
 import type { PieceLike } from '../marks/marks.ts'
-import type { OpenPiece, PhPiece, SourcePiece, SourceUnit } from '../source/latex-front.ts'
+import type { Fsys, OpenPiece, PhPiece, SourcePiece, SourceUnit } from '../source/latex-front.ts'
 import type { DocGlyph } from '../doc.ts'
 
 // ---------------------------------------------------------------- the types of what the adapter reads and states
@@ -145,6 +148,9 @@ export type InstrumentPaper = {
   pseudocode?: readonly number[]
   tableBlocks?: readonly (readonly BlockCell[])[]
   theoremNames?: readonly string[] | null
+  /** its files and its main file (compile/live.ts openPaper's): the commands it defines are read from them (ownCommandsOf) */
+  fsys?: Fsys
+  meta?: { main?: string | null }
 }
 /** instrumentOf's input: the paper, our marked final pass's bytes, the marks file's options, the marked compile's last log,
  *  PDF.js and its document options, and what made it */
@@ -1262,17 +1268,39 @@ export function placesOf(
   return places
 }
 
+/** the commands a paper's files define (source/arg-roles.ts paperOf over its TeX files, the source reader's own reading: \\newcommand's
+ *  and \\def's families, \\let, …), or null where its files are not given */
+export function ownCommandsOf(paper: InstrumentPaper): { has(name: string): boolean } | null {
+  const main = paper.meta?.main
+  return paper.fsys && main ? paperOf(texFilesOf(paper.fsys, main)).own : null
+}
+
 /** The pieces whose span the instrument states empty, TeX setting no ink for them where they stand, by unit index and piece
- *  id: a paper's macro the marking's probe said sets none (its `inkless`, to which the marking gives no point); and a text
- *  macro (classesOf's macro or umacro) the marking never marks, its rendering never ink by the marking's own reading (marks.ts
- *  classOf null: INVISIBLE, STRUCTURE, textless; a .bbl's \newblock, \ttfamily, \sloppy), whose places therefore no compile
- *  states. Stated empty, such a piece is drawn as nothing, proven (El.text ''); stated nothing, the typesetter leaves its
- *  unit unproven (a paper's own macro of no stated ink and no text: lay/read.ts), every BibTeX entry English. `units` the
- *  source units, `classes` each
- *  unit's classesOf by piece id */
+ *  id: a paper's macro the marking's probe said sets none (its `inkless`, to which the marking gives no point); and an element
+ *  the marking reads as setting no ink by TeX's own tables, to which it gives no mark (marks.ts classOf null: one of TeX's and
+ *  LaTeX's control words that set none, INVISIBLE: `\\index`, `\\color`, `\\label`, a skip, a .bbl's \\newblock, \\ttfamily,
+ *  \\sloppy; or one the role table proves can set no letters, source/arg-roles.ts textless: a register's or a length's setting),
+ *  whose places therefore no compile states, whatever class the element carries: one classification for both readers. Where
+ *  its class is one the reading draws from its ink (locate/work.ts INKED_CLASSES: an `\\index{…}` or a `\\color[HTML]{…}` the
+ *  class table reads as `other`, a text macro), stated empty it is drawn as nothing, proven (El.text ''); stated nothing, the
+ *  typesetter left its unit unproven (an inked element of no found ink and no text: lay/read.ts), the original's: every
+ *  BibTeX entry English, every paragraph holding an index entry. Of the marking's null, not an alignment's tab, a stray brace,
+ *  a parameter or a script mark (STRUCTURE): a table's rows read as prose would then be laid as prose over a table, and a
+ *  script mark in text sets a formula; nor a forced break (a space's class, which states its own kind). A class that draws no
+ *  ink (a space, `zero`) reads no such statement: those are left out. The marking reads the name by its spelling: a command
+ *  the paper defines (`own`, ownCommandsOf: `\\renewcommand{\\index}[1]{\\textdagger}`, its call still a placeholder) is read by
+ *  its definition, which may set ink the paragraph's text range then holds, erased with the text and drawn by nothing were it
+ *  stated empty; none such is stated, and with `own` not given none of this reading is made. (The text macro of the marking's
+ *  null, the statement made before this one, is kept as it was: a class's own `\\newblock` is defined in the paper's files of
+ *  many papers and sets no ink; telling which definition sets ink is the definition's reading, not this one's.) `units` the
+ *  source units, `classes` each unit's classesOf by piece id, `own` the commands the paper defines */
 export function inklessPieces(
   units: readonly Unit[],
-  { classes, inkless = null }: { classes: ClassesBy; inkless?: readonly string[] | null },
+  {
+    classes,
+    inkless = null,
+    own = null,
+  }: { classes: ClassesBy; inkless?: readonly string[] | null; own?: { has(name: string): boolean } | null },
 ): PieceRef[] {
   const noInk: ReadonlySet<string | undefined> = new Set(inkless ?? [])
   const out: PieceRef[] = []
@@ -1282,7 +1310,20 @@ export function inklessPieces(
       if (p.t !== 'ph') return
       const marked = classOf(p),
         cls = classes[i]?.get(String(k))?.cls
-      if ((marked === 'macro' && noInk.has(p.src)) || (marked === null && (cls === 'macro' || cls === 'umacro')))
+      // (the marking's reading of no ink, as classOf reads it: its source alone, its spelling. It holds only for a command the
+      // paper does not define: one the paper defines (`own`) is read by its definition, which the spelling does not tell, so
+      // its statement is not made. With `own` unknown, none of this reading is made)
+      const cmd = /^\\([A-Za-z@]+)/.exec(p.src ?? '')?.[1]
+      const noInkRead =
+        marked === null &&
+        own !== null &&
+        !(cmd !== undefined && own.has(cmd)) &&
+        (INVISIBLE.test(p.src ?? '') || textless(p.src ?? ''))
+      if (
+        (marked === 'macro' && noInk.has(p.src)) ||
+        (marked === null && (cls === 'macro' || cls === 'umacro')) ||
+        (noInkRead && cls !== undefined && INKED_CLASSES.has(cls))
+      )
         out.push({ unit: i, piece: String(k) })
     }),
   )
@@ -2365,6 +2406,7 @@ export async function instrumentOf({
       ...(u.title ? { title: true } : {}),
       ...(u.front ? { front: true } : {}),
       ...(entryOf(u) ? { entry: true } : {}),
+      ...(entryOf(u) && u.key !== undefined ? { key: u.key } : {}),
       ...(u.of ? { of: u.of } : {}),
       ...(u.held && (u.kind === 'author' || u.kind === 'affiliation') ? { stored: true } : {}),
       ...(facts.kept.has(i) ? { kept: true, [facts.why.get(i)!]: true } : {}),
@@ -2545,7 +2587,7 @@ export async function instrumentOf({
   // (the pieces TeX sets no ink for (inklessPieces), and those TeX's points prove set nothing of their own (boundedEmpty): their
   // span stated empty, by unit index and piece id)
   // (and the pairs' tail arguments TeX's tail samples answered set nothing: probeFactsOf's `tails`, marks.ts tailsSettingNothing)
-  const empty = inklessPieces(units, { classes: classesBy, inkless })
+  const empty = inklessPieces(units, { classes: classesBy, inkless, own: ownCommandsOf(paper) })
   const stated = new Set(empty.map((x) => `${x.unit}|${x.piece}`))
   // (and the placeholders TeX joined to the macro before them, marks.ts joinedPieces: their ink is that macro's, read through by
   // its opening point, and they set nothing apart from it)

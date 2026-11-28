@@ -6,7 +6,7 @@ import type { Mapping } from '../align/align.ts'
 import { setPagesOf } from '../align/align.ts'
 import type { Doc, DocGlyph } from '../doc.ts'
 import type { PageInk } from '../ink.ts'
-import type { Instrument, InstrumentUnit, TexFrame } from '../instrument.ts'
+import type { Instrument, InstrumentUnit, PieceClass, TexFrame } from '../instrument.ts'
 import { fixedFacesOf } from './facts.ts'
 import type { DisplayLine, InkInput, InkStats } from './ink.ts'
 import { r2 } from './lines.ts'
@@ -221,7 +221,17 @@ export interface Landing {
   ord: number
   box: Box4
   next?: [page: number, box: Box4]
+  /** landed by its name's key (a citation's `cite.<key>`, the entry's \\bibitem's), with the member's ord the point's rule lands
+   *  the point on (`geometry`; null where it lands nowhere) and the member the edge reading names where it names another
+   *  (`edge`): the lab's count of where the geometric evidence disagrees with the paper's identity; the bundle does not carry it */
+  byKey?: { geometry: number | null; edge?: number }
 }
+/** why a landing is not stated (targets.ts): the evidence contradicts it (a page's anchor `page`, another member's left edge at
+ *  its point `edge`, its name's claim another kind `name`, its name claiming nothing and no edge confirming it `unproven`; the
+ *  entry its name's key names beginning on another page than the point's, `key`),
+ *  or its box cannot hold the whole of what it names (an element TeX set whose ink the bundle does not state `unstated`, what it
+ *  names standing in two pieces `pieces`, the box meeting another member's ink `foreign`) */
+export type Refusal = 'page' | 'edge' | 'name' | 'unproven' | 'key' | 'unstated' | 'pieces' | 'foreign'
 
 export interface Located {
   /** the units the members are of (a member's `unit` its index here): the instrument's, then those locate made on A (ink.ts:
@@ -257,9 +267,10 @@ export interface Located {
   floats: FloatBox[]
   /** where each destination of A's links lands (targets.ts), sorted by destination; one that lands on nothing covered is absent */
   targets: Landing[]
-  /** the landings the engine's own evidence does not let it state (targets.ts `contradicted`): each destination, the kind it
-   *  would have had and why not, for the lab's measure; never stated in the bundle */
-  refusedTargets?: [dest: string, kind: TargetKind, cause: 'page' | 'edge' | 'name' | 'unproven'][]
+  /** the landings the engine does not state (targets.ts: its own evidence contradicts them, or their box cannot hold the whole
+   *  of what they name): each destination, the kind it would have had and why not, for the lab's measure; never stated in the
+   *  bundle */
+  refusedTargets?: [dest: string, kind: TargetKind, cause: Refusal][]
   /** the time phases 17 and 18 took, where a clock was given (LocateOptions.now): the lab's measure of their cost */
   linkMs?: { floats: number; targets: number }
   /** per A page (index p - 1): each glyph's and each box's group (the wrap's plan), null for none */
@@ -592,6 +603,32 @@ export const AUTHOR_KINDS = new Set(['author', 'affiliation'])
 /** the classes of an element the typesetter draws from the ink TeX set for it (its reading's VISIBLE, a symbol aside: drawn from
  *  its source where it has no ink): one of no ink states which of three it is, TeX set nothing for it (El.text ''), it stands
  *  outside the unit's text (El.keep), or neither (its ink not found: the typesetter leaves its unit the original's) */
+/** an element as the bundle states it (bundle.ts; targets.ts reads it so too): with what its source says of it (the
+ *  instrument's PieceClass): its class as its kind, and the rest where set; `asInk`, a symbol whose ink locate found not that symbol as its reading draws it (Member.asInk): a formula's, `other`, drawn
+ *  as its ink, no symbol's drawing (2610.10069v1 p20's `$\vs^*$`, read as "*" on the baseline, its bold s lost) */
+export function classed(el: El, c: PieceClass | undefined, asInk = false): El {
+  if (!c) return el
+  const out: El = { ...el, kind: asInk && c.cls === 'symbol' ? 'other' : c.cls }
+  if (c.unknown) out.unknown = 1
+  // (the source's copy text, but where locate states the page's: a URL's, its glyphs' text, which its break points count in)
+  if (c.copy && out.copy === undefined) out.copy = c.copy
+  if (c.sym && !asInk) out.sym = c.sym[1] ? [c.sym[0], 1] : [c.sym[0]]
+  if (c.mark) out.mark = 1
+  if (c.literal) out.literal = 1
+  if (c.glue) out.glue = c.glue[2] ? [c.glue[0], c.glue[1], 1] : [c.glue[0], c.glue[1]]
+  if (c.cmd !== undefined) out.cmd = c.cmd
+  if (c.bare) out.bare = 1
+  if (c.brk) out.brk = 1
+  if (c.note !== undefined) out.note = c.note
+  if (c.same !== undefined) out.same = c.same
+  if (c.colour !== undefined) out.colour = c.colour
+  if (c.nested) out.nested = 1
+  if (c.tie) out.tie = 1
+  // (a text macro's text, where its own glyphs gave it none: the probe's, what TeX sets for it)
+  if (c.text !== undefined && out.text === undefined && !out.ink.length) out.text = c.text
+  return out
+}
+
 export const INKED_CLASSES = new Set(['cite', 'num', 'other', 'display', 'macro', 'umacro'])
 
 /** a unit's pieces by id, spans opened */

@@ -1,14 +1,17 @@
 // lab/pdf/prepare-back/floats-gate.mjs <out> [--json=<file>]: the link targets' gate over a corpus run (run.mjs's located dumps,
 // <out>/located/<id>.json, each its `linkTargets`: link-targets.mjs). Not shipped.
-// The gate (docs/PDF-READER.md §20.3, the lead's ruling of 2026-11-27): no boxed float wrong, 0 over the corpus. A boxed float is
-// wrong where the engine counts another's glyph inside its box, ink none of its own crossing its edge or ink of its own members
-// outside it (locate/floats.ts `foreign`, `cut`, `outside`), or where the bundle's own parts show a member of its own with ink
-// outside the box or another member's text meeting it (link-targets.mjs `wrong`). And no stated landing wrong (the lead's ruling of
-// 2026-11-27: a landing the engine's own evidence contradicts is never stated): a page anchor, one another member's left edge at
-// its point contradicts, one whose name's claim is another kind, one whose name claims nothing and no edge confirms. Exit 1 on
-// any, or where no paper states a record. The share of the figures and tables of a bracket that got a box is reported by type with
-// the cause of each miss, never gated; so are the landings by proof (proved by the edge, by their name's kind alone), the
-// refusals by cause, the destinations landed nowhere, the targets' size and the phases' time.
+// The gate (docs/PDF-READER.md §20.5, the lead's rulings of 2026-11-27 and 2026-11-28): no box a head's target states wrong, 0
+// over the corpus, of any kind. A stated box is wrong where the bundle's own parts read it so (link-targets.mjs `wrong`,
+// boxesWrongOf: its own ink outside it, its own ink untold, another member's ink in it; a heading's window holds its section by
+// design), or, a float's, where the engine counts another's glyph inside it, ink none of its own crossing its edge or ink of its
+// own members outside it (locate/floats.ts `foreign`, `cut`, `outside`). A boxed float no target states is counted apart, never
+// judged. And no stated landing wrong (a landing the engine's own evidence contradicts is never stated): a page anchor, one
+// another member's left edge at its point contradicts, one whose name's claim is another kind, a citation landed elsewhere than
+// on the entry its name's key names, one whose name claims nothing and no edge confirms. Exit 1 on any, or where no paper states
+// a record. The share of the figures and tables of a bracket that got a box is reported by type with the cause of each miss,
+// never gated; so are the landings by proof (by their entry's key, proved by the edge, by their name's kind alone), the landings
+// by key the point's rule lands elsewhere and those whose point the edge reading gives another member, the refusals by kind and cause (the evidence's, and a box's that cannot hold its member
+// whole), the destinations landed nowhere, the targets' size and the phases' time.
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -25,17 +28,24 @@ export function gateOf(records) {
   const dests = { papers: 0, keys: 0, resolved: 0, nowhere: 0, landed: {}, named: {} }
   const disagree = []
   const edge = []
+  let keyGeometry = 0
+  let keyEdge = 0
+  const keyRefused = []
   const landingWrong = []
   const proof = {}
   const refusedBy = {}
   const sizes = []
+  let boxedUnstated = 0
+  const wrongBy = {}
   for (const [id, r] of records) {
     for (const f of r.floats) {
       const t = (byType[f.type ?? '(none)'] ??= { bracketed: 0, boxed: 0, causes: {} })
       if (f.serial >= 0) t.bracketed++
       if (f.box) t.boxed++
       else t.causes[f.cause] = (t.causes[f.cause] ?? 0) + 1
-      if (f.box && (f.foreign > 0 || f.cut > 0 || f.outside > 0)) wrongRows.push({ id, serial: f.serial, page: f.page, why: 'engine counts', foreign: f.foreign, cut: f.cut, outside: f.outside })
+      // (a boxed float no target states: counted apart, never judged)
+      if (f.box && !f.stated) boxedUnstated++
+      else if (f.box && (f.foreign > 0 || f.cut > 0 || f.outside > 0)) wrongRows.push({ id, serial: f.serial, page: f.page, kind: 'float', why: 'engine counts', foreign: f.foreign, cut: f.cut, outside: f.outside })
     }
     for (const w of r.wrong ?? []) wrongRows.push({ id, ...w })
     if (r.dests?.keys !== undefined) {
@@ -53,24 +63,33 @@ export function gateOf(records) {
     for (const d of r.disagree ?? []) disagree.push([id, ...d])
     for (const d of r.edge ?? []) edge.push([id, ...d])
     // (every stated landing the evidence contradicts or does not prove: wrong, the gate's other half)
-    for (const [why, rows] of [['page', r.pages], ['edge', r.edge], ['name', r.disagree], ['unproven', r.unproven]])
+    for (const [why, rows] of [['page', r.pages], ['edge', r.edge], ['name', r.disagree], ['key', r.keyWrong], ['unproven', r.unproven]])
       for (const x of rows ?? []) landingWrong.push({ id, why, dest: x[0], kind: x[1] })
     for (const [k, p] of Object.entries(r.proof ?? {})) {
-      const t = (proof[k] ??= { proved: 0, kindOnly: 0, wrong: 0 })
-      for (const f of ['proved', 'kindOnly', 'wrong']) t[f] += p[f]
+      const t = (proof[k] ??= { byKey: 0, proved: 0, kindOnly: 0, wrong: 0 })
+      for (const f of ['byKey', 'proved', 'kindOnly', 'wrong']) t[f] += p[f] ?? 0
     }
+    keyGeometry += r.keyGeometry?.length ?? 0
+    keyEdge += r.keyEdge?.length ?? 0
+    for (const d of r.keyRefused ?? []) keyRefused.push([id, ...d])
     for (const [k, c] of Object.entries(r.dests?.refused ?? {})) {
       const t = (refusedBy[k] ??= {})
       for (const [cause, n] of Object.entries(c)) t[cause] = (t[cause] ?? 0) + n
     }
     if (r.bytes?.targetsGzip !== undefined) sizes.push(r.bytes)
   }
+  for (const w of wrongRows) {
+    const k = (wrongBy[w.kind ?? 'float'] ??= {})
+    k[w.why] = (k[w.why] ?? 0) + 1
+  }
   const share = (t) => (byType[t]?.bracketed ? byType[t].boxed / byType[t].bracketed : null)
   return {
     // (and some paper states a record: a run whose dumps hold none, made before the targets, checks nothing)
     pass: wrongRows.length === 0 && landingWrong.length === 0 && records.length > 0,
     wrong: wrongRows.length,
+    wrongBy,
     wrongRows,
+    boxedUnstated,
     landingsWrong: landingWrong.length,
     landingWrong,
     proof,
@@ -80,6 +99,9 @@ export function gateOf(records) {
     dests,
     disagree,
     edge,
+    keyGeometry,
+    keyEdge,
+    keyRefused,
     bytes: {
       papers: sizes.length,
       targetsGzip: { p50: quantile(sizes.map((b) => b.targetsGzip), 0.5), p95: quantile(sizes.map((b) => b.targetsGzip), 0.95), max: Math.max(0, ...sizes.map((b) => b.targetsGzip)) },
@@ -112,7 +134,7 @@ if (process.argv[1] === import.meta.filename) {
   const time = Object.fromEntries(Object.entries(ms).map(([k, v]) => [k, { p50: quantile(v, 0.5), p95: quantile(v, 0.95), max: Math.max(0, ...v) }]))
   const json = process.argv.find((a) => a.startsWith('--json='))?.slice(7)
   if (json) writeFileSync(json, `${JSON.stringify({ papers: records.length, ...g, ms: time }, null, 1)}\n`)
-  console.log(JSON.stringify({ papers: records.length, pass: g.pass, wrong: g.wrong, shares: g.shares, byType: g.byType, dests: { ...g.dests, named: undefined }, disagree: g.disagree.length, landingsWrong: g.landingsWrong, proof: g.proof, refused: g.refused, edge: g.edge.length, bytes: g.bytes, ms: time }))
+  console.log(JSON.stringify({ papers: records.length, pass: g.pass, wrong: g.wrong, wrongBy: g.wrongBy, boxedUnstated: g.boxedUnstated, shares: g.shares, byType: g.byType, dests: { ...g.dests, named: undefined }, disagree: g.disagree.length, landingsWrong: g.landingsWrong, proof: g.proof, refused: g.refused, edge: g.edge.length, keyGeometry: g.keyGeometry, keyEdge: g.keyEdge, keyRefused: g.keyRefused.length, bytes: g.bytes, ms: time }))
   for (const w of [...g.wrongRows, ...g.landingWrong].slice(0, 20)) console.log('WRONG', JSON.stringify(w))
   process.exit(g.pass ? 0 : 1)
 }

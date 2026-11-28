@@ -107,6 +107,9 @@ export interface InstrumentUnit {
   front?: true
   /** a bibliography's entry, the source reader's `\bibitem` (instrument.ts entryOf): format's Unit.entry, its parts its blocks */
   entry?: true
+  /** a bibliography entry's first unit: its `\\bibitem`'s key (source/latex-front.ts bibKeyOf), which hyperref names the entry's
+   *  destination by (`cite.<key>`): what a citation lands on by identity (locate/targets.ts); the bundle does not carry it */
+  key?: string
   /** the author block a note is tied to by its source (source/latex-front.ts tieNotes: written inside an author command's argument,
    *  or on its own where the paper's bindings attach it to an author): its toggle the block's (format's Unit.of) */
   of?: 'author'
