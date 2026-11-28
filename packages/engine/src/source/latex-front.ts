@@ -2078,8 +2078,7 @@ function opensIfOf(src: string): boolean {
 }
 /** whether a placeholder is a call of a macro whose meaning in force opens a conditional it does not close, as the reader stated
  *  it where it made the piece (Builder.ph): set in a box of the probe's it would skip or take what follows the box */
-export const opensIf = (p: { t?: string } | null | undefined): boolean =>
-  p?.t === 'ph' && OPENS_IF.has(p)
+export const opensIf = (p: { t?: string } | null | undefined): boolean => p?.t === 'ph' && OPENS_IF.has(p)
 /** how the reader reads a placeholder whose leading control word the paper defines (OwnReading), by the meaning in force where
  *  the walk stands; undefined where the paper does not define it, or no project is read */
 function ownOf(src: string): OwnReading | undefined {
