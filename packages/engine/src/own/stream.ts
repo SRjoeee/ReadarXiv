@@ -63,6 +63,10 @@ export interface Owned {
   how: number
   glyphs: Place[]
   boxes: Place[]
+  /** a reading past its column's end that the text after it ends (pastColumn, pastNotes): bounded by TeX's facts on both sides,
+   *  its opening point and the text after it, as 'open, to the text after it' is on its page (the frame's guard below; own.ts
+   *  claims an image for it) */
+  toText?: true
 }
 /** a page's regions (regionsOf): of each glyph, of each box, at each point; whether the page brackets any body */
 export interface Regions {
@@ -161,6 +165,24 @@ const UNIT_MARK = /^(?:[th]?(\d+)[se]|[pn](\d+)\.\d+[ab])$/
 const earlierUnit = (name: string, id: number) => {
   const m = UNIT_MARK.exec(name)
   return !!m && Number(m[1] ?? m[2]) < id
+}
+/** the index of the first column body's end (`be<n>`) among a page's points after another unit's start at `k`, where every unit
+ *  started from `k` on has its end mark before it and no mark of the unit `id` stands before it; -1 where there is none so. What
+ *  a class that sets a column's notes inside the body it brackets ships from that start to that end is the notes', each whole,
+ *  none of unit `id`'s text (ownedOf's pastNotes): a note left open there may go on at the head of the next column */
+function bodyEndAfter(points: readonly InkPoint[], k: number, id: string) {
+  const open = new Set<string>()
+  for (let j = k; j < points.length; j++) {
+    const n = points[j]!.name
+    if (/^be\d+$/.test(n)) return open.size ? -1 : j
+    const u = UNIT_MARK.exec(n)
+    if (!u) continue
+    const of = u[1] ?? u[2]!
+    if (of === id) return -1
+    if (START.test(n)) open.add(of)
+    else if (n.endsWith('e')) open.delete(of)
+  }
+  return -1
 }
 /** a range in a region outside the column bodies (an output routine of its own: REVTeX's, multicol's) that goes from
  *  low on a page to high on it, and right by this share of the page's width and up by this share of its height, crossed
@@ -543,7 +565,11 @@ function headEntries(
  *   mark there). TeX ships a column's body between its two points in the order it set it: what stands in the piece's
  *   region after its point and before its unit's next text is what TeX set for it (a display at a column's foot, its
  *   number, a display \allowdisplaybreaks breaks over a page). The rule is asked only where the one before it found
- *   nothing ('the next mark on another page', 'the text after it not found'), so no piece found otherwise moves.
+ *   nothing ('the next mark on another page', 'the text after it not found'), so no piece found otherwise moves. Where a class
+ *   sets the column's notes inside the body it brackets, the notes' start bounds the piece's ink as the body's end does, each
+ *   note whole before that end and none of the piece's unit's marks among them: the notes' labels, their separator rule and all
+ *   they hold are none of the piece's, and its reading goes on from the body's end to the text after it (pastNotes, §18.121).
+ *   A reading so ended by the text after it is not refused for a draft frame it holds (FRAME, below).
  * - A display group (`group`, marks/marks.ts followsOf): displays with nothing visible between them whose later ones have no
  *   opening point, since TeX sets none on the empty list it resumes the paragraph with (a whatsit there would keep the
  *   empty paragraph between two displays a line). The first owns the whole group's ink, to the text after the last
@@ -964,6 +990,70 @@ export function ownedOf(
       }
       return cut(HOW['open, to the text after it'], glyphs, boxes, end)
     }
+    /** pastColumn where a class sets the column's notes inside the body it brackets (REVTeX's ltxgrid): the first mark after the
+     *  piece in its region, `stop`, on its page, is another unit's start — a note's —, and its page's body ends after it with no
+     *  mark of the piece's unit between (bodyEndAfter). The note's start bounds the piece's ink as the body's end does: what its
+     *  region holds from it to that start, less the glyphs on the start's line before it (the note's label: none where they are
+     *  words of no label's form, which may be the piece's own) and the boxes TeX shipped after its last glyph there that stand
+     *  below that glyph's line (the notes' separator rule, which TeX ships with them under the column's text); then what its
+     *  region holds from the body's end on, through the bodies' breaks, up to the text after it. Everything from the note's start
+     *  to the body's end is the notes', whatever stands there: a note's placeholder after its end mark, its points and ink.
+     *  Null where it is not so, where the piece set no glyph before the note, or where the text after it is not found */
+    const pastNotes = (stop: Place | null): Owned | null => {
+      if (!stop || stop[0] !== pa) return null
+      const P = pages[pa - 1]!,
+        G = P.glyphs,
+        S = P.points[stop[1]]!,
+        s = START.exec(S.name)
+      if (!s || s[1] === m[2]) return null
+      const B = bodyEndAfter(P.points, stop[1], m[2]!)
+      if (B < 0) return null
+      const lead = takeTo(stop)
+      let k = lead.glyphs.length
+      while (
+        k > 0 &&
+        S.glyph < G.n &&
+        Math.abs(G.y[lead.glyphs[k - 1]![1]]! - G.y[S.glyph]!) <
+          0.5 * Math.max(G.size[lead.glyphs[k - 1]![1]]!, G.size[S.glyph]!)
+      )
+        k--
+      if (!k) return null
+      const label = lead.glyphs
+        .slice(k)
+        .map(([, g]) => G.u[g] ?? '')
+        .join('')
+      if (labelText(label) && !isLabelForm(label)) return null
+      const g1 = lead.glyphs[k - 1]![1],
+        after = P.boxAt[g1]!,
+        upTo = k < lead.glyphs.length ? P.boxAt[lead.glyphs[k]![1]]! : S.box
+      const glyphs = lead.glyphs.slice(0, k),
+        boxes = lead.boxes.filter(
+          ([, b]) => b < upTo && (b < after || P.boxes[4 * b + 3]! > G.y[g1]! - 0.5 * G.size[g1]!),
+        )
+      // (the stop past the body's end: the first mark in the piece's region after it, on its page or a later one)
+      let next: Place | null = null
+      for (let r = (rank.get(`${pa}|${stop[1]}`) ?? -2) + 1; r >= 1 && r < seq.length && !next; r++) {
+        const [p, q] = seq[r]!
+        if ((p > pa || q > B) && regions[p - 1]!.at[q] === rA) next = seq[r]!
+      }
+      const E = P.points[B]!
+      for (let p = pa; p <= (next ? next[0] : pages.length); p++) {
+        const Q = pages[p - 1]!,
+          T = next && p === next[0] ? Q.points[next[1]] : null
+        take(
+          glyphs,
+          boxes,
+          p,
+          p === pa ? E.glyph : 0,
+          T ? T.glyph : Q.glyphs.n,
+          p === pa ? E.box : 0,
+          T ? T.box : Q.boxes.length / 4,
+        )
+      }
+      const end = textEnd(glyphs, next ? pages[next[0] - 1]!.points[next[1]]!.name : null)
+      if (end < k) return null
+      return { ...cut(HOW["open, past its column's end"], glyphs, boxes, end), toText: true }
+    }
     /** an opening point alone in a column's body, its next mark past that body's end, or null where it is not so */
     const pastColumn = (): Owned | null => {
       if (rA % 2 !== 1) return null
@@ -981,11 +1071,11 @@ export function ownedOf(
             break
           }
       }
-      if (!E) return null
+      if (!E) return f.want ? pastNotes(stop) : null
       if (f.want) {
         const { glyphs, boxes } = takeTo(stop)
         const end = textEnd(glyphs, stop ? pages[stop[0] - 1]!.points[stop[1]]!.name : null)
-        return end > 0 ? cut(HOW["open, past its column's end"], glyphs, boxes, end) : null
+        return end > 0 ? { ...cut(HOW["open, past its column's end"], glyphs, boxes, end), toText: true } : null
       }
       if (f.blocked) return null
       // with no text after it: to its body's end, or through to its unit's next mark where that is its stop
@@ -1149,8 +1239,15 @@ export function ownedOf(
     if (e.how === HOW['open, the next mark on another page']) e = footEnd() ?? e
     // (a reading past a draft image frame that the text after it does not end — it runs to its unit's next mark, its column's
     // end —: what TeX set between is not told, a figure after a heading's last piece (2010.11929v2's wrapfigure after
-    // `\subsection{Inspecting \oursfull{}}`), nothing owned, as where the frame's mark stopped it before; FRAME)
-    if (e.how < OWNED && e.how !== HOW['open, to the text after it'] && e.boxes.some(([q, b]) => framed[q - 1]?.box[b]))
+    // `\subsection{Inspecting \oursfull{}}`), nothing owned, as where the frame's mark stopped it before; FRAME. A reading past
+    // its column's end that the text after it ends (Owned.toText) is told as the one to the text after it on its page: a display
+    // holding a picture at a column's foot owns its frame and its number)
+    if (
+      e.how < OWNED &&
+      e.how !== HOW['open, to the text after it'] &&
+      !e.toText &&
+      e.boxes.some(([q, b]) => framed[q - 1]?.box[b])
+    )
       e = none(HOW["open, the next mark not its unit's"])
     if (f.group?.length && e.how < OWNED) {
       e = { ...e, how: HOW['open, with the displays after it'] }
@@ -1258,8 +1355,9 @@ export function ownedPages({
         const u = START.exec(P.points[k]!.name)?.[1]
         const ends = want && u && u !== unit ? [`${u}e`, `t${u}e`, `h${u}e`] : null
         const e = ends ? P.points.findIndex((pt, j) => j > k && ends.includes(pt.name)) : -1
+        // (and the notes up to the body's end after them, which ownedOf reads past to the text after it, pastNotes)
         if (e < 0) return true
-        k = e
+        k = Math.max(e, unit === undefined ? -1 : bodyEndAfter(P.points, k, unit))
       }
     }
     return false
