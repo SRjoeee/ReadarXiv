@@ -406,3 +406,88 @@ describe.skipIf(!docker)('a gated mark expands where TeX scans past it as it did
     expect(await itemsOf(r.pdf)).toEqual(await itemsOf(r.own))
   }, 900_000)
 })
+
+/** the glyphs TeX shows between a piece's two points (`p<u>.<k>a`, `p<u>.<k>b`) on the page holding the first, in the content
+ *  stream's order: a count of the text-showing operations between them; null where either point is not set on that page */
+const shownBetween = async (pdf: Uint8Array, a: string, b: string): Promise<number | null> => {
+  const doc = await getDocument({ data: pdf.slice(), verbosity: 0 }).promise
+  try {
+    for (let n = 1; n <= doc.numPages; n++) {
+      const ops = await (await doc.getPage(n)).getOperatorList()
+      let at = -1,
+        shown = 0
+      for (let j = 0; j < ops.fnArray.length; j++) {
+        const f = ops.fnArray[j]
+        const name = (ops.argsArray[j]?.[0] as { name?: string } | undefined)?.name
+        if (f === OPS.setRenderingIntent && name === `axt-${a}`) at = j
+        else if (f === OPS.setRenderingIntent && name === `axt-${b}` && at >= 0) return shown
+        else if (at >= 0 && (f === OPS.showText || f === OPS.showSpacedText)) shown++
+      }
+      if (at >= 0) return null
+    }
+    return null
+  } finally {
+    await doc.loadingTask.destroy()
+  }
+}
+/** the name of the placeholder whose source begins so, in the first unit holding one: `p<u>.<k>` */
+const pieceName = (paper: ReturnType<typeof openPaper>, begins: string) => {
+  for (const [i, u] of paper.units.entries()) {
+    const k = u.pieces.findIndex((p) => p.t === 'ph' && (p.src ?? '').startsWith(begins))
+    if (k >= 0) return `p${i}.${k}`
+  }
+  throw new Error(`no placeholder ${begins}`)
+}
+
+describe.skipIf(!docker)('a piece’s opening point where its glyphs begin', () => {
+  it('a piece first in a box of its own (\\mbox{\\texttt{…}}): its opening point is set before its glyphs, on the box’s empty list', async () => {
+    const r = await prepared(
+      [
+        '\\documentclass{article}',
+        '\\begin{document}',
+        'Our own paragraph holds a name set whole \\mbox{\\texttt{ourname}} in a box and goes on with words of ours.',
+        '\\end{document}',
+        '',
+      ].join('\n'),
+    )
+    const p = pieceName(r.paper, '\\texttt')
+    expect(await shownBetween(r.pdf, `${p}a`, `${p}b`)).toBeGreaterThan(0)
+    expect(await itemsOf(r.pdf)).toEqual(await itemsOf(r.own))
+  }, 900_000)
+  it('a formula that begins a centred line after a forced break: its two points around its glyphs, the paragraph begun as TeX begins it', async () => {
+    const r = await prepared(
+      [
+        '\\documentclass{article}',
+        '\\begin{document}',
+        '\\begin{center}',
+        'A centred line of our own words\\\\',
+        '$x+y$ and more centred words of ours',
+        '\\end{center}',
+        '\\end{document}',
+        '',
+      ].join('\n'),
+    )
+    const p = pieceName(r.paper, '$x+y$')
+    expect(await shownBetween(r.pdf, `${p}a`, `${p}b`)).toBeGreaterThan(0)
+    expect(await itemsOf(r.pdf)).toEqual(await itemsOf(r.own))
+  }, 900_000)
+  it('a pended opening mark before what begins no paragraph (\\noindent, \\vspace, a display, \\par) stays pended: every word where the paper’s own compile sets it', async () => {
+    const r = await prepared(
+      [
+        '\\documentclass{article}',
+        '\\begin{document}',
+        '\\begin{center}',
+        'A centred line of our own words\\\\',
+        '\\noindent$x$ and more centred words of ours\\\\',
+        '\\vspace{2pt}$y$ and words of ours again\\\\',
+        '\\[ z = 1 \\]',
+        '$w$ and the last centred words of ours',
+        '\\end{center}',
+        'Our own paragraph after it, with a formula $v$ in it.',
+        '\\end{document}',
+        '',
+      ].join('\n'),
+    )
+    expect(await itemsOf(r.pdf)).toEqual(await itemsOf(r.own))
+  }, 900_000)
+})
