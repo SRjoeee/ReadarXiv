@@ -10877,6 +10877,35 @@ the name of the kernel is, reading nothing; the compile guard stands behind it, 
 no ink, and an element with no answer is held. The classification of §18.120 (`inklessPieces`) reads the marking's class, so a
 name the paper defines is no longer of the marking's null there.
 
+### 18.123 Where the marks go, read by TeX's definitions and its answers (the coordinator's ruling C of 2026-11-28, fix phase F4)
+
+Rules of the marked compile, each read off TeX's own definition or TeX's own answer, each found by the census of the 599 papers
+(fix phase F4's traces) where a paragraph stayed the original's because a piece had no point:
+
+- **TeX's grouping primitives** (`\begingroup`, `\endgroup`) set no ink and read nothing after them (`source/tex-kernel.ts`
+  `INK_FREE_WORDS`, held against pdflatex's box by `tex-kernel.test.ts`). Read as a paper's macro, one after a display took an
+  opening mark that pended in vertical mode and was never set, and one before a display read it as what it looks at.
+- **A piece first in a box of its own** (`\mbox{\texttt{…}}`, `\mbox{\cite[…]{…}}`) has its opening point: `\axtpma` sets
+  nothing on an empty list only outside a box (`\ifinner`), where the list is the paragraph TeX resumes after a display, as
+  `\axthpk` already read it (LAYOUT_TEX `\axt@pmb`).
+- **A pended opening mark begins the paragraph its piece begins.** In vertical mode `\axtpma` and `\axtpmm` look at the token after
+  them (`\futurelet`): a letter, another character or a math shift, which TeX answers by beginning a paragraph, begins it first
+  (`\leavevmode`) and the point is set before the piece's first glyph (a formula first on a centred line after its `\\`, both
+  of whose points had stood after its glyphs); before anything else (`\noindent`, `\par`, `\vspace`, a display) it pends as
+  before (LAYOUT_TEX `\axt@pmv`).
+- **A display shorthand's class is the source reader's statement** (`PhPiece.closes`: a paper's `\be … \ee`): `display`, as a
+  spelled one, reading nothing after it, never an ink sample of a paper's macro (`marks.ts` `classOf`).
+- **A macro whose meaning opens a conditional** (`\def\iffa{\iffalse}`, an author's way of commenting a passage out) is read by
+  the source reader as the conditional it is where its meaning in force is one of TeX's conditionals and nothing else
+  (`conditionalMeaning`: its skipped branch skipped), and no probe section asks a placeholder whose macro's meaning opens a
+  conditional it does not close (`PhPiece.opensIf`): set in a probe's box, it skipped every sample after it, and the look-ahead
+  section wrote no row.
+- **TeX answered 0 or 1 for a pair, and its macro had no mark of its own** (passed over at its unit's head, or answered to set no
+  ink: a reference's `\doiprefix`, a cell's `\boldmath`): the placeholder after it has the marks the answer allows, as after a
+  macro with its opening mark (`layoutMarking`'s `ahead`).
+
+Every one moves the marked TeX (LAYOUT_TEX's two, every paper's marked request) or the probe's samples; none moves a unit's id.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server

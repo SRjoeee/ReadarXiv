@@ -4,6 +4,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- Fixed: in the PDF reader, more paragraphs, cells and references are translated where a piece in them had stayed without a place on the page: a formula first on a centred line, a name set in a box of its own, a paper's own shorthand for a displayed formula, a passage the paper comments out with a conditional of its own, a citation or a link right after a command the paper sets at a cell's or an entry's head.
 - Fixed: in the PDF reader, a paragraph holding a command the paper defines anew to print a mark, where LaTeX's own command of that name prints nothing, such as a size switch or a bibliography's separator set to print a symbol, keeps the mark the page prints: the mark had been erased under the translation.
 - Fixed: in the PDF reader, a paragraph whose displayed formula stands at a column's foot, the text after it at the head of the next column, is translated where the paper's class sets the column's footnotes below that formula inside the column, as REVTeX does, or where the formula holds a picture. Such a paragraph had stayed in the original language.
 - Fixed: in the PDF reader, a paragraph, a caption or a theorem holding an index entry, such as `word\index{word}`, or a colour given by a model, such as `\color[HTML]{3366AA}`, is translated. Such a paragraph had stayed in the original language.
