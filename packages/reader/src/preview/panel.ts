@@ -1,5 +1,5 @@
-// Where a kept panel may be and how large it may grow (link previews' kept panel; the owner's approved prototype, eighth pass,
-// 2026-11-28: "one right limit on size; its place, its natural behaviour"). Pure: rectangles and scales in, a place or a scale out.
+// Where a kept panel may be and how large it may grow (link previews' kept panel, docs/PDF-READER.md §20.7: one plain limit on its
+// size, its place its natural behaviour). Pure: rectangles and scales in, a place or a scale out.
 // - ONE rule for its place, whoever moves it (a drag, the arrows, a zoom): whole inside the reader's window, KEEP_EDGE from its
 //   sides and foot, under the toolbar (KEEP_TOP). Nothing else moves it.
 // - Its size (a scale of the page it is cut from, 1 = 100 %): from the one it opened at (the least) to the smaller of KEPT_MOST

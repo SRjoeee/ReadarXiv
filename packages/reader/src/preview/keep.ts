@@ -6,7 +6,7 @@
 // on the keyboard's focus, never on the focus a drag leaves (the sheet's rule). Esc closes the topmost thing (the preview first:
 // previews.ts), the focus back to the link it came from. One at a time: keeping another replaces it. To assistive technology a
 // dialog named by its label, its × named to close it (UI.md S-R-32).
-// Its own zoom (the owner's word on the eighth pass, 2026-11-28: "build it like this"): a zoom gesture on it (zoom-gesture.ts: Ctrl
+// Its own zoom (docs/PDF-READER.md §20.7): a zoom gesture on it (zoom-gesture.ts: Ctrl
 // and the wheel, a trackpad's pinch in Chrome; WebKit's gesture events; two touch pointers) zooms its image about the pointer,
 // never the browser's page, between the size it opened at and its most (panel.ts mostScale), the image always whole; the keys
 // + and - by the panes' tenth, 0 back. While a gesture runs its drawing is scaled (a transform, on the compositor); settled, the
