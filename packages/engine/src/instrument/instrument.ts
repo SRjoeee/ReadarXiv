@@ -48,6 +48,7 @@ import {
   INVISIBLE,
   joinedRead,
   leadStep,
+  ownNoInk,
   probeFactsOf,
   readColours,
   readSkipProbe,
@@ -864,10 +865,13 @@ export { BREAK_SOURCE as FORCED_BREAK } from '../source/latex-front.ts'
  * a sentence cutter; any other marks.ts classOf's, `other` where it names none.
  * As `other`, which the package's cutter reads as a word, `R.~S.~Sutton` would be cut after its initials, and a line
  * after `\\` would run on into the next only by the source's own line end. Neither enters a unit's id
- * (format's unitId reads an element's source)
+ * (format's unitId reads an element's source). A name of the marking's no-ink lists the paper defines (marks.ts ownNoInk), which
+ * the marking asks TeX about as the paper's macro, is told by its spelling's kind, `other`, whatever TeX answers: the source's
+ * units are told their kinds before any compile (front.ts sourceUnitsOf) and the bundle's must say the same, so the translator's
+ * statement of such a unit stays as it was before that rule (PDF-READER §18.122)
  */
 export const elementKindOf = (p: PieceLike | null | undefined): string =>
-  isTie(p) ? 'space' : forcedBreak(p) ? 'break' : (classOf(p) ?? 'other')
+  isTie(p) ? 'space' : forcedBreak(p) ? 'break' : ownNoInk(p) ? 'other' : (classOf(p) ?? 'other')
 /** a tie: the front end's placeholder for the source's `~` (source/latex-front.ts, its one spelling of TeX's \nobreakspace; the
  *  command `\nobreakspace` itself is read as one that sets no ink, marks/marks.ts INVISIBLE_WORDS): \penalty10000 and interword
  *  glue, a space no line breaks at (PieceClass.tie, El.tie) */

@@ -10863,7 +10863,11 @@ stated empty, and its class stays the table's: everything as before. Where TeX a
 and its ink is found by its points; its class is one drawn from its ink (`classesOf`: `umacro`, as a command no table knows;
 an `\index{…}` reads `other` already). Past the ink section's budget (`INK_BUDGET`) it has no answer: an inked class whose ink
 is its points' or none, its unit then the original's (`unproven`), never the reading of no ink. A forced break and a structure
-character keep their readings, and a name the marking gives a class (a citation, a reference) keeps its class.
+character keep their readings, and a name the marking gives a class (a citation, a reference) keeps its class. What a
+translator is told of it does not move: its element's kind stays its spelling's (`instrument.ts` `elementKindOf`: `other`, an
+element that sets no word to a sentence cutter), whatever TeX answers, because the source's units are told their kinds before
+any compile (`front.ts` `sourceUnitsOf`) and the bundle's must say the same; the rule reads the definition for the layout alone,
+and no row is asked again for it.
 
 **What follows it.** Whether such a name reads what follows it is the definition's, where the source reader holds it in force
 at the call (`Ctx.meanings`, the walk's reading in TeX's order): one that takes no parameter reads nothing after it, as the name
