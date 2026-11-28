@@ -22,8 +22,9 @@
 export const INK_FREE_SYMBOLS = Object.freeze(['\\@', '\\/', '\\-', '\\,', '\\;', '\\:', '\\!', '\\ '])
 
 /** control words with no argument: TeX's `\relax` (nothing), `\unskip` (takes the glue before it off), `\ignorespaces`
- *  (skips the spaces after it), `\noindent` and `\indent` (begin a paragraph without or with its indent: an empty box), and
- *  LaTeX's `\leavevmode` (`\unhbox\voidb@x`: begins one), `\nobreak` (`\penalty\@M`), `\allowbreak` (`\penalty\z@`) and
+ *  (skips the spaces after it), `\noindent` and `\indent` (begin a paragraph without or with its indent: an empty box),
+ *  `\begingroup` and `\endgroup` (open and close a semi-simple group: no node, and nothing read after them), and LaTeX's
+ *  `\leavevmode` (`\unhbox\voidb@x`: begins one), `\nobreak` (`\penalty\@M`), `\allowbreak` (`\penalty\z@`) and
  *  `\newline` (ends the line: `\@normalcr\relax`, a break and no ink) */
 export const INK_FREE_WORDS = Object.freeze([
   'relax',
@@ -35,6 +36,8 @@ export const INK_FREE_WORDS = Object.freeze([
   'noindent',
   'indent',
   'newline',
+  'begingroup',
+  'endgroup',
 ])
 
 /** control words whose only argument is an optional priority from 0 to 4 (LaTeX's `\linebreak[2]`, a penalty): no ink, but a
