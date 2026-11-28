@@ -28,7 +28,7 @@ const MEMBERS = [...INK_FREE_SYMBOLS, ...INK_FREE_WORDS.map(w => `\\${w}`)]
 describe('the table', () => {
   it('holds control symbols and words, and the words that carry a priority apart', () => {
     expect(INK_FREE_SYMBOLS).toEqual(['\\@', '\\/', '\\-', '\\,', '\\;', '\\:', '\\!', '\\ '])
-    expect(INK_FREE_WORDS).toEqual(['relax', 'nobreak', 'allowbreak', 'ignorespaces', 'unskip', 'leavevmode', 'noindent', 'indent', 'newline'])
+    expect(INK_FREE_WORDS).toEqual(['relax', 'nobreak', 'allowbreak', 'ignorespaces', 'unskip', 'leavevmode', 'noindent', 'indent', 'newline', 'begingroup', 'endgroup'])
     expect(BREAK_HINTS).toEqual(['linebreak', 'nolinebreak', 'pagebreak', 'nopagebreak'])
   })
   it('inkFree reads a placeholder\'s whole source: an entry alone or before an empty group, a control space with its space', () => {
@@ -59,6 +59,14 @@ describe('the maker: a placeholder after an ink-free control sequence keeps its 
   it('a LaTeX text symbol reads nothing after it either: "\\S\\ref{x}" keeps the \\ref\'s marks, the symbol its opening mark as before', () => {
     expect(marked([text('in '), ph('\\S'), ph('\\ref{x}'), text(' we')])).toEqual(['text', 'ph \\axtpma{p0.1a}', 'ph \\S', 'ph \\axtpma{p0.2a}', 'ph \\ref{x}', 'ph \\axtpm{p0.2b}', 'text'])
     expect(marked([text('rate 50 '), ph('\\%'), text(' '), ph('\\cite{x}'), text(' agree')])).toEqual(['text', 'ph \\axtpma{p0.1a}', 'ph \\%', 'text', 'ph \\axtpma{p0.3a}', 'ph \\cite{x}', 'ph \\axtpm{p0.3b}', 'text'])
+  })
+  it('TeX\'s grouping primitives read nothing and set nothing: a display before \\endgroup and after \\begingroup keeps its marks, the primitive none', () => {
+    // (a display then `\endgroup`: the primitive had a paper's macro's opening mark, pended after the display in vertical mode and
+    // never set, so the display's reading was blocked; `\begingroup` before a display took the display's marks as a macro that
+    // may look ahead)
+    const display = '\\begin{equation}x\\end{equation}'
+    expect(marked([text('We have'), ph(display), ph('\\endgroup'), text(' where it holds')])).toEqual(['text', 'ph \\axtpma{p0.1a}', `ph ${display}`, 'ph \\endgroup', 'text'])
+    expect(marked([text('We have '), ph('\\begingroup'), ph(display), text(' where it holds')])).toEqual(['text', 'ph \\begingroup', 'ph \\axtpma{p0.2a}', `ph ${display}`, 'text'])
   })
   it('guard: a paper\'s macro, which may look ahead, still takes the marks of the piece after it', () => {
     expect(marked([text('see '), ph('\\bert'), text(' '), ph('\\ref{x}'), text(' for it')])).toEqual(['text', 'ph \\axtpma{p0.1a}', 'ph \\bert', 'text', 'ph \\ref{x}', 'text'])
@@ -104,7 +112,8 @@ describe.skipIf(!pdflatex)('the table against pdflatex: an entry adds no ink and
   it('each entry: the letters round it stay, and no character, rule or leaders comes of it', () => {
     const dir = mkdtempSync(join(tmpdir(), 'axt-kernel-'))
     try {
-      const members = [...MEMBERS, ...BREAK_HINTS.map(w => `\\${w}[2]`)]
+      // (TeX's grouping primitives as a pair: one alone leaves its group open at the box's end, TeX's error, not its ink)
+      const members = [...MEMBERS.filter(m => !/^\\(?:begin|end)group$/.test(m)), '\\begingroup\\endgroup', ...BREAK_HINTS.map(w => `\\${w}[2]`)]
       const body = members.map((src, i) => String.raw`\setbox${i}\vbox{\hsize=100cm \parindent=7pt AA${/^\\[A-Za-z]/.test(src) ? `${src} ` : src}BB\par}\showbox${i}`).join('\n')
       writeFileSync(join(dir, 't.tex'), `${TEX}\\showboxbreadth=1000 \\showboxdepth=1000 \\tracingonline=1\n${body}\n\\end{document}\n`)
       spawnSync('pdflatex', ['-interaction=nonstopmode', 't.tex'], { cwd: dir, stdio: 'ignore', timeout: 120_000 })
