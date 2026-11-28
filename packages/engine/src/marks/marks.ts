@@ -1123,8 +1123,10 @@ const OWN_NODE =
  * §18.80: read "never inkless", such a macro would be given a mark it has no ink after, its element no ink and no text, its
  * unit the original's); an `\\item` a paper's macro makes is inked by the label LaTeX
  * sets at the next paragraph's start, which the ask sets in its box. With `ask` (useAnswersOf: the loop's first pass, the marked files), the marks' own points and
- * destinations in the box are no ink (OWN_NODE). A sample with no listing, an error, a line cut short or a node not known is
- * no answer: what it sets is not known
+ * destinations in the box are no ink (OWN_NODE). A node's line TeX's log broke at max_print_line (PRINT_LINE) goes on on the
+ * lines below it, which hold no dots: they are that node's, read on its first line (a label's `\\write`, its token list cut by
+ * TeX with `\\ETC.}`, stays a write, which draws nothing; a `\\special` stays a node not known). A sample with no listing, an
+ * error, a line cut short or a node not known is no answer: what it sets is not known
  */
 export function readInkProbe(
   log: string | null | undefined,
@@ -1138,7 +1140,9 @@ export function readInkProbe(
     bad = false,
     done = false,
     /** the listing's box is a vertical one (an ask's in a paragraph or between them) */
-    vertical = false
+    vertical = false,
+    /** the listing's line before this one */
+    prev = ''
   for (const line of (log ?? '').split('\n')) {
     const [r] = /^LAYOUT-PROBE /.test(line) ? readProbe(line) : []
     if (r && (r.tag === 'ink-at' || r.tag === 'ink-end') && r.fields.length === 1) {
@@ -1149,6 +1153,7 @@ export function readInkProbe(
         bad = false
         done = false
         vertical = false
+        prev = ''
         continue
       }
       if (at === i && nodes && !bad && !eaten.has(i) && samples[i] !== undefined) out.push(samples[i])
@@ -1168,9 +1173,14 @@ export function readInkProbe(
     }
     if (/^> \\box\d+=/.test(line)) {
       nodes = []
+      prev = ''
       continue
     }
     if (nodes === null) continue
+    // (a line of the log's columns goes on on the next where that holds no dots: the same node, its kind read on its first line)
+    const wrapped = prev.length >= PRINT_LINE && !line.startsWith('.')
+    prev = line
+    if (wrapped) continue
     if (/^\\[hv]box\(/.test(line) && !nodes.length) {
       vertical = line.startsWith('\\v')
       nodes.push(line)

@@ -10881,6 +10881,18 @@ the name of the kernel is, reading nothing; the compile guard stands behind it, 
 no ink, and an element with no answer is held. The classification of §18.120 (`inklessPieces`) reads the marking's class, so a
 name the paper defines is no longer of the marking's null there.
 
+**TeX's answer read whole: a write's line the log broke.** TeX's file whatsits (`\write`, `\openout`, `\closeout`) draw nothing,
+and the ink section reads their nodes as no ink (`NO_INK_NODE`). But TeX lists a write's token list to `max_print_line` less ten
+characters and then `\ETC.}`, and its log breaks every line at its 79 columns (`PRINT_LINE`): the write of a label whose fields
+the loop's first pass fills (hyperref's five) leaves its rest on a line of its own, with no dots. `readInkProbe` reads such a line
+as the node above it, its kind read on that node's first line, as `readInkDecorated` already did: a write alone is answered no
+ink, a `\special` or a literal stays a node not known (it may draw), a glyph beside a write is ink, and a line of the 79 columns
+TeX did not break is followed by a node of its own, with its dots. Read as a node not known, a `\label` a paper's class defines
+inside another definition's body (never in force: the label TeX sets is hyperref's) was answered as setting ink and stated as the
+paper's macro no table renders (`umacro`, `unknown`), and three paragraphs of the 599 papers' census that are drawn on the line,
+each holding such a label, stayed the original's. The same reading answers any sample whose listing holds a broken line
+of a node that sets no ink (a mark's, a destination's, a colour stack's) and nothing that sets any.
+
 ### 18.123 Where the marks go, read by TeX's definitions and its answers (the coordinator's ruling C of 2026-11-28, fix phase F4)
 
 Rules of the marked compile, each read off TeX's own definition or TeX's own answer, each found by the census of the 599 papers
