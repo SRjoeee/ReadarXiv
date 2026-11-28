@@ -3610,9 +3610,17 @@ export function layoutMarking(
       // call's too, which its own answer leaves none there; its closing mark is its own answer's. A front unit's as well: its
       // marks robust (`lead`), the probe's boxes set them so (aheadSection), the answer keyed by the lead: an answer about
       // another token list is none)
+      // (and right after one that has no mark of its own by the marking's own rules: passed over at its unit's head, before the
+      // start mark (a cell's \\boldmath, an author's \\IEEEauthorrefmark{2}), or one TeX answered sets no ink (`none`: a
+      // reference's \\doiprefix). TeX's 0 or 1 was answered with that macro's opening mark before it, a mark before the macro that
+      // reads none of what follows it: the mark the answer allows on the placeholder is given there too)
       const pairSaid = inside(k) ? aheadSaid(u.pieces, k, lead) : null
+      const unmarkedLead = !!pairSaid && !opened.has(after) && (!!passed?.has(pairSaid.at) || none.has(pairSaid.m.src))
       const ahead =
-        !!pairSaid && pairSaid.m === after && opened.has(after) && (pairSaid.code === '0' || pairSaid.code === '1')
+        !!pairSaid &&
+        pairSaid.m === after &&
+        (opened.has(after) || unmarkedLead) &&
+        (pairSaid.code === '0' || pairSaid.code === '1')
       // (`reads`: the piece before this one may read what follows it, so that nothing of ours may stand between them)
       const reads =
         LOOKS_AHEAD(after) && !READS_NOTHING(after) && !free(after, p) && !opensAfter(after!, spaced) && !ahead
