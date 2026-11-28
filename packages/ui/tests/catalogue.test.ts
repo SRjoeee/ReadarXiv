@@ -36,6 +36,9 @@ const ADDED: readonly string[] = [
     `R.preview.${k}('α1')`,
     `R.preview.${k}(3)`,
   ]),
+  // S-R-34: a kept panel's percentage, named to reset its size (2026-11-28; zh-CN the owner's approved prototype's, the rest
+  // for his approval: UI.md lists them)
+  'R.preview.reset',
 ]
 
 describe('the string catalogue', () => {
