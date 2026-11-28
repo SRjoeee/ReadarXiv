@@ -63,6 +63,10 @@ export interface Owned {
   how: number
   glyphs: Place[]
   boxes: Place[]
+  /** a reading past its column's end that the text after it ends (pastColumn, pastNotes): bounded by TeX's facts on both sides,
+   *  its opening point and the text after it, as 'open, to the text after it' is on its page (the frame's guard below; own.ts
+   *  claims an image for it) */
+  toText?: true
 }
 /** a page's regions (regionsOf): of each glyph, of each box, at each point; whether the page brackets any body */
 export interface Regions {
@@ -986,8 +990,6 @@ export function ownedOf(
       }
       return cut(HOW['open, to the text after it'], glyphs, boxes, end)
     }
-    /** whether the piece's reading is pastColumn's, ended by the text after it (the frame's guard below lets it stand) */
-    let toText = false
     /** pastColumn where a class sets the column's notes inside the body it brackets (REVTeX's ltxgrid): the first mark after the
      *  piece in its region, `stop`, on its page, is another unit's start — a note's —, and its page's body ends after it with no
      *  mark of the piece's unit between (bodyEndAfter). The note's start bounds the piece's ink as the body's end does: what its
@@ -1050,8 +1052,7 @@ export function ownedOf(
       }
       const end = textEnd(glyphs, next ? pages[next[0] - 1]!.points[next[1]]!.name : null)
       if (end < k) return null
-      toText = true
-      return cut(HOW["open, past its column's end"], glyphs, boxes, end)
+      return { ...cut(HOW["open, past its column's end"], glyphs, boxes, end), toText: true }
     }
     /** an opening point alone in a column's body, its next mark past that body's end, or null where it is not so */
     const pastColumn = (): Owned | null => {
@@ -1074,9 +1075,7 @@ export function ownedOf(
       if (f.want) {
         const { glyphs, boxes } = takeTo(stop)
         const end = textEnd(glyphs, stop ? pages[stop[0] - 1]!.points[stop[1]]!.name : null)
-        if (end <= 0) return null
-        toText = true
-        return cut(HOW["open, past its column's end"], glyphs, boxes, end)
+        return end > 0 ? { ...cut(HOW["open, past its column's end"], glyphs, boxes, end), toText: true } : null
       }
       if (f.blocked) return null
       // with no text after it: to its body's end, or through to its unit's next mark where that is its stop
@@ -1241,12 +1240,12 @@ export function ownedOf(
     // (a reading past a draft image frame that the text after it does not end — it runs to its unit's next mark, its column's
     // end —: what TeX set between is not told, a figure after a heading's last piece (2010.11929v2's wrapfigure after
     // `\subsection{Inspecting \oursfull{}}`), nothing owned, as where the frame's mark stopped it before; FRAME. A reading past
-    // its column's end that the text after it ends (`toText`) is told as the one to the text after it on its page: a display
+    // its column's end that the text after it ends (Owned.toText) is told as the one to the text after it on its page: a display
     // holding a picture at a column's foot owns its frame and its number)
     if (
       e.how < OWNED &&
       e.how !== HOW['open, to the text after it'] &&
-      !toText &&
+      !e.toText &&
       e.boxes.some(([q, b]) => framed[q - 1]?.box[b])
     )
       e = none(HOW["open, the next mark not its unit's"])
