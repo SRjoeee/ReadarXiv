@@ -224,9 +224,7 @@ export function classOf(piece: PieceLike | null | undefined): MarkClass | null {
   // those written out: a table's rule stays the page's own vector ink. Not \\rule either, which a box holds and TeX is
   // asked about (the ink section): a strut sets none, but a bar in a line (a legend's square) is ink that moves with it
   if (textless(src) && !RULE.test(src)) return null
-  // (a display a paper's own macro sets, `\\be … \\ee`: the source reader states it one (PhPiece.closes), and its class is that
-  // statement, not its spelling: as a spelled display it reads nothing after it, and it is read by the display rules)
-  if (DISPLAY.test(src) || (piece as { closes?: number }).closes !== undefined) return 'display'
+  if (DISPLAY.test(src)) return 'display'
   if (MATH.test(src)) return 'math'
   if (CITE.test(src)) return 'cite'
   if (EQREF.test(src)) return 'eqref'
