@@ -2064,7 +2064,18 @@ function citationArgs(s: string, i: number, name: string): { args: GroupArg[]; e
 let paper: ArgPaper | null = null
 /** the walk's meanings in force (Ctx.meanings) for the time a project is read (readProject), else null: what Builder.ph reads a
  *  call of the paper's own command by (ownOf) */
-let walking: Pick<Ctx, 'meanings'> | null = null
+let walking: Pick<Ctx, 'meanings' | 'ifs'> | null = null
+/** whether a placeholder's leading control word is a paper's macro whose meaning in force opens a conditional it does not close
+ *  (opensConditional: `\\def\\iffa{\\iffalse}`, `\\def\\opn{\\ifnum1=1 }`): no probe asks it (PhPiece.opensIf, marks.ts) */
+function opensIfOf(src: string): boolean {
+  const name = /^\\([A-Za-z@]+)/.exec(src)?.[1]
+  const m = name === undefined ? undefined : walking?.meanings?.get(name)
+  return m !== undefined && m !== 'unsure' && opensConditional(m.body, walking?.ifs)
+}
+/** whether a placeholder is a call of a macro whose meaning in force opens a conditional it does not close, as the reader stated
+ *  it where it made the piece (Builder.ph): set in a box of the probe's it would skip or take what follows the box */
+export const opensIf = (p: { t?: string } | null | undefined): boolean =>
+  p?.t === 'ph' && (p as { opensIf?: unknown }).opensIf === true
 /** how the reader reads a placeholder whose leading control word the paper defines (OwnReading), by the meaning in force where
  *  the walk stands; undefined where the paper does not define it, or no project is read */
 function ownOf(src: string): OwnReading | undefined {
@@ -4048,6 +4059,7 @@ class Builder<F extends WalkFile = WalkFile> {
     if (closes !== undefined) Object.defineProperty(p, 'closes', { value: closes })
     const own = ownOf(src)
     if (own) Object.defineProperty(p, 'own', { value: own })
+    if (opensIfOf(src)) Object.defineProperty(p, 'opensIf', { value: true })
     const glue = glueBody(src, this.macros)
     if (glue !== null) Object.defineProperty(p, 'glue', { value: glue })
     if (display) this.displays.add(p)
@@ -4744,6 +4756,25 @@ const consumes = (s: string, from: number, to: number) =>
 function testEnd(name: string, s: string, end: number) {
   const k = skipSpaces(s, end)
   return (name === 'if' || name === 'ifx') && ifChars(s, end) ? k + 2 : end
+}
+/** the conditional a paper's macro stands for where its meaning in force (Ctx.meanings) is one of TeX's conditionals and nothing
+ *  else, no parameter (`\\def\\iffa{\\iffalse}`, `\\def\\iftr{\\iftrue}`): that conditional's name, which the walk reads it as;
+ *  else null */
+function conditionalMeaning(name: string, ctx: Pick<Ctx, 'meanings' | 'ifs'>): string | null {
+  const m = ctx.meanings?.get(name)
+  if (m === undefined || m === 'unsure' || m.params > 0 || m.delim !== null || m.opt) return null
+  const w = /^\s*\\([A-Za-z@]+)\s*$/.exec(m.body)?.[1]
+  return w !== undefined && w !== name && isConditional(w, ctx.ifs) ? w : null
+}
+/** whether a body opens more of TeX's conditionals than it closes (`\\ifnum1=1 `, `\\iffalse`): a macro of such a meaning,
+ *  set in a box of the probe's, skips or takes what follows the box as TeX's conditional does */
+export function opensConditional(body: string, ifs: ReadonlySet<string> = new Set()): boolean {
+  let depth = 0
+  for (const m of body.matchAll(/\\([A-Za-z@]+)/g)) {
+    if (m[1] === 'fi') depth--
+    else if (isConditional(m[1]!, ifs)) depth++
+  }
+  return depth > 0
 }
 /** a control word TeX takes as a conditional, which a \\fi ends: TeX's own, the paper's \\newif ones, LaTeX's internal
  *  \\if@… — not etoolbox's \\ifdefempty{…}{…}{…} and the like, macros that no \\fi ends */
@@ -5774,7 +5805,10 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
       continue
     }
     // a command, or the one a macro's call ends in (goOn)
-    const { name, end } = then ?? commandAt(s, i)
+    const { name: called, end } = then ?? commandAt(s, i)
+    // (a paper's macro whose meaning in force is one of TeX's conditionals and nothing else, `\\def\\iffa{\\iffalse}`: that
+    // conditional, as TeX reads it (conditionalMeaning))
+    const name = conditionalMeaning(called, ctx) ?? called
     thens = then ? thens + 1 : 0
     then = null
     // (a definition TeX reads here puts its meaning in force from here on: the boundary reading's, in TeX's order)

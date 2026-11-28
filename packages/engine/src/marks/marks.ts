@@ -24,6 +24,7 @@ import {
   lastTexLog,
   markUnits,
   NO_ARG_COMMANDS,
+  opensIf,
   ownReading,
   START_LEAD,
   tailPiece,
@@ -413,6 +414,8 @@ export function aheadSamples(units: readonly Unit[]): AheadSample[] {
         next = pieces[q]!
       if (
         !pair ||
+        opensIf(pair[0]) ||
+        opensIf(next) ||
         !AHEAD_FOLLOWS.has(classOf(next)) ||
         READS_NOTHING(next) ||
         prefixWord(next.src) ||
@@ -685,7 +688,8 @@ export function inkSamples(units: readonly Unit[]): string[] {
         tailPiece(p) ||
         backrefPiece(p) ||
         symbolText(p.src) !== null ||
-        !boxable(p.src)
+        !boxable(p.src) ||
+        opensIf(p)
       )
         return
       if (BIB(u) && k < head) leads.add(p.src)
@@ -779,6 +783,7 @@ export function leadSamples(units: readonly Unit[], asked: readonly string[] = i
         seen.has(p.src) ||
         symbolText(p.src) !== null ||
         !boxable(p.src) ||
+        opensIf(p) ||
         p.src!.length > room
       )
         continue
