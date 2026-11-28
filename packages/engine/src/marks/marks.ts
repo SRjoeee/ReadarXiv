@@ -2195,7 +2195,9 @@ export function readMarkProbe(
  *   specification." owned by the $\mathcal{T}$ that opens the paragraph after it, until \axt@hold held a heading's and a
  *   babel name's marks) and its placeholders' (2610.21085v1's \paragraph{What $\cand$ is, …} set u44's point at its
  *   $\cand$: the piece $\cand(q)$ owned the heading's text, LOST, and the paragraph was the original's). Elsewhere, in
- *   vertical mode, it still waits for the next mark that is set, but a heading's or a babel name's (\axt@hold).
+ *   vertical mode, it still waits for the next mark that is set, but a heading's or a babel name's (\axt@hold). In a box of its own (\ifinner: an \mbox, a cell's box) it is set on
+ *   the box's empty list too, as \axthpk's is: no paragraph resumes there after a display (`\mbox{\texttt{…}}`, whose opening
+ *   point had been gobbled, its closing one alone).
  * - **\axtpmm{name}, before an inline formula** (its source begins $, \( or \ensuremath): \axtpma, but set on the empty
  *   list too. The formula's math-on node follows the mark at once, so the paragraph TeX resumes after a display is no
  *   empty one either way (no line is made), and no \ignorespaces is cut short of a space it would have skipped: the
@@ -2903,7 +2905,7 @@ export const LAYOUT_TEX = [
   '\\def\\axt@pmv#1{\\ifvmode\\xdef\\axt@pend{#1}\\fi}',
   '\\def\\axt@pmd#1{\\def\\axt@name{#1}\\axt@pmh}',
   '\\def\\axt@pmc{\\ifnum\\lastnodetype=-1 \\expandafter\\@gobble\\else\\expandafter\\axt@pmd\\fi}',
-  '\\def\\axt@pmb{\\ifhmode\\expandafter\\axt@pmc\\else\\expandafter\\axt@pmv\\fi}',
+  '\\def\\axt@pmb{\\ifhmode\\expandafter\\axt@hpkh\\else\\expandafter\\axt@pmv\\fi}',
   '\\protected\\def\\axt@pma{\\ifaxt@off\\expandafter\\@gobble\\else\\expandafter\\axt@pmb\\fi}',
   '\\def\\axt@pmn{\\ifhmode\\expandafter\\axt@pmd\\else\\expandafter\\axt@pmv\\fi}',
   '\\protected\\def\\axt@pmm{\\ifaxt@off\\expandafter\\@gobble\\else\\expandafter\\axt@pmn\\fi}',
