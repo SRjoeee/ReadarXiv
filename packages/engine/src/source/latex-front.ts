@@ -49,8 +49,6 @@ export type PhPiece = {
   opens?: boolean
   readonly brk?: true
   readonly closes?: number
-  readonly own?: OwnReading
-  readonly opensIf?: true
 }
 /**
  * How the source reader reads a placeholder whose leading command the paper itself defines (arg-roles.ts paperOf's `own`), by
@@ -58,13 +56,18 @@ export type PhPiece = {
  * after it; `args`, one that takes a parameter (or a \\def's parameter text), which may read what follows it; `unread`, one the
  * reader does not hold there (defined inside another definition's body, in a branch or a group it cannot settle, by a form it
  * does not read, or later in the paper), whose reading is the name's as if the paper had not defined it. Stated on the piece
- * (Builder.ph, not enumerable, as `brk` and `closes`): the marking reads a name of its no-ink lists so stated by its definition,
+ * (Builder.ph, beside the piece's properties: ownReading): the marking reads a name of its no-ink lists so stated by its definition,
  * never by its spelling (marks/marks.ts classOf, LOOKS_AHEAD; PDF-READER §18.122)
  */
 export type OwnReading = 'none' | 'args' | 'unread'
-/** the source reader's reading of a placeholder of a command the paper defines (PhPiece.own), or undefined for any other piece */
+/** the reader's statements on its placeholders beside their properties (a piece's own properties are what its unit's JSON, its
+ *  hash and every recorded call read): how it reads a command the paper defines (ownReading), and a macro whose meaning opens a
+ *  conditional it does not close (opensIf) */
+const OWN = new WeakMap<object, OwnReading>(),
+  OPENS_IF = new WeakSet<object>()
+/** the source reader's reading of a placeholder of a command the paper defines (ownReading), or undefined for any other piece */
 export const ownReading = (p: { t?: string } | null | undefined): OwnReading | undefined =>
-  p?.t === 'ph' ? (p as { own?: OwnReading }).own : undefined
+  p?.t === 'ph' ? OWN.get(p) : undefined
 /** a forced break's source: `\\\\`, its star, its optional argument; \\newline; LaTeX's
  *  `\\break`, which ends the line it stands in in a paragraph (PDF-READER §18.77: the marked compile
  *  states where, BREAKS_TEX's point; amsart's `\\hfill\\break\\indent` in 2608.03841v2's addresses) */
@@ -131,7 +134,7 @@ export const forcedBreak = (p: { t?: string } | null | undefined): boolean =>
 function restated<P extends object>(copy: P, of: { t?: string }): P {
   if (forcedBreak(of)) Object.defineProperty(copy, 'brk', { value: true })
   const own = ownReading(of)
-  if (own) Object.defineProperty(copy, 'own', { value: own })
+  if (own) OWN.set(copy, own)
   return copy
 }
 /** a pair's open (`sets` 0: its command sets its argument and nothing else, identityPair; not enumerable) and its close, by id */
@@ -2067,7 +2070,7 @@ let paper: ArgPaper | null = null
  *  call of the paper's own command by (ownOf) */
 let walking: Pick<Ctx, 'meanings' | 'ifs'> | null = null
 /** whether a placeholder's leading control word is a paper's macro whose meaning in force opens a conditional it does not close
- *  (opensConditional: `\\def\\iffa{\\iffalse}`, `\\def\\opn{\\ifnum1=1 }`): no probe asks it (PhPiece.opensIf, marks.ts) */
+ *  (opensConditional: `\\def\\iffa{\\iffalse}`, `\\def\\opn{\\ifnum1=1 }`): no probe asks it (opensIf, marks.ts) */
 function opensIfOf(src: string): boolean {
   const name = /^\\([A-Za-z@]+)/.exec(src)?.[1]
   const m = name === undefined ? undefined : walking?.meanings?.get(name)
@@ -2076,7 +2079,7 @@ function opensIfOf(src: string): boolean {
 /** whether a placeholder is a call of a macro whose meaning in force opens a conditional it does not close, as the reader stated
  *  it where it made the piece (Builder.ph): set in a box of the probe's it would skip or take what follows the box */
 export const opensIf = (p: { t?: string } | null | undefined): boolean =>
-  p?.t === 'ph' && (p as { opensIf?: unknown }).opensIf === true
+  p?.t === 'ph' && OPENS_IF.has(p)
 /** how the reader reads a placeholder whose leading control word the paper defines (OwnReading), by the meaning in force where
  *  the walk stands; undefined where the paper does not define it, or no project is read */
 function ownOf(src: string): OwnReading | undefined {
@@ -4059,8 +4062,8 @@ class Builder<F extends WalkFile = WalkFile> {
     const p = brk ? phPiece(src, true) : phPiece(src)
     if (closes !== undefined) Object.defineProperty(p, 'closes', { value: closes })
     const own = ownOf(src)
-    if (own) Object.defineProperty(p, 'own', { value: own })
-    if (opensIfOf(src)) Object.defineProperty(p, 'opensIf', { value: true })
+    if (own) OWN.set(p, own)
+    if (opensIfOf(src)) OPENS_IF.add(p)
     const glue = glueBody(src, this.macros)
     if (glue !== null) Object.defineProperty(p, 'glue', { value: glue })
     if (display) this.displays.add(p)

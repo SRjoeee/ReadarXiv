@@ -10855,7 +10855,7 @@ set no letters (`textless`) gets no mark and is never asked about, and the class
 \newblock{\textbullet\ }`) had its paragraph laid with the glyph erased under the translation and drawn by nothing: the element
 stated as of no ink, its ink in the text's range.
 
-**The rule.** A name the paper itself defines (the source reader's statement on the piece, `PhPiece.own`, from `paperOf`'s
+**The rule.** A name the paper itself defines (the source reader's statement on the piece, `ownReading`, from `paperOf`'s
 `own`), whose spelling the marking's lists or the role table read as setting nothing (`spelledNoInk`), is read by its definition
 (`ownNoInk`): it is the paper's macro (`classOf` `macro`), asked of TeX in the ink section and where the document first uses it
 (§18.80), whatever the source reader can read of the definition. Where TeX answers that it sets no ink, it gets no mark and is
@@ -10898,7 +10898,7 @@ Rules of the marked compile, each read off TeX's own definition or TeX's own ans
 - **A macro whose meaning opens a conditional** (`\def\iffa{\iffalse}`, an author's way of commenting a passage out) is read by
   the source reader as the conditional it is where its meaning in force is one of TeX's conditionals and nothing else
   (`conditionalMeaning`: its skipped branch skipped), and no probe section asks a placeholder whose macro's meaning opens a
-  conditional it does not close (`PhPiece.opensIf`): set in a probe's box, it skipped every sample after it, and the look-ahead
+  conditional it does not close (`opensIf`): set in a probe's box, it skipped every sample after it, and the look-ahead
   section wrote no row.
 - **TeX answered 0 or 1 for a pair, and its macro had no mark of its own** (passed over at its unit's head, or answered to set no
   ink: a reference's `\doiprefix`, a cell's `\boldmath`): the placeholder after it has the marks the answer allows, as after a

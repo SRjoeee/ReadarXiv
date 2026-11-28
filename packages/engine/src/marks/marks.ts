@@ -191,7 +191,7 @@ export const RULE = /^\s*\\rule\b/
 export const spelledNoInk = (src: string | undefined): boolean =>
   INVISIBLE.test(src ?? '') || (textless(src ?? '') && !RULE.test(src ?? ''))
 /**
- * Whether a placeholder is a call of a command the paper itself defines (the source reader's statement, PhPiece.own) whose
+ * Whether a placeholder is a call of a command the paper itself defines (the source reader's statement, ownReading) whose
  * spelling the marking would read as setting no ink (spelledNoInk): `\\renewcommand{\\footnotesize}{\\textsection}`, a class's
  * `\\def\\newblock{\\textbullet\\ }` inside its bibliography's definition. Its spelling says nothing of what the paper's
  * definition sets: it is the paper's macro (classOf `macro`), asked of TeX (inkSamples, and where the document uses it); with
@@ -668,7 +668,7 @@ export const INK_BUDGET = 65536
 /**
  * The ink section's samples: the source of each of the paper's macros (classOf 'macro'), once, that TeX can set in a box of its
  * own (no comment or parameter sign, no \verb, its braces balanced, no environment, no paragraph's end, no macro whose meaning
- * opens a conditional it does not close, PhPiece.opensIf, which would skip every sample after it): the body's in the
+ * opens a conditional it does not close, opensIf, which would skip every sample after it): the body's in the
  * order the paper writes them, then a bibliography's entries' — first their leads, whose ink only their own text finds
  * (instrument/instrument.ts glyphPiecesOf), then each further call, in order —, while their code units fit INK_BUDGET. A call
  * past it is no sample: no answer of another call is carried to it (no ink and a box begun apart may hang on its

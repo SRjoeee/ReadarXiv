@@ -1,7 +1,9 @@
 // The layout marks (packages/engine/src/marks/marks.mjs) as they were at 9461947a4, before their code change of the typing lane
 // T6 (four reads of a value that may be none made explicit): kept here alone, verbatim but its eight imports (the package's
 // modules by their paths), as the reference the change is held to, value for value (tests/pdf-reader/marks-bounds.test.ts).
-// Imported by no module of the engine.
+// Imported by no module of the engine. One amendment, marked where it stands: a later rule of the marking's that the seeded
+// projects meet (PDF-READER §18.123, the answer's mark after a macro with no mark of its own), so that the check holds the
+// refactor's reads alone.
 //
 // The layout marks of the marked original (Plan 8b, Task 1; the layout research of 2026-10-06): where on the page TeX
 // sets each placeholder of a unit, each footnote call, each table cell and each heading, as named destinations beside
@@ -1733,7 +1735,11 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
       // call's too, which its own answer leaves none there; its closing mark is its own answer's. Not in a front unit, whose marks
       // are robust and the probe's box sets none so)
       const pairSaid = lead ? null : aheadSaid(u.pieces, k)
-      const ahead = !!pairSaid && pairSaid.m === after && opened.has(after) && (pairSaid.code === '0' || pairSaid.code === '1')
+      // (AMENDED with the engine's rule of PDF-READER §18.123, a behaviour change the T6 refactor's check is not about: the answer's
+      // mark after a macro with no mark of its own, passed over at its unit's head or answered to set no ink)
+      const unmarkedLead = !!pairSaid && !opened.has(after) && (!!passed?.has(pairSaid.at) || none.has(pairSaid.m.src))
+      const ahead =
+        !!pairSaid && pairSaid.m === after && (opened.has(after) || unmarkedLead) && (pairSaid.code === '0' || pairSaid.code === '1')
       // (`reads`: the piece before this one may read what follows it, so that nothing of ours may stand between them)
       const reads = LOOKS_AHEAD(after) && !READS_NOTHING(after) && !free(after, p) && !opensAfter(after, spaced) && !ahead
       const cls = passed && !passed.has(k) && !reads ? classOf(p) : null
