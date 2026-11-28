@@ -3783,6 +3783,11 @@ the history of `pipeline/versions.mjs`, where they were kept until 2026-11-04 (t
   flows' order test reads a leader's end as TeX's advance; a font named Demi read bold. Over the lab's 245 papers against the
   line: 9 papers' parts move (2608.30730v1 56 parts, its LMRomanDemi10 text bold and its names line one flow; 8 papers' size
   declarations stated, 2 of them titles at two sizes).
+- 131: lane f4-b (on rebuild/v2 at 385b7fa08, fix phase F4's PR-2), no field added (FORMAT 1); TRANSLATE_VERSION stays 11,
+  LAYOUT 48 stays, no marked TeX moves (the marks digest unmoved: `own/stream.ts` and `own/own.ts` are outside the compile key).
+  Parts (§18.121): a display at a column's foot read past the notes a class ships inside the column's body to the text after it,
+  and a reading past its column's end that the text after it ends keeping its draft frame and claiming its image; no unit id
+  moves. Over the lab's 245 papers nothing moves; over the 599, 11 paragraphs of 4 papers are laid.
 - 129: lane marks-m1 (on rebuild/v2 at 5b0846630, merged up to 9af8859c4), no field added (FORMAT 1); TRANSLATE_VERSION stays
   11, LAYOUT 48 stays (the gate pack's layouts made again at this head and at the line, every file byte for byte the line's).
   Units (§18.111): every marked compile moves (the gated marks' TeX), its units newly located where a class stored a heading by
