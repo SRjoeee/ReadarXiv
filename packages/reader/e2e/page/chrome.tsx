@@ -48,6 +48,8 @@ interface Options {
   faces?: 'fixtures' | 'missing'
   /** page 1 laid with runs of three inks (convert.ts inked) */
   inks?: boolean
+  /** these pages laid with nothing: the right shows them as arXiv's, its own page view with PDF.js's links */
+  unlaid?: number[]
 }
 
 /** the website's words beside HOST_WORDS: its chip that shows the translation, its way to arXiv's PDF, its link where the
@@ -172,7 +174,14 @@ const c = {
           ),
           parts,
         )
-        return o.inks ? inked(laid, 1) : laid
+        const kept = o.inks ? inked(laid, 1) : laid
+        const unlaid = new Set(o.unlaid ?? [])
+        return unlaid.size
+          ? (part: Part, rows: Parameters<typeof kept>[1]) =>
+              unlaid.has(part.page)
+                ? { page: part.page, wait: { rows: [], faces: [] }, members: [], links: [] }
+                : kept(part, rows)
+          : kept
       },
     }
     const controller = createController({

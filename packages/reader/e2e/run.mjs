@@ -6836,6 +6836,129 @@ await check(
   },
 )
 
+// (each link of s5-links' page 1, its bracket from its page's part: the links of one owner's one element, Link.owner)
+const S5_P1_LINKS = (() => {
+  const dir = join(FIX, 's5-links', 'bundle')
+  const head = JSON.parse(readFileSync(join(dir, 'head.json'), 'utf8'))
+  const part = JSON.parse(readFileSync(join(dir, `${head.parts[0]}.part`), 'utf8'))
+  const targets = new Set((head.targets ?? []).map((t) => t[0]))
+  const inner = (part.links ?? []).filter((l) => 'dest' in l.to)
+  return inner.map((l) => ({
+    dest: JSON.parse(l.to.dest),
+    target: targets.has(l.to.dest),
+    bracket: inner
+      .filter((x) => l.owner?.[1] && x.owner?.[0] === l.owner[0] && x.owner?.[1] === l.owner[1])
+      .map((x) => JSON.parse(x.to.dest)),
+  }))
+})()
+for (const unlaid of [false, true])
+  await check(
+    `previews: every link of a ${unlaid ? 'right page not laid (its own page view, PDF.js’s links)' : 'laid right page'} and of the left, each preview at its own bracket: its near edge the design’s gap from the bracket’s box (a raised number’s line foot apart), under it where it fits there, above otherwise; its text from the bracket’s left (staging, 2026-11-28: a card 391 px under its link, placed by another link’s box)`,
+    async () => {
+      const { page, context, errors } = await chromeLaid('s5-links', {
+        ui: 'zh-CN',
+        ...(unlaid ? { unlaid: [1] } : {}),
+      })
+      try {
+        const sel = (side, dest) =>
+          side === 'right' && !unlaid
+            ? `#right [data-page-number="1"] a.axt-link[href="#${encodeURIComponent(JSON.stringify(dest))}"]`
+            : `#${side} [data-page-number="1"] .annotationLayer .linkAnnotation > a[href="#${dest}"]`
+        const out = {}
+        for (const side of ['left', 'right']) {
+          if (side === 'right' && unlaid)
+            await waitFor(page, (s) => !!document.querySelector(s), sel('right', 'cite.a'), 10_000)
+          const rows = []
+          for (const l of S5_P1_LINKS) {
+            const c = await pvHover(page, sel(side, l.dest), l.target ? 1200 : 900)
+            assert(c, `${side} ${l.dest}: no link drawn`)
+            const got = await page.evaluate(
+              ([s, bracket, side]) => {
+                const rect = (el) => {
+                  const r = el.getBoundingClientRect()
+                  return { left: r.left, top: r.top, right: r.right, bottom: r.bottom }
+                }
+                const boxes = bracket
+                  .map((b) => document.querySelector(b))
+                  .filter(Boolean)
+                  .map(rect)
+                const own = rect(document.querySelector(s))
+                const a = [own, ...boxes].reduce((u, r) => ({
+                  left: Math.min(u.left, r.left),
+                  top: Math.min(u.top, r.top),
+                  right: Math.max(u.right, r.right),
+                  bottom: Math.max(u.bottom, r.bottom),
+                }))
+                const pv = document.querySelector('.axt-pv:not([data-axt-out]):not(.axt-pv-kept)')
+                const pane = rect(document.getElementById(side))
+                return {
+                  own,
+                  a,
+                  pane,
+                  pv: pv && {
+                    ...rect(pv),
+                    kind: pv.dataset.axtKind,
+                    at: pv.dataset.axtAt,
+                    pad: Number.parseFloat(getComputedStyle(pv).paddingLeft) || 0,
+                  },
+                }
+              },
+              [sel(side, l.dest), l.bracket.map((d) => sel(side, d)), side],
+            )
+            rows.push({ dest: l.dest, got })
+          }
+          out[side] = rows
+        }
+        // (judged here, from the rectangles: the design's rule, place.ts's values)
+        const GAP = 6,
+          EDGE = 12,
+          FOOT = 54,
+          PAD = 10
+        const wrong = []
+        let judged = 0
+        for (const side of ['left', 'right'])
+          for (const { dest, got } of out[side]) {
+            const l = S5_P1_LINKS.find((x) => x.dest === dest)
+            const { a, pane, pv } = got
+            if (!l.target) {
+              if (pv) wrong.push(`${side} ${dest}: a preview for a link of no target`)
+              continue
+            }
+            if (!pv) {
+              wrong.push(`${side} ${dest}: no preview`)
+              continue
+            }
+            judged++
+            const h = pv.bottom - pv.top,
+              w = pv.right - pv.left
+            const below = pane.bottom - FOOT - a.bottom - GAP
+            const line = a.bottom - a.top
+            if (pv.top >= a.bottom) {
+              // (under: its top the gap under the bracket, or under its line's foot: a raised number's foot at most a line lower)
+              const d = pv.top - a.bottom
+              if (d < GAP - 1.5 || d > GAP + line + 1.5)
+                wrong.push(`${side} ${dest}: ${d.toFixed(1)} px under its bracket`)
+            } else {
+              const d = a.top - pv.bottom
+              if (Math.abs(d - GAP) > 1.5) wrong.push(`${side} ${dest}: above, ${d.toFixed(1)} px over its bracket`)
+              if (h <= below)
+                wrong.push(`${side} ${dest}: above, though ${h.toFixed(0)} px fit the ${below.toFixed(0)} px under`)
+            }
+            const inset = pv.kind === 'card' ? pv.pad : PAD
+            const left = Math.max(pane.left + EDGE, Math.min(a.left - inset, pane.right - EDGE - w))
+            if (Math.abs(pv.left - left) > 1.5)
+              wrong.push(`${side} ${dest}: left ${pv.left.toFixed(1)}, the rule's ${left.toFixed(1)}`)
+          }
+        assert(judged >= 16, `judged ${judged} of the targets' links: ${JSON.stringify(out)}`)
+        assert(!wrong.length, wrong.join('; '))
+        assert(!errors.length, errors.join('; '))
+        return { judged }
+      } finally {
+        await context.close()
+      }
+    },
+  )
+
 await check(
   'previews: every jump source pushes one entry and shows the capsule (a PDF.js link on the left, a laid link on the right, Enter on one, a page typed, a contents entry); Back and Forward land with the band; scrolling back spends the entry',
   async () => {
