@@ -3788,6 +3788,17 @@ the history of `pipeline/versions.mjs`, where they were kept until 2026-11-04 (t
   Parts (§18.121): a display at a column's foot read past the notes a class ships inside the column's body to the text after it,
   and a reading past its column's end that the text after it ends keeping its draft frame and claiming its image; no unit id
   moves. Over the lab's 245 papers nothing moves; over the 599, 11 paragraphs of 4 papers are laid.
+- 132: lanes f4-b to f4-e (on rebuild/v2 at b7feb4d49, fix phase F4's PR-3), no field added (FORMAT 1); TRANSLATE_VERSION
+  stays 11; LAYOUT 49 (today's layout maker calls the marking, which reads a name of its no-ink lists the paper defines by TeX's
+  answer: the gate pack made again, `1de42f44`); the marks digest moves (LAYOUT_TEX: every marked request). Units and parts
+  (§18.122, §18.123): a name of the marking's no-ink lists the paper defines asked of TeX, stated empty where TeX answers no ink
+  (a write's line the log broke read as that write) and marked where it answers ink; the grouping primitives as TeX defines
+  them; a box's first piece's opening point; a pended opening mark's piece beginning its paragraph; a macro whose meaning opens a
+  conditional read as that conditional, the passages it skips no units; the marks an answer allows after a macro with no mark of
+  its own. Over the lab's 245 papers against the line: 31 papers' bundles move, 10 units of 5 papers gain (9 drawn, 1 held for
+  another cause), one paper's units cut anew by its own conditional, none lost, no text item of a marked page moved. Over the
+  599: outcomes equal; units held as text past their source 280 to 259, unproven 88 to 86; two units the line drew held, each a
+  name the paper defines whose answer is not of no ink and whose ink is not found (§18.122's safe side).
 - 129: lane marks-m1 (on rebuild/v2 at 5b0846630, merged up to 9af8859c4), no field added (FORMAT 1); TRANSLATE_VERSION stays
   11, LAYOUT 48 stays (the gate pack's layouts made again at this head and at the line, every file byte for byte the line's).
   Units (§18.111): every marked compile moves (the gated marks' TeX), its units newly located where a class stored a heading by
