@@ -7,10 +7,10 @@
 // macOS's screenshot keys (⌘⇧4, ⌘⇧5) hold ⌘ while a scroll or its momentum runs, and the page zoomed under them while ⌘ made
 // a wheel a zoom (§6.8); nor is ⌘ with the wheel Chrome's own zoom on macOS
 import { type RefObject, useEffect } from 'react'
-import { isZoomWheel } from '../zoom-gesture.ts'
+import { isZoomWheel, wheelStep } from '../zoom-gesture.ts'
 import type { ReaderController, Side } from './model.ts'
 
-export const wheelStep = (deltaY: number) => (Math.abs(deltaY) >= 40 ? Math.sign(deltaY) * 0.1 : deltaY * 0.01)
+export { wheelStep }
 
 export function usePinch(controller: ReaderController, doc: RefObject<HTMLElement | null>) {
   useEffect(() => {

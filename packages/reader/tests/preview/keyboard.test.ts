@@ -9,7 +9,13 @@ import { createPreviews } from '../../src/preview/previews.ts'
 import type { Clock } from '../../src/stack/clock.ts'
 
 const FIG: Target = ['"figure.1"', 'float', 1, 3, [72, 400, 540, 700]]
-const words = { keep: (l: string) => `${l}: keep`, close: (l: string) => `Close ${l}`, go: 'Go to', search: 'S' }
+const words = {
+  keep: (l: string) => `${l}: keep`,
+  close: (l: string) => `Close ${l}`,
+  reset: 'Reset size',
+  go: 'Go to',
+  search: 'S',
+}
 afterEach(() => {
   document.body.innerHTML = ''
   vi.restoreAllMocks()

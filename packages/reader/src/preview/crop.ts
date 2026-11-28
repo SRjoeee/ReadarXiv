@@ -134,22 +134,28 @@ export async function cropContent(
   const scale = Math.min(own, o.max.width / ((w + 2 * edge) * k), o.max.height / ((h + 2 * edge * segs.length) * k))
   const pad = 1 / (k * scale)
   for (const sg of segs) sg[1] = [sg[1][0] - pad, sg[1][1] - pad, sg[1][2] + pad, sg[1][3] + pad]
-  const drawn = await Promise.all(segs.map(([p, b]) => segmentOf(o.side, p, b, scale, o.signal, d)))
-  if (o.signal.aborted || drawn.some((x) => !x)) return null
   const label = d.label(t)
-  const crop = document.createElement('div')
-  crop.className = 'axt-pv-crop'
-  crop.setAttribute('role', 'img')
-  crop.setAttribute('aria-label', label)
-  if (r.fade) crop.dataset.axtFade = ''
-  drawn.forEach((el, i) => {
-    const [, b] = segs[i]!
-    const seg = el as HTMLElement
-    seg.classList.add('axt-pv-seg')
-    seg.style.width = `${Math.ceil((b[2] - b[0]) * k * scale)}px`
-    seg.style.height = `${Math.ceil((b[3] - b[1]) * k * scale)}px`
-    crop.append(seg)
-  })
+  /** the crop at scale `at` from the same segments: null where any of it cannot be drawn */
+  const drawAt = async (at: number, signal: AbortSignal): Promise<HTMLElement | null> => {
+    const drawn = await Promise.all(segs.map(([p, b]) => segmentOf(o.side, p, b, at, signal, d)))
+    if (signal.aborted || drawn.some((x) => !x)) return null
+    const crop = document.createElement('div')
+    crop.className = 'axt-pv-crop'
+    crop.setAttribute('role', 'img')
+    crop.setAttribute('aria-label', label)
+    if (r.fade) crop.dataset.axtFade = ''
+    drawn.forEach((el, i) => {
+      const [, b] = segs[i]!
+      const seg = el as HTMLElement
+      seg.classList.add('axt-pv-seg')
+      seg.style.width = `${Math.ceil((b[2] - b[0]) * k * at)}px`
+      seg.style.height = `${Math.ceil((b[3] - b[1]) * k * at)}px`
+      crop.append(seg)
+    })
+    return crop
+  }
+  const crop = await drawAt(scale, o.signal)
+  if (!crop) return null
   if (o.sheet) {
     const paper = document.createElement('div')
     paper.className = 'axt-pv-paper'
@@ -161,5 +167,23 @@ export async function cropContent(
   keep.className = 'axt-pv-keep'
   keep.setAttribute('aria-label', d.words().keep(label))
   keep.append(crop)
-  return { el: keep, kind: 'crop', label, described: crop }
+  // (kept, it zooms by itself (preview/keep.ts): its image's size at a scale, its segments rounded up as drawAt rounds them)
+  const across = Math.max(...segs.map(([, b]) => b[2] - b[0])) * k,
+    down = segs.map(([, b]) => (b[3] - b[1]) * k)
+  return {
+    el: keep,
+    kind: 'crop',
+    label,
+    described: crop,
+    zoom: {
+      scale,
+      extent: { width: across, height: down.reduce((a, x) => a + x, 0) },
+      segs: segs.length,
+      size: (at) => ({
+        width: Math.ceil(across * at),
+        height: down.reduce((a, x) => a + Math.ceil(x * at), 0),
+      }),
+      draw: drawAt,
+    },
+  }
 }

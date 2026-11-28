@@ -89,6 +89,7 @@ function setUp(o: { narrow?: boolean } = {}) {
   const { clock, pass } = testClock()
   const jumps: unknown[] = []
   const built: string[] = []
+  const maxes: { width: number; height: number }[] = []
   const deps: PreviewDeps = {
     root,
     panes: {
@@ -102,15 +103,22 @@ function setUp(o: { narrow?: boolean } = {}) {
     },
     targets: () => new Map([FIG, SEC].map((t) => [t[0], t] as const)),
     bracket: async () => ({ key: null, boxes: [], foot: null }),
-    content: async ({ target }) => {
+    content: async ({ target, max }) => {
       built.push(target[0])
+      maxes.push(max)
       const el = document.createElement('div')
       el.className = 'content'
       el.textContent = target[0]
       return { el, kind: 'crop', label: target[0], described: el }
     },
     clock,
-    words: () => ({ keep: (l) => `${l}: keep`, close: (l) => `Close ${l}`, go: 'Go to', search: 'Search' }),
+    words: () => ({
+      keep: (l) => `${l}: keep`,
+      close: (l) => `Close ${l}`,
+      reset: 'Reset size',
+      go: 'Go to',
+      search: 'Search',
+    }),
     jump: (j) => jumps.push(j),
     open: () => {},
     narrow: () => !!o.narrow,
@@ -123,7 +131,7 @@ function setUp(o: { narrow?: boolean } = {}) {
   const scroll = (side: 'left' | 'right') => {
     for (const f of [...scrolled]) f({ side })
   }
-  return { root, previews, shown, over, out, pass, fig, sec, thm, jumps, built, scroll, panes }
+  return { root, previews, shown, over, out, pass, fig, sec, thm, jumps, built, maxes, scroll, panes }
 }
 
 afterEach(() => {
@@ -141,6 +149,14 @@ describe('the preview’s intent', () => {
     expect(t.shown()?.textContent).toBe('"figure.1"')
     // (its content asked at the pointer's entry: the dwell is its head start)
     expect(t.built).toEqual(['"figure.1"'])
+  })
+  it('a crop at most the pane less its margins across, and the smaller of 70 % of the pane’s height and the room beside its link', async () => {
+    const t = setUp()
+    // (the pane 640 x 856 from 44; the link's line 200 to 212: 628 px below it to the reader's foot, 138 above)
+    t.over(t.fig)
+    await t.pass(0)
+    expect(t.maxes[0]!.width).toBe(640 - 24)
+    expect(t.maxes[0]!.height).toBeCloseTo(0.7 * 856, 6)
   })
   it('at once, with no motion, within 400 ms of another', async () => {
     const t = setUp()

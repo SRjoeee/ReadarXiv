@@ -359,6 +359,7 @@ const R: Locale['R'] = {
     search: '搜尋這篇論文',
     keep: label => `${label}：留在畫面上`,
     close: label => `關閉${label}`,
+    reset: '恢復原始大小',
     figure: n => `圖 ${n}`,
     table: n => `表 ${n}`,
     section: n => `第 ${n} 節`,

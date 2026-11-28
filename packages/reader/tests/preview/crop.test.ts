@@ -89,6 +89,7 @@ describe('cropContent', () => {
   const words = {
     keep: (l: string) => `${l}: keep on screen`,
     close: (l: string) => `Close ${l}`,
+    reset: 'Reset size',
     go: 'Go to',
     search: 'S',
   }
@@ -173,5 +174,38 @@ describe('cropContent', () => {
         t.deps,
       ),
     ).toBeNull()
+  })
+  it('a kept crop zooms by itself: its opening scale, its size at any scale, and its region drawn again at a scale (the same boxes)', async () => {
+    const s = stand({ laid: laid([60, 380, 560, 420]), region: null, original: null })
+    s.region.mockImplementation(async () => seg())
+    const c = await cropContent(
+      FIG,
+      { side: 'right', max: { width: 800, height: 600 }, sheet: false, signal: new AbortController().signal },
+      s.deps,
+    )
+    const z = c?.zoom
+    expect(z?.scale).toBe(1)
+    expect(z?.segs).toBe(1)
+    // (the region and its pixel round it, 501.5 x 321.5 PDF units, at 4/3 CSS px a unit)
+    expect(z?.extent.width).toBeCloseTo((501.5 * 4) / 3, 6)
+    expect(z?.size(2)).toEqual({ width: Math.ceil((501.5 * 8) / 3), height: Math.ceil((321.5 * 8) / 3) })
+    const el = await z!.draw(2, new AbortController().signal)
+    expect(s.region).toHaveBeenLastCalledWith(3, s.region.mock.calls[0]![1], 2, expect.any(AbortSignal))
+    expect(el?.classList.contains('axt-pv-crop')).toBe(true)
+    expect(el?.getAttribute('role')).toBe('img')
+    expect(el?.getAttribute('aria-label')).toBe('Figure 1')
+    expect(el?.querySelector<HTMLElement>('.axt-pv-seg')?.style.width).toBe(`${Math.ceil((501.5 * 8) / 3)}px`)
+    // (a drawing that cannot be had at that scale: null, the panel keeps what it shows)
+    s.region.mockImplementation(async () => null)
+    expect(await z!.draw(2.5, new AbortController().signal)).toBeNull()
+  })
+  it('the sheet’s crop does not zoom', async () => {
+    const s = stand({ laid: null, region: null, original: seg() })
+    const c = await cropContent(
+      FIG,
+      { side: 'left', max: { width: 800, height: 600 }, sheet: true, signal: new AbortController().signal },
+      s.deps,
+    )
+    expect(c?.zoom).toBeUndefined()
   })
 })

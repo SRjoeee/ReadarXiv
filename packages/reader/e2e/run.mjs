@@ -7299,6 +7299,495 @@ await check(
   },
 )
 
+// ---------------------------------------------------------------- a kept panel's own zoom (the owner's approved eighth prototype)
+/** the kept panel now: its box, its image's box, its chip's state and digits, its drawing (scaled or drawn at its size; its
+ *  canvases' pixels), the page's own zoom and the panes' scale */
+const pvKept = (page) =>
+  page.evaluate(() => {
+    const pv = document.querySelector('.axt-pv.axt-pv-kept:not([data-axt-out])')
+    if (!pv) return null
+    const r = pv.getBoundingClientRect()
+    const k = pv.querySelector('.axt-pv-kv')?.getBoundingClientRect()
+    const chip = pv.querySelector('.axt-pv-chip')
+    return {
+      box: { left: r.left, top: r.top, right: r.right, bottom: r.bottom },
+      img: k ? { left: k.left, top: k.top, w: k.width, h: k.height } : null,
+      chip: pv.dataset.axtChip ?? null,
+      pct: chip?.textContent ?? null,
+      scaled: pv.querySelector('.axt-pv-crop')?.style.transform ?? '',
+      px: [...pv.querySelectorAll('canvas')].reduce((a, c) => a + c.width * c.height, 0),
+      vv: window.visualViewport?.scale ?? 1,
+      pane: window.__c.reader?.state().view.scale ?? null,
+      W: innerWidth,
+      H: innerHeight,
+    }
+  })
+/** a crop of `dest` on `side` kept (hovered, then clicked), the chip's states watched from then on (window.__chips) */
+async function pvKeep(page, side, dest) {
+  if (!(await pvHover(page, pvSel(side, dest), 1200))) return null
+  const r = await page.evaluate(() => {
+    const b = document.querySelector('.axt-pv:not([data-axt-out])')?.getBoundingClientRect()
+    return b && { x: b.left + b.width / 2, y: b.top + b.height / 2 }
+  })
+  if (!r) return null
+  await page.mouse.click(r.x, r.y)
+  await page.waitForTimeout(400)
+  await page.evaluate(() => {
+    const pv = document.querySelector('.axt-pv.axt-pv-kept:not([data-axt-out])')
+    window.__chips = []
+    if (!pv) return
+    new MutationObserver(() => {
+      if (window.__chips.at(-1) !== pv.dataset.axtChip) window.__chips.push(pv.dataset.axtChip)
+    }).observe(pv, { attributes: true, attributeFilter: ['data-axt-chip'] })
+  })
+  return pvKept(page)
+}
+/** `n` zoom wheels (Ctrl held: Chrome's reading of a trackpad's pinch) at (x, y), 30 ms apart, then `wait` ms */
+async function pvPinch(page, x, y, n, dy = -40, wait = 400) {
+  await page.mouse.move(x, y)
+  await page.keyboard.down('Control')
+  for (let i = 0; i < n; i++) {
+    await page.mouse.wheel(0, dy)
+    await page.waitForTimeout(30)
+  }
+  await page.keyboard.up('Control')
+  if (wait) await page.waitForTimeout(wait)
+}
+/** every zoom wheel that reaches the window counted, and those whose default nobody prevented (the browser's page zoom) */
+const pvWheelWatch = (page) =>
+  page.evaluate(() => {
+    window.__zwn = { all: 0, open: 0 }
+    window.addEventListener('wheel', (e) => {
+      if (!e.ctrlKey) return
+      window.__zwn.all++
+      if (!e.defaultPrevented) window.__zwn.open++
+    })
+  })
+/** the kept panel closed (the pointer away, Esc) */
+async function pvClose(page) {
+  await page.mouse.move(2, 300)
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(400)
+}
+/** the panel dragged by its middle so that its corner `at` (tl, tr, bl, br) goes as far as the rule lets it */
+async function pvDragTo(page, at) {
+  const k = await pvKept(page)
+  const x = (k.box.left + k.box.right) / 2,
+    y = (k.box.top + k.box.bottom) / 2
+  await page.mouse.move(x, y)
+  await page.mouse.down()
+  await page.mouse.move(at[1] === 'l' ? 0 : k.W, at[0] === 't' ? 0 : k.H, { steps: 6 })
+  await page.mouse.up()
+  await page.waitForTimeout(200)
+  return pvKept(page)
+}
+/** the chip's computed dress: its opacity, ground, blur, ink, shadow, pointer events, cursor, the alpha of its ground and ink */
+const pvChipDress = (page) =>
+  page.evaluate(() => {
+    const c = document.querySelector('.axt-pv-kept:not([data-axt-out]) .axt-pv-chip')
+    const s = getComputedStyle(c)
+    const alpha = (v) => Number(/\/\s*([\d.]+)\)$/.exec(v)?.[1] ?? /rgba\([^)]*,\s*([\d.]+)\)$/.exec(v)?.[1] ?? 1)
+    return {
+      opacity: s.opacity,
+      background: s.backgroundColor,
+      ground: alpha(s.backgroundColor),
+      blur: s.backdropFilter,
+      ink: alpha(s.color),
+      shadow: s.boxShadow,
+      events: s.pointerEvents,
+      cursor: s.cursor,
+      wake: s.transitionDuration,
+    }
+  })
+await check(
+  'previews: a kept panel’s own zoom (the owner’s approved eighth prototype): a Ctrl-wheel (Chrome’s pinch), WebKit’s gesture events and two touch pointers zoom its image about the pointer, never the page; the chip live, then glass, awake near it, in the prototype’s values; its press and the keys +, -, 0 take it back; drawn again once settled; reduced motion at once',
+  async () => {
+    const { page, context, errors } = await chromeLaid('s5-links', { ui: 'zh-CN' })
+    const out = {}
+    try {
+      await pvWheelWatch(page)
+      // (the left's figure: room on every side for it to grow without the rule moving it)
+      const k0 = await pvKeep(page, 'left', 'figure.1')
+      assert(k0?.img && k0.chip === 'none' && k0.pct, `kept ${JSON.stringify(k0)}`)
+      out.opened = { w: k0.img.w, h: k0.img.h, pct: k0.pct, px: k0.px }
+      // (about the pointer: its place in the image stays under it; the chip live while the wheel runs, then glass or awake)
+      const px = k0.img.left + k0.img.w * 0.6,
+        py = k0.img.top + k0.img.h * 0.7
+      await pvPinch(page, px, py, 4, -40, 600)
+      const k1 = await pvKept(page)
+      const fx = (px - k1.img.left) / k1.img.w,
+        fy = (py - k1.img.top) / k1.img.h
+      const chips = await page.evaluate(() => window.__chips)
+      out.about = { w: k1.img.w, pct: k1.pct, fx: +fx.toFixed(4), fy: +fy.toFixed(4), chips, px: k1.px }
+      assert(k1.img.w > k0.img.w * 1.4, `grew ${JSON.stringify(out.about)}`)
+      assert(Math.abs(fx - 0.6) < 0.01 && Math.abs(fy - 0.7) < 0.01, `about the pointer ${JSON.stringify(out.about)}`)
+      assert(chips[0] === 'live' && ['ghost', 'awake'].includes(chips.at(-1)), `chip ${chips}`)
+      assert(k1.scaled === '' && k1.px > k0.px, `drawn again at its size ${JSON.stringify(out.about)}`)
+      assert(k1.vv === 1 && k1.pane === k0.pane, `the page or the panes zoomed ${JSON.stringify(k1)}`)
+      // (glass: away from the chip on the panel; awake: within 28 px of it)
+      await page.mouse.move(k1.img.left + k1.img.w - 20, k1.img.top + k1.img.h - 20)
+      await page.waitForTimeout(300)
+      const ghost = { state: (await pvKept(page)).chip, ...(await pvChipDress(page)) }
+      const chipBox = await page.evaluate(() => {
+        const r = document.querySelector('.axt-pv-kept .axt-pv-chip').getBoundingClientRect()
+        return { left: r.left, top: r.top, right: r.right, bottom: r.bottom }
+      })
+      await page.mouse.move(chipBox.right + 20, (chipBox.top + chipBox.bottom) / 2 + 10)
+      await page.waitForTimeout(300)
+      const awake = { state: (await pvKept(page)).chip, ...(await pvChipDress(page)) }
+      // (live: wheels dispatched every 50 ms over 400 ms, read at 300)
+      const live = await page.evaluate(async () => {
+        const pv = document.querySelector('.axt-pv-kept:not([data-axt-out])')
+        const r = pv.querySelector('.axt-pv-kv').getBoundingClientRect()
+        const at = { clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 }
+        let read = null
+        for (let t = 0; t < 400; t += 50) {
+          pv.querySelector('.axt-pv-kv').dispatchEvent(
+            new WheelEvent('wheel', { deltaY: 2, ctrlKey: true, bubbles: true, cancelable: true, ...at }),
+          )
+          await new Promise((f) => setTimeout(f, 50))
+          if (t === 300) {
+            const s = getComputedStyle(pv.querySelector('.axt-pv-chip'))
+            read = { state: pv.dataset.axtChip, color: s.color, events: s.pointerEvents }
+          }
+        }
+        return read
+      })
+      live.ink = Number(/\/\s*([\d.]+)\)$/.exec(live.color)?.[1] ?? 1)
+      out.dress = { ghost, awake, live }
+      assert(
+        ghost.state === 'ghost' &&
+          ghost.opacity === '1' &&
+          Math.abs(ghost.ground - 0.4) < 0.01 &&
+          ghost.blur === 'blur(0.5px)' &&
+          Math.abs(ghost.ink - 0.7) < 0.01 &&
+          ghost.events === 'auto',
+        `ghost ${JSON.stringify(ghost)}`,
+      )
+      assert(
+        awake.state === 'awake' &&
+          Math.abs(awake.ground - 0.96) < 0.01 &&
+          awake.blur === 'blur(16px) saturate(1.5)' &&
+          awake.shadow !== 'none' &&
+          awake.cursor === 'pointer' &&
+          awake.wake.includes('0.12s'),
+        `awake ${JSON.stringify(awake)}`,
+      )
+      assert(live.state === 'live' && live.ink === 1 && live.events === 'none', `live ${JSON.stringify(live)}`)
+      // (the press: back to the size it opened at, then no chip)
+      await page.waitForTimeout(1500)
+      const cb = await page.evaluate(() => {
+        const r = document.querySelector('.axt-pv-kept .axt-pv-chip').getBoundingClientRect()
+        return { x: r.left + r.width / 2, y: r.top + r.height / 2 }
+      })
+      await page.mouse.move(cb.x, cb.y)
+      await page.waitForTimeout(200)
+      await page.mouse.click(cb.x, cb.y)
+      await page.waitForTimeout(600)
+      const k2 = await pvKept(page)
+      out.press = { w: k2.img.w, pct: k2.pct, chip: k2.chip, px: k2.px }
+      assert(
+        Math.abs(k2.img.w - k0.img.w) <= 1 && k2.chip === 'none' && k2.pct === k0.pct,
+        `press ${JSON.stringify(out.press)}`,
+      )
+      // (the keys on the focused panel: + and - by a tenth, 0 back)
+      await page.evaluate(() => document.querySelector('.axt-pv-kept:not([data-axt-out])').focus())
+      const keyTo = async (k) => {
+        await page.keyboard.press(k)
+        await page.waitForTimeout(400)
+        return (await pvKept(page)).img.w
+      }
+      const plus = await keyTo('+'),
+        plus2 = await keyTo('+'),
+        minus = await keyTo('-'),
+        zero = await keyTo('0')
+      out.keys = { plus, plus2, minus, zero }
+      assert(
+        Math.abs(plus - k0.img.w * 1.1) <= 2 &&
+          Math.abs(plus2 - k0.img.w * 1.21) <= 2 &&
+          Math.abs(minus - plus) <= 1 &&
+          Math.abs(zero - k0.img.w) <= 1,
+        `keys ${JSON.stringify(out.keys)}`,
+      )
+      // (WebKit's gesture events, dispatched as Safari sends a trackpad's pinch: prevented, and the panel zoomed by their scale)
+      out.webkit = await page.evaluate(() => {
+        const kv = document.querySelector('.axt-pv-kept:not([data-axt-out]) .axt-pv-kv')
+        const r = kv.getBoundingClientRect()
+        const ev = (type, scale) => {
+          const e = new Event(type, { bubbles: true, cancelable: true })
+          Object.assign(e, { scale, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 })
+          kv.dispatchEvent(e)
+          return e.defaultPrevented
+        }
+        const prevented = [ev('gesturestart', 1), ev('gesturechange', 1.4)]
+        const w = kv.getBoundingClientRect().width
+        prevented.push(ev('gestureend', 1.4))
+        return { prevented, ratio: w / r.width }
+      })
+      assert(
+        out.webkit.prevented.every(Boolean) && Math.abs(out.webkit.ratio - 1.4) < 0.02,
+        `WebKit ${JSON.stringify(out.webkit)}`,
+      )
+      await page.waitForTimeout(1600)
+      await page.keyboard.press('0')
+      await page.waitForTimeout(600)
+      // (two touch pointers: by their spread, about their midpoint)
+      out.touch = await page.evaluate(() => {
+        const kv = document.querySelector('.axt-pv-kept:not([data-axt-out]) .axt-pv-kv')
+        const r = kv.getBoundingClientRect()
+        const y = r.top + r.height / 2,
+          x = r.left + r.width / 2
+        const p = (type, id, px) =>
+          kv.dispatchEvent(
+            new PointerEvent(type, {
+              pointerId: id,
+              pointerType: 'touch',
+              isPrimary: id === 11,
+              clientX: px,
+              clientY: y,
+              bubbles: true,
+              button: 0,
+            }),
+          )
+        p('pointerdown', 11, x - 40)
+        p('pointerdown', 12, x + 40)
+        p('pointermove', 12, x + 80)
+        const w = kv.getBoundingClientRect().width
+        p('pointerup', 12, x + 80)
+        p('pointerup', 11, x - 40)
+        return { ratio: w / r.width }
+      })
+      assert(Math.abs(out.touch.ratio - 1.5) < 0.02, `touch ${JSON.stringify(out.touch)}`)
+      await page.waitForTimeout(1600)
+      // (reduced motion: a key's step at once, the chip's wake 0 ms)
+      await page.emulateMedia({ reducedMotion: 'reduce' })
+      await page.evaluate(() => document.querySelector('.axt-pv-kept:not([data-axt-out])').focus())
+      await page.keyboard.press('0')
+      const before = (await pvKept(page)).img.w
+      await page.keyboard.press('+')
+      const at = (await pvKept(page)).img.w
+      const wake = (await pvChipDress(page)).wake
+      out.reduced = { before, at, wake }
+      // (its opacity keeps the quick tempo; the wake into the ×'s dress is at once)
+      const wakes = wake.split(', ').slice(1)
+      assert(
+        Math.abs(at - before * 1.1) <= 2 && wakes.length === 3 && wakes.every((x) => x === '0s'),
+        `reduced ${JSON.stringify(out.reduced)}`,
+      )
+      await page.emulateMedia({ reducedMotion: 'no-preference' })
+      out.wheels = await page.evaluate(() => window.__zwn)
+      assert(out.wheels.all > 0 && out.wheels.open === 0, `a zoom wheel left to the page ${JSON.stringify(out.wheels)}`)
+      assert((await pvKept(page)).vv === 1, 'the page zoomed')
+      assert(!errors.length, errors.join('; '))
+    } finally {
+      await context.close()
+    }
+    return out
+  },
+)
+await check(
+  'previews: a kept panel’s most, from near each edge (the reader’s window less the rule’s margins; 300 % on a large window), whole inside the one rule; inert where it opened at its most; its drawing at the most measured and let go on closing',
+  async () => {
+    const out = {}
+    const inside = (k) =>
+      k.box.left >= 8 - 0.5 && k.box.top >= 52 - 0.5 && k.box.right <= k.W - 8 + 0.5 && k.box.bottom <= k.H - 8 + 0.5
+    const bound = (k) =>
+      k.pct === '300%' ? '300%' : k.img.h >= k.H - 80 - 3 ? 'height' : k.img.w >= k.W - 36 - 3 ? 'width' : null
+    const { page, context, errors } = await chromeLaid('s5-links', { ui: 'zh-CN' })
+    try {
+      await pvWheelWatch(page)
+      for (const [side, dest] of [
+        ['right', 'figure.1'],
+        ['left', 'table.1'],
+        ['right', 'section.2'],
+      ])
+        for (const at of ['tl', 'tr', 'bl', 'br']) {
+          const k0 = await pvKeep(page, side, dest)
+          assert(k0?.img, `${side} ${dest}: not kept`)
+          const k1 = await pvDragTo(page, at)
+          // (the pinch at the panel's own corner by that edge, 15 px into its image)
+          const x = at[1] === 'l' ? k1.img.left + 15 : k1.img.left + k1.img.w - 15,
+            y = at[0] === 't' ? k1.img.top + 15 : k1.img.top + k1.img.h - 15
+          await pvPinch(page, x, y, 60, -40, 600)
+          const k = await pvKept(page)
+          const row = {
+            opened: k0.pct,
+            most: k.pct,
+            by: bound(k),
+            img: [Math.round(k.img.w), Math.round(k.img.h)],
+            px: k.px,
+          }
+          out[`${side} ${dest} ${at}`] = row
+          assert(inside(k), `${side} ${dest} ${at}: past the rule ${JSON.stringify(k.box)}`)
+          assert(row.by, `${side} ${dest} ${at}: stopped short of every limit ${JSON.stringify(row)}`)
+          if (at === 'br') {
+            // (its drawing let go on closing)
+            await page.evaluate(() => {
+              window.__pvc = [...document.querySelectorAll('.axt-pv-kept:not([data-axt-out]) canvas')]
+            })
+            await pvClose(page)
+            const left = await page.evaluate(() => window.__pvc.reduce((a, c) => a + c.width * c.height, 0))
+            assert(left === 0, `${side} ${dest}: ${left} pixels held after closing`)
+          } else await pvClose(page)
+        }
+      // (inert: the panes at 300 %, a display opens at 300 %, its most: a gesture does nothing, no chip)
+      await page.evaluate(() => window.__c.reader.do({ do: 'zoom', to: 3 }))
+      await page.waitForTimeout(1500)
+      const e0 = await pvKeep(page, 'right', 'equation.1')
+      assert(e0?.img, 'equation: not kept')
+      await pvPinch(page, e0.img.left + e0.img.w / 2, e0.img.top + e0.img.h / 2, 10, -40, 600)
+      await page.evaluate(() => document.querySelector('.axt-pv-kept:not([data-axt-out])').focus())
+      await page.keyboard.press('+')
+      await page.waitForTimeout(400)
+      const e1 = await pvKept(page)
+      const chips = await page.evaluate(() => window.__chips)
+      out.inert = { opened: e0.pct, after: e1.pct, w: [e0.img.w, e1.img.w], chips }
+      assert(e1.img.w === e0.img.w && !chips.length && e1.chip === 'none', `inert ${JSON.stringify(out.inert)}`)
+      await pvClose(page)
+      await page.evaluate(() => window.__c.reader.do({ do: 'zoom', to: 'page-width' }))
+      out.wheels = await page.evaluate(() => window.__zwn)
+      assert(out.wheels.open === 0, `a zoom wheel left to the page ${JSON.stringify(out.wheels)}`)
+      assert(!errors.length, errors.join('; '))
+    } finally {
+      await context.close()
+    }
+    // (a large window: a note reaches 300 %)
+    const big = await chromeLaid('s5-links', { ui: 'zh-CN' }, { viewport: { width: 2560, height: 1440 } })
+    try {
+      const n0 = await pvKeep(big.page, 'right', 'Hfootnote.1')
+      assert(n0?.img, 'note: not kept')
+      await pvPinch(big.page, n0.img.left + n0.img.w / 2, n0.img.top + n0.img.h / 2, 80, -40, 600)
+      const n1 = await pvKept(big.page)
+      out.large = { opened: n0.pct, most: n1.pct, by: bound(n1), px: n1.px }
+      assert(n1.pct === '300%' && inside(n1), `large ${JSON.stringify(out.large)}`)
+      assert(!big.errors.length, big.errors.join('; '))
+    } finally {
+      await big.context.close()
+    }
+    return out
+  },
+)
+// (AXT_SHOTS=<dir>: the kept panel's shots in the cases of the approved prototype's own, at its window, 1512 x 818 at 2x: the
+// section window's chip in its three states and the whole panel, light and dark; the figure and the table zoomed to their most
+// from each pane, light, and from the right dark; the note at its most at 1512 and at 2560 x 1440; the narrow sheet, dark)
+await check('previews: the kept panel’s zoom shot beside the approved prototype’s cases (AXT_SHOTS)', async () => {
+  if (!PV_SHOTS) return 'skipped: no AXT_SHOTS'
+  mkdirSync(PV_SHOTS, { recursive: true })
+  const shot = (page, name, clip) => page.screenshot({ path: join(PV_SHOTS, `${name}.png`), ...(clip ? { clip } : {}) })
+  const dark = (page) => page.evaluate(() => window.__c.controller.setPrefs({ theme: 'dark', dim: true }))
+  const light = (page) => page.evaluate(() => window.__c.controller.setPrefs({ theme: 'light', dim: false }))
+  const most = async (page, side, dest) => {
+    const k0 = await pvKeep(page, side, dest)
+    if (!k0?.img) throw new Error(`${side} ${dest}: not kept`)
+    await pvPinch(page, k0.img.left + k0.img.w / 2, k0.img.top + k0.img.h / 2, 60, -40, 900)
+    return pvKept(page)
+  }
+  const out = {}
+  const wide = await chromeLaid('s5-links', { ui: 'zh-CN' }, { viewport: { width: 1512, height: 818 }, dpr: 2 })
+  try {
+    const { page } = wide
+    for (const theme of ['light', 'dark']) {
+      if (theme === 'dark') await dark(page)
+      // (the section window, zoomed a little past its opening size, its chip in each state)
+      const k0 = await pvKeep(page, 'right', 'section.2')
+      await pvPinch(page, k0.img.left + k0.img.w * 0.7, k0.img.top + k0.img.h * 0.7, 3, -40, 700)
+      const k = await pvKept(page)
+      const strip = {
+        x: k.box.left - 8,
+        y: k.box.top - 8,
+        width: Math.min(k.box.right - k.box.left + 16, 774),
+        height: 64,
+      }
+      // (live: a gesture kept running by wheels of no net change, every 40 ms, while the shot is taken)
+      await page.evaluate(() => {
+        const kv = document.querySelector('.axt-pv-kept:not([data-axt-out]) .axt-pv-kv')
+        const r = kv.getBoundingClientRect()
+        let d = 0.5
+        window.__live = setInterval(() => {
+          d = -d
+          kv.dispatchEvent(
+            new WheelEvent('wheel', {
+              deltaY: d,
+              ctrlKey: true,
+              bubbles: true,
+              cancelable: true,
+              clientX: r.left + r.width / 2,
+              clientY: r.top + r.height / 2,
+            }),
+          )
+        }, 40)
+      })
+      await page.mouse.move(k.box.right - 30, k.box.bottom - 30)
+      await page.waitForTimeout(300)
+      const live = (await pvKept(page)).chip
+      await shot(page, `section-${theme}-live`, strip)
+      await page.evaluate(() => clearInterval(window.__live))
+      await page.waitForTimeout(1600)
+      const ghost = (await pvKept(page)).chip
+      await shot(page, `section-${theme}-ghost`, strip)
+      await shot(page, `section-${theme}-panel`, {
+        x: k.box.left - 20,
+        y: k.box.top - 20,
+        width: k.box.right - k.box.left + 40,
+        height: k.box.bottom - k.box.top + 40,
+      })
+      const c = await page.evaluate(() => {
+        const r = document.querySelector('.axt-pv-kept .axt-pv-chip').getBoundingClientRect()
+        return { x: r.right + 16, y: r.top + r.height / 2 + 8 }
+      })
+      await page.mouse.move(c.x, c.y)
+      await page.waitForTimeout(300)
+      const awake = (await pvKept(page)).chip
+      await shot(page, `section-${theme}-awake`, strip)
+      out[`section ${theme}`] = { pct: k.pct, live, ghost, awake }
+      await pvClose(page)
+      // (the figure and the table at their most, from the left pane and from the right)
+      for (const dest of ['figure.1', 'table.1'])
+        for (const side of theme === 'light' ? ['left', 'right'] : ['right']) {
+          const m = await most(page, side, dest)
+          await page.mouse.move(m.box.right - 30, m.box.bottom - 30)
+          await page.waitForTimeout(300)
+          await shot(page, `grow-${dest.split('.')[0]}-${side}-${theme}`)
+          out[`grow ${dest} ${side} ${theme}`] = {
+            pct: m.pct,
+            img: [Math.round(m.img.w), Math.round(m.img.h)],
+            px: m.px,
+          }
+          await pvClose(page)
+        }
+    }
+    await light(page)
+    const n = await most(page, 'right', 'Hfootnote.1')
+    await page.mouse.move(n.box.right - 30, n.box.bottom - 30)
+    await page.waitForTimeout(300)
+    await shot(page, 'small-note-1512')
+    out['note 1512'] = { pct: n.pct }
+  } finally {
+    await wide.context.close()
+  }
+  const big = await chromeLaid('s5-links', { ui: 'zh-CN' }, { viewport: { width: 2560, height: 1440 } })
+  try {
+    const n = await most(big.page, 'right', 'Hfootnote.1')
+    await big.page.mouse.move(n.box.right - 30, n.box.bottom - 30)
+    await big.page.waitForTimeout(300)
+    await shot(big.page, 'small-note-2560')
+    out['note 2560'] = { pct: n.pct }
+  } finally {
+    await big.context.close()
+  }
+  const narrow = await chromeLaid('s5-links', { ui: 'zh-CN' }, { viewport: { width: 390, height: 844 }, dpr: 2 })
+  try {
+    await dark(narrow.page)
+    const f = await pvCentre(narrow.page, pvSel('right', 'figure.1'))
+    await narrow.page.mouse.click(f.x, f.y)
+    await narrow.page.waitForTimeout(900)
+    await shot(narrow.page, 'narrow-sheet-dark')
+  } finally {
+    await narrow.context.close()
+  }
+  return out
+})
+
 await check(
   'previews: no hover (a touch device at a wide window, its primary pointer coarse): a tap opens the sheet, not a popover, and does not jump',
   async () => {
@@ -7855,6 +8344,32 @@ const PV_DISTURB = [
     },
   ],
   [
+    'kept-zoomed',
+    async (page, side, g) => {
+      // (a crop kept, then zoomed by a Ctrl-wheel past its opening size and settled, then closed)
+      const row = g.rows.find((r) => r[0] !== 'card' && r[0] !== 'none')
+      if (!row) return 'n/a'
+      const s = await pvShowAt(page, side, row)
+      if (!s.ok) return { failed: new Map([[row, `kept-zoomed: not shown (${s.why})`]]) }
+      const r = await page.evaluate(() => {
+        const b = document.querySelector('.axt-pv:not([data-axt-out])').getBoundingClientRect()
+        return { x: b.left + b.width / 2, y: b.top + b.height / 2 }
+      })
+      await page.mouse.click(r.x, r.y)
+      await page.waitForTimeout(400)
+      const k0 = await pvKept(page)
+      if (!k0?.img) throw new Error('kept-zoomed: no panel')
+      await pvPinch(page, r.x, r.y, 6, -40, 600)
+      const k1 = await pvKept(page)
+      if (!(k1.img.w > k0.img.w || k1.pct === k0.pct)) throw new Error(`kept-zoomed: not zoomed ${k0.pct} -> ${k1.pct}`)
+      await page.mouse.move(2, 300)
+      await page.keyboard.press('Escape')
+      await page.waitForTimeout(600)
+      if (await page.evaluate(() => !!document.querySelector('.axt-pv.axt-pv-kept')))
+        throw new Error('kept-zoomed: not closed')
+    },
+  ],
+  [
     'hovers-20',
     async (page, side, g) => {
       // (twenty hovers over the page's links in turn: a row missed in any of them failed)
@@ -7871,7 +8386,7 @@ const PV_DISTURB = [
 ]
 for (const side of ['left', 'right'])
   await check(
-    `previews: show, disturb, show again on the ${side} pane: each kind (a card, a figure's, a table's, a display's, a section's window, a note's crop) with its target in view, near and far, shown, then shown again at its own link after each of: a wheel away and back (a little; several pages), a zoom and back, a jump and its return, a resize, the other pane scrolled alone, a kept panel opened and closed, twenty hovers; nothing left behind (surfaces, kept panels, listeners); a link with no target shows nothing and jumps (staging, 2026-11-28: a right crop gone for good after a scroll)`,
+    `previews: show, disturb, show again on the ${side} pane: each kind (a card, a figure's, a table's, a display's, a section's window, a note's crop) with its target in view, near and far, shown, then shown again at its own link after each of: a wheel away and back (a little; several pages), a zoom and back, a jump and its return, a resize, the other pane scrolled alone, a kept panel opened and closed, a kept panel zoomed and closed, twenty hovers; nothing left behind (surfaces, kept panels, listeners); a link with no target shows nothing and jumps (staging, 2026-11-28: a right crop gone for good after a scroll)`,
     async () => {
       const { page, context, errors } = await chromeLaid('s5-links', { ui: 'zh-CN' })
       const cdp = await context.newCDPSession(page)

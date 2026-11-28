@@ -362,6 +362,7 @@ const R: Locale['R'] = {
     search: 'この論文を検索',
     keep: label => `${label}：画面に残す`,
     close: label => `${label}を閉じる`,
+    reset: 'サイズをリセット',
     figure: n => `図 ${n}`,
     table: n => `表 ${n}`,
     section: n => `第${n}節`,

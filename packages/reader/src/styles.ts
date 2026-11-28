@@ -34,6 +34,13 @@ const PREVIEW_CSS = `
   --axt-pv-paper: #fff;
   --axt-pv-ease: cubic-bezier(0.2, 0, 0, 1);
   --axt-fade: 20px;
+  /* the kept panel's percentage as glass [approved, P8 style.css:251]: the surface's ground (the chrome's raised) at this share
+     over this blur, no hairline, no shadow; its digits at this share of the ink; its wake into the ×'s dress in the quick tempo */
+  --axt-pv-raised: var(--raised, #fff);
+  --axt-pv-glass: 40%;
+  --axt-pv-glass-blur: 0.5px;
+  --axt-pv-ghost-ink: 70%;
+  --axt-pv-wake: 120ms;
 }
 
 .axt-reader .axt-pv-layer { position: fixed; inset: 0; z-index: 30; pointer-events: none; }
@@ -89,6 +96,23 @@ ${DIMMED} .axt-pv[data-axt-kind="crop"], ${DIMMED} .axt-pv-paper { background: r
 .axt-reader .axt-pv-x svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; }
 .axt-reader .axt-pv-kept:hover .axt-pv-x, .axt-reader .axt-pv-kept:focus-visible .axt-pv-x, .axt-reader .axt-pv-x:focus-visible { opacity: 1; }
 @media (hover: hover) { .axt-reader .axt-pv-x:hover { color: var(--axt-pv-ink); } }
+/* its image's box: always the image's own size (the image shows whole; nothing scrolls inside a panel); while a zoom runs its
+   drawing is scaled from its top-left corner (keep.ts), drawn again once the zoom settles */
+.axt-reader .axt-pv-kv { display: block; overflow: hidden; }
+.axt-reader .axt-pv-kv > .axt-pv-crop { transform-origin: 0 0; }
+/* its percentage, at the top-left opposite the × (the owner's choice, 2026-11-28), as wide as 000 % so that it never changes
+   width under a pinch; data-axt-chip (keep.ts): none (gone) | live (a zoom running: the digits at full ink, no pointer events) |
+   ghost (glass: what is under it softened and still there) | awake (the pointer near or the keyboard on it: the ×'s own dress) */
+.axt-reader .axt-pv-chip { position: absolute; top: 6px; inset-inline-start: 6px; display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; height: 24px; min-width: 46px; margin: 0; padding: 0 8px; border: 0; border-radius: 999px; font: inherit; font-size: 11px; font-weight: 500; line-height: 1; font-variant-numeric: tabular-nums; cursor: default;
+  background: color-mix(in oklab, var(--axt-pv-raised) var(--axt-pv-glass), transparent); -webkit-backdrop-filter: blur(var(--axt-pv-glass-blur)); backdrop-filter: blur(var(--axt-pv-glass-blur)); box-shadow: 0 0 0 0 transparent; color: color-mix(in oklab, var(--axt-pv-ink) var(--axt-pv-ghost-ink), transparent);
+  opacity: 0; pointer-events: none; transition: opacity 120ms ease-out, background-color var(--axt-pv-wake) ease-out, box-shadow var(--axt-pv-wake) ease-out, color var(--axt-pv-wake) ease-out; }
+.axt-reader .axt-pv-chip::before { content: ""; position: absolute; inset: -8px; }
+.axt-reader .axt-pv-chip:focus-visible { outline: 2px solid var(--axt-pv-focus); outline-offset: 2px; }
+.axt-reader .axt-pv-kept:not([data-axt-chip="none"]) .axt-pv-chip { opacity: 1; }
+.axt-reader .axt-pv-kept[data-axt-chip="ghost"] .axt-pv-chip, .axt-reader .axt-pv-kept[data-axt-chip="awake"] .axt-pv-chip { pointer-events: auto; }
+.axt-reader .axt-pv-kept[data-axt-chip="live"] .axt-pv-chip { color: var(--axt-pv-ink); }
+.axt-reader .axt-pv-kept[data-axt-chip="awake"] .axt-pv-chip { background: var(--axt-pv-surface); -webkit-backdrop-filter: var(--axt-pv-blur); backdrop-filter: var(--axt-pv-blur); box-shadow: var(--axt-pv-shadow); color: var(--axt-pv-ink-2); cursor: pointer; }
+@media (hover: hover) { .axt-reader .axt-pv-kept[data-axt-chip="awake"] .axt-pv-chip:hover { color: var(--axt-pv-ink); } }
 /* narrow, or no hover: the sheet from the bottom, a native modal dialog over an 8 % dim (30 % dark) */
 .axt-reader .axt-sheet { position: fixed; inset: auto 0 0 0; box-sizing: border-box; width: 100%; max-width: none; max-height: 80%; margin: 0; display: flex; flex-direction: column; border: 0; border-radius: 28px 28px 0 0; padding: 16px 16px calc(16px + env(safe-area-inset-bottom)); touch-action: pan-x pan-y; animation: axt-sheet-in 240ms var(--axt-pv-ease); }
 .axt-reader .axt-sheet:not([open]) { display: none; }
@@ -113,6 +137,7 @@ ${DIMMED} .axt-sheet::backdrop, :root[data-theme="dark"] .axt-reader .axt-sheet:
    never past the midpoint to a neighbour (compose/links.ts: --axt-hit-t, -r, -b, -l, set where the link has one there) */
 .axt-reader[data-axt-narrow] .axt-link > .axt-link-box::before { content: ""; position: absolute; inset: calc(-1 * min(7px, var(--axt-hit-t, 7px))) calc(-1 * min(3px, var(--axt-hit-r, 3px))) calc(-1 * min(7px, var(--axt-hit-b, 7px))) calc(-1 * min(3px, var(--axt-hit-l, 3px))); }
 @media (prefers-reduced-motion: reduce) {
+  .axt-reader { --axt-pv-wake: 0ms; }
   @keyframes axt-pv-in { from { opacity: 0; } }
   @keyframes axt-sheet-in { from { opacity: 0; } }
   @keyframes axt-sheet-out { to { opacity: 0; } }
@@ -121,6 +146,7 @@ ${DIMMED} .axt-sheet::backdrop, :root[data-theme="dark"] .axt-reader .axt-sheet:
 @media (forced-colors: active) {
   .axt-reader .axt-pv, .axt-reader .axt-sheet { background: Canvas; color: CanvasText; border: 1px solid CanvasText; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
   .axt-reader .axt-pv-x, .axt-reader .axt-pv-ne { color: CanvasText; stroke: CanvasText; }
+  .axt-reader .axt-pv-chip, .axt-reader .axt-pv-kept[data-axt-chip] .axt-pv-chip { background: Canvas; color: CanvasText; border: 1px solid CanvasText; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
   .axt-reader .axt-pv-text { -webkit-mask-image: none; mask-image: none; }
 }
 `

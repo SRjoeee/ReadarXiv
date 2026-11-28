@@ -8,7 +8,13 @@ import { cardOf, SEARCH_URL } from '../../src/preview/card.ts'
 import { createPreviews } from '../../src/preview/previews.ts'
 import type { Clock } from '../../src/stack/clock.ts'
 
-const words = { keep: (l: string) => l, close: (l: string) => l, go: 'Go to', search: 'Search for this paper' }
+const words = {
+  keep: (l: string) => l,
+  close: (l: string) => l,
+  reset: 'Reset size',
+  go: 'Go to',
+  search: 'Search for this paper',
+}
 afterEach(() => {
   document.body.innerHTML = ''
   vi.restoreAllMocks()

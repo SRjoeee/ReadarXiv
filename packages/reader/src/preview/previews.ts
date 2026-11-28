@@ -28,6 +28,7 @@ import {
   type At,
   AGAIN_MS,
   CARD_W,
+  CROP_FIT_H,
   CROP_PAD,
   DWELL_MS,
   EDGE_PX,
@@ -65,11 +66,22 @@ export interface PreviewContent {
   /** a card's text giving way to the room on its side (never below three lines) */
   fit?(room: number): void
   dispose?(): void
+  /** a crop's own zoom, once kept (preview/keep.ts): the scale it was drawn at, its image's size in CSS px at scale 1 and at any
+   *  scale (`segs` segments, each rounded up to a whole pixel), and the same crop drawn at a scale (null where it cannot be) */
+  zoom?: {
+    scale: number
+    extent: { width: number; height: number }
+    segs: number
+    size(scale: number): { width: number; height: number }
+    draw(scale: number, signal: AbortSignal): Promise<HTMLElement | null>
+  }
 }
-/** the words the previews set (S-R-30, S-R-32, S-R-31) */
+/** the words the previews set (S-R-30, S-R-32, S-R-31, S-R-34) */
 export interface PreviewWords {
   keep(label: string): string
   close(label: string): string
+  /** the kept panel's percentage, named for what its press does */
+  reset: string
   go: string
   search: string
 }
@@ -220,12 +232,16 @@ export function createPreviews(d: PreviewDeps): Previews {
     return a
   }
   const paneOf = (side: Side): Rect => rectOf(panes.containerOf(side))
-  /** the most a preview may take: the pane less its margins across; the larger room up or down */
+  /** the most a preview may take: the pane less its margins across; down, the smaller of CROP_FIT_H of the pane's height and the
+   *  larger room up or down beside its link (a crop never covers the line it was called from) */
   const maxOf = (link: PreviewLink) => {
     const pane = paneOf(link.side),
       a = rectOf(link.el)
     const { below, above } = roomsOf(a, pane)
-    return { width: Math.max(0, pane.right - pane.left - 2 * EDGE_PX), height: Math.max(0, Math.max(below, above)) }
+    return {
+      width: Math.max(0, pane.right - pane.left - 2 * EDGE_PX),
+      height: Math.max(0, Math.min(CROP_FIT_H * (pane.bottom - pane.top), Math.max(below, above))),
+    }
   }
 
   // ---------------------------------------------------------------- held, described

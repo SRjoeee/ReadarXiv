@@ -363,6 +363,7 @@ const R: Locale['R'] = {
     search: '이 논문 검색',
     keep: label => `${label}: 화면에 고정`,
     close: label => `${label} 닫기`,
+    reset: '크기 재설정',
     figure: n => `그림 ${n}`,
     table: n => `표 ${n}`,
     section: n => `${n}절`,

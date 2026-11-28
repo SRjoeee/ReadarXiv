@@ -642,7 +642,8 @@ is taken only over the pages. The overlays follow the pinch exactly (§10.1).
   2026-11-10): the page sometimes zoomed when he pressed ⌘⇧ — macOS's screenshot keys (⌘⇧4, ⌘⇧5), which he uses all the
   time, hold ⌘ while a trackpad's scroll or its momentum is still running, and every wheel with ⌘ was then taken as a
   zoom. The keys are unchanged: ⌘ or Ctrl with − and + zoom by a tenth (§7). The reading is one (`zoom-gesture.ts`
-  `isZoomWheel`): the chrome's pinch zooms the panes by it, and over a preview surface it zooms nothing (§20.7).
+  `isZoomWheel`, its factor `wheelStep`): the chrome's pinch zooms the panes by it, a kept panel its own image, and over any
+  other preview surface it zooms nothing (§20.7).
 - **No step lays anything out.** From the page boxes read at the gesture's first step, a step works out the layout the
   commit will make at its scale — each page box scaled, the gaps between them not, a page narrower than the view centred,
   the scroll put so that the point under the gesture stays under it, then held within the scroll's ends — and shows it by
@@ -14566,12 +14567,46 @@ and its jump. One layer for every kind (`previews.ts`), from the three link sour
   this, `warm` answered ready from the stack's `ahead` for a parked drawing that `region` refused to read (`showing`): after a
   scroll parked the target's page, its crop never showed again until that page came near (the owner's recording, the lead on
   staging, 2026-11-28). One CSS px of the page round it (its drawing's antialiased edge, where a descender's last pixel
-  falls). At the page's own scale, smaller where the pane less 24 px (and 640 px of height) holds it not; a
+  falls). At the page's own scale, smaller where it does not fit the pane less 24 px across and, down, the smaller of 70 % of
+  the pane's height and the room beside its link (the approved prototype's eighth pass, `hoverFit`: before it a fixed 640 px
+  stood where the 70 % stands, `CROP_FIT_H`); a
   section's window runs on to the next page's head and fades at its foot; a figure, a table or a display never fades. None
   where any part of it cannot be drawn (a page turned by /Rotate included): the jump stays.
 - **Keeping** (`keep.ts`): a click or Enter on a crop keeps it where it stands (a dialog named by its label), lifted then
-  settled in 240 ms; moved by a drag or the arrows (16 px), below the toolbar's 52 px and 8 px inside the window; its round ×
-  shown on hover and on the keyboard's focus; Esc closes the preview first, then the kept panel; one at a time.
+  settled in 240 ms; its round × shown on hover and on the keyboard's focus; Esc closes the preview first, then the kept
+  panel; one at a time. **One rule for where it may be** (`panel.ts` `placeKept`): whole inside the reader's window, 8 px
+  from its sides and foot, under the toolbar's 52 px; a drag, the arrows (16 px) and its zoom all pass through it, and
+  nothing else moves it.
+- **A kept panel's own zoom** (the owner's approved eighth prototype, 2026-11-28: no scrolling inside the panel, one plain
+  limit on its size, its place its natural behaviour): a zoom gesture with the pointer on it (§6.8's one reading,
+  `zoom-gesture.ts`: Ctrl and the wheel, a trackpad's pinch in Chrome; WebKit's `gesturestart`/`gesturechange`/`gestureend`;
+  two touch pointers, by their spread about their midpoint) zooms its image about the pointer, never the browser's page. From
+  the size it opened at (the least) to the smaller of 300 % (`KEPT_MOST`, the prototype's value; the panes' own bounds are
+  25 % to 400 % by a step and 10 % to 2,500 % by a pinch, so it is the panel's own token) and the size at which it fits the
+  rule's room less its 10 px padding (the most); its image always whole, nothing scrolling inside it. Over the last 15 % before
+  either end a gesture slows to a quarter of its speed and stops there; no bounce (a plain stop under reduced motion). Where it
+  opens at its most (a small display with the panes at 300 %), a gesture does nothing and no percentage shows. Keys on the
+  focused panel: + and − by the panes' tenth in 120 ms about its centre, 0 back to its opening size. While a gesture runs its
+  drawing is scaled (a transform on the crop, from its top-left corner); 150 ms after its last event (a wheel's end) it is
+  drawn again at the settled scale by the same segments (`zoom.draw`: the left's arXiv drawing, a fresh PDF.js render at that
+  scale where the left's canvas is not fine enough; the right's laid page through the stack's `read`, `composer.region`), the
+  drawing it replaces let go at once (its canvases emptied), as is the panel's on closing. A drawing that cannot be had keeps
+  the scaled one and is asked again at the next settle. **Its sharpness on the right**: `region` copies the page's drawing at
+  its own pixels or the device's at the scale, whichever is fewer, so a right crop zoomed past the pane's scale shows the
+  page's pixels upscaled (its translation's SVG stays sharp); the left's is drawn at the scale. **Its cost at the most**
+  (the harness, 1,400 x 900 at 1x): the left's table at 300 % 426,123 device pixels (its 1,258 x 339 CSS px whole), the right's
+  figure at 300 % 120,646; at most the rule's room times the device's pixels squared on the left (1,364 x 820 x 4 = 4.5
+  million at 2x).
+- **Its percentage** (UI.md S-R-34, never shown as words): a chip at the top-left, 6 px in, opposite the × (which is unchanged),
+  24 px high, at least 46 px wide (as wide as 000 %, tabular digits, 11 px / 500). It exists only while a zoom runs and 1.2 s
+  after, or while the size is not the opening one and the pointer (or the keyboard's focus) is on the panel; three states on
+  `data-axt-chip`: **live** while a zoom runs (the digits at full ink, no pointer events), **ghost** (glass: the chrome's
+  raised ground at 40 % over a 0.5 px blur, no hairline, no shadow, the digits at 70 % of the ink: what is under it softened
+  and still there), **awake** within 28 px of it or on the keyboard's focus (the ×'s own dress: the surface, its blur and
+  shadow, pointer cursor; in 120 ms, at once under reduced motion). A press returns the panel to its opening size in 240 ms on
+  the layer's curve, shrinking towards the chip's corner; then no chip. A Tab stop only while the size is not the opening one.
+  Tokens `--axt-pv-raised`, `--axt-pv-glass`, `--axt-pv-glass-blur`, `--axt-pv-ghost-ink`, `--axt-pv-wake`; forced colours:
+  `Canvas` with a `CanvasText` border.
 - **The sheet** (`sheet.ts`), where the device has no hover or the pane is narrower than the card with its margins (the lead's
   ruling on open item 8; the reader's own one-pane switch at 840 px is not moved): a tap on a link with a target opens a native
   modal `<dialog>` (`showModal`, `closedby="any"`, the pointer-position fallback where the browser lacks it) from the bottom,
@@ -14585,9 +14620,9 @@ and its jump. One layer for every kind (`previews.ts`), from the three link sour
 - **A zoom gesture over a preview surface** (a card, a crop, a kept panel, the sheet) never zooms the browser's page: a wheel
   §6.8 reads as a zoom (`zoom-gesture.ts`: Ctrl held, a trackpad's pinch in Chrome and Firefox) and WebKit's own pinch
   (`gesturestart`, `gesturechange`) have their default prevented there, and a touch's pinch is not the page's (the surfaces'
-  `touch-action: pan-x pan-y`, a kept panel's `none`). It does nothing else there: it neither zooms the preview nor scrolls the
-  pane under it, as a plain wheel does (the owner's look at staging, 2026-11-28: a pinch on a kept figure zoomed the whole page).
-  A kept panel's own zoom is not built (its design is shown to the owner first).
+  `touch-action: pan-x pan-y`, a kept panel's `none`). Over a card, a hover's crop or the sheet it does nothing else: it neither
+  zooms the preview nor scrolls the pane under it, as a plain wheel does (the owner's look at staging, 2026-11-28: a pinch on a
+  kept figure zoomed the whole page); over a kept panel it zooms the panel (above).
 - **A laid link's place** (`data-axt-at`) is its index in `Page.links`, apart from its place in the reading order: the bracket a
   preview is anchored to is read there (staging, 2026-11-28: a card stood a line lower for each text item before its link,
   anchored to another link's box).

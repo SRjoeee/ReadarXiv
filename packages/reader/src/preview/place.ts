@@ -16,6 +16,9 @@ export const FOOT_PX = 54
 /** the citation card's width and a crop's padding [approved, D §3.2, §3.3] */
 export const CARD_W = 416
 export const CROP_PAD = 10
+/** a hover's crop at most this share of its pane's height (with the room beside its link and the pane's width less its margins)
+ *  [approved, P8 app.js:23 FIT_H] */
+export const CROP_FIT_H = 0.7
 
 export interface Rect {
   left: number

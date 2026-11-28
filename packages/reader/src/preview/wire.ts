@@ -29,9 +29,6 @@ import { createSheet } from './sheet.ts'
 import { targetsOf } from './targets.ts'
 import { previewWords } from './words.ts'
 
-/** a crop's preview at most this tall, px (the prototype's bound: a figure taller than this shows smaller) */
-const CROP_MAX_H = 640
-
 export interface WireOptions {
   root: HTMLElement
   panes: Panes
@@ -275,9 +272,7 @@ export function wirePreviews(o: WireOptions): Previews {
       t,
       {
         side: x.link.side,
-        max: x.sheet
-          ? x.max
-          : { width: x.max.width - 2 * CROP_PAD, height: Math.min(x.max.height, CROP_MAX_H) - 2 * CROP_PAD },
+        max: x.sheet ? x.max : { width: x.max.width - 2 * CROP_PAD, height: x.max.height - 2 * CROP_PAD },
         sheet: x.sheet,
         signal: x.signal,
       },

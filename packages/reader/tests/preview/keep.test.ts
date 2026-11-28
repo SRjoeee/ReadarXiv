@@ -21,7 +21,13 @@ const clock: Clock = {
   },
   cancel: () => {},
 }
-const words = { keep: (l: string) => `${l}: keep`, close: (l: string) => `Close ${l}`, go: 'Go to', search: 'S' }
+const words = {
+  keep: (l: string) => `${l}: keep`,
+  close: (l: string) => `Close ${l}`,
+  reset: 'Reset size',
+  go: 'Go to',
+  search: 'S',
+}
 afterEach(() => {
   document.body.innerHTML = ''
 })

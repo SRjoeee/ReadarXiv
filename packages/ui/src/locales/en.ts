@@ -363,6 +363,7 @@ const R: Locale['R'] = {
     search: 'Search for this paper',
     keep: label => `${label}: keep on screen`,
     close: label => `Close ${label}`,
+    reset: 'Reset size',
     figure: n => `Figure ${n}`,
     table: n => `Table ${n}`,
     section: n => `Section ${n}`,
