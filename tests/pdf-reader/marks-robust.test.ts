@@ -490,4 +490,48 @@ describe.skipIf(!docker)('a piece’s opening point where its glyphs begin', () 
     )
     expect(await itemsOf(r.pdf)).toEqual(await itemsOf(r.own))
   }, 900_000)
+  it('a plain display ($$…$$) that begins a centred line after a forced break: its math shift begins the paragraph as TeX’s does, every word and the display where the paper’s own compile sets them', async () => {
+    // (the first $ in vertical mode begins the paragraph, as it does with no mark; the display's spacing is TeX's reading of
+    // the line before it, the paragraph's indentation box, which the mark's point beside it does not widen)
+    const r = await prepared(
+      [
+        '\\documentclass{article}',
+        '\\begin{document}',
+        '\\begin{center}',
+        'A centred line of our own words\\\\',
+        '$$x+y=z$$',
+        'and more centred words of ours\\\\',
+        '$$u = v$$ and the last centred words of ours',
+        '\\end{center}',
+        'Our own paragraph after it.',
+        '$$w = 1$$',
+        'Our own words after its display.',
+        '\\end{document}',
+        '',
+      ].join('\n'),
+    )
+    expect(await itemsOf(r.pdf)).toEqual(await itemsOf(r.own))
+    // (the display's opening mark was set where its math shift began the paragraph: its point is on the page)
+    const p = pieceName(r.paper, '$$x+y=z$$')
+    expect(await pointSet(r.pdf, `${p}a`)).toBe(true)
+  }, 900_000)
 })
+
+/** whether a point (`p<u>.<k>a`) is set on any page of the PDF */
+const pointSet = async (pdf: Uint8Array, a: string): Promise<boolean> => {
+  const doc = await getDocument({ data: pdf.slice(), verbosity: 0 }).promise
+  try {
+    for (let n = 1; n <= doc.numPages; n++) {
+      const ops = await (await doc.getPage(n)).getOperatorList()
+      for (let j = 0; j < ops.fnArray.length; j++)
+        if (
+          ops.fnArray[j] === OPS.setRenderingIntent &&
+          (ops.argsArray[j]?.[0] as { name?: string } | undefined)?.name === `axt-${a}`
+        )
+          return true
+    }
+    return false
+  } finally {
+    await doc.loadingTask.destroy()
+  }
+}
