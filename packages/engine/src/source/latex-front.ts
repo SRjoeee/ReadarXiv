@@ -49,7 +49,21 @@ export type PhPiece = {
   opens?: boolean
   readonly brk?: true
   readonly closes?: number
+  readonly own?: OwnReading
 }
+/**
+ * How the source reader reads a placeholder whose leading command the paper itself defines (arg-roles.ts paperOf's `own`), by
+ * the definition in force where the walk meets the call (Ctx.meanings): `none`, one that takes no parameter, which reads nothing
+ * after it; `args`, one that takes a parameter (or a \\def's parameter text), which may read what follows it; `unread`, one the
+ * reader does not hold there (defined inside another definition's body, in a branch or a group it cannot settle, by a form it
+ * does not read, or later in the paper), whose reading is the name's as if the paper had not defined it. Stated on the piece
+ * (Builder.ph, not enumerable, as `brk` and `closes`): the marking reads a name of its no-ink lists so stated by its definition,
+ * never by its spelling (marks/marks.ts classOf, LOOKS_AHEAD; PDF-READER §18.122)
+ */
+export type OwnReading = 'none' | 'args' | 'unread'
+/** the source reader's reading of a placeholder of a command the paper defines (PhPiece.own), or undefined for any other piece */
+export const ownReading = (p: { t?: string } | null | undefined): OwnReading | undefined =>
+  p?.t === 'ph' ? (p as { own?: OwnReading }).own : undefined
 /** a forced break's source: `\\\\`, its star, its optional argument; \\newline; LaTeX's
  *  `\\break`, which ends the line it stands in in a paragraph (PDF-READER §18.77: the marked compile
  *  states where, BREAKS_TEX's point; amsart's `\\hfill\\break\\indent` in 2608.03841v2's addresses) */
@@ -115,6 +129,8 @@ export const forcedBreak = (p: { t?: string } | null | undefined): boolean =>
 /** a copy of a piece (an object spread takes no property that is not enumerable), stating what the piece states */
 function restated<P extends object>(copy: P, of: { t?: string }): P {
   if (forcedBreak(of)) Object.defineProperty(copy, 'brk', { value: true })
+  const own = ownReading(of)
+  if (own) Object.defineProperty(copy, 'own', { value: own })
   return copy
 }
 /** a pair's open (`sets` 0: its command sets its argument and nothing else, identityPair; not enumerable) and its close, by id */
@@ -2046,6 +2062,17 @@ function citationArgs(s: string, i: number, name: string): { args: GroupArg[]; e
  *  whose arguments the table cannot know (melba.cls's \\def\\firstname{…}, which LaTeXML's moderncv gives one). Set for
  *  the time a project is read — loadProject is synchronous —, else null: the kernel's forms and those written out */
 let paper: ArgPaper | null = null
+/** the walk's meanings in force (Ctx.meanings) for the time a project is read (readProject), else null: what Builder.ph reads a
+ *  call of the paper's own command by (ownOf) */
+let walking: Pick<Ctx, 'meanings'> | null = null
+/** how the reader reads a placeholder whose leading control word the paper defines (OwnReading), by the meaning in force where
+ *  the walk stands; undefined where the paper does not define it, or no project is read */
+function ownOf(src: string): OwnReading | undefined {
+  const name = /^\\([A-Za-z@]+)/.exec(src)?.[1]
+  if (name === undefined || !paper?.own.has(name)) return undefined
+  const m = walking?.meanings?.get(name)
+  return m === undefined || m === 'unsure' ? 'unread' : m.params > 0 || m.delim !== null ? 'args' : 'none'
+}
 /**
  * A command's arguments: a citation's every adjacent one, its notes in angle brackets or parentheses with them
  * (citationArgs); one whose parameters the role table knows (arg-roles.ts), exactly those as TeX takes them — a group
@@ -4019,6 +4046,8 @@ class Builder<F extends WalkFile = WalkFile> {
     if (!this.cur) this.cur = { file: this.file, kind: this.kind ?? 'para', start, end, pieces: [] }
     const p = brk ? phPiece(src, true) : phPiece(src)
     if (closes !== undefined) Object.defineProperty(p, 'closes', { value: closes })
+    const own = ownOf(src)
+    if (own) Object.defineProperty(p, 'own', { value: own })
     const glue = glueBody(src, this.macros)
     if (glue !== null) Object.defineProperty(p, 'glue', { value: glue })
     if (display) this.displays.add(p)
@@ -7976,7 +8005,8 @@ export function loadProject(fsys: Fsys, main: string, { tables = false } = {}) {
     .filter((f) => /\.(tex|sty|cls)$/i.test(f))
     .map((f) => ({ file: f, text: sourceText(f) }))
   const outer = paper,
-    outerDecoders = decoders
+    outerDecoders = decoders,
+    outerWalking = walking
   paper = paperOf(own.map((x) => x.text))
   // (the job's .bbl, which \\bibliography reads, decoded as the package's own TeX is: BibTeX writes it in the .bib's bytes, the
   // encoding the paper declares; it is read as none of the package's own files otherwise)
@@ -7988,6 +8018,7 @@ export function loadProject(fsys: Fsys, main: string, { tables = false } = {}) {
   } finally {
     paper = outer
     decoders = outerDecoders
+    walking = outerWalking
   }
 }
 /** each of the package's files that is not UTF-8, by its normalized name, with its decoding (INPUT_ENCODINGS): the one the
@@ -8256,6 +8287,8 @@ function readProject(
     quotes: csquotesOf(ownTexts),
     ...tblrOf(sources.map(sourceText)),
   }
+  // (the meanings the walk puts in force, read where a placeholder of the paper's own command is made: ownOf)
+  walking = ctx
   // (the author block's commands of a class the paper ships that the role table does not know: ownAuthorsOf)
   ctx.ownAuthors = ownAuthorsOf(own, ctx.macros)
   // (the labels the authors' texts request, which a note attached by its label waits for: tieLabels)

@@ -56,7 +56,15 @@ import {
 } from '../marks/marks.ts'
 import { ownOf } from '../own/own.ts'
 import { READ_ALONE, regionsOf, WANT } from '../own/stream.ts'
-import { BACKREF_LIST, forcedBreak, lastTexLog, startOf, statedGlue, texFilesOf } from '../source/latex-front.ts'
+import {
+  BACKREF_LIST,
+  forcedBreak,
+  lastTexLog,
+  ownReading,
+  startOf,
+  statedGlue,
+  texFilesOf,
+} from '../source/latex-front.ts'
 import { paperOf, textless } from '../source/arg-roles.ts'
 import { bundleUnitsOf } from './units.ts'
 import { phClass, texToText } from './layer1.ts'
@@ -996,6 +1004,7 @@ export function classesOf(
   colours: ReadonlyMap<number, number> | null = null,
   texts: ReadonlyMap<string | undefined, string> | null = null,
   told: ReadonlyMap<string | undefined, string> | null = null,
+  inkless: ReadonlySet<string | undefined> | null = null,
 ): [string, PieceClass][] {
   const out: [string, PieceClass][] = []
   const first = new Map<string, string>()
@@ -1017,7 +1026,15 @@ export function classesOf(
     // break inside a grid cell (read as the paper's macro, umacro), is read as `\\\\` is; one whose source reads as none (`\\\\`
     // space, \\newline zero) as its source)
     const as = statedBreak(p) && !INKLESS_CLASSES.has(phClassProven(src).cls) ? '\\\\' : src
-    const c = phClassProven(as),
+    // (a command the paper defines whose spelling the class table reads as drawing no ink (`zero`, `space`), which the marking
+    // asks TeX about (marks.ts classOf `macro`: ownNoInk, or a paper's macro of the table's spelling): the paper's macro its
+    // definition makes it, a class drawn from its ink (`umacro`, as a command no table knows), unless TeX answered that it sets
+    // none (`inkless`, the marking's), where the table's class stands as before (PDF-READER §18.122)
+    const table = phClassProven(as)
+    const c =
+        INKLESS_CLASSES.has(table.cls) && ownReading(p) !== undefined && classOf(p) === 'macro' && !inkless?.has(p.src)
+          ? { cls: 'umacro', unknown: true as const }
+          : table,
       copy = copyOf(as) || ''
     const x: PieceClass = { cls: c.cls, ...(c.unknown ? { unknown: true } : {}), ...(copy ? { copy } : {}) }
     if (phClass2(as).cls === 'symbol') {
@@ -2323,7 +2340,8 @@ export async function instrumentOf({
     }
   })
   const texts = options.texts,
-    inkless = options.inkless ?? null
+    inkless = options.inkless ?? null,
+    inklessSet: ReadonlySet<string | undefined> = new Set(inkless ?? [])
   // (the probe's own log, where the box hands it over: TeX's quotation marks read in the samples' texts, a text the stored
   // reading gave none taken (F16); and the samples TeX ends with ink a fill pushed (F14))
   const probe = probeLog ? probeFactsOf(probeLog, units) : null
@@ -2386,7 +2404,7 @@ export async function instrumentOf({
     const id = unitId(u.kind, content)
     ids[i] = id
     const unhidden = own.units.get(i)?.unhidden
-    const classes = classesOf(u.pieces, colours.get(i) ?? null, shown, told)
+    const classes = classesOf(u.pieces, colours.get(i) ?? null, shown, told, inklessSet)
     // (the piece the unit ends with that TeX sets as its end mark: El.end on its element, F14)
     for (const k of endPiecesOf(u.pieces, endSamples)) {
       const c = classes.find(([id]) => id === String(k))

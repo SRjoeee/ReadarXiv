@@ -24,6 +24,7 @@ import {
   lastTexLog,
   markUnits,
   NO_ARG_COMMANDS,
+  ownReading,
   START_LEAD,
   tailPiece,
   writtenSource,
@@ -183,6 +184,23 @@ export const backrefPiece = (p: PieceLike | null | undefined): boolean => p?.t =
 /** a piece's class, or null where it is not marked (text, a group's open or close, an invisible placeholder) */
 /** \\rule's call: what TeX's ink section measures, not the role table (a strut, \\rule{0pt}{2ex}, none; a bar, ink) */
 export const RULE = /^\s*\\rule\b/
+/** whether a source is one the marking reads by its spelling as setting no ink: one of TeX's and LaTeX's own that set none or a
+ *  control word of the lists (INVISIBLE), or one the role table proves can set no letters (textless) but \\rule, which TeX is
+ *  asked about */
+export const spelledNoInk = (src: string | undefined): boolean =>
+  INVISIBLE.test(src ?? '') || (textless(src ?? '') && !RULE.test(src ?? ''))
+/**
+ * Whether a placeholder is a call of a command the paper itself defines (the source reader's statement, PhPiece.own) whose
+ * spelling the marking would read as setting no ink (spelledNoInk): `\\renewcommand{\\footnotesize}{\\textsection}`, a class's
+ * `\\def\\newblock{\\textbullet\\ }` inside its bibliography's definition. Its spelling says nothing of what the paper's
+ * definition sets: it is the paper's macro (classOf `macro`), asked of TeX (inkSamples, and where the document uses it); with
+ * TeX's answer of no ink it gets no mark and is stated empty, as the spelling read it; with ink, it is marked and its ink found;
+ * with no answer (past INK_BUDGET), an inked class whose ink is found by its points or not at all, its unit then the original's.
+ * Whether it reads what follows it is its definition's (LOOKS_AHEAD). Never a forced break or a structure character, which
+ * classOf reads first (PDF-READER §18.122)
+ */
+export const ownNoInk = (p: PieceLike | null | undefined): boolean =>
+  ownReading(p) !== undefined && spelledNoInk(p!.src)
 export function classOf(piece: PieceLike | null | undefined): MarkClass | null {
   if (piece?.t === 'nested') return 'footnote'
   if (piece?.t !== 'ph') return null
@@ -193,7 +211,11 @@ export function classOf(piece: PieceLike | null | undefined): MarkClass | null {
   const src = piece.src ?? ''
   // (a forced break sets no ink, and a mark there would move a line: as the source reader states it (forcedBreak, `\\\\` and a
   // paper's row-ending macro inside a grid cell, §18.75), among what INVISIBLE reads)
-  if (forcedBreak(piece) || INVISIBLE.test(src) || STRUCTURE.test(src)) return null
+  if (forcedBreak(piece) || STRUCTURE.test(src)) return null
+  // (a name of these lists the paper itself defines is read by its definition, not by its spelling: the paper's macro, which TeX
+  // is asked about (inkSamples), stated empty where it answers no ink and marked where it answers ink (ownNoInk, §18.122))
+  if (ownNoInk(piece)) return 'macro'
+  if (INVISIBLE.test(src)) return null
   // a placeholder that can set no letters is no text rendering: never ink, never LOST — one of the commands the role
   // table proves so (source/arg-roles.ts textless: rules, space, a length's or a counter's setting, a definition, a register's
   // assignment; a strut's \\rule{0pt}{2.2ex}, \\specialrule{1pt}{-1pt}{0pt}, \\addlinespace[2pt]), its arguments all there.
@@ -3268,6 +3290,10 @@ const BETWEEN_TEXTS = (p: Piece): boolean =>
 const LOOKS_AHEAD = (p: PieceLike | null | undefined): boolean => {
   // (a pair's tail argument is read as the pair's close is: what follows the call is read by its macro as before)
   if (tailPiece(p)) return false
+  // (a name of the no-ink lists the paper defines (ownNoInk): its definition decides where the source reader reads it, one that
+  // takes a parameter may read what follows it, one of none reads nothing; one the reader does not hold reads as the name did,
+  // nothing after it (the compile guard the backstop, as for the name itself))
+  if (ownNoInk(p)) return ownReading(p) === 'args'
   const cls = classOf(p)
   // (the prefixes: xspace.sty's \xspace, latex.ltx's \protect, TeX's primitives \noexpand, \expandafter, \string, \global, \long,
   // \outer, \immediate and e-TeX's \unexpanded, \detokenize, \protected)

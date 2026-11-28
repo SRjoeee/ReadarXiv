@@ -10798,8 +10798,8 @@ moves. A `\color` at a table cell's head, which TeX sets before the cell's start
 formula, a year, an algorithm's line). These set none by TeX's definition, and only where the command is TeX's or LaTeX's: the
 marking reads the name by its spelling, so a command the paper defines (`instrument/instrument.ts` `ownCommandsOf`: the source
 reader's own reading of the paper's definitions, `\renewcommand{\index}[1]{\textdagger}`, `\let\index…`) is read by its
-definition and is not stated empty, its call held unproven as before (stated empty, the dagger TeX sets would be erased with
-the paragraph and drawn by nothing). One whose definition sets its argument is a span of text, no placeholder (§18.119). The
+definition and is not stated empty by this reading (stated empty, the dagger TeX sets would be erased with the paragraph and
+drawn by nothing): the marking asks TeX about it as the paper's macro it is (§18.122). One whose definition sets its argument is a span of text, no placeholder (§18.119). The
 text macro of the marking's null stated empty before this item (a `.bbl`'s `\newblock`) is kept as it was: a class's own
 `\newblock`, defined in the paper's files of many papers, sets no ink, and telling which definition sets ink is the
 definition's reading, not this one's. None of the 56 units this item lays stands at a command its paper defines. Of the marking's
@@ -10844,6 +10844,38 @@ no closing point.
 **What it protects.** No glyph of a note is the display's (its label, its text, its placeholders, its rule), and a reading that
 runs to a mark or a column's end past a frame stays refused. The rules are outside the marked compile (`own/stream.ts` is not
 in the compile key's closure): no TeX moves, no stored compile is made again.
+
+### 18.122 A name the marking reads as setting no ink, the paper's own definition is asked of TeX (the coordinator's ruling F of 2026-11-28, fix phase F4)
+
+The marking reads a placeholder by its spelling (`marks/marks.ts` `classOf`): one of TeX's and LaTeX's own that set no ink and a
+control word of its lists (`INVISIBLE`: `\index`, `\label`, a size switch, `\newblock`, a skip) or one the role table proves can
+set no letters (`textless`) gets no mark and is never asked about, and the class table reads such names as drawing nothing
+(`instrument/layer1.ts` `phClass`: `zero`). A paper that defines one of them to print a glyph (`\renewcommand{\footnotesize}
+{\textsection}`; a package of the paper's that defines the bibliography's separator inside its bibliography environment, `\def
+\newblock{\textbullet\ }`) had its paragraph laid with the glyph erased under the translation and drawn by nothing: the element
+stated as of no ink, its ink in the text's range.
+
+**The rule.** A name the paper itself defines (the source reader's statement on the piece, `PhPiece.own`, from `paperOf`'s
+`own`), whose spelling the marking's lists or the role table read as setting nothing (`spelledNoInk`), is read by its definition
+(`ownNoInk`): it is the paper's macro (`classOf` `macro`), asked of TeX in the ink section and where the document first uses it
+(§18.80), whatever the source reader can read of the definition. Where TeX answers that it sets no ink, it gets no mark and is
+stated empty, and its class stays the table's: everything as before. Where TeX answers ink, it is marked as the paper's macro
+and its ink is found by its points; its class is one drawn from its ink (`classesOf`: `umacro`, as a command no table knows;
+an `\index{…}` reads `other` already). Past the ink section's budget (`INK_BUDGET`) it has no answer: an inked class whose ink
+is its points' or none, its unit then the original's (`unproven`), never the reading of no ink. A forced break and a structure
+character keep their readings, and a name the marking gives a class (a citation, a reference) keeps its class.
+
+**What follows it.** Whether such a name reads what follows it is the definition's, where the source reader holds it in force
+at the call (`Ctx.meanings`, the walk's reading in TeX's order): one that takes no parameter reads nothing after it, as the name
+of the kernel does (the piece after it keeps its marks); one that takes a parameter, or a `\def`'s parameter text, may read what
+follows it (LOOKS_AHEAD: the marks after it are taken off, the safe side). One the reader does not hold there (defined inside
+another definition's body, in a group or a branch it cannot settle, by a form it does not read, or not yet in force) is read as
+the name of the kernel is, reading nothing; the compile guard stands behind it, as it does for the name itself
+(`OwnReading`: `none`, `args`, `unread`).
+
+**What it protects.** A glyph TeX set is never erased without being drawn: the element is stated empty only on TeX's answer of
+no ink, and an element with no answer is held. The classification of §18.120 (`inklessPieces`) reads the marking's class, so a
+name the paper defines is no longer of the marking's null there.
 
 ## 19. The engine's contract
 
