@@ -10906,7 +10906,10 @@ Rules of the marked compile, each read off TeX's own definition or TeX's own ans
   ink: a reference's `\doiprefix`, a cell's `\boldmath`): the placeholder after it has the marks the answer allows, as after a
   macro with its opening mark (`layoutMarking`'s `ahead`).
 
-Every one moves the marked TeX (LAYOUT_TEX's two, every paper's marked request) or the probe's samples; none moves a unit's id.
+Every one moves the marked TeX (LAYOUT_TEX's two: every paper's marked request) or the probe's samples. The conditional's
+reading also moves the units of a paper that comments passages out by a macro of its own: a passage TeX skips is no unit, and
+the paragraphs around it are cut as TeX sets them; no other rule moves a unit's id, and none moves what a translator is told
+of a unit but those cuts and the grouping primitives' kind (`other`, an element that sets no word).
 
 ## 19. The engine's contract
 
