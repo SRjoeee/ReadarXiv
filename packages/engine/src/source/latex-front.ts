@@ -5611,6 +5611,29 @@ function walkInGrid(s: string, from: number, to: number, grid: readonly GridCell
   walk(s, from, to, b, ctx)
   b.cells = savedCells
 }
+/**
+ * \\bibliography{…} at the walk's command ending at `end`: TeX reads the job's .bbl there, which the package holds (BibTeX's
+ * output, shipped, or the one BibTeX writes in the prepare's first pass: compile/paper.ts madeBibliography), its thebibliography
+ * a paragraph's end (its heading's); none read, it sets nothing, and the paragraph before it ends there all the same, so that the
+ * source's units are the same with the .bbl and without it (`bibliography`, the names it reads: whether the paper has one to
+ * make). The unit before it ended (endUnit), the names noted and the .bbl walked; the call's end, or null where no group follows
+ * (the command read as any other)
+ */
+function bibliographyCall(s: string, end: number, b: Builder, ctx: Ctx, endUnit: () => void): number | null {
+  const { args, end: e } = argsAfter(s, end, 1)
+  const arg = args[0]
+  if (arg?.kind !== 'req') return null
+  endUnit()
+  ctx.bibliography.push(
+    ...s
+      .slice(arg.start + 1, arg.end - 1)
+      .split(',')
+      .map((x) => x.trim())
+      .filter(Boolean),
+  )
+  if (ctx.bbl) ctx.visit(ctx.bbl, [], b.inFloat)
+  return e
+}
 function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
   let i = from,
     textStart = -1
@@ -6167,25 +6190,11 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
       }
       continue
     }
-    // \\bibliography{…}: TeX reads the job's .bbl there, which the package holds (BibTeX's output, shipped, or the one BibTeX
-    // writes in the prepare's first pass: compile/paper.ts madeBibliography), its thebibliography a paragraph's end (its
-    // heading's); none read, it sets nothing, and the paragraph before it ends there all the same, so that the source's units
-    // are the same with the .bbl and without it (`bibliography`, the names it reads: whether the paper has one to make)
-    if (name === 'bibliography') {
-      const { args, end: e } = argsAfter(s, end, 1)
-      if (args[0]?.kind === 'req') {
-        endUnit()
-        ctx.bibliography.push(
-          ...s
-            .slice(args[0].start + 1, args[0].end - 1)
-            .split(',')
-            .map((x) => x.trim())
-            .filter(Boolean),
-        )
-        if (ctx.bbl) ctx.visit(ctx.bbl, [], b.inFloat)
-        i = e
-        continue
-      }
+    // \\bibliography{…}: the job's .bbl, read there (bibliographyCall)
+    const bibEnd = name === 'bibliography' ? bibliographyCall(s, end, b, ctx, endUnit) : null
+    if (bibEnd !== null) {
+      i = bibEnd
+      continue
     }
     // csquotes' \\enquote{…} (the paper defining none): its quotation marks text around its argument, by its level (quoteMarks)
     if (name === 'enquote' && !ctx.macros.has('enquote') && !ctx.bibDefs?.has('enquote') && !BIB_KINDS.has(b.kind)) {
