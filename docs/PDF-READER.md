@@ -10893,8 +10893,6 @@ Rules of the marked compile, each read off TeX's own definition or TeX's own ans
   (`\leavevmode`) and the point is set before the piece's first glyph (a formula first on a centred line after its `\\`, both
   of whose points had stood after its glyphs); before anything else (`\noindent`, `\par`, `\vspace`, a display) it pends as
   before (LAYOUT_TEX `\axt@pmv`).
-- **A display shorthand's class is the source reader's statement** (`PhPiece.closes`: a paper's `\be … \ee`): `display`, as a
-  spelled one, reading nothing after it, never an ink sample of a paper's macro (`marks.ts` `classOf`).
 - **A macro whose meaning opens a conditional** (`\def\iffa{\iffalse}`, an author's way of commenting a passage out) is read by
   the source reader as the conditional it is where its meaning in force is one of TeX's conditionals and nothing else
   (`conditionalMeaning`: its skipped branch skipped), and no probe section asks a placeholder whose macro's meaning opens a
