@@ -325,6 +325,18 @@ interface Slot {
   /** a laid drawing kept off the view (its device pixels), else 0; when it was kept (an order) */
   kept: number
   keptAt: number
+  /** the reads of its drawing waiting for it to be whole (stack.read) */
+  readers: Set<Reader>
+}
+/** a read of a slot's drawing of content `key` waiting for it: served with the drawing whole, or null where it will not be */
+interface Reader {
+  key: string
+  serve(d: Drawing | null): void
+}
+/** what a read of a slot's drawing is given, whole, in the task it reads it in: its page view and what is laid over it */
+export interface Drawn {
+  view: PDFPageView
+  over: HTMLElement | null
 }
 
 export interface Stack {
@@ -350,6 +362,15 @@ export interface Stack {
   /** slot n's content drawn now though the slot is far (a page ahead), after the view's own drawings, and kept off the view
    *  within the budget: resolves whether it is kept (false: let go, failed, or given up by `signal`) */
   ahead(n: number, signal: AbortSignal): Promise<boolean>
+  /**
+   * Slot n's drawing of content `key` read by `f` in a task in which it is whole: at once where it is (in view, near, or kept off
+   * the view: parked is no less drawn), else once it is drawn (a near slot's at its turn; a far one's drawn as a page ahead is, and
+   * kept or let go after the read as any far drawing is; one a zoom reset while it was kept drawn again). The one answer to "can
+   * this page's drawing be read now": nothing else says ready. Null where it will not be: the slot is to show another content, its
+   * drawing failed, the stack went, or `signal` gave it up (whose drawing made for it alone is let go). Nothing is remembered: a
+   * read after a null asks again
+   */
+  read<T>(n: number, key: string, signal: AbortSignal, f: (d: Drawn) => T): Promise<T | null>
   page(n: number): HTMLElement | null
   viewport(n: number): PageViewport | null
   /** the content key slot n shows, or null */
@@ -640,7 +661,7 @@ export function createStack(o: StackOptions): Stack {
      *  is drawing finished, undrawn, at its new scale (pdf_viewer.mjs PDFPageView#update, #draw) */
     const finishedAt = (k: number) => view.renderingState === FINISHED && view.scale === k
     d.job = {
-      rank: () => (s.next === d || s.shown === d ? (d.ahead && !s.near ? 2 : rankOf(s)) : null),
+      rank: () => (s.next === d || s.shown === d ? ((d.ahead || wanted(s, d.key)) && !s.near ? 2 : rankOf(s)) : null),
       order: () => s.n,
       run: async () => {
         if (mine !== gen || (s.next !== d && s.shown !== d)) return
@@ -659,6 +680,7 @@ export function createStack(o: StackOptions): Stack {
             s.next = null
             d.ahead?.(false)
           }
+          unread(s, d.key)
           tell('failed', { n: s.n, key: d.key })
           return
         }
@@ -681,6 +703,7 @@ export function createStack(o: StackOptions): Stack {
               s.next = null
               d.ahead?.(false)
             }
+            unread(s, d.key)
             tell('failed', { n: s.n, key: d.key })
             return
           }
@@ -816,6 +839,11 @@ export function createStack(o: StackOptions): Stack {
     d.over?.remove()
     d.holder.remove()
     counts.released++
+    // (a read that waited for what went: its drawing asked again, or the read let go, once the caller is done)
+    if (s && wanted(s, d.key))
+      queueMicrotask(() => {
+        if (s.readers.size) drive(s)
+      })
   }
   /** what is kept parsed of page n once drawing d of it has gone: a laid page's document's last WARM_PAGES pages, the oldest
    *  cleaned up past it; an original's page cleaned up where the left does not hold it */
@@ -853,6 +881,7 @@ export function createStack(o: StackOptions): Stack {
   }
   /** what slot s is to show, drawn (asked of the scheduler) where it is near and not shown or under way */
   function want(s: Slot) {
+    if (s.readers.size) drive(s)
     if (disposed || !s.near) return
     const c = contentOf(s.n)
     if (!c) return
@@ -876,7 +905,8 @@ export function createStack(o: StackOptions): Stack {
   function drawnNow(s: Slot, d: Drawing) {
     const ahead = d.ahead
     d.ahead = null
-    if (s.next === d) {
+    const swapped = s.next === d
+    if (swapped) {
       const t0 = performance.now()
       const focus = focusIn(s)
       const was = s.shown
@@ -901,26 +931,83 @@ export function createStack(o: StackOptions): Stack {
     }
     rounding(s)
     tell('drawn', { n: s.n, scale: d.drawnAt, key: d.key, detail: false })
-    // (a page ahead drawn while its slot is far: kept off the view within the budget, put back as it comes near)
-    if (ahead) {
-      if (!s.near && s.shown === d) {
-        const px = d.over ? pixelsOf(d) : 0
-        if (px && px <= keepPixels) {
-          keep(s, px + awayOf(d))
-          trim(s.n)
-        } else {
-          release(d, s)
-          s.shown = null
-          name(s)
-        }
+    // (the reads waiting for it served now, whole, before a far drawing is kept or let go)
+    serve(s)
+    // (a drawing put in place while its slot is far (a page ahead, or one a read asked for): kept off the view within the budget,
+    // put back as it comes near)
+    if ((ahead || swapped) && !s.near && s.shown === d && !keptForFocus.has(s)) {
+      const px = d.over ? pixelsOf(d) : 0
+      if (px && px <= keepPixels) {
+        keep(s, px + awayOf(d))
+        trim(s.n)
+      } else {
+        release(d, s)
+        s.shown = null
+        name(s)
       }
-      ahead(s.shown === d)
     }
+    ahead?.(s.shown === d)
     if (s.n === 1 && sized === 0 && doc) {
       sized = -1
       void readSizes(gen, doc)
     }
     areaSoon()
+  }
+
+  // ---------------------------------------------------------------- reads of a drawing (stack.read)
+  /** whether a read waits on slot s for its drawing of content `key` */
+  const wanted = (s: Slot, key: string) => [...s.readers].some((r) => r.key === key)
+  /** slot s's drawing of content `key` whole to be read now (its page view drawn and standing at its scale's turn, in the layout
+   *  tree or kept off it), else null: the one test of it */
+  const readable = (s: Slot, key: string): Drawing | null => {
+    const d = s.shown
+    return d?.view && d.key === key && d.view.renderingState === FINISHED ? d : null
+  }
+  /** the reads waiting on slot s served where its drawing is whole now, and let go (null) where it is to show another content */
+  function serve(s: Slot) {
+    if (!s.readers.size) return
+    const c = disposed ? null : contentOf(s.n)
+    for (const r of [...s.readers]) {
+      const d = readable(s, r.key)
+      if (d || !c || c.key !== r.key || !isView(c)) {
+        s.readers.delete(r)
+        r.serve(d)
+      }
+    }
+  }
+  /** the reads of content `key` on slot s let go (its drawing failed); its drawing made for reads alone let go with them */
+  function unread(s: Slot, key: string) {
+    for (const r of [...s.readers])
+      if (r.key === key) {
+        s.readers.delete(r)
+        r.serve(null)
+      }
+  }
+  /** slot s's drawing on its way for the reads that wait on it: served where it is whole; a near slot's drawn at its own turn; a
+   *  far one's drawn as a page ahead is (or its kept drawing, reset by a zoom, drawn again) */
+  function drive(s: Slot) {
+    serve(s)
+    if (disposed || !s.readers.size || s.near) return
+    const c = contentOf(s.n)
+    if (!c || !isView(c)) return
+    if (s.shown?.key === c.key) {
+      if (s.shown.view?.renderingState === INITIAL && s.shown.job) scheduler.want(s.shown.job)
+      return
+    }
+    if (s.next && s.next.key !== c.key) {
+      release(s.next, s)
+      s.next = null
+    }
+    s.next ??= viewDrawing(s, c)
+    if (s.next?.job) scheduler.want(s.next.job)
+    else unread(s, c.key)
+  }
+  /** a far slot's drawing made for reads that no read waits for now let go */
+  function readsGone(s: Slot) {
+    const d = s.next
+    if (!d || s.near || d.ahead || wanted(s, d.key)) return
+    release(d, s)
+    s.next = null
   }
 
   // ---------------------------------------------------------------- far: let go, kept, held for the focus
@@ -933,7 +1020,8 @@ export function createStack(o: StackOptions): Stack {
   }
   /** slot s gone far: a laid drawing kept off the view within the budget, any other let go; held where it holds the focus */
   function goFar(s: Slot) {
-    if (s.next) {
+    // (a drawing on its way goes with the slot's nearness, but one a read waits for, drawn on as a far one)
+    if (s.next && !wanted(s, s.next.key)) {
       release(s.next, s)
       s.next = null
     }
@@ -1173,6 +1261,8 @@ export function createStack(o: StackOptions): Stack {
 
   function letAllGo() {
     for (const s of slots) {
+      for (const r of [...s.readers]) r.serve(null)
+      s.readers.clear()
       release(s.next, s)
       release(s.shown, s)
       s.next = null
@@ -1226,7 +1316,17 @@ export function createStack(o: StackOptions): Stack {
         div.className = 'page axt-slot'
         div.dataset.pageNumber = String(i + 1)
         div.setAttribute('aria-hidden', 'true')
-        return { n: i + 1, div, shown: null, next: null, near: false, inView: false, kept: 0, keptAt: 0 }
+        return {
+          n: i + 1,
+          div,
+          shown: null,
+          next: null,
+          near: false,
+          inView: false,
+          kept: 0,
+          keptAt: 0,
+          readers: new Set<Reader>(),
+        }
       })
       for (const sl of slots) size(sl)
       element.append(...slots.map((sl) => sl.div))
@@ -1352,13 +1452,44 @@ export function createStack(o: StackOptions): Stack {
         signal.addEventListener(
           'abort',
           () => {
-            if (s.next !== d || s.near) return
+            if (s.next !== d || s.near || wanted(s, d.key)) return
             release(d, s)
             s.next = null
           },
           { once: true },
         )
         scheduler.want(d.job as Job)
+      })
+    },
+    read(n, key, signal, f) {
+      const s = slots[n - 1]
+      if (disposed || !s || signal.aborted) return Promise.resolve(null)
+      const now = readable(s, key)
+      if (now?.view) return Promise.resolve(f({ view: now.view, over: now.over }))
+      const c = contentOf(n)
+      if (!c || c.key !== key || !isView(c)) return Promise.resolve(null)
+      return new Promise((done, fail) => {
+        const off = () => {
+          if (!s.readers.delete(r)) return
+          done(null)
+          readsGone(s)
+        }
+        const r: Reader = {
+          key,
+          serve(d) {
+            signal.removeEventListener('abort', off)
+            try {
+              done(d?.view ? f({ view: d.view, over: d.over }) : null)
+            } catch (e) {
+              fail(e)
+            }
+          },
+        }
+        signal.addEventListener('abort', off, { once: true })
+        s.readers.add(r)
+        // (a near slot's drawing at its own turn, a far one's now)
+        if (s.near) want(s)
+        else drive(s)
       })
     },
     dropKept(drop = () => true) {
@@ -1447,6 +1578,7 @@ export function createStack(o: StackOptions): Stack {
         lefts,
         skeletons,
         focusHeld: keptForFocus.size,
+        reads: slots.reduce((a, s) => a + s.readers.size, 0),
         made: counts.made,
         released: counts.released,
         swaps: counts.swaps,

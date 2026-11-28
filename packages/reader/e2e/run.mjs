@@ -5431,6 +5431,105 @@ await check(
     return { kept: a.far.keptPixels, again: a.again.length, zero: b.far.kept }
   },
 )
+await check(
+  'link previews: one answer to whether a page’s drawing can be read (the stack’s read): a parked page read where it stands and left parked; zoomed while parked, read whole (drawn again where the zoom reset it); a budget of 0: drawn for the read, read, then let go; a read given up lets its drawing go; another content’s key: none; the cost of a far read (ms to the read, device pixels held, held after)',
+  async () => {
+    const run = async (keep) => {
+      const { page, context, errors } = await newPage({
+        viewport: { width: 1400, height: 500 },
+        screen: { width: 2560, height: 1600 },
+      })
+      await page.evaluate(([u, k]) => window.__h.open(u, k === null ? {} : { keepPixels: k }), [S1, keep])
+      await page.evaluate(() => window.__h.layer('s1-columns'))
+      await laidShown(page, 1)
+      // (at 2, page 1 goes far once the pane is at its end, as in the check above)
+      await page.evaluate(() => window.__h.panes.zoomTo(2))
+      await page.waitForTimeout(1200)
+      const key = await page.evaluate(() => window.__h.panes.right.showing(1))
+      const end = () =>
+        page.evaluate(() => {
+          const c = document.querySelector('.axt-pane.right')
+          c.scrollTop = c.scrollHeight
+        })
+      await end()
+      await waitFor(page, () => !window.__h.panes.right.near(1))
+      await page.waitForTimeout(300)
+      /** a read of page 1 as a preview makes it: its canvas's pixels, the ms it took, the stack's probe after */
+      const read = (k, abort = false) =>
+        page.evaluate(
+          async ([k, abort]) => {
+            const st = window.__h.panes.right
+            const ac = new AbortController()
+            const t0 = performance.now()
+            const p = st.read(1, k, ac.signal, (d) => {
+              const c = d.view.div.querySelector('.canvasWrapper canvas')
+              return {
+                px: c ? c.width * c.height : 0,
+                over: !!d.over,
+                parked: st.page(1).hasAttribute('data-axt-kept'),
+              }
+            })
+            if (abort) ac.abort()
+            const got = await p
+            const ms = Math.round(performance.now() - t0)
+            await new Promise((r) => setTimeout(r, 300))
+            const probe = st.probe()
+            return {
+              got,
+              ms,
+              after: { kept: probe.kept, keptPixels: probe.keptPixels, views: probe.views, reads: probe.reads },
+              shownKey: st.showing(1),
+              drawing: !!st.page(1).querySelector('.axt-slot-view canvas'),
+            }
+          },
+          [k, abort],
+        )
+      const out = { key }
+      out.parked = await read(key)
+      if (keep !== 0) {
+        await page.evaluate(() => window.__h.panes.zoomTo(2.4))
+        await page.waitForTimeout(900)
+        out.zoomed = await read(key)
+      }
+      out.other = await read('laid:no-such-key')
+      out.aborted = await read(key, true)
+      out.again = await read(key)
+      await context.close()
+      assert(!errors.length, errors.join('; '))
+      return out
+    }
+    const a = await run(null)
+    // (parked: read where it stands, whole, and left parked)
+    assert(
+      a.parked.got?.px > 0 &&
+        a.parked.got.over &&
+        a.parked.got.parked &&
+        a.parked.after.kept >= 1 &&
+        a.parked.after.reads === 0,
+      `parked: ${JSON.stringify(a.parked)}`,
+    )
+    assert(a.zoomed.got?.px > 0 && a.zoomed.after.reads === 0, `zoomed while parked: ${JSON.stringify(a.zoomed)}`)
+    assert(a.other.got === null && a.other.ms < 50, `another key: ${JSON.stringify(a.other)}`)
+    const b = await run(0)
+    // (a budget of 0: drawn for the read, read whole, then let go: nothing held)
+    assert(
+      b.parked.got?.px > 0 && b.parked.after.kept === 0 && !b.parked.drawing,
+      `none kept: ${JSON.stringify(b.parked)}`,
+    )
+    assert(
+      b.aborted.got === null && b.aborted.after.reads === 0 && !b.aborted.drawing,
+      `given up: ${JSON.stringify(b.aborted)}`,
+    )
+    assert(b.again.got?.px > 0 && !b.again.drawing, `asked again: ${JSON.stringify(b.again)}`)
+    return {
+      parkedMs: a.parked.ms,
+      zoomedMs: a.zoomed.ms,
+      drawnMs: [b.parked.ms, b.again.ms],
+      px: b.parked.got.px,
+      keptAfter: [a.parked.after.keptPixels, b.again.after.keptPixels],
+    }
+  },
+)
 
 await check(
   "port: links named by the text under them, the PDF's border, the wash on hover, the ring on focus; a click on one levels nothing; the keyboard's jump takes the focus there (B-336-B-338, B-343, B-344, B-346-B-348, A-383)",
@@ -7531,6 +7630,318 @@ await check(
     }
   },
 )
+
+// ---------------------------------------------------------------- show, disturb, show again (link previews, as a class)
+// Each kind of preview on each pane with its target in view, on a near page and on a far one (s5-links' links on pages 1, 2, 5
+// and 6: PV_ROWS) is shown; then after each disturbance of PV_DISTURB it is shown again at its own link, with nothing left
+// behind: no preview's surface and no kept panel in the document once the pointer has left, and as many listeners on the window,
+// the document and both panes' scrollers (Chromium's own count, DOMDebugger.getEventListeners) as after the first shows. Where
+// each target stood at its first show is read from its pane (in view; out of it and drawn; parked off the view; not drawn) and
+// printed with the time from the pointer's entry to the preview shown (AXT_PV_TABLE=<path> writes the table). A
+// new kind or a new disturbance is one row. "Nothing" is only ever a link whose target the head states none of (its jump kept).
+/** [kind, destination, the page its link stands on, where the target stands from there] */
+const PV_ROWS = [
+  ['card', 'cite.b', 6, 'view'],
+  ['card', 'cite.a', 5, 'near'],
+  ['card', 'cite.a', 1, 'far'],
+  ['figure', 'figure.1', 1, 'view'],
+  ['figure', 'figure.1', 2, 'near'],
+  ['figure', 'figure.1', 5, 'far'],
+  ['figure', 'figure.2', 1, 'far'],
+  ['table', 'table.1', 2, 'view'],
+  ['table', 'table.1', 1, 'near'],
+  ['table', 'table.1', 5, 'far'],
+  ['display', 'equation.1', 1, 'view'],
+  ['display', 'equation.1', 2, 'near'],
+  ['display', 'equation.1', 5, 'far'],
+  ['section', 'section.2', 1, 'view'],
+  ['section', 'section.2', 2, 'near'],
+  ['section', 'section.2', 5, 'far'],
+  ['note', 'Hfootnote.1', 1, 'view'],
+  ['note', 'Hfootnote.1', 2, 'near'],
+  ['note', 'Hfootnote.1', 5, 'far'],
+  ['none', 'theorem.1', 1, 'none'],
+]
+/** how long a preview may take to show after the pointer's entry before the check calls it absent, ms: a wait, never a bound
+ *  of the product's (the design's: it shows once both the dwell has passed and its content is drawn) */
+const PV_SHOW_MS = 6000
+/** a link of s5-links on page n of a side */
+const pvOn = (side, name, n) =>
+  side === 'right'
+    ? `#right .axt-slot[data-page-number="${n}"] a.axt-link[href="#${encodeURIComponent(JSON.stringify(name))}"] > .axt-link-box`
+    : `#left .page[data-page-number="${n}"] .annotationLayer .linkAnnotation > a[href="#${name}"]`
+/** a pane's page n: the right's slot, the left's PDF.js page */
+const pvPageSel = (side, n) => `#${side} ${side === 'right' ? '.axt-slot' : '.page'}[data-page-number="${n}"]`
+async function pvScrollTop(page, side) {
+  return page.evaluate((s) => {
+    let e = document.getElementById(s).querySelector('[data-page-number]')
+    while (e && !(e.scrollHeight > e.clientHeight + 4 && getComputedStyle(e).overflowY !== 'visible'))
+      e = e.parentElement
+    return e ? e.scrollTop : -1
+  }, side)
+}
+/** a side's pane brought to page n (its top at the view's), and the link wanted there once it is drawn */
+async function pvToPage(page, side, n, sel) {
+  await page.evaluate((s) => document.querySelector(s)?.scrollIntoView({ block: 'start' }), pvPageSel(side, n))
+  await waitFor(page, (s) => !!document.querySelector(s), sel, 15_000)
+  await page.waitForTimeout(400)
+}
+/** where the target's page stands on a side now */
+const pvPlace = (page, side, n) =>
+  page.evaluate(
+    ([s, sel]) => {
+      const pane = document.getElementById(s).getBoundingClientRect()
+      const pg = document.querySelector(sel)
+      if (!pg) return 'absent'
+      const b = pg.getBoundingClientRect()
+      if (b.bottom > pane.top && b.top < pane.bottom) return 'view'
+      if (pg.hasAttribute('data-axt-kept')) return 'parked'
+      return pg.querySelector(s === 'right' ? '.axt-slot-view canvas' : 'canvas') ? 'drawn' : 'undrawn'
+    },
+    [side, pvPageSel(side, n)],
+  )
+/** the pointer off every link, and the previews gone (the one shown faded out) */
+async function pvAway(page) {
+  await page.mouse.move(2, 300)
+  return page
+    .waitForFunction(() => !document.querySelector('.axt-pv:not(.axt-pv-kept)'), null, { timeout: 3000, polling: 50 })
+    .then(
+      () => true,
+      () => false,
+    )
+}
+/** the row's link hovered, the preview waited for (PV_SHOW_MS; a link with no target: the dwell and more) */
+async function pvShowAt(page, side, row) {
+  const [kind, dest, n] = row
+  const sel = pvOn(side, dest, n)
+  await pvAway(page)
+  if (!(await page.evaluate((s) => !!document.querySelector(s), sel))) await pvToPage(page, side, n, sel)
+  const c = await pvCentre(page, sel)
+  if (!c) return { ok: false, why: 'no link' }
+  const t0 = Date.now()
+  await page.mouse.move(c.x, c.y, { steps: 3 })
+  if (kind === 'none') await page.waitForTimeout(1200)
+  else
+    await page
+      .waitForFunction(() => !!document.querySelector('.axt-pv:not([data-axt-out]):not(.axt-pv-kept)'), null, {
+        timeout: PV_SHOW_MS,
+        polling: 50,
+      })
+      .catch(() => {})
+  const ms = Date.now() - t0
+  const s = await pvShown(page)
+  if (kind === 'none') return { ok: !s, why: s ? `shown ${s.kind}` : '', c }
+  if (!s) return { ok: false, why: 'nothing shown', c }
+  const good =
+    kind === 'card'
+      ? s.kind === 'card' && s.text.startsWith(ENTRY[dest])
+      : s.kind === 'crop' && s.ink > 0 && (kind === 'section' ? s.segs === 2 && s.fade : s.segs === 1 && !s.fade)
+  // (at its own link: its near edge within a line of the link's box, under it or over it)
+  const gap = s.rect.top >= c.bottom - 1 ? s.rect.top - c.bottom : c.top - s.rect.bottom
+  const beside = gap >= -1 && gap <= 24
+  return {
+    ok: good && beside,
+    why: good ? (beside ? '' : `${Math.round(gap)} px from its link`) : JSON.stringify(s),
+    c,
+    ms,
+  }
+}
+/** a pane's centre */
+const pvMid = (page, side) =>
+  page.evaluate((s) => {
+    const b = document.getElementById(s).getBoundingClientRect()
+    return { x: b.x + b.width / 2, y: b.y + b.height / 2 }
+  }, side)
+/** a wheel over a side's pane by dy CSS px, then back by as much as it moved */
+async function pvWheel(page, side, dy) {
+  const m = await pvMid(page, side)
+  const a = await pvScrollTop(page, side)
+  await page.mouse.move(m.x, m.y)
+  await page.mouse.wheel(0, dy)
+  await page.waitForTimeout(900)
+  const moved = (await pvScrollTop(page, side)) - a
+  await page.mouse.wheel(0, -moved)
+  await page.waitForTimeout(900)
+  return moved
+}
+/** Chromium's count of the listeners on the window, the document and both panes' scrollers */
+async function pvListeners(cdp) {
+  const count = async (expr) => {
+    const { result } = await cdp.send('Runtime.evaluate', { expression: expr })
+    if (!result.objectId) return -1
+    const { listeners } = await cdp.send('DOMDebugger.getEventListeners', { objectId: result.objectId })
+    await cdp.send('Runtime.releaseObject', { objectId: result.objectId })
+    return listeners.length
+  }
+  const scroller = (s) =>
+    `(() => { let e = document.getElementById('${s}').querySelector('[data-page-number]'); while (e && !(e.scrollHeight > e.clientHeight + 4 && getComputedStyle(e).overflowY !== 'visible')) e = e.parentElement; return e })()`
+  return [
+    await count('window'),
+    await count('document'),
+    await count(scroller('left')),
+    await count(scroller('right')),
+  ].join('/')
+}
+const pvDo = (page, x) => page.evaluate((a) => window.__c.reader.do(a), x)
+/** [name, what it does to a pane holding page g.n of a side] */
+const PV_DISTURB = [
+  ['wheel-little', (page, side) => pvWheel(page, side, 150)],
+  ['wheel-pages', (page, side, g) => pvWheel(page, side, g.n <= 3 ? 2600 : -2600)],
+  [
+    'zoom',
+    async (page) => {
+      await pvDo(page, { do: 'zoomBy', factor: 1.5 })
+      await page.waitForTimeout(1500)
+      await pvDo(page, { do: 'zoomBy', factor: 1 / 1.5 })
+      await page.waitForTimeout(1500)
+    },
+  ],
+  [
+    'jump',
+    async (page, side, g) => {
+      // (each row's link pressed in turn, its return taken: a link with no target jumps as well)
+      for (const row of g.rows) {
+        const sel = pvOn(side, row[1], row[2])
+        const c = await pvCentre(page, sel)
+        if (!c) throw new Error(`jump: no link ${row[1]}`)
+        await page.mouse.click(c.x, c.y)
+        await page.waitForTimeout(900)
+        const back = page.locator('button.back:not([data-out])').first()
+        if (!(await back.count())) throw new Error(`jump: no way back after ${row[1]} (its jump not taken)`)
+        await back.click()
+        await page.waitForTimeout(1200)
+      }
+    },
+  ],
+  [
+    'resize',
+    async (page) => {
+      await page.setViewportSize({ width: 1100, height: 760 })
+      await page.waitForTimeout(1200)
+      await page.setViewportSize({ width: 1400, height: 900 })
+      await page.waitForTimeout(1200)
+    },
+  ],
+  [
+    'other-pane',
+    async (page, side, g) => {
+      await pvDo(page, { do: 'set', prefs: { sync: false } })
+      await page.waitForTimeout(300)
+      await pvWheel(page, side === 'left' ? 'right' : 'left', g.n <= 3 ? 2600 : -2600)
+      await pvDo(page, { do: 'set', prefs: { sync: true } })
+      await page.waitForTimeout(600)
+    },
+  ],
+  [
+    'kept',
+    async (page, side, g) => {
+      const row = g.rows.find((r) => r[0] !== 'card' && r[0] !== 'none')
+      if (!row) return 'n/a'
+      const s = await pvShowAt(page, side, row)
+      if (!s.ok) return { failed: new Map([[row, `kept: not shown (${s.why})`]]) }
+      const r = await page.evaluate(() => {
+        const b = document.querySelector('.axt-pv:not([data-axt-out])').getBoundingClientRect()
+        return { x: b.left + b.width / 2, y: b.top + b.height / 2 }
+      })
+      await page.mouse.click(r.x, r.y)
+      await page.waitForTimeout(400)
+      if (!(await page.evaluate(() => !!document.querySelector('.axt-pv.axt-pv-kept'))))
+        throw new Error('kept: no panel')
+      await page.mouse.move(2, 300)
+      await page.keyboard.press('Escape')
+      await page.waitForTimeout(600)
+      if (await page.evaluate(() => !!document.querySelector('.axt-pv.axt-pv-kept')))
+        throw new Error('kept: not closed')
+    },
+  ],
+  [
+    'hovers-20',
+    async (page, side, g) => {
+      // (twenty hovers over the page's links in turn: a row missed in any of them failed)
+      const rows = g.rows.filter((r) => r[0] !== 'none')
+      const failed = new Map()
+      for (let i = 0; i < 20; i++) {
+        const row = rows[i % rows.length]
+        const s = await pvShowAt(page, side, row)
+        if (!s.ok) failed.set(row, `hover ${i}: ${s.why}`)
+      }
+      return { failed }
+    },
+  ],
+]
+for (const side of ['left', 'right'])
+  await check(
+    `previews: show, disturb, show again on the ${side} pane: each kind (a card, a figure's, a table's, a display's, a section's window, a note's crop) with its target in view, near and far, shown, then shown again at its own link after each of: a wheel away and back (a little; several pages), a zoom and back, a jump and its return, a resize, the other pane scrolled alone, a kept panel opened and closed, twenty hovers; nothing left behind (surfaces, kept panels, listeners); a link with no target shows nothing and jumps (staging, 2026-11-28: a right crop gone for good after a scroll)`,
+    async () => {
+      const { page, context, errors } = await chromeLaid('s5-links', { ui: 'zh-CN' })
+      const cdp = await context.newCDPSession(page)
+      const head = JSON.parse(readFileSync(join(FIX, 's5-links', 'bundle', 'head.json'), 'utf8'))
+      const pageOf = new Map(head.targets.map((t) => [JSON.parse(t[0]), t[2]]))
+      pageOf.set('theorem.1', 2)
+      const groups = [...new Set(PV_ROWS.map((r) => r[2]))].map((n) => ({ n, rows: PV_ROWS.filter((r) => r[2] === n) }))
+      const table = {}
+      const fails = []
+      const mark = (row, col, ok, why) => {
+        const k = `${row[0]} ${row[1]}@p${row[2]}`
+        table[k] = table[k] ?? {}
+        table[k][col] = ok ? 'ok' : 'FAIL'
+        if (!ok) fails.push(`${k} ${col}: ${why}`)
+      }
+      try {
+        let baseline = null
+        for (const g of groups) {
+          await pvToPage(page, side, g.n, pvOn(side, g.rows[0][1], g.n))
+          for (const row of g.rows) {
+            const place = await pvPlace(page, side, pageOf.get(row[1]))
+            const s = await pvShowAt(page, side, row)
+            mark(row, 'first', s.ok, s.why)
+            Object.assign(table[`${row[0]} ${row[1]}@p${row[2]}`], { place, ms: s.ms })
+          }
+          if (!(await pvAway(page))) fails.push(`p${g.n} first: a preview left in the document`)
+          baseline ??= await pvListeners(cdp)
+          for (const [name, disturb] of PV_DISTURB) {
+            let how
+            try {
+              how = await disturb(page, side, g)
+            } catch (e) {
+              for (const row of g.rows) mark(row, name, false, String(e?.message ?? e))
+              await pvAway(page)
+              await page.keyboard.press('Escape')
+              continue
+            }
+            for (const row of g.rows) {
+              if (how === 'n/a') {
+                table[`${row[0]} ${row[1]}@p${row[2]}`][name] = 'n/a'
+                continue
+              }
+              if (how?.failed?.has(row)) {
+                mark(row, name, false, how.failed.get(row))
+                continue
+              }
+              const s = await pvShowAt(page, side, row)
+              mark(row, name, s.ok, s.why)
+            }
+            if (!(await pvAway(page))) fails.push(`p${g.n} ${name}: a preview left in the document`)
+            if (await page.evaluate(() => !!document.querySelector('.axt-pv-kept')))
+              fails.push(`p${g.n} ${name}: a kept panel left`)
+            const now = await pvListeners(cdp)
+            if (now !== baseline) fails.push(`p${g.n} ${name}: listeners ${baseline} -> ${now}`)
+          }
+        }
+        const rows = Object.entries(table).map(
+          ([k, v]) =>
+            `${k} [${v.place}, ${v.ms ?? '-'} ms] ${['first', ...PV_DISTURB.map((d) => d[0])].map((c) => `${c}:${v[c] ?? '-'}`).join(' ')}`,
+        )
+        if (process.env.AXT_PV_TABLE)
+          (await import('node:fs')).writeFileSync(`${process.env.AXT_PV_TABLE}-${side}.txt`, `${rows.join('\n')}\n`)
+        assert(!fails.length, `${fails.length} failed: ${fails.slice(0, 12).join(' | ')}`)
+        assert(!errors.length, errors.join('; '))
+        return { rows: rows.length, disturbances: PV_DISTURB.length, listeners: baseline }
+      } finally {
+        await context.close()
+      }
+    },
+  )
 
 if (process.env.AXT_PUNCT_OUT)
   (await import('node:fs')).writeFileSync(process.env.AXT_PUNCT_OUT, `${JSON.stringify(punctOut, null, 1)}\n`)

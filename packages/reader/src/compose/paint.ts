@@ -721,6 +721,18 @@ export function cropsBack(over: HTMLElement, grid: readonly [number, number]): b
   }
   return true
 }
+/** what a page's crops hold now, to be read (a link preview's copy of a region): the canvas, page-sized; or while the page is
+ *  parked off the view, the copy of its box it keeps (`cropsAway`). The source, the width of the page-sized grid it stands on (its
+ *  device pixels) and where the source's top-left stands on that grid; null where it holds nothing */
+export function cropsNow(
+  over: HTMLElement,
+): { src: HTMLCanvasElement; grid: readonly [number, number]; x: number; y: number } | null {
+  const c = cropsIn(over)
+  if (!c) return null
+  const h = held.get(c)
+  if (h) return h.copy ? { src: h.copy, grid: h.grid, x: h.box.x, y: h.box.y } : null
+  return c.width && c.height ? { src: c, grid: [c.width, c.height], x: 0, y: 0 } : null
+}
 /** the copy of a page's crops let go with its drawing */
 export function cropsFree(over: HTMLElement) {
   const c = cropsIn(over)

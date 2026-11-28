@@ -17,14 +17,14 @@ import {
 import { createFaces, type Faces, WAVE_SLOTS } from '../src/compose/faces.ts'
 import type { Groups } from '../src/compose/groups.ts'
 import type { Lay, Laid, Page, Rows } from '../src/compose/page.ts'
-import { detailBoxOf, holeOf } from '../src/compose/paint.ts'
+import { cropsAway, detailBoxOf, holeOf } from '../src/compose/paint.ts'
 import { createServed, type Served } from '../src/compose/served.ts'
 import { PROBE_TEXT } from '../src/compose/text-rendering.ts'
 import { BACKOFF_MS } from '../src/session/machine.ts'
 import type { Clock } from '../src/stack/clock.ts'
 import { layPage, rulesFor } from '@readarxiv/typeset'
 import { kindShown, leftKinds } from '../src/compose/classes.ts'
-import type { DetailArea, PageContent, Stack, StackEvents, ViewContent } from '../src/stack/stack.ts'
+import type { DetailArea, Drawn, PageContent, Stack, StackEvents, ViewContent } from '../src/stack/stack.ts'
 
 // ---------------------------------------------------------------- the stand-ins
 function handClock() {
@@ -62,6 +62,8 @@ type FakeStack = Omit<Stack, 'ahead'> & {
   setNear(ns: number[]): void
   put(n: number): void
   refreshed: number[]
+  /** each slot's drawing as the stack's read gives it (whole, in view or parked) */
+  drawn: Map<number, Drawn>
 }
 function fakeStack(pages: number): FakeStack {
   const scroller = document.createElement('div')
@@ -101,6 +103,12 @@ function fakeStack(pages: number): FakeStack {
     leftDrawn: () => {},
     dropKept: vi.fn(),
     ahead: vi.fn(async (_n: number, _s: AbortSignal) => true),
+    drawn: new Map<number, Drawn>(),
+    // (the stack's one answer: the drawing of the key asked, wherever it stands, read whole; none of another key)
+    read: vi.fn(async <T>(n: number, key: string, _s: AbortSignal, f: (d: Drawn) => T) => {
+      const d = st.drawn.get(n)
+      return d && (shown.get(n) === key || contentOf(n)?.key === key) ? f(d) : null
+    }),
     page: (n: number) => slots[n - 1] ?? null,
     viewport: () => ({ viewBox: [0, 0, 600, 800], rotation: 0 }) as never,
     showing: (n: number) => shown.get(n) ?? null,
@@ -2076,8 +2084,8 @@ describe("the base's crops past PDF.js's canvas cap, cut away under the detail's
   })
 })
 
-describe('a page warmed and cut for a preview (link previews: warm, region)', () => {
-  it('a far right page is laid and drawn off the view, then is laid; a page with no part is not', async () => {
+describe('a page laid and cut for a preview (link previews: lay, region)', () => {
+  it('a far right page is laid; a page with no part is not', async () => {
     const w = world()
     w.stack.setNear([1])
     open(w, rowsOf('de', allIds(w), true))
@@ -2086,19 +2094,17 @@ describe('a page warmed and cut for a preview (link previews: warm, region)', ()
     await settle()
     expect(w.composer.laid(4)).toBeNull()
     const signal = new AbortController().signal
-    expect(await w.composer.warm(4, signal)).toBe(true)
-    expect(w.stack.ahead.mock.calls.map((c) => c[0])).toContain(4)
+    expect(await w.composer.lay(4, signal)).not.toBeNull()
     expect(w.composer.laid(4)).not.toBeNull()
-    expect(await w.composer.warm(9, signal)).toBe(false)
+    expect(await w.composer.lay(9, signal)).toBeNull()
   })
-  it('a region copies what the right draws of a page inside a box: its pixels, its crops, its translation; none undrawn', async () => {
+  it('a region copies what the right draws of a page inside a box, read through the stack: its pixels, its crops (from their copy while the page is parked), its translation; none of a page not laid', async () => {
     const w = world()
     w.stack.setNear([2])
     open(w, rowsOf('de', allIds(w), true))
     await settle()
     w.stack.put(2)
     await settle()
-    // (the slot's drawing as the stack holds it: the page view's canvas, and beside it the overlay's SVG and crops)
     const slot = w.stack.page(2)!
     const holder = document.createElement('div')
     holder.className = 'axt-slot-view'
@@ -2135,7 +2141,10 @@ describe('a page warmed and cut for a preview (link previews: warm, region)', ()
     view.append(wrap)
     holder.append(view, over)
     slot.append(holder)
-    const r = w.composer.region(2, [60, 400, 360, 700], 1)
+    w.stack.drawn.set(2, { view: { div: view } as never, over })
+    const signal = new AbortController().signal
+    const r = await w.composer.region(2, [60, 400, 360, 700], 1, signal)
+    expect(w.stack.read).toHaveBeenCalledWith(2, w.stack.showing(2), signal, expect.any(Function))
     expect(r).not.toBeNull()
     expect(r!.classList.contains('axt-pv-region')).toBe(true)
     expect(r!.querySelectorAll('canvas')).toHaveLength(2)
@@ -2147,6 +2156,24 @@ describe('a page warmed and cut for a preview (link previews: warm, region)', ()
     // (the page's top-left at the box's: the box 300 x 300 PDF units at 4/3 CSS px a unit)
     expect(Number.parseFloat(copy.style.left)).toBeCloseTo(-60 * (4 / 3), 3)
     expect(Number.parseFloat(copy.style.top)).toBeCloseTo(-(800 - 700) * (4 / 3), 3)
-    expect(w.composer.region(3, [60, 400, 360, 700], 1)).toBeNull()
+    expect(await w.composer.region(3, [60, 400, 360, 700], 1, signal)).toBeNull()
+    // (parked off the view: its crops' canvas let go to the copy of their box, read from that copy; the page view's as it is)
+    const draws: { to: HTMLCanvasElement; from: unknown }[] = []
+    const spy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(function (
+      this: HTMLCanvasElement,
+    ) {
+      const to = this
+      return { imageSmoothingEnabled: true, drawImage: (from: unknown) => draws.push({ to, from }) } as never
+    })
+    try {
+      expect(cropsAway(over)).toBeGreaterThan(0)
+      expect(crops.width).toBe(0)
+      const copy = draws[0]?.to
+      const parked = await w.composer.region(2, [60, 400, 360, 700], 1, signal)
+      expect([...parked!.querySelectorAll('canvas')].map((c) => c.className)).toEqual(['axt-pv-page', 'axt-pv-crops'])
+      expect(draws.find((d) => d.to.className === 'axt-pv-crops')?.from).toBe(copy)
+    } finally {
+      spy.mockRestore()
+    }
   })
 })

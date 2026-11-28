@@ -2,9 +2,9 @@
 // §3.2, §4.3; L12). Its region (PDF units on A) is the head's target box, and on a laid right page that box widened by the
 // drawn extent of every member laid there whose lines on A stand inside it (a float's translated caption, its figure texts, a
 // note: what the translation draws, never only the original's box). The left's crop is arXiv's drawing (the left's own canvas
-// where it is drawn, else a fresh drawing of the region); the right's is what that pane draws: a laid page's drawing (laid and
-// drawn off the view first where it is far: the composer's `warm`, then its `region`), else what it shows for a page not laid,
-// arXiv's drawing, never waiting for a translation. A section's window runs on to the next page and fades at its foot (the one
+// where it is drawn, else a fresh drawing of the region); the right's is what that pane draws: a laid page's drawing (the
+// composer's `lay`, then its `region`, which reads the page's drawing wherever it stands: in view, parked off the view, or drawn
+// for the read where it is not), else what it shows for a page not laid, arXiv's drawing, never waiting for a translation. A section's window runs on to the next page and fades at its foot (the one
 // fade); a figure, a table or a display never fades. Drawn at the page's own scale, widened past the card up to the pane less
 // its margins, smaller where it would not fit; on the page's own paper (it is a cut of the page), dimmed as the page is. Null
 // where it cannot be drawn: no preview, the jump stays (never a doubtful one).
@@ -73,9 +73,8 @@ export interface CropDeps {
   /** the panes' scale now (the zoom: CSS px a CSS px of the page at scale 1) */
   scale(): number
   composer(): {
-    laid(n: number): Page | null
-    warm(n: number, signal: AbortSignal): Promise<boolean>
-    region(n: number, box: Box, scale: number): HTMLElement | null
+    lay(n: number, signal: AbortSignal): Promise<Page | null>
+    region(n: number, box: Box, scale: number, signal: AbortSignal): Promise<HTMLElement | null>
   } | null
   part(n: number): Promise<Part | null>
   /** arXiv's drawing of a region of page n at a scale (the left's own canvas, else a fresh drawing); null where none can be had */
@@ -96,11 +95,11 @@ async function segmentOf(
 ): Promise<HTMLElement | null> {
   if (side === 'left') return d.original(page, box, scale, signal)
   const c = d.composer()
-  const ok = c ? await c.warm(page, signal).catch(() => false) : false
+  const laid = c ? await c.lay(page, signal).catch(() => null) : null
   if (signal.aborted) return null
-  if (ok) return c?.region(page, box, scale) ?? null
-  // (a laid page that cannot be drawn now: no preview; a page not laid: what the pane shows for it, arXiv's drawing)
-  return c?.laid(page) ? null : d.original(page, box, scale, signal)
+  // (a laid page: its drawing, wherever it stands; a page not laid: what the pane shows for it, arXiv's drawing)
+  if (laid && c) return c.region(page, box, scale, signal).catch(() => null)
+  return d.original(page, box, scale, signal)
 }
 
 /** a crop's content for a target on a pane: kept by a click or Enter where it is a preview, a plain cut in the sheet */
@@ -111,13 +110,14 @@ export async function cropContent(
 ): Promise<PreviewContent | null> {
   const n = t[2]
   // (the right's region read once the page is laid where it can be: the extents are its lay's)
-  if (o.side === 'right')
-    await d
-      .composer()
-      ?.warm(n, o.signal)
-      .catch(() => false)
+  const laid =
+    o.side === 'right'
+      ? ((await d
+          .composer()
+          ?.lay(n, o.signal)
+          .catch(() => null)) ?? null)
+      : null
   if (o.signal.aborted) return null
-  const laid = o.side === 'right' ? (d.composer()?.laid(n) ?? null) : null
   const part = laid ? await d.part(n).catch(() => null) : null
   const r = regionOf(t, o.side, laid, part)
   const segs: [number, Box][] = [[r.page, r.box], ...(r.next ? [r.next] : [])]

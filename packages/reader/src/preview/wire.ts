@@ -9,7 +9,7 @@
 //   element, the numbers of one \cite); on a laid right page, Page.links' owner and piece; the line its box stands on, for a
 //   superscript's foot.
 // - A citation's card: the reference's own text (preview/reference-text.ts) of the member the target names.
-// - A crop: preview/crop.ts over the composer's warm and region, and arXiv's drawing of a region: the left's own canvas where it
+// - A crop: preview/crop.ts over the composer's lay and region, and arXiv's drawing of a region: the left's own canvas where it
 //   is drawn at the crop's scale or finer, else a fresh drawing of the region by PDF.js on the original's document.
 // - Labels (S-R-33): the accessible names of a crop and of its kept panel and sheet, from the member's label as A prints it.
 import { type Head, headNumberOf, type Part, type Placed, type Target, type Unit } from '@readarxiv/format'

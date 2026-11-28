@@ -41,7 +41,7 @@ import type { ClassName } from '../prefs.ts'
 import type { Kit } from '../pdfjs/kit.ts'
 import type { Clock } from '../stack/clock.ts'
 import { onOf } from '../listeners.ts'
-import { type DetailArea, type PageContent, PDF_TO_CSS, type SlotAt, type Stack } from '../stack/stack.ts'
+import { type DetailArea, type Drawn, type PageContent, PDF_TO_CSS, type SlotAt, type Stack } from '../stack/stack.ts'
 import { kindShown, sameClasses } from './classes.ts'
 import type { Faces } from './faces.ts'
 import type { Groups } from './groups.ts'
@@ -54,6 +54,7 @@ import {
   cropGrid,
   cropsAway,
   cropsBack,
+  cropsNow,
   cropsFor,
   cropsFree,
   detailAway,
@@ -145,14 +146,21 @@ export interface Composer {
   page(n: number): Page | null
   /** whether page n shows a drawing of another generation (another target's, the toggles' before), nothing of it lit or hit */
   muted(n: number): boolean
-  /** page n laid and drawn into a drawing kept off the view, as the pages ahead are (a far page a preview cuts from: the link
-   *  previews' crop of the right pane); its drawing of this generation in place already, at once. False where it cannot be: no
-   *  translation shown, no part, nothing of its own laid, waiting, failed, not kept, or the generation changed */
-  warm(n: number, signal: AbortSignal): Promise<boolean>
+  /** page n as the right shows it laid in this generation (a link preview's crop of the right pane reads its extents): laid now
+   *  where it is not (its part read, laid and committed, as a page ahead is). Null where the right shows arXiv's page for it: no
+   *  translation shown, no part, nothing of its own laid, waiting for its rows or faces, settled as the original's */
+  lay(n: number, signal: AbortSignal): Promise<Page | null>
   /** a copy of what the right draws of page n inside `box` (PDF units) at `scale` (the zoom): its page view's pixels, its crops
-   *  and its translation's drawing, the page's top-left placed at the box's; null where page n shows no drawing of this
-   *  generation now (or a page turned by /Rotate: none rather than a doubtful one) */
-  region(n: number, box: [number, number, number, number], scale: number): HTMLElement | null
+   *  and its translation's drawing, the page's top-left placed at the box's. Its drawing is read through the stack's `read`, the
+   *  one answer to whether it can be read: where it is parked off the view it is read there, where it is not drawn it is drawn
+   *  (as a page ahead is) and read once whole. Null where it cannot be had now (not laid in this generation, its drawing failed,
+   *  `signal` aborted, a page turned by /Rotate: none rather than a doubtful one); nothing is remembered of a null */
+  region(
+    n: number,
+    box: [number, number, number, number],
+    scale: number,
+    signal: AbortSignal,
+  ): Promise<HTMLElement | null>
   /** whether page n stays the original's for now */
   settled(n: number): boolean
   /** every member of the layer laid so far, by ord (the parts' Placed) */
@@ -886,6 +894,83 @@ export function createComposer(o: ComposerOptions): Composer {
     marks.mark(n, slot, (vp?.viewBox as number[] | undefined) ?? null, vp?.rotation ?? 0, boxes)
   }
 
+  // ---------------------------------------------------------------- a link preview's copy of a region (region)
+  /** what the right draws of page n inside `box` at `scale`, copied from its drawing `d` read whole (stack.read): its page view's
+   *  pixels, its crops (their canvas, or while the page is parked off the view the copy it keeps of them) and its translation's
+   *  drawing; null for a page turned by /Rotate or a box of no size */
+  function regionOf(n: number, d: Drawn, box: [number, number, number, number], scale: number): HTMLElement | null {
+    const vp = stack.viewport(n) as unknown as { viewBox: number[]; rotation?: number } | null
+    if (!vp || (((vp.rotation ?? 0) % 360) + 360) % 360) return null
+    const canvas = d.view.div.querySelector<HTMLCanvasElement>('.canvasWrapper canvas')
+    if (!canvas?.width) return null
+    const [vx0 = 0, , vx1 = 0, vy1 = 0] = vp.viewBox
+    const vy0 = vp.viewBox[1] ?? 0
+    // (the page at the stack's scale now, CSS px a PDF unit; the copy at the scale asked)
+    const u = stack.scale * PDF_TO_CSS,
+      k = scale / stack.scale
+    const pw = (vx1 - vx0) * u,
+      ph = (vy1 - vy0) * u
+    const l = (box[0] - vx0) * u,
+      t = (vy1 - box[3]) * u,
+      w = (box[2] - box[0]) * u,
+      h = (box[3] - box[1]) * u
+    if (!(w > 0 && h > 0 && pw > 0)) return null
+    const el = document.createElement('div')
+    el.className = 'axt-pv-region'
+    el.style.width = `${w * k}px`
+    el.style.height = `${h * k}px`
+    const dpr = globalThis.devicePixelRatio || 1
+    /** a canvas of the page's frame cut to the box, at its own pixels or the device's at the scale asked, whichever is fewer:
+     *  from `src`, which stands at (x, y) on a page-sized grid `gw` device pixels wide */
+    const cut = (src: HTMLCanvasElement, gw: number, x: number, y: number, cls: string) => {
+      const q = gw / pw
+      const out = document.createElement('canvas')
+      out.className = cls
+      out.width = Math.max(1, Math.round(w * Math.min(q, k * dpr)))
+      out.height = Math.max(1, Math.round(h * Math.min(q, k * dpr)))
+      out.getContext('2d')?.drawImage(src, l * q - x, t * q - y, w * q, h * q, 0, 0, out.width, out.height)
+      el.append(out)
+    }
+    cut(canvas, canvas.width, 0, 0, 'axt-pv-page')
+    const over = d.over
+    const crops = over ? cropsNow(over) : null
+    if (crops) cut(crops.src, crops.grid[0], crops.x, crops.y, 'axt-pv-crops')
+    const svg = over?.querySelector<SVGSVGElement>(':scope > svg') ?? null
+    if (svg) {
+      const copy = svg.cloneNode(true) as SVGSVGElement
+      // (the box's own lines alone: a line of the page beyond it is no part of what the crop shows, and would be read as the
+      // preview's text by assistive technology (the lead's look at staging, 2026-11-28); in the SVG's units, y down from the
+      // page's top, a line kept where its band (its size over its baseline, a third under) meets the box and it begins left of
+      // the box's right edge)
+      const top = vy1 - box[3],
+        bottom = vy1 - box[1],
+        left = box[0] - vx0,
+        right = box[2] - vx0
+      for (const t of [...copy.querySelectorAll('text')]) {
+        const span = t.querySelector('tspan')
+        const at = /translate\(([-\d.]+)[ ,]+([-\d.]+)\)/.exec(t.getAttribute('transform') ?? '')
+        const ys = (span?.getAttribute('y') ?? '').split(/[ ,]+/).map(Number)
+        const xs = (span?.getAttribute('x') ?? '').split(/[ ,]+/).map(Number)
+        const size = Number(span?.getAttribute('font-size')) || 10
+        const y = at ? Number(at[2]) : (ys[0] ?? Number.NaN),
+          x0 = at ? Number(at[1]) : Math.min(...xs),
+          x1 = at ? Number(at[1]) : Math.max(...xs)
+        // (across: where a line ends is known only where each character has its place (dx); a run of one place may reach
+        // any length to its right)
+        const across = x0 <= right && (at || xs.length < 2 || x1 + 2 * size >= left)
+        const meets = y + size / 3 >= top && y - size <= bottom && across
+        if (!(Number.isFinite(y) && meets)) t.remove()
+      }
+      copy.setAttribute('aria-hidden', 'true')
+      copy.style.left = `${-l * k}px`
+      copy.style.top = `${-t * k}px`
+      copy.style.width = `${pw * k}px`
+      copy.style.height = `${ph * k}px`
+      el.append(copy)
+    }
+    return el
+  }
+
   // ---------------------------------------------------------------- the pages ahead
   let aheadAc: AbortController | null = null,
     aheadDir = 1,
@@ -1170,101 +1255,30 @@ export function createComposer(o: ComposerOptions): Composer {
       if (!on) stopAhead()
     },
     laid: (n) => commits.get(n)?.page ?? null,
-    async warm(n, signal) {
-      if (disposed || !shown || !composed || !groups || !layer || signal.aborted) return false
+    async lay(n, signal) {
+      if (disposed || !shown || !composed || !groups || !layer || signal.aborted) return null
       const mine = gen
       const c = commits.get(n)
-      if (c && c.gen === mine && stack.showing(n) === keyOf(c)) return true
-      if (!c || c.gen !== mine) {
-        if (settledOriginal(n)) return false
-        const part = await partFor(n).catch(() => null)
-        if (!part || signal.aborted || mine !== gen || disposed) return false
-        const now = commits.get(n)
-        if (!now || now.gen !== mine) {
-          const got = layRead(part)
-          if (!committed(got.page) || !got.page.members.some((x) => x.state === 'laid' && x.off)) return false
-          pages.set(n, got.page)
-          commit(n, got.page, got.read, got.lost)
-        }
-      }
-      const done = await stack.ahead(n, signal).catch(() => false)
-      return done && mine === gen && !disposed
+      if (c && c.gen === mine) return c.page
+      if (settledOriginal(n)) return null
+      const part = await partFor(n).catch(() => null)
+      if (!part || signal.aborted || mine !== gen || disposed) return null
+      const now = commits.get(n)
+      if (now && now.gen === mine) return now.page
+      const got = layRead(part)
+      if (!committed(got.page) || !got.page.members.some((x) => x.state === 'laid' && x.off)) return null
+      pages.set(n, got.page)
+      commit(n, got.page, got.read, got.lost)
+      return commits.get(n)?.page ?? null
     },
-    region(n, box, scale) {
-      const c = commits.get(n)
-      if (!c || c.gen !== gen || !shown || stack.showing(n) !== keyOf(c)) return null
-      const vp = stack.viewport(n) as unknown as { viewBox: number[]; rotation?: number } | null
-      const slot = stack.page(n)
-      if (!vp || !slot || (((vp.rotation ?? 0) % 360) + 360) % 360) return null
-      const view = slot.querySelector<HTMLElement>('.axt-slot-view > .page')
-      const canvas = view?.querySelector<HTMLCanvasElement>('.canvasWrapper canvas') ?? null
-      // (the overlay stands beside the page view in its holder: stack.ts appends it there once the page view has drawn)
-      const over = slot.querySelector<HTMLElement>('.axt-slot-view > .axt-over')
-      if (!(view && canvas?.width)) return null
-      const [vx0 = 0, , vx1 = 0, vy1 = 0] = vp.viewBox
-      const vy0 = vp.viewBox[1] ?? 0
-      // (the page at the stack's scale now, CSS px a PDF unit; the copy at the scale asked)
-      const u = stack.scale * PDF_TO_CSS,
-        k = scale / stack.scale
-      const pw = (vx1 - vx0) * u,
-        ph = (vy1 - vy0) * u
-      const l = (box[0] - vx0) * u,
-        t = (vy1 - box[3]) * u,
-        w = (box[2] - box[0]) * u,
-        h = (box[3] - box[1]) * u
-      if (!(w > 0 && h > 0 && pw > 0)) return null
-      const el = document.createElement('div')
-      el.className = 'axt-pv-region'
-      el.style.width = `${w * k}px`
-      el.style.height = `${h * k}px`
-      const dpr = globalThis.devicePixelRatio || 1
-      /** a canvas of the page's frame cut to the box, at its own pixels or the device's at the scale asked, whichever is fewer */
-      const cut = (src: HTMLCanvasElement, cls: string) => {
-        const d = src.width / pw
-        const out = document.createElement('canvas')
-        out.className = cls
-        out.width = Math.max(1, Math.round(w * Math.min(d, k * dpr)))
-        out.height = Math.max(1, Math.round(h * Math.min(d, k * dpr)))
-        out.getContext('2d')?.drawImage(src, l * d, t * d, w * d, h * d, 0, 0, out.width, out.height)
-        el.append(out)
+    async region(n, box, scale, signal) {
+      for (;;) {
+        const c = commits.get(n)
+        if (!c || c.gen !== gen || !shown || signal.aborted || disposed) return null
+        const got = await stack.read(n, keyOf(c), signal, (d) => regionOf(n, d, box, scale))
+        // (laid again while it was read, another generation's: the new one read)
+        if (got || signal.aborted || commits.get(n) === c) return got
       }
-      cut(canvas, 'axt-pv-page')
-      const crops = over?.querySelector<HTMLCanvasElement>(':scope > canvas.axt-crops') ?? null
-      if (crops?.width) cut(crops, 'axt-pv-crops')
-      const svg = over?.querySelector<SVGSVGElement>(':scope > svg') ?? null
-      if (svg) {
-        const copy = svg.cloneNode(true) as SVGSVGElement
-        // (the box's own lines alone: a line of the page beyond it is no part of what the crop shows, and would be read as the
-        // preview's text by assistive technology (the lead's look at staging, 2026-11-28); in the SVG's units, y down from the
-        // page's top, a line kept where its band (its size over its baseline, a third under) meets the box and it begins left of
-        // the box's right edge)
-        const top = vy1 - box[3],
-          bottom = vy1 - box[1],
-          left = box[0] - vx0,
-          right = box[2] - vx0
-        for (const t of [...copy.querySelectorAll('text')]) {
-          const span = t.querySelector('tspan')
-          const at = /translate\(([-\d.]+)[ ,]+([-\d.]+)\)/.exec(t.getAttribute('transform') ?? '')
-          const ys = (span?.getAttribute('y') ?? '').split(/[ ,]+/).map(Number)
-          const xs = (span?.getAttribute('x') ?? '').split(/[ ,]+/).map(Number)
-          const size = Number(span?.getAttribute('font-size')) || 10
-          const y = at ? Number(at[2]) : (ys[0] ?? Number.NaN),
-            x0 = at ? Number(at[1]) : Math.min(...xs),
-            x1 = at ? Number(at[1]) : Math.max(...xs)
-          // (across: where a line ends is known only where each character has its place (dx); a run of one place may reach
-          // any length to its right)
-          const across = x0 <= right && (at || xs.length < 2 || x1 + 2 * size >= left)
-          const meets = y + size / 3 >= top && y - size <= bottom && across
-          if (!(Number.isFinite(y) && meets)) t.remove()
-        }
-        copy.setAttribute('aria-hidden', 'true')
-        copy.style.left = `${-l * k}px`
-        copy.style.top = `${-t * k}px`
-        copy.style.width = `${pw * k}px`
-        copy.style.height = `${ph * k}px`
-        el.append(copy)
-      }
-      return el
     },
     page: (n) => pages.get(n) ?? commits.get(n)?.page ?? null,
     muted: (n) => {

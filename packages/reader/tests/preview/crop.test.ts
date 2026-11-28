@@ -92,17 +92,19 @@ describe('cropContent', () => {
     go: 'Go to',
     search: 'S',
   }
-  const stand = (o: { laid: Page | null; warm: boolean; region: HTMLElement | null; original: HTMLElement | null }) => {
-    const warm = vi.fn(async (_n: number, _signal: AbortSignal) => o.warm)
-    const region = vi.fn((_n: number, _box: [number, number, number, number], _scale: number) => o.region)
+  const stand = (o: { laid: Page | null; region: HTMLElement | null; original: HTMLElement | null }) => {
+    const lay = vi.fn(async (_n: number, _signal: AbortSignal) => o.laid)
+    const region = vi.fn(
+      async (_n: number, _box: [number, number, number, number], _scale: number, _signal: AbortSignal) => o.region,
+    )
     const original = vi.fn(async (_n: number, _box: unknown, _scale: number, _signal: AbortSignal) => o.original)
     return {
-      warm,
+      lay,
       region,
       original,
       deps: {
         scale: () => 1,
-        composer: () => ({ laid: () => o.laid, warm, region }),
+        composer: () => ({ lay, region }),
         part: async () => part,
         original,
         words: () => words,
@@ -115,15 +117,16 @@ describe('cropContent', () => {
     el.className = 'seg'
     return el
   }
-  it('a far right page is warmed, then cropped', async () => {
-    const s = stand({ laid: laid([60, 380, 560, 420]), warm: true, region: seg(), original: null })
+  it('a laid right page is laid, then cut from its drawing by the composer, wherever that drawing stands', async () => {
+    const s = stand({ laid: laid([60, 380, 560, 420]), region: seg(), original: null })
     const c = await cropContent(
       FIG,
       { side: 'right', max: { width: 800, height: 600 }, sheet: false, signal: new AbortController().signal },
       s.deps,
     )
-    expect(s.warm).toHaveBeenCalledWith(3, expect.anything())
-    expect(s.region).toHaveBeenCalled()
+    expect(s.lay).toHaveBeenCalledWith(3, expect.anything())
+    expect(s.region).toHaveBeenCalledWith(3, expect.anything(), expect.any(Number), expect.any(AbortSignal))
+    expect(s.original).not.toHaveBeenCalled()
     // (the region widened by the caption's extent, and one CSS px of the page round it at the crop's scale (1: 0.75 PDF units):
     // its drawing's antialiased edge, where a descender's last pixel falls)
     const [x0, y0, x1, y1] = s.region.mock.calls[0]![1]
@@ -138,7 +141,7 @@ describe('cropContent', () => {
     )
   })
   it('a right page not laid shows what the pane shows for it: the original’s drawing, never waiting for a translation', async () => {
-    const s = stand({ laid: null, warm: false, region: null, original: seg() })
+    const s = stand({ laid: null, region: null, original: seg() })
     const c = await cropContent(
       FIG,
       { side: 'right', max: { width: 800, height: 600 }, sheet: false, signal: new AbortController().signal },
@@ -147,16 +150,22 @@ describe('cropContent', () => {
     expect(s.original).toHaveBeenCalled()
     expect(c).not.toBeNull()
   })
-  it('a crop that cannot be drawn shows no preview', async () => {
-    const s = stand({ laid: laid([60, 380, 560, 420]), warm: false, region: null, original: null })
-    expect(
-      await cropContent(
+  it('a crop that cannot be drawn shows no preview, and is asked again at the next hover (nothing remembered)', async () => {
+    const o = { laid: laid([60, 380, 560, 420]), region: null as HTMLElement | null, original: null }
+    const s = stand(o)
+    const at = () =>
+      cropContent(
         FIG,
         { side: 'right', max: { width: 800, height: 600 }, sheet: false, signal: new AbortController().signal },
         s.deps,
-      ),
-    ).toBeNull()
-    const t = stand({ laid: null, warm: false, region: null, original: null })
+      )
+    expect(await at()).toBeNull()
+    // (its drawing to be had now: the next hover's crop shows; the laid page never handed to the original's drawing)
+    o.region = seg()
+    expect((await at())?.kind).toBe('crop')
+    expect(s.region).toHaveBeenCalledTimes(2)
+    expect(s.original).not.toHaveBeenCalled()
+    const t = stand({ laid: null, region: null, original: null })
     expect(
       await cropContent(
         FIG,

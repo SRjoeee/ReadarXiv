@@ -80,10 +80,10 @@ const PAPERS = {
   // display's raised over its first baseline, a float's at its top (hypcap))
   's5-links': {
     id: '2600.00006', version: 1,
-    note: 'Its links inside the paper name destinations the head states as targets (link previews: a citation, a figure, a table, a section, a display, a note), one to a theorem it states none of, and one out of the paper. Three pages: the table and the theorem on the middle one, the bibliography on the last (entry [3] long enough that its card scrolls).',
+    note: 'Its links inside the paper name destinations the head states as targets (link previews: a citation, a figure, a table, a section, a display, a note), one to a theorem it states none of, and one out of the paper. Six pages: the table and the theorem on the second, a second figure on the fifth, the bibliography on the last (entry [3] long enough that its card scrolls). Links to each kind stand on the page of their target, on the page next to it and several pages from it (page 1, page 2, page 5 and the last), so that a preview is shown with its target in view, near and far (its drawing parked off the view, or never drawn).',
     // (TeX's text frame of each page, its block's foot under the note, and its body bracketed (`bs<n>`..`be<n>`) as the page
     // builder broke it: a heading's window that passes the foot runs on to the next page's body)
-    tex: { frames: [0, 1, 2].map(() => ({ block: [72, 540], columns: [[72, 540]], foot: 60 })) },
+    tex: { frames: [0, 1, 2, 3, 4, 5].map(() => ({ block: [72, 540], columns: [[72, 540]], foot: 60 })) },
     dests: {
       'section.2': [1, 72, 172],
       'figure.1': [1, 150, 469],
@@ -91,10 +91,11 @@ const PAPERS = {
       'Hfootnote.1': [1, 72, 79],
       'table.1': [2, 150, 663],
       'theorem.1': [2, 72, 532],
-      'cite.a': [3, 72, 741],
-      'cite.b': [3, 72, 708],
-      'cite.c': [3, 72, 675],
-      'cite.d': [3, 72, 609],
+      'figure.2': [5, 150, 619],
+      'cite.a': [6, 72, 741],
+      'cite.b': [6, 72, 708],
+      'cite.c': [6, 72, 675],
+      'cite.d': [6, 72, 609],
     },
     pages: [
       { size: [612, 792], blocks: [
@@ -108,6 +109,7 @@ const PAPERS = {
           { at: 33, s: '(1)', kind: 'ref', src: '\\eqref{eq:one}', dest: 'equation.1' },
           { at: 39, s: '1', kind: 'ref', src: '\\footnotemark', dest: 'Hfootnote.1' },
           { at: 45, s: '1', kind: 'ref', src: '\\ref{thm:one}', dest: 'theorem.1' },
+          { at: 54, s: '2', kind: 'ref', src: '\\ref{fig:two}', dest: 'figure.2' },
           { at: 58, s: '4', kind: 'cite', src: '\\cite{d}', links: [['4', 'cite.d']] },
         ] },
         { u: 'p2', kind: 'para', size: 10, x: 72, y: 600, w: 468, lead: 12, text: words(20, 30) },
@@ -131,18 +133,54 @@ const PAPERS = {
         { point: 'fe2' },
         { u: 'thm1', kind: 'theorem', size: 10, x: 72, y: 520, w: 468, lead: 12, label: 'Theorem 1.', text: words(26, 3) },
         { u: 'p5', kind: 'para', size: 10, x: 72, y: 460, w: 468, lead: 12, text: words(120, 6) },
+        // (the targets of page 1 from the page next to it, and the table in view)
+        { u: 'p6', kind: 'para', size: 10, x: 72, y: 300, w: 468, lead: 12, text: words(40, 7), els: [
+          { at: 4, s: '1', kind: 'ref', src: '\\ref{fig:one}', dest: 'figure.1' },
+          { at: 10, s: '1', kind: 'ref', src: '\\ref{tab:one}', dest: 'table.1' },
+          { at: 16, s: '2', kind: 'ref', src: '\\ref{sec:two}', dest: 'section.2' },
+          { at: 22, s: '(1)', kind: 'ref', src: '\\eqref{eq:one}', dest: 'equation.1' },
+          { at: 28, s: '1', kind: 'ref', src: '\\footnotemark', dest: 'Hfootnote.1' },
+        ] },
         { point: 'be2' },
       ] },
-      // (a page of its own for the bibliography: a jump from page 1 lands on the last page, one to the table on a page in the
-      // middle; entry [3] long enough that its card scrolls)
+      // (two pages of text: what lies between page 2 and page 5, so that page 5's targets are far from page 1 and page 1's and 2's
+      // from page 5)
+      ...[3, 4].map((n) => ({ size: [612, 792], blocks: [
+        { point: `bs${n}` },
+        { u: `p${4 + n}`, kind: 'para', size: 10, x: 72, y: 720, w: 468, lead: 12, text: words(300, n * 4) },
+        { point: `be${n}` },
+      ] })),
+      // (a second figure, and the targets of page 1 and 2 from far, a citation of the page next to it)
       { size: [612, 792], blocks: [
-        { point: 'bs3' },
+        { point: 'bs5' },
+        { point: 'fs3' },
+        { figure: [150, 480, 462, 620] },
+        { u: 'cap2', kind: 'caption', float: 'figure', size: 9, x: 150, y: 466, w: 312, lead: 10.8, label: 'Figure 2:', text: words(14, 3) },
+        { point: 'fe3' },
+        { u: 'p9', kind: 'para', size: 10, x: 72, y: 420, w: 468, lead: 12, text: words(48, 19), els: [
+          { at: 4, s: '1', kind: 'cite', src: '\\cite{a}', links: [['1', 'cite.a']] },
+          { at: 10, s: '1', kind: 'ref', src: '\\ref{fig:one}', dest: 'figure.1' },
+          { at: 16, s: '1', kind: 'ref', src: '\\ref{tab:one}', dest: 'table.1' },
+          { at: 22, s: '2', kind: 'ref', src: '\\ref{sec:two}', dest: 'section.2' },
+          { at: 28, s: '(1)', kind: 'ref', src: '\\eqref{eq:one}', dest: 'equation.1' },
+          { at: 34, s: '1', kind: 'ref', src: '\\footnotemark', dest: 'Hfootnote.1' },
+          { at: 40, s: '2', kind: 'ref', src: '\\ref{fig:two}', dest: 'figure.2' },
+        ] },
+        { point: 'be5' },
+      ] },
+      // (a page of its own for the bibliography: a jump from page 1 lands on the last page, one to the table on a page in the
+      // middle; entry [3] long enough that its card scrolls; a citation of its own under it)
+      { size: [612, 792], blocks: [
+        { point: 'bs6' },
         { u: 'h3', kind: 'heading', font: 'HB', size: 12, x: 72, y: 760, w: 468, text: 'References' },
         { u: 'r1', kind: 'reference', entry: true, size: 9, x: 72, y: 730, w: 468, lead: 11, label: '[1]', text: 'A. Author and B. Writer. A study of reading in two languages. Journal of Synthetic Pages, 12(3):45-67, 2020.' },
         { u: 'r2', kind: 'reference', entry: true, size: 9, x: 72, y: 697, w: 468, lead: 11, label: '[2]', text: 'C. Reader. Figures, tables and where they stand: a measure of the page. In Proceedings of a Workshop on Layout, pages 1-9, 2021.' },
         { u: 'r3', kind: 'reference', entry: true, size: 9, x: 72, y: 664, w: 468, lead: 11, label: '[3]', text: `D. Typesetter, E. Printer, and F. Binder. Lines, columns and the paragraphs between them, with a long title that runs over more than one line of the bibliography. In ${words(70, 1)}. Synthetic Press, 2019.` },
         { u: 'r4', kind: 'reference', entry: true, size: 9, x: 72, y: 598, w: 468, lead: 11, label: '[4]', text: 'G. Linker. Destinations that land. Technical report, 2022.' },
-        { point: 'be3' },
+        { u: 'p10', kind: 'para', size: 10, x: 72, y: 560, w: 468, lead: 12, text: words(24, 2), els: [
+          { at: 6, s: '2', kind: 'cite', src: '\\cite{b}', links: [['2', 'cite.b']] },
+        ] },
+        { point: 'be6' },
       ] },
     ],
   },

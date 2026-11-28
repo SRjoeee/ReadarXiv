@@ -1577,6 +1577,7 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
   it is held, out again at its end where still far. A kept page's words are not found by the
   browser's find while it is far, as today's are not (the coordinator's word, 2026-11-12: equal to production is the bar).
   Held by the harness's check "a far laid page kept out of the layout tree, back pixel for pixel, the scroll height unmoved".
+  A kept drawing is no less drawn: a link preview reads it where it stands (the stack's `read`, §20.7), and it stays kept.
   **A kept page holds one bitmap** (design-performance-2026-11-13 Q7): its page view's. Its crops canvas, page-sized so that the
   compositor draws it as it draws the page view, holds a few formulas' pixels on most pages; kept, it let every laid page hold a
   second page of pixels (2610.20808v1 and 2610.40645v1 after a scroll: 27 and 35 of them, 62.6 and 74.3 MiB; the GPU process
@@ -14555,8 +14556,16 @@ and its jump. One layer for every kind (`previews.ts`), from the three link sour
   member laid there whose every line on A stands inside it (its ink across and its baseline: the head states a float's box by
   its ink, which a caption's last line with no descender meets at its baseline). The left's and a right page not laid: arXiv's drawing (the left's
   canvas where it is drawn at the crop's scale or finer, else a fresh PDF.js drawing of the region); a laid right page: the
-  composer's `region` (its page view's pixels, its crops and its SVG copied), after `warm` lays and draws a far page off the view
-  as the pages ahead are. One CSS px of the page round it (its drawing's antialiased edge, where a descender's last pixel
+  composer's `region` (its page view's pixels, its crops and its SVG copied), after `lay` lays a page not laid yet. The region is
+  read through the stack's `read`, the one answer to whether a page's drawing can be read: a drawing parked off the view (§11.8)
+  is read where it stands, its crops from the copy of their box it keeps (`cropsNow`), and stays parked; a page with no drawing
+  is drawn for the read as a page ahead is, read in the task it is whole (before the keep's budget may let it go), then kept
+  or let go as any far drawing; one a zoom reset while it was parked is drawn again; a near page's is read once its own turn has
+  drawn it. "Not drawn yet" is a wait (the pointer's leaving gives it up, and a drawing made for it alone goes with it), never
+  "nothing"; a failed drawing answers nothing this time and is asked again at the next hover (nothing remembered). Before
+  this, `warm` answered ready from the stack's `ahead` for a parked drawing that `region` refused to read (`showing`): after a
+  scroll parked the target's page, its crop never showed again until that page came near (the owner's recording, the lead on
+  staging, 2026-11-28). One CSS px of the page round it (its drawing's antialiased edge, where a descender's last pixel
   falls). At the page's own scale, smaller where the pane less 24 px (and 640 px of height) holds it not; a
   section's window runs on to the next page's head and fades at its foot; a figure, a table or a display never fades. None
   where any part of it cannot be drawn (a page turned by /Rotate included): the jump stays.
@@ -14586,7 +14595,16 @@ and its jump. One layer for every kind (`previews.ts`), from the three link sour
 **What it costs, measured** (the reader's harness, `packages/reader/e2e/run.mjs` `preview-waits`, s5-links, 2026-11-28): from the
 pointer's entry to a preview shown, every kind on both panes, 18 links: 289 to 298 ms, the median 293 ms (the dwell and a frame);
 none waited past it. A hover sweep over every link fetched no part the reader did not hold, and nothing from any other origin
-(the harness's `a hover sweep` check). Not measured: the same over corpus papers (their stored bundles state no targets until
+(the harness's `a hover sweep` check). A far target costs no wait of its own (the harness's show-disturb-show table, s5-links
+lengthened to six pages, 2026-11-28): from the pointer's entry to the crop shown, 317 to 369 ms where the target's page was
+parked off the view, 319 to 388 ms where it was in view or near (the dwell, the pointer's own steps and the check's 50 ms
+polling). A parked page is read where it stands, with no drawing; a page with no drawing is drawn for the read (s1-columns'
+page 1 at 2, 3.4 million device pixels: 9 and 28 ms, its parse kept, `WARM_PAGES`), then held as any far drawing within the
+keep's budget (§11.8, unchanged: 3.56 million pixels held after the read under the default budget, none under a budget of 0)
+until the budget, a new generation or its coming near lets it go. The table holds every kind on both panes, with its target
+in view, near and far, through a wheel, a wheel of pages, a zoom, a jump and its return, a resize, the other pane scrolled
+alone, a kept panel and twenty hovers: 179 of 179 on each pane (a card is never kept), nothing left behind (no surface, no kept panel, the
+listeners on the window, the document and the scrollers as many as before); before this fix 63 of the right's failed, every crop whose page was parked. Not measured: the same over corpus papers (their stored bundles state no targets until
 they are prepared again at this engine).
 
 Surfaces wear the chrome's tokens `--surface`, `--surface-blur`, `--hairline`, `--shadow`, `--shadow-lift`, `--ink-read`
