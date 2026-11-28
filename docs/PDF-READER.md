@@ -641,7 +641,8 @@ is taken only over the pages. The overlays follow the pinch exactly (§10.1).
   never a zoom, in the chrome's pinch, the panes' inputs and the scroll indicator alike. **Why** (the owner's report,
   2026-11-10): the page sometimes zoomed when he pressed ⌘⇧ — macOS's screenshot keys (⌘⇧4, ⌘⇧5), which he uses all the
   time, hold ⌘ while a trackpad's scroll or its momentum is still running, and every wheel with ⌘ was then taken as a
-  zoom. The keys are unchanged: ⌘ or Ctrl with − and + zoom by a tenth (§7).
+  zoom. The keys are unchanged: ⌘ or Ctrl with − and + zoom by a tenth (§7). The reading is one (`zoom-gesture.ts`
+  `isZoomWheel`): the chrome's pinch zooms the panes by it, and over a preview surface it zooms nothing (§20.7).
 - **No step lays anything out.** From the page boxes read at the gesture's first step, a step works out the layout the
   commit will make at its scale — each page box scaled, the gaps between them not, a page narrower than the view centred,
   the scroll put so that the point under the gesture stays under it, then held within the scroll's ends — and shows it by
@@ -14572,6 +14573,15 @@ and its jump. One layer for every kind (`previews.ts`), from the three link sour
   next link (closing it), Shift+Tab back. A crop is `role="img"` named by its label (UI.md S-R-33).
 - **The jump** lands lit by the target the head states (session/one-jump.ts, §17.10): the unit it names (a reference, a note,
   a heading) or its box (a float, a display); nothing lit where the head states none.
+- **A zoom gesture over a preview surface** (a card, a crop, a kept panel, the sheet) never zooms the browser's page: a wheel
+  §6.8 reads as a zoom (`zoom-gesture.ts`: Ctrl held, a trackpad's pinch in Chrome and Firefox) and WebKit's own pinch
+  (`gesturestart`, `gesturechange`) have their default prevented there, and a touch's pinch is not the page's (the surfaces'
+  `touch-action: pan-x pan-y`, a kept panel's `none`). It does nothing else there: it neither zooms the preview nor scrolls the
+  pane under it, as a plain wheel does (the owner's look at staging, 2026-11-28: a pinch on a kept figure zoomed the whole page).
+  A kept panel's own zoom is not built (its design is shown to the owner first).
+- **A laid link's place** (`data-axt-at`) is its index in `Page.links`, apart from its place in the reading order: the bracket a
+  preview is anchored to is read there (staging, 2026-11-28: a card stood a line lower for each text item before its link,
+  anchored to another link's box).
 
 **What it costs, measured** (the reader's harness, `packages/reader/e2e/run.mjs` `preview-waits`, s5-links, 2026-11-28): from the
 pointer's entry to a preview shown, every kind on both panes, 18 links: 289 to 298 ms, the median 293 ms (the dwell and a frame);

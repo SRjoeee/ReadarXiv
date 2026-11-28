@@ -9,6 +9,7 @@
 // for a citation's: the design's §3.13).
 import type { Target } from '@readarxiv/format'
 import type { Side } from '../panes/panes.ts'
+import { keepZoomFromPage } from '../zoom-gesture.ts'
 import type { PreviewContent, PreviewLink, PreviewWords, SheetHost } from './previews.ts'
 
 /** the sheet's going out, ms (the capsules' tempo, 160, and the element let go just after) */
@@ -51,6 +52,8 @@ export function createSheet(o: {
       const dialog = document.createElement('dialog')
       dialog.className = 'axt-sheet'
       dialog.setAttribute('closedby', 'any')
+      // (a zoom gesture over the sheet: never the page's)
+      keepZoomFromPage(dialog, ac.signal)
       current = { dialog, ac }
       const mine = current
       const w = window.innerWidth || 390,

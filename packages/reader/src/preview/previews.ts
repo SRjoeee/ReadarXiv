@@ -23,6 +23,7 @@ import type { Target } from '@readarxiv/format'
 import type { Box } from '../compose/page.ts'
 import type { Side } from '../panes/panes.ts'
 import type { Clock } from '../stack/clock.ts'
+import { isZoomWheel, keepZoomFromPage } from '../zoom-gesture.ts'
 import {
   type At,
   AGAIN_MS,
@@ -146,6 +147,8 @@ export function createPreviews(d: PreviewDeps): Previews {
   const layer = document.createElement('div')
   layer.className = 'axt-pv-layer'
   root.append(layer)
+  // (a zoom gesture over a preview or a kept panel: never the page's, nor theirs)
+  keepZoomFromPage(layer, signal)
 
   type Cur = { link: PreviewLink; target: Target; bracket: Bracket; content: PreviewContent; described: string | null }
   type Pend = {
@@ -398,7 +401,8 @@ export function createPreviews(d: PreviewDeps): Previews {
     el.addEventListener(
       'wheel',
       (e) => {
-        if (el !== pv || !cur) return
+        // (a zoom gesture scrolls nothing: the layer keeps it from the page, and it does nothing here)
+        if (el !== pv || !cur || isZoomWheel(e)) return
         const s = (e.target as Element).closest?.('[data-axt-scrolls]') as HTMLElement | null
         if (s && (e.deltaY < 0 ? s.scrollTop > 0 : s.scrollTop + s.clientHeight < s.scrollHeight - 1)) return
         e.preventDefault()

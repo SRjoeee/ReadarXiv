@@ -39,7 +39,7 @@ const PREVIEW_CSS = `
 .axt-reader .axt-pv-layer { position: fixed; inset: 0; z-index: 30; pointer-events: none; }
 .axt-reader .axt-pv-layer > * { pointer-events: auto; }
 .axt-reader .axt-pv, .axt-reader .axt-sheet { background: var(--axt-pv-surface); -webkit-backdrop-filter: var(--axt-pv-blur); backdrop-filter: var(--axt-pv-blur); box-shadow: var(--axt-pv-shadow); color: var(--axt-pv-ink); font: 13px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
-.axt-reader .axt-pv { position: fixed; box-sizing: border-box; border-radius: 12px; animation: axt-pv-in 120ms ease-out; }
+.axt-reader .axt-pv { position: fixed; box-sizing: border-box; border-radius: 12px; touch-action: pan-x pan-y; animation: axt-pv-in 120ms ease-out; }
 .axt-reader .axt-pv[data-axt-quiet] { animation: none; }
 .axt-reader .axt-pv[data-axt-out] { animation: axt-pv-out 80ms ease-out forwards; pointer-events: none; }
 /* the bridge: the pointer travels from the line into the preview */
@@ -90,7 +90,7 @@ ${DIMMED} .axt-pv[data-axt-kind="crop"], ${DIMMED} .axt-pv-paper { background: r
 .axt-reader .axt-pv-kept:hover .axt-pv-x, .axt-reader .axt-pv-kept:focus-visible .axt-pv-x, .axt-reader .axt-pv-x:focus-visible { opacity: 1; }
 @media (hover: hover) { .axt-reader .axt-pv-x:hover { color: var(--axt-pv-ink); } }
 /* narrow, or no hover: the sheet from the bottom, a native modal dialog over an 8 % dim (30 % dark) */
-.axt-reader .axt-sheet { position: fixed; inset: auto 0 0 0; box-sizing: border-box; width: 100%; max-width: none; max-height: 80%; margin: 0; display: flex; flex-direction: column; border: 0; border-radius: 28px 28px 0 0; padding: 16px 16px calc(16px + env(safe-area-inset-bottom)); animation: axt-sheet-in 240ms var(--axt-pv-ease); }
+.axt-reader .axt-sheet { position: fixed; inset: auto 0 0 0; box-sizing: border-box; width: 100%; max-width: none; max-height: 80%; margin: 0; display: flex; flex-direction: column; border: 0; border-radius: 28px 28px 0 0; padding: 16px 16px calc(16px + env(safe-area-inset-bottom)); touch-action: pan-x pan-y; animation: axt-sheet-in 240ms var(--axt-pv-ease); }
 .axt-reader .axt-sheet:not([open]) { display: none; }
 .axt-reader .axt-sheet[data-axt-out] { animation: axt-sheet-out 160ms ease-out forwards; }
 .axt-reader .axt-sheet::backdrop { background: oklch(0 0 0 / 0.08); animation: axt-fade-in 240ms var(--axt-pv-ease); }

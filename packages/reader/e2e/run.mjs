@@ -7115,6 +7115,91 @@ await check(
   },
 )
 
+// (a zoom wheel's fate, read at the window once it has bubbled there: its default prevented by the reader or left to the
+// browser, which zooms the page; the right pane's scroll and the panes' scale beside it)
+async function zoomWheelOver(page, x, y) {
+  await page.evaluate(() => {
+    window.__zw = []
+    window.addEventListener('wheel', (e) => window.__zw.push(e.defaultPrevented), { once: true })
+  })
+  const read = () =>
+    page.evaluate(() => ({
+      top: Math.round(document.getElementById('right').scrollTop),
+      scale: window.__c.reader?.state().view.scale ?? null,
+    }))
+  const before = await read()
+  await page.mouse.move(x, y)
+  await page.keyboard.down('Control')
+  await page.mouse.wheel(0, -40)
+  await page.keyboard.up('Control')
+  await page.waitForTimeout(700)
+  const after = await read()
+  return { prevented: await page.evaluate(() => window.__zw[0] ?? null), before, after }
+}
+await check(
+  'previews: a zoom gesture (Ctrl and the wheel, a trackpad’s pinch) over a crop, a kept panel or the sheet never zooms the page, nor scrolls the pane; over the pane it still zooms the panes',
+  async () => {
+    const { page, context, errors } = await chromeLaid('s5-links', { ui: 'zh-CN' })
+    const out = {}
+    try {
+      const shown = () => page.evaluate(() => !!document.querySelector('.axt-pv:not([data-axt-out])'))
+      const still = (w) => w.after.top === w.before.top && w.after.scale === w.before.scale
+      // (a hover crop)
+      await pvHover(page, pvSel('right', 'figure.1'), 1200)
+      const r = await page.evaluate(() => {
+        const b = document.querySelector('.axt-pv:not([data-axt-out])').getBoundingClientRect()
+        return { x: b.left + b.width / 2, y: b.top + b.height / 2 }
+      })
+      out.crop = await zoomWheelOver(page, r.x, r.y)
+      assert(
+        out.crop.prevented === true && still(out.crop) && (await shown()),
+        `over a crop ${JSON.stringify(out.crop)}`,
+      )
+      // (kept: a click on the crop)
+      await page.mouse.click(r.x, r.y)
+      await page.waitForTimeout(400)
+      const k = await page.evaluate(() => {
+        const b = document.querySelector('.axt-pv.axt-pv-kept')?.getBoundingClientRect()
+        return b && { x: b.left + b.width / 2, y: b.top + b.height / 2 }
+      })
+      assert(k, 'no kept panel')
+      out.kept = await zoomWheelOver(page, k.x, k.y)
+      assert(out.kept.prevented === true && still(out.kept), `over a kept panel ${JSON.stringify(out.kept)}`)
+      // (the panes' own pinch, over the left pane away from any preview: taken by the panes, as before)
+      const left = await page.evaluate(() => {
+        const b = document.getElementById('left').getBoundingClientRect()
+        return { x: b.left + 40, y: b.bottom - 120 }
+      })
+      out.pane = await zoomWheelOver(page, left.x, left.y)
+      assert(
+        out.pane.prevented === true && out.pane.after.scale > out.pane.before.scale,
+        `over a pane ${JSON.stringify(out.pane)}`,
+      )
+      assert(!errors.length, errors.join('; '))
+    } finally {
+      await context.close()
+    }
+    // (the sheet, narrow)
+    const n = await chromeLaid('s5-links', { ui: 'zh-CN' }, { viewport: { width: 390, height: 844 } })
+    try {
+      const f = await pvCentre(n.page, pvSel('right', 'figure.1'))
+      await n.page.mouse.click(f.x, f.y)
+      await n.page.waitForTimeout(700)
+      const d = await n.page.evaluate(() => {
+        const b = document.querySelector('dialog.axt-sheet[open]')?.getBoundingClientRect()
+        return b && { x: b.left + b.width / 2, y: b.top + 40 }
+      })
+      assert(d, 'no sheet')
+      out.sheet = await zoomWheelOver(n.page, d.x, d.y)
+      assert(out.sheet.prevented === true, `over the sheet ${JSON.stringify(out.sheet)}`)
+      assert(!n.errors.length, n.errors.join('; '))
+    } finally {
+      await n.context.close()
+    }
+    return out
+  },
+)
+
 await check(
   'previews: no hover (a touch device at a wide window, its primary pointer coarse): a tap opens the sheet, not a popover, and does not jump',
   async () => {

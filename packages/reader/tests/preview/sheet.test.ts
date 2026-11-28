@@ -131,6 +131,26 @@ describe('the sheet', () => {
     await settle()
     expect(t.root.querySelector('.axt-pv')).toBeNull()
   })
+  it('a zoom gesture over the sheet never zooms the page: a Ctrl-wheel and WebKit’s gesture taken from it, a plain wheel left', async () => {
+    const t = setUp()
+    tap(t.fig)
+    await settle()
+    const d = t.root.querySelector('dialog.axt-sheet') as HTMLDialogElement
+    const wheel = (ctrlKey: boolean) => {
+      const e = new WheelEvent('wheel', { deltaY: -10, bubbles: true, cancelable: true })
+      // (happy-dom's WheelEvent is a UIEvent: no modifier keys of its own)
+      Object.defineProperty(e, 'ctrlKey', { value: ctrlKey })
+      d.firstElementChild!.dispatchEvent(e)
+      return e.defaultPrevented
+    }
+    expect(wheel(true)).toBe(true)
+    expect(wheel(false)).toBe(false)
+    const g = new Event('gesturestart', { bubbles: true, cancelable: true })
+    d.dispatchEvent(g)
+    expect(g.defaultPrevented).toBe(true)
+    // (a touch's pinch: the sheet pans, never zooms)
+    expect(READER_CSS).toMatch(/\.axt-reader \.axt-sheet \{[^}]*touch-action: pan-x pan-y;/)
+  })
   it('a link with no target jumps on a tap as today (its click not taken)', () => {
     const t = setUp()
     expect(tap(t.thm).defaultPrevented).toBe(false)

@@ -192,6 +192,39 @@ describe('the preview’s intent', () => {
     await t.pass(1000)
     expect(t.shown()).toBeNull()
   })
+  it('a zoom gesture over a preview never zooms the page, nor the preview, nor scrolls the pane: a Ctrl-wheel and WebKit’s gesture taken from it; a plain wheel scrolls the pane as before', async () => {
+    const t = setUp()
+    t.over(t.fig)
+    await t.pass(280)
+    const pv = t.shown()!
+    const inner = pv.firstElementChild ?? pv
+    const scrolled: unknown[] = []
+    t.panes.right.scrollBy = ((o: unknown) => void scrolled.push(o)) as never
+    const wheel = (ctrlKey: boolean) => {
+      const e = new WheelEvent('wheel', { deltaY: -10, bubbles: true, cancelable: true })
+      // (happy-dom's WheelEvent is a UIEvent: no modifier keys of its own)
+      Object.defineProperty(e, 'ctrlKey', { value: ctrlKey })
+      inner.dispatchEvent(e)
+      return e.defaultPrevented
+    }
+    expect(wheel(true)).toBe(true)
+    expect(scrolled).toEqual([])
+    expect(wheel(false)).toBe(true)
+    expect(scrolled).toHaveLength(1)
+    for (const type of ['gesturestart', 'gesturechange']) {
+      const g = new Event(type, { bubbles: true, cancelable: true })
+      inner.dispatchEvent(g)
+      expect(g.defaultPrevented).toBe(true)
+    }
+    // (the preview stays as it was: nothing of it zoomed)
+    expect(t.shown()).toBe(pv)
+    expect(pv.style.transform).toBe('')
+  })
+  it('a touch’s pinch over a preview or a kept panel is not the page’s: every preview surface pans at most', async () => {
+    const { READER_CSS } = await import('../../src/styles.ts')
+    expect(READER_CSS).toMatch(/\.axt-reader \.axt-pv \{[^}]*touch-action: pan-x pan-y;/)
+    expect(READER_CSS).toMatch(/\.axt-reader \.axt-pv\.axt-pv-kept \{[^}]*touch-action: none;/)
+  })
   it('a link of no target shows nothing and still jumps (its click is the page’s)', async () => {
     const t = setUp()
     t.over(t.thm)
