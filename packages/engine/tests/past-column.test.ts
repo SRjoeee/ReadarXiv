@@ -12,6 +12,7 @@
 import { describe, expect, it } from 'vitest'
 import { type Glyph, packGlyphs } from '../src/ink.ts'
 import { followsOf } from '../src/marks/marks.ts'
+import { ownOf } from '../src/own/own.ts'
 import {
   OWNED,
   OWNED_HOW,
@@ -262,5 +263,78 @@ describe("a display holding a draft image frame at a column's foot, read past it
 
   it("the other side: no text after it, the reading runs to its column's end: refused as before", () => {
     expect(owned(framedUnits(true), FRAME(true))).toBe("open, the next mark not its unit's")
+  })
+})
+
+// The ownership's claim of that reading (own/own.ts ownOf): a placeholder's reading takes an image's box only where TeX's facts
+// bound it on both sides (its closing point, or the text after it). A reading past its column's end that the text after it
+// ends is so bounded: the display owns the picture TeX set in it (in the final pass an image's box, pageInk's kind -3), as it
+// owns its number. (Devin on #704: the stream's reading kept the frame's box, and the claim then dropped the image.)
+/** a page for the ownership: glyphs as ownOf reads them, a `{ rule }` a painted rule (its path 0), an `{ image }` an image's box */
+function ownPageOf(items: readonly (Item | { image: true })[]) {
+  const glyphs: {
+    n: number
+    k: number
+    u: string
+    x0: number
+    x1: number
+    y: number
+    size: number
+    top: number
+    bottom: number
+  }[] = []
+  const points: { name: string; glyph: number; box: number }[] = [],
+    boxes: number[] = [],
+    paths: number[] = [],
+    boxAt: number[] = []
+  let x = 72,
+    y = 700
+  for (const it of items) {
+    if (typeof it === 'string') {
+      for (const u of it) {
+        if (u === ' ') x += 3
+        else if (u === '\n' || u === '\f') {
+          x = 72
+          y -= u === '\n' ? 12 : 200
+        } else {
+          glyphs.push({ n: glyphs.length, k: 0, u, x0: x, x1: x + 5, y, size: 10, top: y + 7, bottom: y - 2 })
+          boxAt.push(boxes.length / 4)
+          x += 5
+        }
+      }
+    } else if ('image' in it) {
+      y -= 40
+      boxes.push(72, y, 172, y + 36)
+      paths.push(-3)
+    } else if ('rule' in it) {
+      y -= 12
+      boxes.push(72, y, 108, y + 0.4)
+      paths.push(0)
+    } else if ('under' in it) {
+      boxes.push(x - 5, y - 2.4, x, y - 2)
+      paths.push(0)
+    } else points.push({ name: it.at, glyph: glyphs.length, box: boxes.length / 4 })
+  }
+  return { glyphs, boxes, paths, points, boxAt, view: [0, 0, 612, 792] as const }
+}
+
+describe("the ownership's claim of a display at a column's foot read past its column's end to the text after it", () => {
+  it("a display holding a picture (an image in the final pass): its image box is the display piece's, as its number is", () => {
+    const items: (Item | { image: true })[] = FRAME(false).map((it) =>
+      typeof it !== 'string' && 'rule' in it ? { image: true as const } : it,
+    )
+    const split: (Item | { image: true })[][] = [[]]
+    for (const it of items) {
+      if (typeof it !== 'string' && 'at' in it && it.at === '\f') split.push([])
+      else split.at(-1)!.push(it)
+    }
+    const pages = split.map(ownPageOf)
+    const units = framedUnits(false)
+    const follows = followsOf(units as never, new Set(pages.flatMap((pg) => pg.points.map((p) => p.name))))
+    const r = ownOf(pages as never, { units: units as never, follows })
+    // (the image is the first page's one box; the number's glyphs are the display piece's)
+    expect(r.boxes[0]![0]).toBe('u1.p')
+    const number = pages[0]!.glyphs.flatMap((g, i) => ('(1)'.includes(g.u) && g.y < 700 ? [r.glyphs[0]![i]] : []))
+    expect(number).toEqual(['u1.p', 'u1.p', 'u1.p'])
   })
 })
