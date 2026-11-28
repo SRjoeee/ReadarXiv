@@ -364,7 +364,8 @@ export function probeSamples(units: readonly Unit[], complete: CompleteGiven | n
   for (const u of units)
     for (const k of betweenOf(u, !!isFront(u as Parameters<typeof isFront>[0]))) {
       const p = u.pieces[k]!
-      if (p.t !== 'ph' || classOf(p) !== 'macro' || opensIf(p) || !fit(p.src!) || p.src!.length > COMPLETE_SRC_MAX) continue
+      if (p.t !== 'ph' || classOf(p) !== 'macro' || opensIf(p) || !fit(p.src!) || p.src!.length > COMPLETE_SRC_MAX)
+        continue
       const key = frontKey(p.src!)
       if (!fronts.has(key) && fronts.size < FRONT_PROBE_MAX)
         fronts.set(key, { command: key, src: p.src!, call: false, own: true, front: true })
