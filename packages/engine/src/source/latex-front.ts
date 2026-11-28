@@ -4769,6 +4769,66 @@ function conditionalMeaning(name: string, ctx: Pick<Ctx, 'meanings' | 'ifs'>): s
   const w = /^\s*\\([A-Za-z@]+)\s*$/.exec(m.body)?.[1]
   return w !== undefined && w !== name && isConditional(w, ctx.ifs) ? w : null
 }
+/**
+ * The conditional a call of a paper's macro at s[i] stands for (conditionalMeaning; its name ends at `end`) where the reader
+ * reads that conditional whole as TeX does: its \\fi found before `to` (conditionalAt), nothing in its span TeX reads otherwise
+ * than as tokens (consumes), and in each branch TeX sets (both, where its own text does not decide its test: conditionalValue,
+ * `\\unless`) no call of a paper's macro whose meaning opens or closes a conditional (callsConditional). TeX expands such a call
+ * in a branch it sets and counts the conditional it opens, where the scan (branchEnd) counts conditionals by their names alone and
+ * would take an inner \\else or \\fi for this one's; in a branch it skips TeX expands nothing, and counts the call no more than
+ * the scan does. Else null: the call is read as the paper's macro, as it was before any macro was read as a conditional
+ */
+function conditionalCall(called: string, s: string, i: number, end: number, to: number, ctx: Ctx): string | null {
+  const w = conditionalMeaning(called, ctx)
+  if (w === null) return null
+  const c = conditionalAt(s, end, to, ctx.ifs)
+  if (!c || consumes(s, end, c.end)) return null
+  const value = /\\unless\s*$/.test(s.slice(Math.max(0, i - 12), i))
+    ? null
+    : w === 'iffalse'
+      ? false
+      : conditionalValue(w, s, end)
+  const set: [number, number][] =
+    value === null
+      ? [
+          [c.thenFrom, c.thenTo],
+          [c.elseFrom, c.elseTo],
+        ]
+      : value
+        ? [[c.thenFrom, c.thenTo]]
+        : [[c.elseFrom, c.elseTo]]
+  return set.some(([from, upto]) => from >= 0 && callsConditional(s, from, upto, ctx)) ? null : w
+}
+/** whether s[from, to) calls a paper's macro whose meaning in force opens or closes a conditional (unbalancedConditional), or
+ *  one the reader cannot read ('unsure'); a name the scan counts as a conditional itself (TeX's, the paper's \\newif ones)
+ *  apart */
+function callsConditional(s: string, from: number, to: number, ctx: Pick<Ctx, 'meanings' | 'ifs'>): boolean {
+  for (let k = from; k < to; k++) {
+    if (s[k] === '%') {
+      k = skipComment(s, k)
+      continue
+    }
+    if (s[k] !== '\\') continue
+    const { name, end } = commandAt(s, k)
+    const m = ctx.meanings?.get(name)
+    if (m !== undefined && !isConditional(name, ctx.ifs) && (m === 'unsure' || unbalancedConditional(m.body, ctx.ifs)))
+      return true
+    k = end - 1
+  }
+  return false
+}
+/** whether a body leaves open a conditional it opens, or holds a \\fi, \\else or \\or outside one of its own: a call of it opens
+ *  or closes one where TeX expands it */
+function unbalancedConditional(body: string, ifs: ReadonlySet<string>): boolean {
+  let depth = 0
+  for (const m of body.matchAll(/\\([A-Za-z@]+)/g)) {
+    if (isConditional(m[1]!, ifs)) depth++
+    else if (m[1] === 'fi') {
+      if (depth-- === 0) return true
+    } else if ((m[1] === 'else' || m[1] === 'or') && depth === 0) return true
+  }
+  return depth > 0
+}
 /** whether a body opens more of TeX's conditionals than it closes (`\\ifnum1=1 `, `\\iffalse`): a macro of such a meaning,
  *  set in a box of the probe's, skips or takes what follows the box as TeX's conditional does */
 export function opensConditional(body: string, ifs: ReadonlySet<string> = new Set()): boolean {
@@ -5833,15 +5893,16 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
     // a command, or the one a macro's call ends in (goOn)
     const { name: called, end }: { name: string; end: number } = then ?? commandAt(s, i)
     // (a paper's macro whose meaning in force is one of TeX's conditionals and nothing else, `\\def\\iffa{\\iffalse}`: that
-    // conditional, as TeX reads it (conditionalMeaning))
-    const name: string = conditionalMeaning(called, ctx) ?? called
+    // conditional, as TeX reads it, where the reader reads it whole; else the paper's macro, as before (conditionalCall))
+    const name: string = conditionalCall(called, s, i, end, to, ctx) ?? called
     thens = then ? thens + 1 : 0
     then = null
     // (a definition TeX reads here puts its meaning in force from here on: the boundary reading's, in TeX's order)
     if (definesMeaning(name) && ctx.meanings && !ctx.dry) noteDefinition(s, i, ctx)
     // \\iffalse … \\fi, and \\if followed by words (an author's way of commenting a passage out): nothing there is typeset,
-    // so nothing there is a unit — and a mark or a translated first word would change what \\if compares
-    if (name === 'iffalse' || (name === 'if' && /^[ \t]*\n?[ \t]*[A-Za-z]{2}/.test(s.slice(end, end + 8)))) {
+    // so nothing there is a unit — and a mark or a translated first word would change what \\if compares. The written \\if: one
+    // a paper's macro stands for compares its two characters below, as TeX does (conditionalValue)
+    if (name === 'iffalse' || (called === 'if' && /^[ \t]*\n?[ \t]*[A-Za-z]{2}/.test(s.slice(end, end + 8)))) {
       const stop = branchEnd(s, end, to, ctx.ifs)
       if (stop > 0) {
         endUnit()

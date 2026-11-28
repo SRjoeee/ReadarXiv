@@ -317,7 +317,8 @@ export const commandOf = (p: PieceLike | null | undefined): string | null =>
  * (`complete`: source/latex-front.ts completeMacros), by its first call that holds them (completeCall), at most COMPLETE_PROBE_MAX:
  * what follows such a call may still be looked at by what its body sets (a citation under cite's superscripts, a footnote
  * under fnpct, a kern after its last letter), and only TeX's answer says a closing mark there moves nothing. The asked
- * classes' first, then the paper's own (`own`), which markProbeTex asks about last
+ * classes' first, then the paper's own (`own`), which markProbeTex asks about last. None of these, nor a call's glued follower
+ * or a front piece, whose leading macro's meaning opens a conditional it does not close (opensIf), as no section asks one
  */
 export function probeSamples(units: readonly Unit[], complete: CompleteGiven | null = null): ProbeSample[] {
   const seen = new Map<string, CommandSample>(),
@@ -328,7 +329,8 @@ export function probeSamples(units: readonly Unit[], complete: CompleteGiven | n
     for (const [k, p] of u.pieces.entries()) {
       const cmd = commandOf(p),
         cls = classOf(p)
-      if (!cmd) continue
+      // (none whose meaning opens a conditional it does not close, opensIf: set in a box, it would skip every sample after it)
+      if (!cmd || opensIf(p)) continue
       if (ASKED.has(cls)) {
         if (seen.has(cmd) || seen.size >= PROBE_MAX) continue
         const src = p.t === 'nested' ? `${p.pre}A note.${p.post}` : p.src!
@@ -347,6 +349,7 @@ export function probeSamples(units: readonly Unit[], complete: CompleteGiven | n
           glued =
             next?.t === 'ph' &&
             typeof next.src === 'string' &&
+            !opensIf(next) &&
             fit(next.src.replace(/(?<!\\)((?:\\\\)*)\\[%#]/g, '$1')) &&
             next.src.length <= COMPLETE_SRC_MAX
               ? next.src
@@ -361,7 +364,7 @@ export function probeSamples(units: readonly Unit[], complete: CompleteGiven | n
   for (const u of units)
     for (const k of betweenOf(u, !!isFront(u as Parameters<typeof isFront>[0]))) {
       const p = u.pieces[k]!
-      if (p.t !== 'ph' || classOf(p) !== 'macro' || !fit(p.src!) || p.src!.length > COMPLETE_SRC_MAX) continue
+      if (p.t !== 'ph' || classOf(p) !== 'macro' || opensIf(p) || !fit(p.src!) || p.src!.length > COMPLETE_SRC_MAX) continue
       const key = frontKey(p.src!)
       if (!fronts.has(key) && fronts.size < FRONT_PROBE_MAX)
         fronts.set(key, { command: key, src: p.src!, call: false, own: true, front: true })

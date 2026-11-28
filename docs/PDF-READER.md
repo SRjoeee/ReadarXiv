@@ -10924,7 +10924,15 @@ Rules of the marked compile, each read off TeX's own definition or TeX's own ans
   the source reader as the conditional it is where its meaning in force is one of TeX's conditionals and nothing else
   (`conditionalMeaning`: its skipped branch skipped), and no probe section asks a placeholder whose macro's meaning opens a
   conditional it does not close (`opensIf`): set in a probe's box, it skipped every sample after it, and the look-ahead
-  section wrote no row.
+  section wrote no row. The punctuation section too: neither a complete call, its glued follower nor a front piece of such a
+  meaning (the review of #705). Such a macro is read as its conditional only where the reader reads that conditional whole as
+  TeX does (`conditionalCall`): its `\fi` found, nothing in its span read otherwise than as tokens, and in each branch TeX sets
+  (both, where its own text does not decide the test) no call of a paper's macro whose meaning opens or closes a conditional,
+  nor one the reader cannot read: TeX expands such a call in a branch it sets and counts the conditional it opens, where the
+  scan counts conditionals by their names alone and takes the inner `\else` for the outer's (`\yes … \no … \else … \fi …`); in
+  a branch TeX skips nothing is expanded, and the scan counts as TeX does. Elsewhere the call is read as the paper's macro, as
+  before. One meaning `\if` compares its two characters (`\ifeq aa`: its first branch set); the written `\if` before two
+  letters keeps its reading as an author's way of commenting out.
 - **TeX answered 0 or 1 for a pair, and its macro had no mark of its own** (passed over at its unit's head, or answered to set no
   ink: a reference's `\doiprefix`, a cell's `\boldmath`): the placeholder after it has the marks the answer allows, as after a
   macro with its opening mark (`layoutMarking`'s `ahead`).
