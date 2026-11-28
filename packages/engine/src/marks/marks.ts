@@ -2195,7 +2195,11 @@ export function readMarkProbe(
  *   specification." owned by the $\mathcal{T}$ that opens the paragraph after it, until \axt@hold held a heading's and a
  *   babel name's marks) and its placeholders' (2610.21085v1's \paragraph{What $\cand$ is, …} set u44's point at its
  *   $\cand$: the piece $\cand(q)$ owned the heading's text, LOST, and the paragraph was the original's). Elsewhere, in
- *   vertical mode, it still waits for the next mark that is set, but a heading's or a babel name's (\axt@hold). In a box of its own (\ifinner: an \mbox, a cell's box) it is set on
+ *   vertical mode, it looks at the token after it (\futurelet, as \axthpk does): a letter, another character or a math shift,
+ *   each of which TeX answers in vertical mode by beginning a paragraph, begins it first (\leavevmode) and the point is set
+ *   before the piece's first glyph (a formula first on a centred line after its `\\`, whose two points had both stood after its
+ *   glyphs); before anything else (\noindent, \par, \vspace, a display, a group) it waits for the next mark that is set, but a
+ *   heading's or a babel name's (\axt@hold), as before. In a box of its own (\ifinner: an \mbox, a cell's box) it is set on
  *   the box's empty list too, as \axthpk's is: no paragraph resumes there after a display (`\mbox{\texttt{…}}`, whose opening
  *   point had been gobbled, its closing one alone).
  * - **\axtpmm{name}, before an inline formula** (its source begins $, \( or \ensuremath): \axtpma, but set on the empty
@@ -2902,7 +2906,8 @@ export const LAYOUT_TEX = [
   '\\def\\axt@pmgo{\\ifx\\axt@back\\@empty\\ifcase\\lastnodetype\\axt@pmglued\\or\\or\\or\\or\\or\\or\\or\\axt@pmglued\\fi\\fi\\ifx\\axt@pmhow\\relax\\axt@put{\\axt@name}\\else\\axt@putbox{\\axt@name}\\fi\\let\\axt@pmhow\\relax\\axt@back}',
   '\\let\\axt@pmhow\\relax\\def\\axt@pmglued{\\ifnum\\axt@boxy=1 \\let\\axt@pmhow\\hbox\\fi}',
   '\\def\\axt@pmh{\\relax\\let\\axt@back\\@empty\\axt@take\\futurelet\\axt@next\\axt@pmgo}',
-  '\\def\\axt@pmv#1{\\ifvmode\\xdef\\axt@pend{#1}\\fi}',
+  '\\def\\axt@pmv#1{\\ifvmode\\expandafter\\axt@pmvv\\else\\expandafter\\@gobble\\fi{#1}}\\def\\axt@pmvv#1{\\def\\axt@pvn{#1}\\futurelet\\axt@pvt\\axt@pmvd}',
+  '\\def\\axt@pmvd{\\let\\axt@pvgo\\axt@pmvp\\ifcat\\noexpand\\axt@pvt a\\let\\axt@pvgo\\axt@pmvg\\fi\\ifcat\\noexpand\\axt@pvt 0\\let\\axt@pvgo\\axt@pmvg\\fi\\ifcat\\noexpand\\axt@pvt $\\let\\axt@pvgo\\axt@pmvg\\fi\\axt@pvgo}\\def\\axt@pmvg{\\leavevmode\\axt@put{\\axt@pvn}}\\def\\axt@pmvp{\\xdef\\axt@pend{\\axt@pvn}}',
   '\\def\\axt@pmd#1{\\def\\axt@name{#1}\\axt@pmh}',
   '\\def\\axt@pmc{\\ifnum\\lastnodetype=-1 \\expandafter\\@gobble\\else\\expandafter\\axt@pmd\\fi}',
   '\\def\\axt@pmb{\\ifhmode\\expandafter\\axt@hpkh\\else\\expandafter\\axt@pmv\\fi}',
